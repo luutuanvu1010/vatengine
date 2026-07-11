@@ -5,6 +5,6 @@ import { defineConfig } from "vitest/config";
 // @cloudflare/vitest-pool-workers (Miniflare) với ma trận phiên bản đã ghim (U4+).
 export default defineConfig({
   test: {
-    include: ["test/**/*.test.ts"],
+    include: ["**/*.test.ts"],
   },
 });

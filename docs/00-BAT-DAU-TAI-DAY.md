@@ -49,6 +49,22 @@ Mỗi mốc (U#) đi trọn một vòng lặp, gọi bằng lệnh `/slash`:
 | `contract-guardian` | Cô lập adapter GDT, 401, cổng hợp đồng, không phá captcha, egress | U1, U2, U3 (và khi đụng `packages/gdt-client`) |
 | `security-reviewer` | Bí mật, không lưu mật khẩu thô, cách ly tenant/RLS | U4, U6, U8, U12 (và khi đụng auth/token/tenant) |
 
+## 3b. Vận hành trong MỘT cửa sổ Claude Code (best practice Anthropic)
+
+Toàn bộ vòng lặp chạy **trong một phiên Claude Code duy nhất** — không cần công cụ thứ hai chép prompt qua lại. Sub-agent review trả kết quả **thẳng vào cùng phiên** để tự sửa ("without you copying findings between windows"). Nguồn: `code.claude.com/docs/en/best-practices`.
+
+Con người giữ vai trò quyết định ở **cổng quản trị**, không cần đọc code:
+
+- **Plan Mode (Shift+Tab → chế độ chỉ đọc):** Claude chỉ đọc + trình **kế hoạch bằng lời**; bạn duyệt/sửa (Ctrl+G mở trong editor) rồi mới cho chạy. Đây là cổng "kiến trúc sư". (`/plan-unit` đóng đúng vai này.)
+- **Duyệt hành động có hệ quả:** Claude hỏi trước khi ghi file/commit; `/permissions` cho phép sẵn các lệnh an toàn (`make lint`, `make test`) để đỡ bị hỏi vặt.
+- **Soát BẰNG CHỨNG, không soát code:** đọc kết quả test pass/fail, báo cáo `/qa-unit`, và các ô đã tick trong checklist — nhanh hơn và không cần biết lập trình.
+- **Cổng DoD tự động:** Stop hook `gate-dod.sh` chặn kết thúc lượt tới khi `make lint && make test` xanh (khách quan, không phụ thuộc thiện chí).
+- **Đi lùi an toàn:** `Esc` dừng giữa chừng; `/rewind` quay lại điểm trước; `/clear` xoá ngữ cảnh giữa hai việc rời rạc.
+
+Mẹo cho người không lập trình: có thể mô tả ý muốn bằng lời rồi bảo *"phỏng vấn tôi bằng AskUserQuestion rồi viết spec"* — Claude tự hỏi phần kỹ thuật. Claude Code cũng có **ứng dụng Desktop** (giao diện, không cần dùng terminal thô).
+
+**Cowork (chỗ này) là tùy chọn, KHÔNG nằm trong vòng lặp:** chỉ dùng khi cần việc tách biệt bất đồng bộ — nghiên cứu (ví dụ GDT đổi API), soạn tài liệu/báo cáo. Không dùng để "điều phối" từng mốc, vì điều đó tạo ra chính việc chép qua chép lại cần tránh.
+
 ## 4. Trạng thái chốt phiên này
 
 - ✅ Chọn nền tảng Cloudflare + ghi ADR-0001 (Accepted); chốt Postgres+Hyperdrive (A2) + TypeScript (B1).
