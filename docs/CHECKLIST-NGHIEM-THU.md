@@ -46,13 +46,13 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 
 ## B. Mốc theo lộ trình
 
-### ✅ U0 — Khung dự án + CI + skeleton test  ·  *ĐÃ LÀM (chờ xác nhận `make lint && make test` xanh trên máy + commit skill)*
+### ✅ U0 — Khung dự án + CI + skeleton test  ·  *ĐẠT (`make lint && make test` xanh trên máy — commit `757ec3a`)*
 
 - [x] Monorepo npm workspaces (`apps/*`, `packages/*`) dựng xong.
 - [x] `apps/api` (Worker Hono) có `/health`; test health-check.
 - [x] `packages/gdt-client` giữ interface `GdtTransport` + endpoint (nguồn chân lý).
 - [x] `Makefile` (bọc npm/Wrangler) + CI GitHub Actions.
-- [ ] `make lint` và `make test` xanh trên máy (xác nhận cuối cùng).
+- [x] `make lint` và `make test` xanh trên máy (xác nhận cuối cùng).
 
 ### ⬜ U1 — GDT Adapter: captcha + authenticate  ·  *TIẾP THEO* · review: `contract-guardian`
 
