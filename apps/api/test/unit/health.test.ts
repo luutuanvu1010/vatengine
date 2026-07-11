@@ -1,6 +1,8 @@
-import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import app from "../../src/index";
+import type { Env } from "../../src/index";
+
+const env: Env = { ENVIRONMENT: "test" };
 
 describe("health-check", () => {
   it("trả về status ok", async () => {

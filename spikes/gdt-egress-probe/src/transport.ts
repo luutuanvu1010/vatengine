@@ -30,7 +30,11 @@ export interface ProbeOptions {
 }
 
 // Phân loại kết quả một lần gọi thành ProbeVerdict.
-export function classify(status: number | undefined, timedOut: boolean, errored: boolean): ProbeVerdict {
+export function classify(
+  status: number | undefined,
+  timedOut: boolean,
+  errored: boolean,
+): ProbeVerdict {
   if (timedOut) return "TIMEOUT";
   if (errored) return "ERROR";
   if (status === undefined) return "ERROR";
@@ -40,7 +44,11 @@ export function classify(status: number | undefined, timedOut: boolean, errored:
   return "ERROR";
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -51,17 +59,23 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 }
 
 // Đọc IP + quốc gia egress từ endpoint dạng Cloudflare trace (key=value theo dòng).
-async function readEgress(traceUrl: string, timeoutMs: number): Promise<{ ip?: string; country?: string }> {
+async function readEgress(
+  traceUrl: string,
+  timeoutMs: number,
+): Promise<{ ip?: string; country?: string }> {
   try {
     const res = await fetchWithTimeout(traceUrl, { method: "GET" }, timeoutMs);
     const text = await res.text();
     const map = Object.fromEntries(
-      text.split("\n").filter(Boolean).map((line) => {
-        const i = line.indexOf("=");
-        return [line.slice(0, i), line.slice(i + 1)];
-      }),
+      text
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const i = line.indexOf("=");
+          return [line.slice(0, i), line.slice(i + 1)];
+        }),
     );
-    return { ip: map["ip"], country: map["loc"] };
+    return { ip: map.ip, country: map.loc };
   } catch {
     return {};
   }
@@ -144,7 +158,13 @@ export class VnRelayTransport implements GdtTransport {
         {
           method: "POST",
           headers: { "content-type": "application/json", "x-relay-secret": this.relaySecret },
-          body: JSON.stringify({ method: "GET", url: opts.gdtProbeUrl, headers: {}, body: null, wantEgress: true }),
+          body: JSON.stringify({
+            method: "GET",
+            url: opts.gdtProbeUrl,
+            headers: {},
+            body: null,
+            wantEgress: true,
+          }),
         },
         opts.timeoutMs,
       );

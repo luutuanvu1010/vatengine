@@ -7,7 +7,13 @@
 //
 // KHÔNG phá captcha, KHÔNG đăng nhập — chỉ gọi endpoint công khai để đo khả năng tới máy chủ.
 
-import { DirectTransport, VnRelayTransport, type GdtTransport, type ProbeOptions, type ProbeResult } from "./transport";
+import {
+  DirectTransport,
+  type GdtTransport,
+  type ProbeOptions,
+  type ProbeResult,
+  VnRelayTransport,
+} from "./transport";
 
 export interface Env {
   // Endpoint công khai, nhẹ của GDT dùng để thử. Cấu hình qua wrangler vars.
@@ -28,7 +34,9 @@ function transportsFor(env: Env): GdtTransport[] {
   return list;
 }
 
-async function runProbe(env: Env): Promise<{ decidedTransport: string | null; results: ProbeResult[] }> {
+async function runProbe(
+  env: Env,
+): Promise<{ decidedTransport: string | null; results: ProbeResult[] }> {
   const opts: ProbeOptions = {
     gdtProbeUrl: env.GDT_PROBE_URL,
     traceUrl: env.TRACE_URL,

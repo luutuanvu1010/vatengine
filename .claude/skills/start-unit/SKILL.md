@@ -12,11 +12,12 @@ Thực hiện đơn vị công việc: **$ARGUMENTS**
 2. **Kế hoạch ngắn.** Liệt kê: file sẽ sửa/tạo, test sẽ viết trước, tiêu chí nghiệm thu. Nếu có bất kỳ điểm nào phải **đoán cấu trúc phản hồi API thuế** hoặc yêu cầu chưa rõ — DỪNG và hỏi người dùng kèm phương án đề xuất, theo mục "Khi gặp mơ hồ" của Hiến pháp. Không tự giả định thầm rồi code tiếp.
 3. **Viết test trước (TDD).** Test phải đỏ trước khi có code hiện thực. Tuân `.claude/rules/testing.md` (đánh dấu `unit`/`contract`/`integration` phù hợp, mock mọi gọi mạng thật trong test `unit`).
 4. **Hiện thực tối thiểu** để test xanh — không làm dư phạm vi đơn vị.
-5. **Tự kiểm chứng:** chạy `make lint && make test`. Nếu sửa `backend/gdt_client.py`, chạy thêm `make test-contract`. Đỏ thì tự sửa và lặp lại bước 4–5.
-6. **Review chéo.** Khi lint/test đã xanh, dùng subagent độc lập trước khi coi là xong:
-   - Nếu đơn vị đụng tới `gdt_client.py` hoặc endpoint thuế: dùng subagent `contract-guardian`.
-   - Nếu đơn vị đụng tới xác thực, token, dữ liệu nhạy cảm, hoặc truy vấn đa tenant: dùng subagent `security-reviewer`.
+5. **Tự kiểm chứng:** chạy `make lint && make test` (hoặc gọi skill `/verify`). Nếu sửa `packages/gdt-client`, chạy thêm `make test-contract`. Đỏ thì tự sửa và lặp lại bước 4–5.
+6. **Review chéo (QA đầu ra).** Khi lint/test đã xanh, dùng subagent độc lập trước khi coi là xong — hoặc gọi skill `/qa-unit` để điều phối cả ba:
+   - `dod-auditor` — luôn luôn (kiểm Definition of Done tổng quát).
+   - `contract-guardian` — nếu đơn vị đụng `packages/gdt-client` hoặc endpoint thuế.
+   - `security-reviewer` — nếu đụng xác thực, token, dữ liệu nhạy cảm, hoặc truy vấn đa tenant.
    - Yêu cầu subagent chỉ báo cáo lỗ hổng/vi phạm thực sự (đúng/sai theo tiêu chí nghiệm thu), không phải sở thích văn phong.
 7. **Đóng gói.** Cập nhật tài liệu liên quan nếu hành vi thay đổi. Commit nhỏ, thông điệp rõ (không trộn nhiều đơn vị công việc).
 
-Definition of Done cho `$ARGUMENTS`: test tự động phủ đúng tiêu chí nghiệm thu và toàn bộ xanh; `make lint` sạch; không giảm coverage dưới ngưỡng 80%; không lộ bí mật; tài liệu liên quan đã cập nhật; commit nhỏ, rõ. Stop hook (`.claude/hooks/gate-dod.sh`) sẽ tự chặn nếu `make lint && make test` chưa xanh khi có thay đổi trong `backend/`.
+Definition of Done cho `$ARGUMENTS`: test tự động phủ đúng tiêu chí nghiệm thu và toàn bộ xanh; `make lint` sạch; không giảm coverage dưới ngưỡng 80%; không lộ bí mật; tài liệu liên quan đã cập nhật; commit nhỏ, rõ. Stop hook (`.claude/hooks/gate-dod.sh`) sẽ tự chặn nếu `make lint && make test` chưa xanh khi có thay đổi trong `apps/`, `packages/` (hoặc `backend/` di sản).

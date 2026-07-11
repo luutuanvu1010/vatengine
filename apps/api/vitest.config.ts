@@ -1,12 +1,10 @@
-import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
+import { defineConfig } from "vitest/config";
 
-// Chạy test bên trong runtime Workers (Miniflare) — xem testing.md.
-export default defineWorkersConfig({
+// U0: unit test chạy trên Node thuần — Hono `app.request()` không cần workerd.
+// Khi cần binding thật (D1/KV/Durable Objects/Hyperdrive) sẽ chuyển sang
+// @cloudflare/vitest-pool-workers (Miniflare) với ma trận phiên bản đã ghim (U4+).
+export default defineConfig({
   test: {
-    poolOptions: {
-      workers: {
-        wrangler: { configPath: "./wrangler.jsonc" },
-      },
-    },
+    include: ["test/**/*.test.ts"],
   },
 });

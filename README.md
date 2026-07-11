@@ -8,6 +8,8 @@ và **xuất Excel** để đối chiếu, kê khai và nhập vào phần mềm
 > Ứng dụng chỉ truy xuất dữ liệu **thuộc thẩm quyền của chính doanh nghiệp**, bằng
 > tài khoản Mã số thuế do cơ quan thuế cấp. Không thu thập dữ liệu của bên thứ ba.
 
+> 📌 **Cập nhật ngăn xếp (2026-07-11):** Ngăn xếp thực thi đã chuyển sang **Cloudflare Workers + TypeScript** theo `docs/adr/0001-nen-tang-cloudflare.md` (Accepted). Phần mô tả Python/FastAPI + cách cài/chạy bên dưới là **bối cảnh MVP cũ**, giữ để tham chiếu nghiệp vụ. Cách chạy mới: `make up && make run`. **Điểm vào phiên làm việc: `docs/00-BAT-DAU-TAI-DAY.md`.**
+
 ## Kiến trúc nhanh
 
 ```

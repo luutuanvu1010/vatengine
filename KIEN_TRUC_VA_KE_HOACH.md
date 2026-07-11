@@ -6,6 +6,8 @@ Phiên bản tài liệu: 1.0 · Ngày: 11/07/2026 · Trạng thái: Bản kế 
 
 ---
 
+> 📌 **Cập nhật (2026-07-11):** Runtime chuyển sang **Cloudflare Workers + TypeScript** theo `docs/adr/0001-nen-tang-cloudflare.md` (Accepted). **Mô hình dữ liệu (mục 7 — PostgreSQL/JSONB/RLS) và lộ trình (mục 12) vẫn áp dụng**; các chi tiết công nghệ nền (FastAPI/Celery/Alembic) được thay bằng Workers / Queues+Workflows+Durable Objects / Drizzle+Hyperdrive. Điểm vào: `docs/00-BAT-DAU-TAI-DAY.md`.
+
 ## 1. Tóm tắt điều hành
 
 Doanh nghiệp Việt Nam đã có tài khoản trên hệ thống của cơ quan thuế để theo dõi hóa đơn đầu ra và đầu vào, nhưng giao diện tra cứu chính thức bộc lộ giới hạn: số trường dữ liệu hiển thị/xuất ra không đủ, thao tác thủ công theo từng tháng, khó đối chiếu và khó tích hợp vào quy trình kế toán. Thị trường vì thế xuất hiện nhiều phần mềm trung gian trả phí đóng vai trò "lớp bọc" quanh API chính thức của Tổng cục Thuế.

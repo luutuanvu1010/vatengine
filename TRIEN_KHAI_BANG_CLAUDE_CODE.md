@@ -6,6 +6,8 @@ Phiên bản: 1.0 · Ngày: 11/07/2026
 
 ---
 
+> 📌 **Cập nhật (2026-07-11):** Phương pháp Prompt + Loop Engineering và cách chia đơn vị U0–U12 (mục 3) **vẫn nguyên giá trị**. Riêng "Ngăn xếp" và "Lệnh chuẩn" trích ở mục 2 đã đổi sang Cloudflare/TypeScript theo `docs/adr/0001-nen-tang-cloudflare.md` (pytest→Vitest, ruff→Biome, uvicorn→wrangler, Alembic→Drizzle, Celery→Queues/Workflows). Tiêu chí nghiệm thu từng mốc: `docs/CHECKLIST-NGHIEM-THU.md`.
+
 ## 0. Nguyên tắc nền
 
 Con người (bạn) và tài liệu này giữ vai trò **kiến trúc sư và người ra đề**; Claude Code giữ vai trò **kỹ sư hiện thực**. Chúng ta không viết code thủ công — chúng ta viết **đặc tả tốt** và **vòng lặp kiểm chứng tốt**, để Claude Code tự sinh, tự chạy, tự sửa cho tới khi đạt tiêu chí nghiệm thu.
