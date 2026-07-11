@@ -1,0 +1,14 @@
+{
+  "captcha": {
+    "description": "GET /captcha — lấy ảnh captcha, không cần đăng nhập. Endpoint công khai dùng làm canary cho contract test định kỳ.",
+    "required_keys": ["key", "content"]
+  },
+  "authenticate": {
+    "description": "POST /security-taxpayer/authenticate — đổi captcha đã nhập lấy JWT token.",
+    "required_keys": ["token"]
+  },
+  "invoice_envelope": {
+    "description": "GET /query|/sco-query/invoices/{purchase,sold} và /detail — phong bì danh sách hóa đơn, phân trang qua 'state'.",
+    "required_keys": ["datas"]
+  }
+}

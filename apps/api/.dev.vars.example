@@ -1,0 +1,9 @@
+# Biến môi trường local cho `wrangler dev` (KHÔNG commit .dev.vars thật — xem security.md).
+# Copy file này thành .dev.vars rồi điền giá trị.
+
+ENVIRONMENT="dev"
+
+# U4 — Postgres qua Hyperdrive (chuỗi kết nối chỉ dùng local):
+# HYPERDRIVE_LOCAL_CONNECTION_STRING="postgres://user:pass@host:5432/vat"
+
+# Bí mật khác nạp qua `wrangler secret put <TÊN>` (không để trong file này).

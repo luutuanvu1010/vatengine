@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tra cứu hóa đơn - Tổng cục Thuế (Nội bộ)</title>
+<style>
+  :root { --primary:#1f4e78; --primary2:#2e6da4; --bg:#f4f6f9; --line:#dde3ea; --ok:#1e7e34; --err:#c0392b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; background:var(--bg); color:#233; }
+  header { background:var(--primary); color:#fff; padding:14px 22px; display:flex; align-items:center; gap:12px; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  header .tag { margin-left:auto; font-size:12px; opacity:.85; }
+  main { max-width:1280px; margin:20px auto; padding:0 16px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin-bottom:18px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .card h2 { font-size:15px; margin:0 0 14px; color:var(--primary); }
+  label { display:block; font-size:13px; margin-bottom:4px; color:#556; }
+  input, select { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px; font-size:14px; }
+  .row { display:flex; gap:14px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:150px; }
+  button { background:var(--primary2); color:#fff; border:0; padding:10px 18px; border-radius:7px; font-size:14px; cursor:pointer; font-weight:600; }
+  button:hover { background:var(--primary); }
+  button.ghost { background:#eef2f7; color:var(--primary); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .captcha-box { display:flex; align-items:center; gap:12px; }
+  .captcha-img { background:#fff; border:1px solid var(--line); border-radius:7px; padding:4px 8px; min-width:150px; min-height:46px; display:flex; align-items:center; }
+  .msg { padding:10px 12px; border-radius:7px; font-size:13px; margin-top:12px; display:none; }
+  .msg.ok { background:#e8f6ec; color:var(--ok); display:block; }
+  .msg.err { background:#fdecea; color:var(--err); display:block; }
+  .hidden { display:none; }
+  .summary { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px; }
+  .summary .box { background:#f0f5fb; border:1px solid #dbe7f3; border-radius:8px; padding:10px 16px; }
+  .summary .box .n { font-size:18px; font-weight:700; color:var(--primary); }
+  .summary .box .l { font-size:12px; color:#667; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:8px 10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+  th { background:#f0f3f7; position:sticky; top:0; cursor:pointer; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .table-wrap { max-height:60vh; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+  tr:hover td { background:#f8fbff; }
+  .filter-inline { width:220px; }
+  .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:s .7s linear infinite; vertical-align:-2px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  .hint { font-size:12px; color:#889; margin-top:6px; }
+  .link { color:var(--primary2); cursor:pointer; text-decoration:underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tra cứu hóa đơn điện tử — Tổng cục Thuế</h1>
+  <span class="tag">Kết nối trực tiếp hoadondientu.gdt.gov.vn · Nội bộ doanh nghiệp</span>
+</header>
+
+<main>
+  <!-- ĐĂNG NHẬP -->
+  <section class="card" id="loginCard">
+    <h2>1. Đăng nhập tài khoản Mã số thuế</h2>
+    <div class="row">
+      <div>
+        <label>Tên đăng nhập (MST / tài khoản người dùng con)</label>
+        <input id="username" placeholder="VD: 4201969169 hoặc 4201969169-subuser" />
+      </div>
+      <div>
+        <label>Mật khẩu</label>
+        <input id="password" type="password" placeholder="Mật khẩu tài khoản thuế" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px; align-items:flex-end;">
+      <div style="max-width:280px;">
+        <label>Mã captcha</label>
+        <input id="cvalue" placeholder="Nhập mã trong ảnh" autocomplete="off" />
+      </div>
+      <div style="flex:0 0 auto;">
+        <div class="captcha-box">
+          <div class="captcha-img" id="captchaImg">Đang tải…</div>
+          <button class="ghost" type="button" id="refreshCaptcha">↻ Đổi mã</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px; display:flex; gap:12px; align-items:center;">
+      <button id="loginBtn">Đăng nhập</button>
+      <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;">
+        <input type="checkbox" id="verifySsl" checked style="width:auto;" /> Xác thực SSL
+      </label>
+    </div>
+    <div class="hint">Mật khẩu chỉ dùng để đăng nhập tại máy chủ thuế, không được lưu lại. Nếu mạng công ty báo lỗi chứng chỉ, bỏ chọn “Xác thực SSL”.</div>
+    <div class="msg" id="loginMsg"></div>
+  </section>
+
+  <!-- TRA CỨU -->
+  <section class="card hidden" id="queryCard">
+    <h2>2. Tra cứu hóa đơn</h2>
+    <div class="row">
+      <div>
+        <label>Loại hóa đơn</label>
+        <select id="direction">
+          <option value="purchase">Đầu vào (mua vào)</option>
+          <option value="sold">Đầu ra (bán ra)</option>
+        </select>
+      </div>
+      <div>
+        <label>Từ ngày</label>
+        <input id="dateFrom" type="date" />
+      </div>
+      <div>
+        <label>Đến ngày</label>
+        <input id="dateTo" type="date" />
+      </div>
+      <div style="flex:0 0 auto; display:flex; align-items:flex-end;">
+        <label style="display:flex; align-items:center; gap:6px; margin:0;">
+          <input type="checkbox" id="includeSco" checked style="width:auto;" /> Gồm HĐ máy tính tiền
+        </label>
+      </div>
+    </div>
+    <div style="margin-top:16px; display:flex; gap:12px;">
+      <button id="queryBtn">Tra cứu</button>
+      <button class="ghost" id="exportBtn" disabled>⬇ Xuất Excel</button>
+    </div>
+    <div class="msg" id="queryMsg"></div>
+  </section>
+
+  <!-- KẾT QUẢ -->
+  <section class="card hidden" id="resultCard">
+    <h2>3. Kết quả</h2>
+    <div class="summary" id="summary"></div>
+    <div class="toolbar">
+      <input class="filter-inline" id="filterBox" placeholder="Lọc nhanh: tên/MST/số HĐ…" />
+      <span class="hint" id="countHint"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="resultTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const state = { sessionId:null, captchaKey:null, rows:[], columns:[], sortKey:null, sortDir:1 };
+const $ = (id)=>document.getElementById(id);
+const money = (v)=> (v===null||v===undefined||v==='') ? '' : Number(v).toLocaleString('vi-VN');
+
+function show(el){ el.classList.remove('hidden'); }
+function msg(el, text, ok){ el.className = 'msg ' + (ok?'ok':'err'); el.textContent = text; }
+
+async function loadCaptcha(refresh){
+  $('captchaImg').textContent = 'Đang tải…';
+  try{
+    let data;
+    if(refresh && state.sessionId){
+      const r = await fetch('/api/captcha/refresh?session_id='+state.sessionId);
+      data = await r.json();
+    } else {
+      const r = await fetch('/api/captcha');
+      data = await r.json();
+      state.sessionId = data.session_id;
+    }
+    state.captchaKey = data.key;
+    // content là chuỗi SVG
+    $('captchaImg').innerHTML = data.content || 'Không tải được';
+  }catch(e){ $('captchaImg').textContent = 'Lỗi tải captcha'; }
+}
+
+$('refreshCaptcha').onclick = ()=>loadCaptcha(true);
+
+$('loginBtn').onclick = async ()=>{
+  const btn = $('loginBtn'); btn.disabled = true; const old = btn.innerHTML;
+  btn.innerHTML = '<span class="spin"></span> Đang đăng nhập';
+  try{
+    const body = {
+      session_id: state.sessionId,
+      username: $('username').value.trim(),
+      password: $('password').value,
+      ckey: state.captchaKey,
+      cvalue: $('cvalue').value.trim(),
+      verify_ssl: $('verifySsl').checked,
+    };
+    const r = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.detail || 'Đăng nhập thất bại');
+    msg($('loginMsg'), 'Đăng nhập thành công.', true);
+    show($('queryCard'));
+    // đặt mặc định tháng hiện tại
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    $('dateFrom').value = first.toISOString().slice(0,10);
+    $('dateTo').value = now.toISOString().slice(0,10);
+  }catch(e){
+    msg($('loginMsg'), e.message, false);
+    loadCaptcha(true); $('cvalue').value='';
+  }finally{ btn.disabled=false; btn.innerHTML=old; }
+};
+
+function ddmmyyyy(v){ const [y,m,d]=v.split('-'); return d+'/'+m+'/'+y; }
+
+function buildQueryBody(){
+  return {
+    session_id: state.sessionId,
+    direction: $('direction').value,
+    date_from: ddmmyyyy($('dateFrom').value),
+    date_to: ddmmyyyy($('dateTo').value),
+    include_sco: $('includeSco').checked,
+    statuses: [5,6,8],
+  };
+}
+
+$('queryBtn').onclick = async ()=>{
+  const btn=$('queryBtn'); btn.disabled=true; const old=btn.innerHTML;
+  btn.innerHTML='<span class="spin"></span> Đang tra cứu';
+  $('queryMsg').className='msg';
+  try{
+    const r = await fetch('/api/invoices', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(buildQueryBody())});
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.detail || 'Lỗi tra cứu');
+    state.rows = data.rows; state.columns = data.columns;
+    renderSummary(data.summary, data.count);
+    renderTable();
+    show($('resultCard'));
+    $('exportBtn').disabled = data.count===0;
+  }catch(e){ msg($('queryMsg'), e.message, false); }
+  finally{ btn.disabled=false; btn.innerHTML=old; }
+};
+
+$('exportBtn').onclick = async ()=>{
+  const btn=$('exportBtn'); btn.disabled=true; const old=btn.innerHTML;
+  btn.innerHTML='<span class="spin"></span> Đang xuất';
+  try{
+    const r = await fetch('/api/export', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(buildQueryBody())});
+    if(!r.ok){ const d=await r.json(); throw new Error(d.detail||'Lỗi xuất'); }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url; a.download='hoadon.xlsx'; a.click(); URL.revokeObjectURL(url);
+  }catch(e){ msg($('queryMsg'), e.message, false); }
+  finally{ btn.disabled=false; btn.innerHTML=old; }
+};
+
+function renderSummary(s, count){
+  $('summary').innerHTML = `
+    <div class="box"><div class="n">${count}</div><div class="l">Số hóa đơn</div></div>
+    <div class="box"><div class="n">${money(s.tong_chua_thue)}</div><div class="l">Tổng chưa thuế</div></div>
+    <div class="box"><div class="n">${money(s.tong_thue)}</div><div class="l">Tổng tiền thuế</div></div>
+    <div class="box"><div class="n">${money(s.tong_thanh_toan)}</div><div class="l">Tổng thanh toán</div></div>`;
+}
+
+const MONEY_KEYS = new Set(['tgtcthue','tgtthue','tgtttbso']);
+
+function renderTable(){
+  const filter = $('filterBox').value.toLowerCase();
+  let rows = state.rows;
+  if(filter){
+    rows = rows.filter(r => ['nbten','nbmst','nmten','nmmst','shdon'].some(k => String(r[k]||'').toLowerCase().includes(filter)));
+  }
+  if(state.sortKey){
+    rows = [...rows].sort((a,b)=>{
+      let x=a[state.sortKey], y=b[state.sortKey];
+      if(MONEY_KEYS.has(state.sortKey)){ x=Number(x||0); y=Number(y||0); }
+      else { x=String(x||''); y=String(y||''); }
+      return (x>y?1:x<y?-1:0)*state.sortDir;
+    });
+  }
+  const thead = $('resultTable').querySelector('thead');
+  const tbody = $('resultTable').querySelector('tbody');
+  thead.innerHTML = '<tr>'+state.columns.map(c=>`<th data-k="${c.key}">${c.label}${state.sortKey===c.key?(state.sortDir>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>';
+  thead.querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k;
+    if(state.sortKey===k) state.sortDir*=-1; else { state.sortKey=k; state.sortDir=1; }
+    renderTable();
+  });
+  tbody.innerHTML = rows.map(r=>'<tr>'+state.columns.map(c=>{
+    const isMoney = MONEY_KEYS.has(c.key);
+    const val = isMoney ? money(r[c.key]) : (r[c.key]??'');
+    return `<td class="${isMoney?'num':''}">${val}</td>`;
+  }).join('')+'</tr>').join('');
+  $('countHint').textContent = `Hiển thị ${rows.length} / ${state.rows.length} hóa đơn`;
+}
+
+$('filterBox').oninput = renderTable;
+
+loadCaptcha(false);
+</script>
+</body>
+</html>

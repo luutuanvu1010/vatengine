@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.env.local
+.env.production
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Ngăn xếp Node/TypeScript/Cloudflare (ADR-0001)
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.tsbuildinfo
+
+# Cổng kiểm soát: log audit prompt là dữ liệu vận hành, không commit vào git.
+.claude/logs/
+.claude/settings.local.json
+
+# macOS
+.DS_Store

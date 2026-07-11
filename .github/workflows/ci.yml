@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Contract test hằng ngày 02:00 UTC (bắt GDT đổi API + kiểm egress).
+    - cron: "0 2 * * *"
+
+jobs:
+  quality:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Lint (Biome)
+        run: npx biome check .
+      - name: Typecheck
+        run: npm run typecheck --workspaces --if-present
+      - name: Test (unit + integration)
+        run: npm run test --workspaces --if-present
+
+  # Contract test gọi GDT thật + probe egress — chỉ chạy theo lịch, không chặn PR
+  # (tránh phụ thuộc mạng ngoài trong CI PR). Xem .claude/rules/gdt-adapter.md.
+  contract:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:contract --workspaces --if-present

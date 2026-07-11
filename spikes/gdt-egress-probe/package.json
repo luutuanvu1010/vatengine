@@ -1,0 +1,16 @@
+{
+  "name": "gdt-egress-probe",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Spike: gọi thử đường ra (egress) tới GDT từ Cloudflare Workers + fallback relay VN (ADR-0001 mục 5B).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "wrangler": "^4.34.0",
+    "@cloudflare/workers-types": "^5.20260708.1"
+  }
+}

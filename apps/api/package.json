@@ -1,0 +1,17 @@
+{
+  "name": "@vat/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir test/unit",
+    "test:contract": "vitest run --dir test/contract --passWithNoTests"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "@vat/gdt-client": "*"
+  }
+}
