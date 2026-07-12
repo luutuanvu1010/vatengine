@@ -1,13 +1,54 @@
 # ADR-0001 — Nền tảng triển khai Backend & Frontend trên hệ sinh thái Cloudflare
 
-- **Trạng thái:** ✅ Đã chấp thuận (Accepted) — 2026-07-11
-- **Quyết định đã chốt:** **4A = A2** (PostgreSQL ngoài + Hyperdrive) · **4B = B1** (TypeScript trên Workers) · Egress **T0 (thuần Cloudflare)** làm chính, giữ **T1 relay VN** làm fallback.
-- **Ngày:** 2026-07-11
+- **Trạng thái:** ✅ Đã chấp thuận (Accepted) — 2026-07-11 · **sửa đổi 2026-07-12** (xem "Amendment" bên dưới)
+- **Quyết định đã chốt:** **4A = A2** (PostgreSQL ngoài + Hyperdrive) · **4B = B1** (TypeScript trên Workers) · Egress: **~~T0 (thuần Cloudflare) làm chính~~ → BỊ BÁC BỎ cho API (Amendment 2026-07-12)**; **T1 relay VN là ĐƯỜNG CHÍNH cho API `:30000`**, T0 chỉ cho tài nguyên công khai `:443`/probe.
+- **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress)
+- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật; T1 relay VN thành đường chính + thành phần trọng yếu bảo mật. Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên.
 - **Người quyết định:** Chủ dự án (luutuanvu.gl@gmail.com)
 - **Phạm vi ảnh hưởng:** Hiến pháp `CLAUDE.md` (mục "Ngăn xếp công nghệ", "Kiến trúc — quy tắc cứng"), các luật `.claude/rules/*.md`, khung `backend/` + `frontend/` hiện có.
 - **Nguồn tra cứu:** Tài liệu chính thức Cloudflare (developers.cloudflare.com), truy cập 2026-07-11. Các mốc giới hạn dẫn trong tài liệu này lấy từ trang docs cập nhật tháng 4–6/2026.
 
 > ⚠️ **Cảnh báo quản trị.** Quyết định này **mâu thuẫn trực diện** với Hiến pháp hiện hành (Python/FastAPI/PostgreSQL/Celery/Redis). Theo chính khung quản trị của dự án ("khi một luật mâu thuẫn với Hiến pháp, Hiến pháp thắng — sửa luật, không sửa hiến pháp để né"), việc chuyển sang Cloudflare **bắt buộc phải sửa Hiến pháp một cách tường minh**, không được lặng lẽ đi chệch. Mục "Hệ quả" liệt kê các thay đổi Hiến pháp cần thông qua.
+
+---
+
+## Amendment (2026-07-12) — Egress T0 (thuần Cloudflare) BỊ BÁC BỎ cho API; T1 relay VN là ĐƯỜNG CHÍNH
+
+> Bổ sung sau khi **kiểm chứng lại egress bằng probe trên edge thật** (`wrangler dev --remote`, colo SG). ADR **giữ trạng thái Accepted**; đây là changelog sửa **một giả định sai của bản gốc** (mục 5B, 8, 9), **không** đảo quyết định nền tảng — Workers/TS + Postgres/Hyperdrive giữ nguyên.
+
+### Bằng chứng probe (edge thật Cloudflare, colo SG — 2026-07-12)
+
+| Phép thử (từ Cloudflare Worker) | Kết quả | Diễn giải |
+|---|---|---|
+| `fetch https://hoadondientu.gdt.gov.vn:30000/captcha` | **HTTP 521** · `server: cloudflare` · body `error code: 521` | Biên Cloudflare **KHÔNG tới được** origin API trên `:30000` |
+| `connect(TLS) :30000` (Workers TCP Sockets) | **không nối được** — `cannot connect to the specified address` | Sockets cũng không tới `:30000` |
+| `fetch :443/captcha` | **404** · `server: cloudflare` · HTML SPA | `:443` chỉ là tầng web; `/captcha` **không phải** API ở đây |
+| `fetch :443/` (root) | **200** · HTML SPA | Đúng thứ spike gốc đo — **chỉ web SPA**, không phải API |
+| direct-origin (resolveOverride / TCP tới origin IP) | **inconclusive** — 521 từ Cloudflare / bị `wrangler dev --remote` chặn | Không né được lớp CF từ biên; không có bằng chứng đi vòng được |
+
+DNS công khai: `hoadondientu.gdt.gov.vn` → **`103.9.200.142`** (netname **GDT-VN**, origin Việt Nam — **không** phải IP Cloudflare).
+
+### Kết luận (thay cho "Kết quả spike (2026-07-11)" ở mục 5B)
+
+- Spike gốc kết luận **sai**: chỉ đo `:443` **root** (cổng web SPA CF-fronted, trả 200), **không phải API `:30000`**. Đính chính tại mục 5B.
+- **Từ biên Cloudflare KHÔNG tới được API `:30000`** — bằng cả `fetch()` lẫn TCP `connect()`. Tên miền GDT là zone Cloudflare (proxied); edge phục vụ `:443` nhưng trả 521 cho `:30000`.
+- Không có đường "thuần Cloudflare" nào tới API → **nhánh (b)** trong cây quyết định đã chốt.
+
+### Quyết định sửa đổi
+
+1. **T1 relay VN = ĐƯỜNG CHÍNH cho mọi gọi API GDT** (`:30000`). T0 (Workers `fetch()` trực tiếp) **chỉ** còn dùng cho tài nguyên công khai `:443` + probe egress — **KHÔNG** cho API.
+2. **`GdtTransport` mặc định = `vn-relay`.** `direct-cf` không còn là mặc định; chỉ dùng cho probe/tài nguyên `:443`.
+3. **Relay VN được nâng thành THÀNH PHẦN TRỌNG YẾU VỀ BẢO MẬT** (không còn là "fallback tiện lợi"):
+   - **mTLS + shared-secret**; **chỉ** Worker của dự án gọi được relay.
+   - **Stateless**: chỉ *forward* request tới GDT rồi trả nguyên response; **không lưu**, **không log** body / credential / token / `raw_json`.
+   - Đặt tại **điểm hiện diện Việt Nam** (VPS Viettel/VNPT/FPT…), gọi thẳng origin `103.9.200.142:30000`.
+   - Ràng buộc chi tiết: `.claude/rules/security.md` mục "Relay VN (egress GDT)".
+4. **Dependency bắt buộc mới:** production **phụ thuộc một egress host đặt tại VN** — thành phần ngoài Cloudflare (mất tính "thuần Cloudflare" cho đường API, đã chấp nhận). **Không có relay VN ⇒ không đồng bộ được hóa đơn.**
+5. **Lộ trình:** chèn mốc **U1a — Dựng relay VN + kiểm chứng egress `:30000`** TRƯỚC U1 (xem `docs/CHECKLIST-NGHIEM-THU.md`). U1 (captcha + authenticate) **BỊ CHẶN bởi U1a**.
+
+### Còn phải kiểm chứng (điều kiện tiên quyết của U1a)
+
+Từ **vantage VN thật**: `curl https://103.9.200.142:30000/captcha` (Host: `hoadondientu.gdt.gov.vn`) trả JSON `{key, content}` hợp lệ. **Chưa có VPS VN ⇒ chưa dựng relay, chưa vào U1a/U1.**
 
 ---
 
@@ -146,8 +187,8 @@ export interface GdtTransport {
 
 | Tầng | Đường ra | Thuần Cloudflare? | Khi dùng |
 |---|---|---|---|
-| **T0** | **Workers `fetch()` trực tiếp** từ biên Cloudflare | ✅ Có | Mặc định — thử trước; rẻ nhất, đơn giản nhất. |
-| **T1** | **Relay đặt tại Việt Nam** (VPS VN: Viettel/VNPT/FPT…), Worker gọi qua relay bằng mTLS + shared-secret; relay chỉ *chuyển tiếp* request tới GDT rồi trả nguyên response. | ❌ Không (một thành phần ngoài Cloudflare, đặt tại VN) | Khi T0 bị `GEO_BLOCKED`/chặn ổn định. Đây là điểm đánh đổi tính "thuần Cloudflare" như đã thống nhất. |
+| **T0** | **Workers `fetch()` trực tiếp** từ biên Cloudflare | ✅ Có | ~~Mặc định cho API~~ → **BÁC BỎ cho API (521 trên `:30000`)**. Chỉ còn dùng cho tài nguyên công khai `:443` + probe egress. |
+| **T1** | **Relay đặt tại Việt Nam** (VPS VN: Viettel/VNPT/FPT…), Worker gọi qua relay bằng mTLS + shared-secret; relay chỉ *chuyển tiếp* request tới GDT rồi trả nguyên response. | ❌ Không (một thành phần ngoài Cloudflare, đặt tại VN) | **ĐƯỜNG CHÍNH cho API `:30000`** (Amendment 2026-07-12). `GdtTransport` mặc định = `vn-relay`. |
 
 > Ghi chú kỹ thuật: Workers `fetch()` **không hỗ trợ HTTP proxy**, nên T1 dùng **mẫu relay** (Worker POST gói `{method,url,headers,body}` tới relay VN; relay gọi GDT và trả về) thay vì proxy CONNECT. Relay phải **stateless, không lưu dữ liệu hóa đơn**, chỉ forward — để giảm bề mặt tuân thủ/bảo mật. Các lựa chọn thay thế cần đánh giá thêm: **Cloudflare Tunnel/WARP Connector** đặt tại VN, hoặc **Magic WAN** — nhưng phức tạp hơn và vẫn cần điểm hiện diện VN.
 
@@ -161,7 +202,9 @@ export interface GdtTransport {
 
 Một **spike gọi thử chạy được** đã được tạo tại `spikes/gdt-egress-probe/` để xác minh thực tế T0 (và T1 nếu đã dựng relay) trước khi chốt ADR.
 
-### Kết quả spike (2026-07-11)
+### Kết quả spike (2026-07-11) — ⚠️ ĐÃ ĐÍNH CHÍNH (xem Amendment 2026-07-12)
+
+> **Đính chính (2026-07-12):** Kết quả dưới đây **đo sai đối tượng** — chỉ gọi `:443` **root** (cổng web SPA CF-fronted), **không phải API `:30000`**. Kết luận "T0 thuần Cloudflare khả thi" là **SAI với API**. Probe edge thật ngày 2026-07-12 cho thấy biên Cloudflare **không** tới được API `:30000` (521 / không nối được). Giữ lại đoạn gốc dưới đây làm bằng chứng lịch sử; quyết định hiện hành nằm ở **Amendment** đầu tài liệu.
 
 Deploy thật lên biên Cloudflare và gọi thử:
 
@@ -212,7 +255,7 @@ Deploy thật lên biên Cloudflare và gọi thử:
 
 ## 8. Rủi ro cần kiểm chứng trước khi chốt (spikes)
 
-1. **✅ Egress IP tới GDT (đã kiểm chứng sơ bộ — ĐẠT):** spike deploy thật (2026-07-11) cho thấy biên Cloudflare (colo SG) gọi GDT trả **HTTP 200, không bị chặn** — xem "Kết quả spike" ở mục 5B. **Còn phải kiểm chứng thêm** ở giai đoạn adapter: nhiều colo, tải cao/liên tục, và endpoint truy vấn hóa đơn cần token. Giữ probe định kỳ + T1 làm fallback dự phòng.
+1. **❌ Egress IP tới API GDT — BÁC BỎ (Amendment 2026-07-12):** probe edge thật cho thấy biên Cloudflare **không** tới được API `:30000` (521 / không nối được); kết quả "ĐẠT" ngày 2026-07-11 chỉ đo `:443` root, không phải API. → **T1 relay VN là đường chính**; điều kiện tiên quyết mới là **dựng + kiểm chứng relay VN (U1a)**. Xem Amendment đầu tài liệu.
 2. **Python-only libs:** nếu bắt buộc thư viện parse chỉ có ở Python → đánh giá Cloudflare Containers (cần kiểm chứng khả dụng/giá) hoặc một microservice ngoài.
 3. **Dung lượng/tenant:** xác minh dữ liệu hóa đơn/tenant có vượt 10 GB không (quyết định A1 vs A2).
 4. **Tuân thủ dữ liệu (NĐ 13/2023):** xác nhận nơi lưu trữ (region) và ràng buộc dữ liệu cá nhân với D1/R2/Postgres đã chọn.
@@ -221,7 +264,7 @@ Deploy thật lên biên Cloudflare và gọi thử:
 
 ## 9. Bước tiếp theo
 
-1. ✅ **Spike egress-GDT (rủi ro #1) — ĐÃ CHẠY, ĐẠT sơ bộ** (T0 thuần Cloudflare gọi được GDT). Điều kiện tiên quyết coi như thỏa.
+1. ❌ **Spike egress-GDT (rủi ro #1) — ĐÃ CHẠY LẠI, BÁC BỎ T0 cho API** (Amendment 2026-07-12): biên Cloudflare không tới được API `:30000`. Điều kiện tiên quyết chuyển thành **U1a — dựng + kiểm chứng relay VN**.
 2. Chủ dự án chọn **4A** (mặc định A2 — Postgres + Hyperdrive) và **4B** (mặc định B1 — TypeScript). Đây là 2 mục còn mở duy nhất trước khi chuyển trạng thái ADR sang *Accepted*.
 3. Sau khi chốt: soạn PR sửa Hiến pháp + luật theo mục 7, dựng khung Wrangler U0, rồi tiếp tục U1–U3 (GDT Adapter) — trong đó tích hợp `GdtTransport` + probe và **contract test** xác minh thêm egress trên endpoint có token và dưới tải.
 
