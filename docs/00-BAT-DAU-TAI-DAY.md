@@ -2,7 +2,7 @@
 
 Tài liệu này là **cửa vào duy nhất** cho mỗi phiên làm việc mới. Đọc file này trước, nó chỉ tới mọi thứ còn lại.
 
-Cập nhật lần chốt: **2026-07-11** · Vị trí lộ trình: **hết U0 → sẵn sàng U1**.
+Cập nhật lần chốt: **2026-07-12** · Vị trí lộ trình: **U0 ✅ ĐẠT (`make lint && make test` xanh trên máy — commit `757ec3a`, `fa0988b`) → chuẩn bị U1**.
 
 ---
 
@@ -75,14 +75,10 @@ Mẹo cho người không lập trình: có thể mô tả ý muốn bằng lờ
 
 ## 5. Việc còn treo (làm đầu phiên sau)
 
-1. **Commit** đợt cuối (checklist + skill/agent + banner):
-   ```bash
-   cd "/Users/tuanbao/Documents/Projects/VATCrawlbot"
-   git add -A && git commit -m "docs: chốt tài liệu + checklist + bộ skill/agent vòng đời"
-   ```
-2. **Xác nhận U0 xanh**: `make up && make lint && make test` (đánh nốt ô cuối U0 trong checklist).
-3. **Nạp lại skill**: khởi động lại phiên Claude Code để nhận skill mới trong `.claude/skills/`.
-4. **Egress**: theo dõi thêm ở U1–U3 (nhiều colo, tải cao, endpoint có token).
+- ✅ **Đã xong (2026-07-12):** commit đợt cuối; `make lint && make test` xanh trên máy; U0 tick đủ và đổi trạng thái `✅ ĐẠT` trong checklist (commit `757ec3a`, `fa0988b`).
+- ⬜ **Kiểm chứng egress `:30000` (chặn U1):** API GDT nằm ở cổng `:30000`; spike cũ chỉ probe `:443` root nên **chưa** chứng minh Workers `fetch()` gọi được `:30000/captcha`. Phải probe trên **edge thật** (`wrangler dev --remote` hoặc deploy, KHÔNG dùng Miniflare/local). Nếu `fetch(:30000)` bị chặn cổng → thử **Workers TCP Sockets `connect()` (có TLS)** trước khi kết luận cần T1 relay. Kết quả quyết định BASE của U1 (xem kế hoạch U1).
+- 🔄 **Egress (xuyên suốt):** tiếp tục theo dõi ở U1–U3 (nhiều colo, tải cao, endpoint có token).
+- ℹ️ **Nạp lại skill:** khởi động lại phiên Claude Code khi thêm skill mới trong `.claude/skills/`.
 
 ## 6. Khởi động phiên mới — làm gì trước
 
