@@ -1,7 +1,11 @@
 // Nguồn chân lý DUY NHẤT cho URL/endpoint GDT. Khi thuế đổi endpoint, chỉ sửa ở đây.
 // Xem .claude/rules/gdt-adapter.md. (Giá trị đầy đủ sẽ port từ backend/gdt_client.py ở U1–U3.)
 
-export const BASE = "https://hoadondientu.gdt.gov.vn" as const;
+// API GDT nằm ở cổng :30000 (xem backend/gdt_client.py + ADR-0001 mục 2).
+// LƯU Ý (Amendment ADR-0001 2026-07-12): biên Cloudflare KHÔNG tới được :30000
+// (fetch → 521). Mọi gọi API phải đi qua GdtTransport = vn-relay (relay VN gọi
+// thẳng origin). Không gọi fetch(BASE) trực tiếp từ Worker cho API.
+export const BASE = "https://hoadondientu.gdt.gov.vn:30000" as const;
 
 // Hai họ endpoint truy vấn hóa đơn (gộp kết quả): thường + máy tính tiền (sco).
 export const INVOICE_ENDPOINTS = {
