@@ -2,7 +2,9 @@
 
 Tài liệu này là **cửa vào duy nhất** cho mỗi phiên làm việc mới. Đọc file này trước, nó chỉ tới mọi thứ còn lại.
 
-Cập nhật lần chốt: **2026-07-12** · Vị trí lộ trình: **U0 ✅ ĐẠT (`make lint && make test` xanh trên máy — commit `757ec3a`, `fa0988b`) → chuẩn bị U1**.
+Cập nhật lần chốt: **2026-07-12** · Vị trí lộ trình: **U0 ✅ ĐẠT (`make lint && make test` xanh trên máy — commit `757ec3a`, `fa0988b`) → mốc kế tiếp = U1a (dựng relay VN + kiểm chứng egress `:30000`); U1 BỊ CHẶN bởi U1a**.
+
+> ⚠️ **U1a chặn U1** (Amendment ADR-0001, 2026-07-12): biên Cloudflare không tới được API GDT `:30000` → mọi gọi API phải qua relay đặt tại VN. **U1a cần một VPS tại VN**; chưa có VPS ⇒ chưa dựng relay, chưa vào U1a/U1.
 
 ---
 
@@ -76,12 +78,14 @@ Mẹo cho người không lập trình: có thể mô tả ý muốn bằng lờ
 ## 5. Việc còn treo (làm đầu phiên sau)
 
 - ✅ **Đã xong (2026-07-12):** commit đợt cuối; `make lint && make test` xanh trên máy; U0 tick đủ và đổi trạng thái `✅ ĐẠT` trong checklist (commit `757ec3a`, `fa0988b`).
-- ⬜ **Kiểm chứng egress `:30000` (chặn U1):** API GDT nằm ở cổng `:30000`; spike cũ chỉ probe `:443` root nên **chưa** chứng minh Workers `fetch()` gọi được `:30000/captcha`. Phải probe trên **edge thật** (`wrangler dev --remote` hoặc deploy, KHÔNG dùng Miniflare/local). Nếu `fetch(:30000)` bị chặn cổng → thử **Workers TCP Sockets `connect()` (có TLS)** trước khi kết luận cần T1 relay. Kết quả quyết định BASE của U1 (xem kế hoạch U1).
+- ✅ **Đã kết luận egress `:30000` (2026-07-12):** probe edge thật cho thấy biên Cloudflare **KHÔNG** tới được API `:30000` (`fetch` → 521; TCP `connect()` → không nối được); thử direct-origin (`resolveOverride` + TCP) **inconclusive**, giữ làm bằng chứng (commit `fb54fea`). → Amendment ADR-0001 **bác bỏ T0 cho API**; **T1 relay VN là đường chính**.
+- ⬜ **U1a — Dựng relay VN + kiểm chứng egress `:30000` (chặn U1):** cần **VPS tại VN** trước; từ VN `curl :30000/captcha` trả `{key, content}`; relay stateless mTLS+secret; Worker gọi GDT qua relay. **Chưa có VPS ⇒ chưa vào U1a/U1.**
 - 🔄 **Egress (xuyên suốt):** tiếp tục theo dõi ở U1–U3 (nhiều colo, tải cao, endpoint có token).
 - ℹ️ **Nạp lại skill:** khởi động lại phiên Claude Code khi thêm skill mới trong `.claude/skills/`.
 
 ## 6. Khởi động phiên mới — làm gì trước
 
-1. Đọc file này + `docs/CHECKLIST-NGHIEM-THU.md` để biết mốc kế tiếp.
-2. Chạy `/plan-unit U1` (GDT Adapter: captcha + authenticate) — port từ `backend/gdt_client.py` sang `packages/gdt-client` bằng TypeScript.
-3. Theo vòng lặp mục 3 cho tới khi `/qa-unit` báo ĐẠT, rồi tick U1 trong checklist và commit.
+1. Đọc file này + `docs/CHECKLIST-NGHIEM-THU.md` để biết mốc kế tiếp (**U1a**).
+2. **Điều kiện tiên quyết U1a: có một VPS tại VN.** Chưa có ⇒ **DỪNG**, không dựng relay, không code U1a/U1. Khi có VPS: chạy `/plan-unit U1a` (dựng relay VN stateless mTLS+secret + kiểm chứng `curl :30000/captcha` từ VN trả `{key, content}` + Worker gọi GDT qua relay).
+3. Sau khi U1a ĐẠT (relay chạy, egress `:30000` kiểm chứng xong): `/plan-unit U1` (GDT Adapter: captcha + authenticate) — port từ `backend/gdt_client.py` sang `packages/gdt-client` bằng TypeScript.
+4. Theo vòng lặp mục 3 cho tới khi `/qa-unit` báo ĐẠT, rồi tick mốc trong checklist và commit.
