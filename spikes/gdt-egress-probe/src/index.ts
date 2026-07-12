@@ -8,8 +8,10 @@
 // KHÔNG phá captcha, KHÔNG đăng nhập — chỉ gọi endpoint công khai để đo khả năng tới máy chủ.
 
 import {
+  DirectOriginTransport,
   DirectTransport,
   type GdtTransport,
+  type OriginProbeResult,
   type ProbeOptions,
   type ProbeResult,
   VnRelayTransport,
@@ -24,6 +26,11 @@ export interface Env {
   // (Tùy chọn) relay VN — nếu đã dựng.
   VN_RELAY_URL?: string;
   VN_RELAY_SECRET?: string;
+  // Thử gọi thẳng origin IP của GDT (bỏ qua phân giải tên, giữ Host+SNI).
+  GDT_ORIGIN_IP: string;
+  GDT_ORIGIN_PORT: string;
+  GDT_ORIGIN_SNI_HOST: string;
+  GDT_ORIGIN_PATH: string;
 }
 
 function transportsFor(env: Env): GdtTransport[] {
@@ -51,9 +58,43 @@ async function runProbe(
   return { decidedTransport: decided, results };
 }
 
+// Thử riêng: gọi thẳng origin IP của GDT, giữ Host+SNI, bỏ qua phân giải tên
+// (vốn hiện route vào lớp fronting/CDN phía trước GDT). Chỉ /captcha, một lần.
+async function runOriginProbe(env: Env, force?: "fetch" | "tcp"): Promise<OriginProbeResult> {
+  const t = new DirectOriginTransport();
+  return t.probeOrigin(
+    {
+      originIp: env.GDT_ORIGIN_IP,
+      originPort: Number(env.GDT_ORIGIN_PORT ?? "30000"),
+      sniHost: env.GDT_ORIGIN_SNI_HOST,
+      path: env.GDT_ORIGIN_PATH ?? "/captcha",
+      timeoutMs: Number(env.PROBE_TIMEOUT_MS ?? "8000"),
+    },
+    force,
+  );
+}
+
 export default {
   // Gọi thử theo yêu cầu (HTTP) — tiện xem kết quả trên trình duyệt.
-  async fetch(_req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env): Promise<Response> {
+    const url = new URL(req.url);
+    if (url.pathname === "/origin") {
+      const force = url.searchParams.get("force");
+      const originResult = await runOriginProbe(
+        env,
+        force === "tcp" || force === "fetch" ? force : undefined,
+      );
+      const advice =
+        originResult.verdict === "OK"
+          ? `✅ Origin GDT nhận kết nối trực tiếp qua ${originResult.method} — cần đối chiếu bodyPreview để chắc là JSON captcha thật.`
+          : originResult.verdict === "GEO_BLOCKED"
+            ? `⚠️ Origin từ chối theo địa lý/HTTP (403/451) qua ${originResult.method}.`
+            : originResult.verdict === "TIMEOUT"
+              ? `❌ Origin không phản hồi trong timeout qua ${originResult.method}.`
+              : `❌ Không kết nối được origin qua ${originResult.method} (httpStatus=${originResult.httpStatus ?? "n/a"}). Thử '?force=tcp' để kiểm cơ chế còn lại.`;
+      return Response.json({ advice, ...originResult }, { status: 200 });
+    }
+
     const report = await runProbe(env);
     const advice =
       report.decidedTransport === "direct-cf"
