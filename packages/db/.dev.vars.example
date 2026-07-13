@@ -1,0 +1,7 @@
+# Mẫu biến môi trường cho packages/db (KHÔNG commit .dev.vars thật — đã .gitignore).
+# Kết nối Postgres TRỰC TIẾP dùng cho `make migrate` (drizzle-kit migrate) từ máy
+# dev/CI. KHÔNG phải binding Hyperdrive của Worker (đó là U6, runtime).
+#
+# Neon/Supabase (region gần VN, ví dụ SG) — ADR-0001 mục 4A.
+# Test tự động (make test) dùng PGlite offline, KHÔNG cần biến này.
+DATABASE_URL=postgres://user:password@host:5432/dbname?sslmode=require

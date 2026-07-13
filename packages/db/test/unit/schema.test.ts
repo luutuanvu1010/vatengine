@@ -1,0 +1,150 @@
+// U4 — Test lược đồ (nhóm unit, OFFLINE): introspect object Drizzle bằng
+// getTableConfig, KHÔNG cần DB. Bắt các luật mô hình hóa của Hiến pháp/Luật:
+// tenant_id NOT NULL mọi bảng nghiệp vụ; khóa tự nhiên 6 trường đúng thứ tự;
+// KHÔNG cột mật khẩu thô; raw_json JSONB; thuế suất dòng giữ kép.
+import { getTableName } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
+import { describe, expect, it } from "vitest";
+import { HOA_DON_NATURAL_KEY, HOA_DON_NATURAL_KEY_CONSTRAINT } from "../../src/naturalKey";
+import {
+  auditLog,
+  dongHangHoa,
+  hoaDon,
+  lanDongBo,
+  nguoiDung,
+  taiKhoanThue,
+} from "../../src/schema";
+
+/** Bảng nghiệp vụ bắt buộc có cột `tenant_id` NOT NULL (multi-tenant.md). */
+const TENANT_SCOPED = {
+  hoa_don: hoaDon,
+  dong_hang_hoa: dongHangHoa,
+  lan_dong_bo: lanDongBo,
+  tai_khoan_thue: taiKhoanThue,
+  nguoi_dung: nguoiDung,
+  audit_log: auditLog,
+} as const;
+
+function columnNames(table: Parameters<typeof getTableConfig>[0]): string[] {
+  return getTableConfig(table).columns.map((c) => c.name);
+}
+
+describe("U4 lược đồ — ràng buộc mô hình hóa (unit, offline)", () => {
+  it("(1) mọi bảng nghiệp vụ có cột tenant_id NOT NULL", () => {
+    for (const [name, table] of Object.entries(TENANT_SCOPED)) {
+      const col = getTableConfig(table).columns.find((c) => c.name === "tenant_id");
+      expect(col, `bảng ${name} phải có cột tenant_id`).toBeDefined();
+      expect(col?.notNull, `tenant_id của ${name} phải NOT NULL`).toBe(true);
+    }
+  });
+
+  it("(2) khóa tự nhiên hóa đơn = UNIQUE đúng 6 trường, đúng thứ tự (gồm tenant_id)", () => {
+    const cfg = getTableConfig(hoaDon);
+    const uc = cfg.uniqueConstraints.find((u) => u.name === HOA_DON_NATURAL_KEY_CONSTRAINT);
+    expect(uc, `phải có ràng buộc unique tên ${HOA_DON_NATURAL_KEY_CONSTRAINT}`).toBeDefined();
+    expect(uc?.columns.map((c) => c.name)).toEqual([
+      "tenant_id",
+      "nbmst",
+      "khmshdon",
+      "khhdon",
+      "shdon",
+      "tdlap",
+    ]);
+    // Hằng dùng chung phải khớp đúng khóa tự nhiên (nguồn chân lý ở tầng DB).
+    expect([...HOA_DON_NATURAL_KEY]).toEqual([
+      "tenant_id",
+      "nbmst",
+      "khmshdon",
+      "khhdon",
+      "shdon",
+      "tdlap",
+    ]);
+  });
+
+  it("(3) tai_khoan_thue KHÔNG có cột mật khẩu thô; có secret_ref + token mã hóa + hạn", () => {
+    const names = columnNames(taiKhoanThue);
+    expect(names).toContain("secret_ref");
+    expect(names).toContain("token_hien_tai");
+    expect(names).toContain("token_het_han");
+    // Ranh giới pháp lý: không lưu mật khẩu thuế thô (security.md + Hiến pháp).
+    expect(names.some((n) => /pass|matkhau|password|pwd/i.test(n))).toBe(false);
+  });
+
+  it("(4) hoa_don.raw_json là JSONB NOT NULL và có đủ cột nghiệp vụ mục 7.1", () => {
+    const cols = getTableConfig(hoaDon).columns;
+    const rawJson = cols.find((c) => c.name === "raw_json");
+    expect(rawJson?.getSQLType()).toBe("jsonb");
+    expect(rawJson?.notNull).toBe(true);
+    const names = cols.map((c) => c.name);
+    for (const n of [
+      "nbmst",
+      "nbten",
+      "nmmst",
+      "nmten",
+      "khmshdon",
+      "khhdon",
+      "shdon",
+      "tdlap",
+      "ncnhat",
+      "tgtcthue",
+      "tgtthue",
+      "tgtttbso",
+      "ttcktmai",
+      "dvtte",
+      "tgia",
+      "ttxly",
+      "tthai",
+      "chieu",
+      "nguon",
+    ]) {
+      expect(names, `hoa_don phải có cột ${n}`).toContain(n);
+    }
+  });
+
+  it("(5) dong_hang_hoa giữ thuế suất KÉP (ltsuat chuỗi + tsuat số) + tiền thuế dòng + raw_json JSONB", () => {
+    const cols = getTableConfig(dongHangHoa).columns;
+    const names = cols.map((c) => c.name);
+    expect(names).toContain("ltsuat"); // chuỗi hiển thị "8%"/"KCT"/"KKKNT"
+    expect(names).toContain("tsuat"); // số thập phân 0.08
+    expect(names).toContain("tsuat_tien"); // tiền thuế dòng (≡ tthue của adapter U3)
+    const rawJson = cols.find((c) => c.name === "raw_json");
+    expect(rawJson?.getSQLType()).toBe("jsonb");
+  });
+
+  it("(6) lan_dong_bo có đủ trường nhật ký đồng bộ", () => {
+    const names = columnNames(lanDongBo);
+    for (const n of [
+      "tenant_id",
+      "taikhoan_id",
+      "chieu",
+      "tu_ngay",
+      "den_ngay",
+      "so_hd_moi",
+      "so_hd_cap_nhat",
+      "trang_thai",
+      "thong_diep_loi",
+      "bat_dau",
+      "ket_thuc",
+    ]) {
+      expect(names, `lan_dong_bo phải có cột ${n}`).toContain(n);
+    }
+  });
+
+  it("(FK) khóa ngoại trỏ đúng bảng đích (cột nội bộ → bảng ngoài)", () => {
+    const cases: Array<[Parameters<typeof getTableConfig>[0], Record<string, string>]> = [
+      [taiKhoanThue, { tenant_id: "tenants" }],
+      [hoaDon, { tenant_id: "tenants" }],
+      [dongHangHoa, { tenant_id: "tenants", hoadon_id: "hoa_don" }],
+      [lanDongBo, { tenant_id: "tenants", taikhoan_id: "tai_khoan_thue" }],
+      [nguoiDung, { tenant_id: "tenants" }],
+      [auditLog, { tenant_id: "tenants" }],
+    ];
+    for (const [table, expected] of cases) {
+      for (const fk of getTableConfig(table).foreignKeys) {
+        const ref = fk.reference(); // resolve thunk () => bảng đích
+        const localCol = ref.columns[0]?.name ?? "";
+        expect(expected[localCol], `FK cột ${localCol}`).toBe(getTableName(ref.foreignTable));
+      }
+    }
+  });
+});

@@ -6,13 +6,15 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 ## Trạng thái tiến độ (đọc trước tiên)
 
-> **Cập nhật: 2026-07-13 · commit gần nhất `737e67d` · nhánh `feat/cloudflare-stack-u0`.**
+> **Cập nhật: 2026-07-13 · U4 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · **`U4 ⬜ ← KẾ TIẾP`** · `U5 ⬜` · `U6 ⬜` · `U7 ⬜` · `U8 ⬜` · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · **`U5 ⬜ ← KẾ TIẾP`** · `U6 ⬜` · `U7 ⬜` · `U8 ⬜` · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
-> **Kế tiếp — U4 (Mô hình dữ liệu + migration):** Drizzle/PostgreSQL qua Hyperdrive; khóa tự nhiên **6 trường** `(tenant_id, nbmst, khmshdon, khhdon, shdon, tdlap)` (khác adapter 5 trường — thêm `tenant_id`); `raw_json` JSONB; **RLS** theo `tenant_id`; bảng `HoaDon` + `DongHangHoa` (ánh xạ từ `mapDetailLines`). Xem `KIEN_TRUC_VA_KE_HOACH.md` mục 7.
+> **Đã xong — U4 (Mô hình dữ liệu + migration, `packages/db` = `@vat/db`):** lược đồ Drizzle 7 thực thể (mục 7.1); khóa tự nhiên **6 trường** UNIQUE `(tenant_id, nbmst, khmshdon, khhdon, shdon, tdlap)`; `raw_json` JSONB; **RLS `ENABLE` + `FORCE`** theo `tenant_id` (ràng buộc cả owner). Kiểm bằng **PGlite offline** (14 test: ràng buộc + cách ly tenant owner/non-owner), coverage 100%. `make migrate` = `drizzle-kit migrate` (cần `DATABASE_URL` thật; test dùng PGlite nên không chặn).
+>
+> **Kế tiếp — U5 (Dịch vụ đồng bộ idempotent):** `sync()` upsert theo khóa tự nhiên 6 trường lên `hoa_don` (`packages/db`), cập nhật `ttxly`/`tthai`, ghi `lan_dong_bo`; 401 dừng, lỗi tạm retry. Xem `KIEN_TRUC_VA_KE_HOACH.md` mục 7.2.
 >
 > **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
 
@@ -120,12 +122,12 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
   - Đã gỡ nhãn CHƯA KIỂM CHỨNG cho `DETAIL_ENDPOINTS.normal` + `gdt-contract-schema.json` (`invoice_detail`). Chi tiết: ADR-0001 **Amendment #6**.
   - Còn lại (giữ nhãn CHƯA KIỂM CHỨNG): `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) suy từ đối xứng, chưa gọi trực tiếp (tài khoản không có HĐ máy tính tiền); mã thuế đặc biệt KCT/KKKNT chưa quan sát (mới thấy 8%).
 
-### ⬜ U4 — Mô hình dữ liệu + migration (PostgreSQL/Drizzle qua Hyperdrive) · review: `security-reviewer`
+### ✅ U4 — Mô hình dữ liệu + migration (PostgreSQL/Drizzle qua Hyperdrive) · review: `security-reviewer` **PASS** + `dod-auditor` **PASS** (2026-07-13) · *ĐẠT (`make lint && make test` xanh, coverage 100%)*
 
-- [ ] `make migrate` tạo schema (Drizzle) trên Postgres.
-- [ ] Test ràng buộc **khóa tự nhiên** (unique) trên bảng hóa đơn.
-- [ ] Mọi bảng nghiệp vụ có `tenant_id` NOT NULL; `raw_json` kiểu JSONB.
-- [ ] Bật **Row-Level Security** theo `tenant_id`.
+- [x] `make migrate` tạo schema (Drizzle) trên Postgres. → `packages/db` (`@vat/db`): `drizzle-kit generate` sinh `migrations/0000_*.sql`; `make migrate` = `drizzle-kit migrate` (cần `DATABASE_URL` thật). Kiểm áp migration thật bằng PGlite: test (12) tạo đủ 7 bảng, áp lần hai không lỗi.
+- [x] Test ràng buộc **khóa tự nhiên** (unique) trên bảng hóa đơn. → UNIQUE `hoa_don_natural_key(tenant_id, nbmst, khmshdon, khhdon, shdon, tdlap)`; test (7) chèn trùng → lỗi thật, (8) khác `tenant_id` → chèn được (nguồn chân lý: `packages/db/src/naturalKey.ts`).
+- [x] Mọi bảng nghiệp vụ có `tenant_id` NOT NULL; `raw_json` kiểu JSONB. → unit test (1)(4)(5) introspect lược đồ; integration (9) chèn thiếu `tenant_id` → lỗi; (11) `raw_json` round-trip JSONB. **Không** cột mật khẩu thô ở `tai_khoan_thue` (test (3)).
+- [x] Bật **Row-Level Security** theo `tenant_id`. → `ENABLE` + **`FORCE`** ROW LEVEL SECURITY + policy fail-closed (`NULLIF(current_setting('app.tenant_id', true), '')`); test (13) chứng minh cách ly cho **cả role owner (nhờ FORCE) lẫn non-owner**. Ràng buộc vận hành: role app U6 không được là superuser (xem `.claude/rules/multi-tenant.md`).
 
 ### ⬜ U5 — Dịch vụ đồng bộ idempotent (upsert)
 

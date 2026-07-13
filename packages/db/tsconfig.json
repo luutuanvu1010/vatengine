@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Package dữ liệu chạy Node/Postgres (pg, pglite, drizzle-kit) — KHÔNG dùng
+    // binding Workers, nên thay @cloudflare/workers-types bằng @types/node
+    // (process.env cho drizzle.config, crypto/url trong test).
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "drizzle.config.ts"]
+}

@@ -1,0 +1,806 @@
+{
+  "id": "d6abcbff-d740-44ec-875b-a16383ccb42e",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.audit_log": {
+      "name": "audit_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hanh_dong": {
+          "name": "hanh_dong",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "doi_tuong": {
+          "name": "doi_tuong",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chi_tiet": {
+          "name": "chi_tiet",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tao_luc": {
+          "name": "tao_luc",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "audit_log_tenant_id_tenants_id_fk": {
+          "name": "audit_log_tenant_id_tenants_id_fk",
+          "tableFrom": "audit_log",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "audit_log_tenant_isolation": {
+          "name": "audit_log_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "\"audit_log\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "\"audit_log\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.dong_hang_hoa": {
+      "name": "dong_hang_hoa",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "hoadon_id": {
+          "name": "hoadon_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stt": {
+          "name": "stt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ten": {
+          "name": "ten",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dvtinh": {
+          "name": "dvtinh",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sluong": {
+          "name": "sluong",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dgia": {
+          "name": "dgia",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "thtien": {
+          "name": "thtien",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ltsuat": {
+          "name": "ltsuat",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tsuat": {
+          "name": "tsuat",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tsuat_tien": {
+          "name": "tsuat_tien",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raw_json": {
+          "name": "raw_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "dong_hang_hoa_hoadon_idx": {
+          "name": "dong_hang_hoa_hoadon_idx",
+          "columns": [
+            {
+              "expression": "hoadon_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "dong_hang_hoa_hoadon_id_hoa_don_id_fk": {
+          "name": "dong_hang_hoa_hoadon_id_hoa_don_id_fk",
+          "tableFrom": "dong_hang_hoa",
+          "tableTo": "hoa_don",
+          "columnsFrom": [
+            "hoadon_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "dong_hang_hoa_tenant_id_tenants_id_fk": {
+          "name": "dong_hang_hoa_tenant_id_tenants_id_fk",
+          "tableFrom": "dong_hang_hoa",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "dong_hang_hoa_tenant_isolation": {
+          "name": "dong_hang_hoa_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "\"dong_hang_hoa\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "\"dong_hang_hoa\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.hoa_don": {
+      "name": "hoa_don",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nbmst": {
+          "name": "nbmst",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nbten": {
+          "name": "nbten",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nmmst": {
+          "name": "nmmst",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nmten": {
+          "name": "nmten",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "khmshdon": {
+          "name": "khmshdon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "khhdon": {
+          "name": "khhdon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shdon": {
+          "name": "shdon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tdlap": {
+          "name": "tdlap",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ncnhat": {
+          "name": "ncnhat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tgtcthue": {
+          "name": "tgtcthue",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tgtthue": {
+          "name": "tgtthue",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tgtttbso": {
+          "name": "tgtttbso",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ttcktmai": {
+          "name": "ttcktmai",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dvtte": {
+          "name": "dvtte",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tgia": {
+          "name": "tgia",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ttxly": {
+          "name": "ttxly",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tthai": {
+          "name": "tthai",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chieu": {
+          "name": "chieu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nguon": {
+          "name": "nguon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_json": {
+          "name": "raw_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "hoa_don_tenant_idx": {
+          "name": "hoa_don_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "hoa_don_tenant_id_tenants_id_fk": {
+          "name": "hoa_don_tenant_id_tenants_id_fk",
+          "tableFrom": "hoa_don",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "hoa_don_natural_key": {
+          "name": "hoa_don_natural_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "nbmst",
+            "khmshdon",
+            "khhdon",
+            "shdon",
+            "tdlap"
+          ]
+        }
+      },
+      "policies": {
+        "hoa_don_tenant_isolation": {
+          "name": "hoa_don_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "\"hoa_don\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "\"hoa_don\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.lan_dong_bo": {
+      "name": "lan_dong_bo",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "taikhoan_id": {
+          "name": "taikhoan_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chieu": {
+          "name": "chieu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tu_ngay": {
+          "name": "tu_ngay",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "den_ngay": {
+          "name": "den_ngay",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "so_hd_moi": {
+          "name": "so_hd_moi",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "so_hd_cap_nhat": {
+          "name": "so_hd_cap_nhat",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "trang_thai": {
+          "name": "trang_thai",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'running'"
+        },
+        "thong_diep_loi": {
+          "name": "thong_diep_loi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bat_dau": {
+          "name": "bat_dau",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "ket_thuc": {
+          "name": "ket_thuc",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "lan_dong_bo_tenant_id_tenants_id_fk": {
+          "name": "lan_dong_bo_tenant_id_tenants_id_fk",
+          "tableFrom": "lan_dong_bo",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "lan_dong_bo_taikhoan_id_tai_khoan_thue_id_fk": {
+          "name": "lan_dong_bo_taikhoan_id_tai_khoan_thue_id_fk",
+          "tableFrom": "lan_dong_bo",
+          "tableTo": "tai_khoan_thue",
+          "columnsFrom": [
+            "taikhoan_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "lan_dong_bo_tenant_isolation": {
+          "name": "lan_dong_bo_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "\"lan_dong_bo\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "\"lan_dong_bo\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.nguoi_dung": {
+      "name": "nguoi_dung",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vai_tro": {
+          "name": "vai_tro",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'member'"
+        },
+        "ngay_tao": {
+          "name": "ngay_tao",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "nguoi_dung_tenant_id_tenants_id_fk": {
+          "name": "nguoi_dung_tenant_id_tenants_id_fk",
+          "tableFrom": "nguoi_dung",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "nguoi_dung_tenant_isolation": {
+          "name": "nguoi_dung_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "\"nguoi_dung\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "\"nguoi_dung\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tai_khoan_thue": {
+      "name": "tai_khoan_thue",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "loai": {
+          "name": "loai",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'chinh'"
+        },
+        "secret_ref": {
+          "name": "secret_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_hien_tai": {
+          "name": "token_hien_tai",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_het_han": {
+          "name": "token_het_han",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ngay_tao": {
+          "name": "ngay_tao",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tai_khoan_thue_tenant_id_tenants_id_fk": {
+          "name": "tai_khoan_thue_tenant_id_tenants_id_fk",
+          "tableFrom": "tai_khoan_thue",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "tai_khoan_thue_tenant_isolation": {
+          "name": "tai_khoan_thue_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "\"tai_khoan_thue\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "\"tai_khoan_thue\".\"tenant_id\" = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tenants": {
+      "name": "tenants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "ten": {
+          "name": "ten",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mst": {
+          "name": "mst",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trang_thai": {
+          "name": "trang_thai",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "goi_dich_vu": {
+          "name": "goi_dich_vu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ngay_tao": {
+          "name": "ngay_tao",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "tenants_tenant_isolation": {
+          "name": "tenants_tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "\"tenants\".\"id\" = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "\"tenants\".\"id\" = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -14,6 +14,7 @@ Cụ thể hoá nguyên tắc "mọi truy vấn dữ liệu phải gắn tenant_
 - Mọi bảng dữ liệu nghiệp vụ (hóa đơn, tài khoản thuế, lịch sử đồng bộ, log) phải có cột `tenant_id` không null.
 - Mọi truy vấn Drizzle đọc/ghi dữ liệu nghiệp vụ phải lọc theo `tenant_id` của phiên hiện tại. Không viết truy vấn "lấy tất cả" rồi lọc ở tầng ứng dụng.
 - Bật **Row-Level Security (RLS)** ở PostgreSQL làm lớp phòng thủ thứ hai (đặt `app.tenant_id` cho mỗi giao dịch), **không** thay thế cho lọc tường minh ở tầng ứng dụng.
+- RLS phải dùng cả `ENABLE` **và** `FORCE ROW LEVEL SECURITY`: `ENABLE` chỉ chi phối role KHÔNG-owner, `FORCE` mới bắt cả table owner tuân theo policy (chặn kịch bản kết nối bằng đúng role sở hữu bảng — mặc định phổ biến của Neon/Supabase). Ràng buộc vận hành: role app kết nối Hyperdrive (U6) **KHÔNG được là superuser** — superuser bỏ qua RLS kể cả FORCE. (Thiết lập ở U4: `packages/db/migrations`, kiểm bằng test cách ly cho cả role owner lẫn non-owner.)
 - Khóa tự nhiên hóa đơn để upsert luôn bao gồm `tenant_id`: `(tenant_id, nbmst, khmshdon, khhdon, shdon, tdlap)`. Không dùng khóa thiếu `tenant_id`.
 - Session/token đăng nhập thuế gắn với đúng một `tenant_id`; không cho một tenant dùng token của tenant khác dù có quyền admin.
 - Job nền (Queue/Workflow) **không có request context** → `tenant_id` phải nằm tường minh trong payload message/Workflow event, không suy đoán ngầm.

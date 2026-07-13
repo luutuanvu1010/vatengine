@@ -25,8 +25,5 @@ run:
 	npm run dev -w apps/api
 
 migrate:
-	@if npm run --workspaces --if-present migrate 2>/dev/null; then \
-		echo "Đã chạy migrate."; \
-	else \
-		echo "Chưa có package DB/migrations (thêm ở U4 — mô hình dữ liệu, xem KIEN_TRUC_VA_KE_HOACH.md mục 7)."; \
-	fi
+	@echo "Áp migration Drizzle (@vat/db) lên DATABASE_URL — đặt trong packages/db/.dev.vars (xem .dev.vars.example). Test tự động dùng PGlite offline, không cần DB thật."
+	npm run migrate -w packages/db
