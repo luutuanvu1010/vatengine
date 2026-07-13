@@ -85,7 +85,14 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] Test phân trang nhiều trang (đủ, không sót/lặp trang). (Test: dừng khi trang ngắn hơn size, dừng khi thiếu `state`, chặn vòng lặp vô hạn + cảnh báo cắt cụt.)
 - [x] Khử trùng lặp theo khóa tự nhiên. Ở **tầng adapter (U2)** dùng **5 trường** `(nbmst, khmshdon, khhdon, shdon, tdlap)` — `tenant_id` (khóa 6 trường cho upsert DB) bổ sung ở tầng đồng bộ **U4/U5**, không thuộc adapter. (Test: "khử trùng theo khóa tự nhiên khi trùng giữa normal và sco".)
 - [x] Luôn giữ nguyên bản thô của hóa đơn (nền tảng cho cột `raw_json` khi lưu DB ở U4): adapter trả nguyên toàn bộ trường, chỉ gắn thêm `_source`/`_direction`. (Test: "bảo toàn TOÀN BỘ trường thô của hóa đơn".)
-- [ ] ⚠️ **Nợ kiểm chứng (chuyển sang runbook probe query):** hình dạng phong bì `{datas, state}`, cú pháp RSQL, cách gắn token `Bearer`, và giả định "một số tài khoản không có sco" đều **CHƯA KIỂM CHỨNG** (suy từ mã Python di sản). Contract test `invoices.contract.test.ts` gated bằng `GDT_CONTRACT_TOKEN` ghi kỳ vọng; gỡ nhãn trong `endpoints.ts` + `gdt-contract-schema.json` sau khi có log gọi thật.
+- [x] ✅ **ĐÃ KIỂM CHỨNG (2026-07-13, probe query thật từ Chrome đăng nhập thật của người dùng — chỉ đọc network, không ghi token/giá trị hóa đơn):**
+  - `GET /api/query/invoices/purchase` → `200`, phong bì `{datas, total, state, time}`; `datas` mảng (15), `state` chuỗi con trỏ; **16 kết quả / 2 trang** ⇒ phân trang `state` hoạt động thật.
+  - `GET /api/query/invoices/sold` → `200` (network capture).
+  - `GET /api/sco-query/invoices/purchase` → `200`, `datas: []` **RỖNG vẫn hiện diện**, `state: null` khi rỗng ⇒ giải toả điểm mơ hồ "GDT có luôn trả `datas` khi rỗng không".
+  - Bare fetch không kèm `Authorization` → `401` ⇒ xác nhận cần header `Bearer`.
+  - Cú pháp RSQL thật `tdlap=ge=…T00:00:00;tdlap=le=…T23:59:59` khớp `buildSearch()`; row đủ 5 trường khóa tự nhiên.
+  - Đã gỡ nhãn `CHƯA KIỂM CHỨNG` trong `endpoints.ts` + `gdt-contract-schema.json`. Chi tiết: ADR-0001 **Amendment #5**.
+  - Còn lại (nhẹ): `/api/sco-query/invoices/sold` suy từ đối xứng, chưa gọi trực tiếp; probe qua egress máy người dùng (không kiểm lại egress T0 — đã có ở Amendment #3/#4).
 
 ### ⬜ U3 — GDT Adapter: detail dòng hàng · review: `contract-guardian`
 

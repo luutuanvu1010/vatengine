@@ -16,7 +16,12 @@ export const CAPTCHA_PATH = "/api/captcha" as const;
 export const AUTH_PATH = "/api/security-taxpayer/authenticate" as const;
 
 // Hai họ endpoint truy vấn hóa đơn (gộp kết quả): thường + máy tính tiền (sco).
-// CHƯA KIỂM CHỨNG (2026-07-13) — dùng ở U2, chưa test trong U1.
+// ĐÃ KIỂM CHỨNG (2026-07-13, probe query thật từ Chrome đăng nhập thật của người
+// dùng): GET /api/query/invoices/purchase và /sold trả 200; GET
+// /api/sco-query/invoices/purchase trả 200. Có tiền tố /api. Phân trang state
+// hoạt động (16 kết quả / 2 trang). Bằng chứng: docs/CHECKLIST-NGHIEM-THU.md (U2)
+// + docs/adr/0001-nen-tang-cloudflare.md Amendment #5. (/sco-query/.../sold suy
+// từ đối xứng, chưa gọi trực tiếp.) Không ghi lại token/giá trị hóa đơn.
 export const INVOICE_ENDPOINTS = {
   purchase: "/api/query/invoices/purchase",
   sold: "/api/query/invoices/sold",

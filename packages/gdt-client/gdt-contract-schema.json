@@ -8,7 +8,7 @@
     "required_keys": ["token"]
   },
   "invoice_envelope": {
-    "description": "GET /api/(sco-)query/invoices/{purchase,sold} — phong bì danh sách hóa đơn: 'datas' (mảng HĐ) + 'state' (con trỏ phân trang). CHƯA KIỂM CHỨNG (2026-07-13): hình dạng mới suy từ mã Python di sản backend/gdt_client.py, CHƯA có probe query thật (endpoint cần token + captcha người thật). Kiểm hợp đồng MỀM (chỉ cảnh báo, KHÔNG mở circuit breaker) theo ngoại lệ trong .claude/rules/gdt-adapter.md, vì chưa xác nhận GDT luôn trả 'datas' kể cả khi rỗng. Gỡ nhãn + nâng thành kiểm cứng sau khi có log thật (runbook probe query, giống U1-probe-authenticate.md).",
+    "description": "GET /api/(sco-)query/invoices/{purchase,sold} — phong bì danh sách hóa đơn: {datas, total, state, time}. ĐÃ KIỂM CHỨNG (2026-07-13, probe query thật từ Chrome đăng nhập thật): 'datas' (mảng HĐ) LUÔN hiện diện kể cả khi rỗng (sco-query/purchase trả datas:[]) — giải toả điểm mơ hồ cũ; 'state' là chuỗi con trỏ phân trang khi có dữ liệu, null khi rỗng. Vẫn giữ kiểm hợp đồng MỀM (missingContractKeys → chỉ cảnh báo, KHÔNG mở circuit breaker) ở tầng query như lớp phòng thủ; có thể nâng hard-raise theo .claude/rules/gdt-adapter.md (quyết định governance riêng, cần cập nhật ngoại lệ trong rule + test). Bằng chứng: docs/CHECKLIST-NGHIEM-THU.md (U2) + ADR-0001 Amendment #5.",
     "required_keys": ["datas"]
   }
 }

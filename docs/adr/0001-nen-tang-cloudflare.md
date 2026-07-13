@@ -3,12 +3,40 @@
 - **Trạng thái:** ✅ Đã chấp thuận (Accepted) — 2026-07-11 · **sửa đổi 2026-07-12, 2026-07-13** (xem "Amendment" bên dưới)
 - **Quyết định đã chốt:** **4A = A2** (PostgreSQL ngoài + Hyperdrive) · **4B = B1** (TypeScript trên Workers) · Egress: **T0 (thuần Cloudflare) là đường ra CHÍNH THỨC cho API GDT `/api/*` (Amendment #3, 2026-07-13)**; relay VN/T1/U1a **TREO, không dựng** trừ khi phát sinh bằng chứng chặn địa lý mới.
 - **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress, sau này xác định dựa trên tiền đề sai) · 2026-07-13 (Amendment #2 đính chính tiền đề `:30000`; Amendment #3 xác nhận T0 chạy được với `/api/captcha`; Amendment #4 xác nhận T0 tới được endpoint xác thực `/api/security-taxpayer/authenticate`)
-- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Amendment #4 — probe đăng nhập thật (QĐ-2, có người trực nhập captcha) trả **200 + `{token}` (JWT)** từ T0 ⇒ **T0 tới được cả endpoint xác thực** `/api/security-taxpayer/authenticate`, gỡ nhãn CHƯA KIỂM CHỨNG cho `AUTH_PATH`. Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
+- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Amendment #4 — probe đăng nhập thật (QĐ-2, có người trực nhập captcha) trả **200 + `{token}` (JWT)** từ T0 ⇒ **T0 tới được cả endpoint xác thực** `/api/security-taxpayer/authenticate`, gỡ nhãn CHƯA KIỂM CHỨNG cho `AUTH_PATH`. Amendment #5 — probe query thật (Chrome đăng nhập thật, chỉ đọc network) xác nhận `INVOICE_ENDPOINTS` `/api/(sco-)query/invoices/*` trả **200 + phong bì `{datas, total, state, time}`** (datas luôn hiện diện kể cả rỗng, state=null khi rỗng), gỡ nhãn CHƯA KIỂM CHỨNG cho query hóa đơn (U2). Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
 - **Người quyết định:** Chủ dự án (luutuanvu.gl@gmail.com)
 - **Phạm vi ảnh hưởng:** Hiến pháp `CLAUDE.md` (mục "Ngăn xếp công nghệ", "Kiến trúc — quy tắc cứng"), các luật `.claude/rules/*.md`, khung `backend/` + `frontend/` hiện có.
 - **Nguồn tra cứu:** Tài liệu chính thức Cloudflare (developers.cloudflare.com), truy cập 2026-07-11. Các mốc giới hạn dẫn trong tài liệu này lấy từ trang docs cập nhật tháng 4–6/2026.
 
 > ⚠️ **Cảnh báo quản trị.** Quyết định này **mâu thuẫn trực diện** với Hiến pháp hiện hành (Python/FastAPI/PostgreSQL/Celery/Redis). Theo chính khung quản trị của dự án ("khi một luật mâu thuẫn với Hiến pháp, Hiến pháp thắng — sửa luật, không sửa hiến pháp để né"), việc chuyển sang Cloudflare **bắt buộc phải sửa Hiến pháp một cách tường minh**, không được lặng lẽ đi chệch. Mục "Hệ quả" liệt kê các thay đổi Hiến pháp cần thông qua.
+
+---
+
+## Amendment #5 (2026-07-13) — Hợp đồng endpoint QUERY hóa đơn đã kiểm chứng; gỡ nhãn CHƯA KIỂM CHỨNG cho `INVOICE_ENDPOINTS` (U2)
+
+> Đóng đúng khoảng trống "Giới hạn của bằng chứng" ở Amendment #4 (khi đó chưa kiểm chứng `INVOICE_ENDPOINTS`). Probe query THẬT qua **Chrome đăng nhập thật của người dùng** (người dùng tự đăng nhập + nhập captcha — KHÔNG bypass), quan sát tầng mạng để lấy **đường dẫn + hình dạng phản hồi**. Chỉ đọc **tên khóa** (schema), **không** ghi lại token hay giá trị hóa đơn.
+
+### Bằng chứng (2026-07-13, quan sát network trên portal `hoadondientu.gdt.gov.vn` đã đăng nhập)
+
+| Endpoint (thật) | status | Phong bì / ghi chú |
+|---|---|---|
+| `GET /api/query/invoices/purchase?sort=tdlap:desc&size=15&search=…` | `200` | keys `{datas, total, state, time}`; `datas` mảng (15), `state` chuỗi con trỏ; 16 kết quả / 2 trang ⇒ phân trang `state` hoạt động |
+| `GET /api/query/invoices/sold?…` | `200` | (bắt ở tầng network) |
+| `GET /api/sco-query/invoices/purchase?…` | `200` | `datas: []` (RỖNG) vẫn hiện diện; `state: null` khi rỗng |
+| `GET /api/query/invoices/purchase` **không kèm** `Authorization` | `401` | xác nhận cần header `Bearer` |
+
+- **Cú pháp RSQL** thật: `tdlap=ge=DD/MM/YYYYT00:00:00;tdlap=le=DD/MM/YYYYT23:59:59` — khớp `buildSearch()`.
+- **Row** chứa đủ 5 trường khóa tự nhiên `nbmst, khmshdon, khhdon, shdon, tdlap` (+ `ttxly`, `tthai`, ~130 trường ⇒ `raw_json` hợp lý).
+
+### Kết luận
+
+- **Gỡ nhãn `CHƯA KIỂM CHỨNG`** cho `INVOICE_ENDPOINTS` trong `endpoints.ts`; cập nhật `gdt-contract-schema.json` (`invoice_envelope`) sang ĐÃ KIỂM CHỨNG. Điểm mơ hồ cũ ("chưa chắc GDT trả `datas` khi rỗng") **đã giải toả**: `datas` luôn hiện diện, `state=null` khi rỗng (khớp điều kiện dừng phân trang trong `query.ts`).
+
+### Giới hạn của bằng chứng (không phóng đại)
+
+- Probe này chạy qua **trình duyệt người dùng (egress = máy người dùng)**, KHÔNG phải biên Cloudflare — nó kiểm chứng **hợp đồng (path + phong bì + RSQL + Bearer)**, KHÔNG kiểm lại egress T0. Egress T0 tới host `hoadondientu.gdt.gov.vn` `/api/*` đã được Amendment #3/#4 xác lập (cùng host).
+- `/api/sco-query/invoices/sold` **suy từ đối xứng**, chưa gọi trực tiếp trong probe này.
+- Vẫn giữ kiểm hợp đồng **mềm** cho `invoice_envelope` ở tầng query (lớp phòng thủ); nâng hard-raise là quyết định governance riêng (cập nhật `.claude/rules/gdt-adapter.md` + test).
 
 ---
 

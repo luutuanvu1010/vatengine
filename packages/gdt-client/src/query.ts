@@ -4,10 +4,14 @@
 // (upsert idempotent theo (tenant_id, ...) là tầng U4–U5).
 // Xem .claude/rules/gdt-adapter.md và KIEN_TRUC_VA_KE_HOACH.md mục 7.
 //
-// CHƯA KIỂM CHỨNG (2026-07-13): hình dạng phong bì `{datas, state}` và cú pháp
-// RSQL suy từ mã Python di sản (backend/gdt_client.py) — mã cũ KHÔNG phải bằng
-// chứng (Hiến pháp). Chưa có probe query thật (cần token + captcha người thật);
-// contract test invoices.contract.test.ts ghi kỳ vọng, gỡ nhãn sau khi có log.
+// ĐÃ KIỂM CHỨNG (2026-07-13, probe query thật từ Chrome đăng nhập thật): phong bì
+// là `{datas, total, state, time}` — `datas` LUÔN hiện diện kể cả khi rỗng
+// (sco-query/purchase trả `datas: []`), `state` là chuỗi con trỏ khi có dữ liệu
+// và `null` khi rỗng (khớp điều kiện dừng phân trang bên dưới). Cú pháp RSQL
+// `tdlap=ge=DD/MM/YYYYT00:00:00;tdlap=le=...T23:59:59` khớp portal; token gắn qua
+// header `Authorization: Bearer` (bare fetch không kèm → 401). Row chứa đủ 5
+// trường khóa tự nhiên. Bằng chứng: docs/CHECKLIST-NGHIEM-THU.md (U2) + ADR-0001
+// Amendment #5. Không ghi lại token/giá trị hóa đơn.
 
 import { missingContractKeys } from "./contract";
 import { BASE, INVOICE_ENDPOINTS } from "./endpoints";
