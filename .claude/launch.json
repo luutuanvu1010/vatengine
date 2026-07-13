@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "apps/api"],
+      "port": 8787
+    },
+    {
+      "name": "gdt-egress-probe",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "spikes/gdt-egress-probe/wrangler.jsonc",
+        "--port",
+        "8788"
+      ],
+      "port": 8788
+    }
+  ]
+}
