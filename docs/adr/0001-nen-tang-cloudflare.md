@@ -2,13 +2,42 @@
 
 - **Trạng thái:** ✅ Đã chấp thuận (Accepted) — 2026-07-11 · **sửa đổi 2026-07-12, 2026-07-13** (xem "Amendment" bên dưới)
 - **Quyết định đã chốt:** **4A = A2** (PostgreSQL ngoài + Hyperdrive) · **4B = B1** (TypeScript trên Workers) · Egress: **T0 (thuần Cloudflare) là đường ra CHÍNH THỨC cho API GDT `/api/*` (Amendment #3, 2026-07-13)**; relay VN/T1/U1a **TREO, không dựng** trừ khi phát sinh bằng chứng chặn địa lý mới.
-- **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress, sau này xác định dựa trên tiền đề sai) · 2026-07-13 (Amendment #2 đính chính tiền đề `:30000`; Amendment #3 xác nhận T0 chạy được với endpoint đúng)
-- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
+- **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress, sau này xác định dựa trên tiền đề sai) · 2026-07-13 (Amendment #2 đính chính tiền đề `:30000`; Amendment #3 xác nhận T0 chạy được với `/api/captcha`; Amendment #4 xác nhận T0 tới được endpoint xác thực `/api/security-taxpayer/authenticate`)
+- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Amendment #4 — probe đăng nhập thật (QĐ-2, có người trực nhập captcha) trả **200 + `{token}` (JWT)** từ T0 ⇒ **T0 tới được cả endpoint xác thực** `/api/security-taxpayer/authenticate`, gỡ nhãn CHƯA KIỂM CHỨNG cho `AUTH_PATH`. Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
 - **Người quyết định:** Chủ dự án (luutuanvu.gl@gmail.com)
 - **Phạm vi ảnh hưởng:** Hiến pháp `CLAUDE.md` (mục "Ngăn xếp công nghệ", "Kiến trúc — quy tắc cứng"), các luật `.claude/rules/*.md`, khung `backend/` + `frontend/` hiện có.
 - **Nguồn tra cứu:** Tài liệu chính thức Cloudflare (developers.cloudflare.com), truy cập 2026-07-11. Các mốc giới hạn dẫn trong tài liệu này lấy từ trang docs cập nhật tháng 4–6/2026.
 
 > ⚠️ **Cảnh báo quản trị.** Quyết định này **mâu thuẫn trực diện** với Hiến pháp hiện hành (Python/FastAPI/PostgreSQL/Celery/Redis). Theo chính khung quản trị của dự án ("khi một luật mâu thuẫn với Hiến pháp, Hiến pháp thắng — sửa luật, không sửa hiến pháp để né"), việc chuyển sang Cloudflare **bắt buộc phải sửa Hiến pháp một cách tường minh**, không được lặng lẽ đi chệch. Mục "Hệ quả" liệt kê các thay đổi Hiến pháp cần thông qua.
+
+---
+
+## Amendment #4 (2026-07-13) — T0 tới được endpoint XÁC THỰC: `authenticate` trả 200 + JWT; gỡ nhãn CHƯA KIỂM CHỨNG cho `AUTH_PATH`
+
+> Bổ khuyết trực tiếp "Giới hạn của bằng chứng" ở Amendment #3 (khi đó **mới** kiểm chứng `/api/captcha` công khai, **chưa** kiểm chứng endpoint cần xác thực). Probe đăng nhập THẬT theo **QĐ-2** (`docs/plans/U1-plan.md`, runbook `docs/prompts/U1-probe-authenticate.md`): có người trực **đọc + nhập captcha** (KHÔNG bypass), credential nạp **ephemeral** qua `.dev.vars` rồi **xoá ngay** sau probe.
+
+### Bằng chứng (2026-07-13, `wrangler dev --remote`, spike `spikes/gdt-egress-probe`, route probe tạm — đã revert)
+
+Worker chạy trên colo Cloudflare thật gọi `POST https://hoadondientu.gdt.gov.vn/api/security-taxpayer/authenticate` **qua adapter thật** (`authenticate()` trong `packages/gdt-client`), body `{username, password, ckey, cvalue}` (captcha do người dùng đọc + gõ). Log server (bản che) đối chiếu độc lập với trang kết quả trên trình duyệt.
+
+| Chỉ số | Giá trị |
+|---|---|
+| `httpStatus` | `200` |
+| `hasToken` | `true` (JWT, prefix `eyJ...` — **không** ghi lại token đầy đủ) |
+| `egressCountry` (`cdn-cgi/trace`) | `SG` (Singapore — colo CF nước ngoài, xác nhận egress không phải VN cục bộ) |
+| verdict | `VERIFIED` |
+
+### Kết luận
+
+- **T0 (thuần Cloudflare) tới được endpoint XÁC THỰC** `/api/security-taxpayer/authenticate`, không chỉ endpoint captcha công khai — đóng đúng khoảng trống nêu ở Amendment #3.
+- Hình dạng phản hồi thành công khớp hợp đồng `authenticate` `{token}` (`packages/gdt-client/gdt-contract-schema.json`).
+- **Gỡ nhãn `CHƯA KIỂM CHỨNG`** cho `AUTH_PATH` trong `endpoints.ts` + cập nhật `gdt-contract-schema.json` (`authenticate`) sang trạng thái ĐÃ KIỂM CHỨNG. Bằng chứng đầy đủ (ngày, status, egress, hasToken, đã che token/password) ở `docs/CHECKLIST-NGHIEM-THU.md` (U1).
+
+### Giới hạn của bằng chứng (không phóng đại)
+
+- **Chưa** kiểm chứng `INVOICE_ENDPOINTS` (`/api/query/invoices/*`, `/api/sco-query/invoices/*`) — vẫn giữ nhãn `CHƯA KIỂM CHỨNG`, là việc của **U2**.
+- Probe là **bán thủ công một lần** (không vào CI tự động): captcha cần người thật. CI (`make test-contract`) chỉ giữ contract công khai `/api/captcha`.
+- Mã probe **tạm, đã revert** ngay sau khi lấy bằng chứng (`git status` sạch); credential ephemeral đã xoá — không lưu mật khẩu thuế thô (ranh giới `security.md`).
 
 ---
 

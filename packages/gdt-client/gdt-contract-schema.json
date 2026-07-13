@@ -4,7 +4,7 @@
     "required_keys": ["key", "content"]
   },
   "authenticate": {
-    "description": "POST /api/security-taxpayer/authenticate — đổi captcha đã nhập lấy JWT token. CHƯA KIỂM CHỨNG (2026-07-13) — chờ probe đăng nhập thật với tài khoản MST hợp pháp (QĐ-2, docs/plans/U1-plan.md).",
+    "description": "POST /api/security-taxpayer/authenticate — đổi captcha đã nhập lấy JWT token. ĐÃ KIỂM CHỨNG (2026-07-13, ADR-0001 Amendment #4): probe đăng nhập thật (QĐ-2) từ biên Cloudflare (T0) trả 200 + {token} (JWT), egress SG. Không tự động vào CI (cần captcha người thật) — CI chỉ giữ contract công khai /api/captcha.",
     "required_keys": ["token"]
   }
 }

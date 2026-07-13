@@ -9,9 +9,10 @@ export const BASE = "https://hoadondientu.gdt.gov.vn" as const;
 
 export const CAPTCHA_PATH = "/api/captcha" as const;
 
-// CHƯA KIỂM CHỨNG (2026-07-13) — chờ probe đăng nhập thật với tài khoản MST hợp
-// pháp (QĐ-2, docs/plans/U1-plan.md). Không ghi vào ADR như "đã chốt" cho tới
-// khi probe xanh (bài học :30000, xem "Nguyên tắc bằng chứng" trong CLAUDE.md).
+// ĐÃ KIỂM CHỨNG (2026-07-13): probe đăng nhập thật (QĐ-2, ADR-0001 Amendment #4)
+// từ biên Cloudflare (T0, wrangler dev --remote) trả HTTP 200 + {token} (JWT),
+// egress SG. Credential ephemeral đã xoá; token KHÔNG ghi lại. Bằng chứng:
+// docs/CHECKLIST-NGHIEM-THU.md (U1) + runbook docs/prompts/U1-probe-authenticate.md.
 export const AUTH_PATH = "/api/security-taxpayer/authenticate" as const;
 
 // Hai họ endpoint truy vấn hóa đơn (gộp kết quả): thường + máy tính tiền (sco).
