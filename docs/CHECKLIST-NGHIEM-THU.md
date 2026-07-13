@@ -62,6 +62,7 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [ ] Từ **vantage VN thật**: `curl https://103.9.200.142:30000/captcha` (Host: `hoadondientu.gdt.gov.vn`) trả JSON hợp lệ `{key, content}`.
 - [ ] Worker gọi GDT **thành công qua relay** (`GdtTransport = vn-relay`): probe/`getCaptcha` qua relay trả về đúng payload.
 - [ ] Bí mật relay (khóa mTLS, shared-secret) nạp qua Workers Secrets/Secrets Store, không commit, xoay vòng được.
+- [ ] **Đo ngưỡng danh tính egress (ADR-0002):** xác định **đơn vị + con số thật** GDT siết một IP (kiểm chứng giả định tạm *≤10 DN/IP/ngày*); ghi rõ GDT có nhạy với "1 token đổi nhiều IP" / "1 IP đổi nhiều token" hay không. Từ kết quả → **tính cỡ pool IP VN** theo tần suất đồng bộ và cập nhật ADR-0002 sang *Accepted*.
 
 ### ⬜ U1 — GDT Adapter: captcha + authenticate  ·  *BỊ CHẶN bởi U1a* · review: `contract-guardian`
 
