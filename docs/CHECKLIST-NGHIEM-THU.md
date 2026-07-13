@@ -66,13 +66,17 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [ ] ~~Bí mật relay (khóa mTLS, shared-secret) nạp qua Workers Secrets/Secrets Store, không commit, xoay vòng được.~~
 - [ ] ~~**Đo ngưỡng danh tính egress (ADR-0002):** xác định **đơn vị + con số thật** GDT siết một IP...~~ — chỉ cần lại nếu probe định kỳ trong tương lai phát hiện `GEO_BLOCKED` thật sự.
 
-### ⬜ U1 — GDT Adapter: captcha + authenticate  ·  review: `contract-guardian`
+### ✅ U1 — GDT Adapter: captcha + authenticate  ·  review: `contract-guardian` + `security-reviewer` + `dod-auditor` — cả ba **PASS** (2026-07-13)
 
-- [ ] Mọi gọi GDT đi qua `GdtTransport` trong `packages/gdt-client` (không `fetch` trực tiếp nơi khác).
-- [ ] `getCaptcha()` chỉ trả ảnh cho người dùng nhập — **không** tự giải/bypass.
-- [ ] Đăng nhập thành công nghiệp vụ khi có `token`; xử lý sai captcha/mật khẩu (GDT có thể trả 200 kèm `message` lỗi, không có `token`).
-- [ ] 401 → dừng, báo hết phiên; không tự retry bằng credential cũ.
-- [ ] Contract test với phản hồi mẫu (endpoint công khai `/captcha`).
+- [x] Mọi gọi GDT đi qua `GdtTransport` trong `packages/gdt-client` (không `fetch` trực tiếp nơi khác). Khẳng định bằng test chặn `globalThis.fetch` (`test/unit/auth.test.ts`).
+- [x] `getCaptcha()` chỉ trả ảnh cho người dùng nhập — **không** tự giải/bypass (`src/captcha.ts`).
+- [x] Đăng nhập thành công nghiệp vụ khi có `token`; xử lý sai captcha/mật khẩu (GDT có thể trả 200 kèm `message` lỗi, không có `token`) như lỗi nghiệp vụ, không phải lệch hợp đồng (`src/auth.ts`).
+- [x] 401 → dừng, báo hết phiên (`GdtError` code `SESSION_EXPIRED`); không tự retry bằng credential cũ (`src/http.ts` không retry cho 401; khẳng định `callCount()===1`).
+- [x] Contract test với phản hồi thật (endpoint công khai `/api/captcha`, `test/contract/captcha.contract.test.ts`, chạy mạng thật, khớp `gdt-contract-schema.json`).
+- [x] `BASE` sửa từ `:30000` (sai) sang `https://hoadondientu.gdt.gov.vn` (`:443`), `CAPTCHA_PATH = /api/captcha` — ĐÃ KIỂM CHỨNG (ADR-0001 Amendment #3).
+- [x] `make lint` sạch, `make test` xanh (25/25 unit + 2/2 apps/api), `make test-contract` xanh (1/1, gọi mạng thật).
+- [x] Coverage `packages/gdt-client/src/*.ts` (trừ `index.ts` — wiring thuần): **99.29%** stmts/lines, 96.29% branch, 100% funcs — vượt ngưỡng 80% (`.claude/rules/testing.md`).
+- [ ] ⚠️ **Nợ kiểm chứng ghi rõ:** `AUTH_PATH = /api/security-taxpayer/authenticate` và `INVOICE_ENDPOINTS` (tiền tố `/api/*`) **CHƯA KIỂM CHỨNG** — chỉ có unit test mock, chưa chạy probe đăng nhập thật (QĐ-2, `docs/plans/U1-plan.md`). Cần tài khoản MST hợp pháp + người trực đọc captcha thật; secret nạp ephemeral qua `wrangler secret put` rồi xoá ngay sau probe — **không** thực hiện trong phiên này (đòi hỏi nhập credential thật, ngoài phạm vi tác nhân tự động). Khi probe xanh: gỡ nhãn CHƯA KIỂM CHỨNG khỏi `endpoints.ts` + cập nhật `gdt-contract-schema.json` phần `authenticate`.
 
 ### ⬜ U2 — Query purchase/sold + phân trang + gộp sco + khử trùng · review: `contract-guardian`
 

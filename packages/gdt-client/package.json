@@ -6,6 +6,8 @@
   "main": "src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir test/unit",
+    "test:contract": "vitest run --dir test/contract --passWithNoTests"
   }
 }

@@ -18,6 +18,7 @@ dist/
 .wrangler/
 .dev.vars
 *.tsbuildinfo
+coverage/
 
 # Cổng kiểm soát: log audit prompt là dữ liệu vận hành, không commit vào git.
 .claude/logs/

@@ -1,17 +1,9 @@
 // Package adapter GDT — điểm cô lập DUY NHẤT mọi phụ thuộc API thuế (ADR-0001).
-// U0: mới export interface + hằng số endpoint; hiện thực transport/login/query
-// port từ backend/gdt_client.py ở U1–U3.
+// U1: hiện thực getCaptcha() + authenticate(); query hóa đơn port ở U2–U3.
 
-export { BASE, INVOICE_ENDPOINTS, PUBLIC_PROBE_PATH } from "./endpoints";
+export { authenticate, type AuthCredentials, type AuthResult } from "./auth";
+export { getCaptcha, type Captcha } from "./captcha";
+export { AUTH_PATH, BASE, CAPTCHA_PATH, INVOICE_ENDPOINTS, PUBLIC_PROBE_PATH } from "./endpoints";
+export { GdtContractDriftError, GdtError } from "./errors";
+export { type RetryOptions, fetchWithRetry } from "./http";
 export { type GdtTransport, type ProbeResult, type ProbeVerdict, classify } from "./transport";
-
-/** Lỗi nghiệp vụ GDT (ví dụ 401 hết phiên). Không retry bằng credential cũ. */
-export class GdtError extends Error {
-  constructor(
-    message: string,
-    readonly code: "SESSION_EXPIRED" | "HTTP_ERROR" | "CONTRACT_DRIFT" = "HTTP_ERROR",
-  ) {
-    super(message);
-    this.name = "GdtError";
-  }
-}
