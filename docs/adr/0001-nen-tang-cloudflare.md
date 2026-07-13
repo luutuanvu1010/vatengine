@@ -2,13 +2,47 @@
 
 - **Trạng thái:** ✅ Đã chấp thuận (Accepted) — 2026-07-11 · **sửa đổi 2026-07-12, 2026-07-13** (xem "Amendment" bên dưới)
 - **Quyết định đã chốt:** **4A = A2** (PostgreSQL ngoài + Hyperdrive) · **4B = B1** (TypeScript trên Workers) · Egress: **T0 (thuần Cloudflare) là đường ra CHÍNH THỨC cho API GDT `/api/*` (Amendment #3, 2026-07-13)**; relay VN/T1/U1a **TREO, không dựng** trừ khi phát sinh bằng chứng chặn địa lý mới.
-- **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress, sau này xác định dựa trên tiền đề sai) · 2026-07-13 (Amendment #2 đính chính tiền đề `:30000`; Amendment #3 xác nhận T0 chạy được với `/api/captcha`; Amendment #4 xác nhận T0 tới được endpoint xác thực `/api/security-taxpayer/authenticate`)
-- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Amendment #4 — probe đăng nhập thật (QĐ-2, có người trực nhập captcha) trả **200 + `{token}` (JWT)** từ T0 ⇒ **T0 tới được cả endpoint xác thực** `/api/security-taxpayer/authenticate`, gỡ nhãn CHƯA KIỂM CHỨNG cho `AUTH_PATH`. Amendment #5 — probe query thật (Chrome đăng nhập thật, chỉ đọc network) xác nhận `INVOICE_ENDPOINTS` `/api/(sco-)query/invoices/*` trả **200 + phong bì `{datas, total, state, time}`** (datas luôn hiện diện kể cả rỗng, state=null khi rỗng), gỡ nhãn CHƯA KIỂM CHỨNG cho query hóa đơn (U2). Amendment #6 — probe detail thật (Chrome đăng nhập thật) xác nhận hợp đồng endpoint chi tiết dòng hàng `GET /api/query/invoices/detail` (**4 tham số `nbmst,khhdon,shdon,khmshdon`, KHÔNG tdlap**; mảng dòng hàng ở khóa `hdhhdvu`; thuế suất HAI trường `ltsuat` chuỗi "8%" + `tsuat` số 0.08), gỡ nhãn CHƯA KIỂM CHỨNG cho `DETAIL_ENDPOINTS.normal` (U3). Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
+- **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress, sau này xác định dựa trên tiền đề sai) · 2026-07-13 (Amendment #2 đính chính tiền đề `:30000`; Amendment #3 xác nhận T0 chạy được với `/api/captcha`; Amendment #4 xác nhận T0 tới được endpoint xác thực `/api/security-taxpayer/authenticate`; Amendment #7 xác nhận định dạng `tdlap`/`ncnhat` trả về trong `datas[]`)
+- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Amendment #4 — probe đăng nhập thật (QĐ-2, có người trực nhập captcha) trả **200 + `{token}` (JWT)** từ T0 ⇒ **T0 tới được cả endpoint xác thực** `/api/security-taxpayer/authenticate`, gỡ nhãn CHƯA KIỂM CHỨNG cho `AUTH_PATH`. Amendment #5 — probe query thật (Chrome đăng nhập thật, chỉ đọc network) xác nhận `INVOICE_ENDPOINTS` `/api/(sco-)query/invoices/*` trả **200 + phong bì `{datas, total, state, time}`** (datas luôn hiện diện kể cả rỗng, state=null khi rỗng), gỡ nhãn CHƯA KIỂM CHỨNG cho query hóa đơn (U2). Amendment #6 — probe detail thật (Chrome đăng nhập thật) xác nhận hợp đồng endpoint chi tiết dòng hàng `GET /api/query/invoices/detail` (**4 tham số `nbmst,khhdon,shdon,khmshdon`, KHÔNG tdlap**; mảng dòng hàng ở khóa `hdhhdvu`; thuế suất HAI trường `ltsuat` chuỗi "8%" + `tsuat` số 0.08), gỡ nhãn CHƯA KIỂM CHỨNG cho `DETAIL_ENDPOINTS.normal` (U3). Amendment #7 — probe `datas[0]` thật của `GET /api/query/invoices/purchase` xác nhận `tdlap` là chuỗi ISO-8601 UTC KHÔNG mili giây (`YYYY-MM-DDTHH:mm:ssZ`) và luôn ở giờ `17:00:00Z` (= 00:00:00 giờ VN, UTC+7) của ngày lập, khác `ncnhat` (ISO-8601 UTC CÓ mili giây); `tgtcthue`/`tgtttbso` là JSON number (có thể dạng khoa học cho giá trị lớn); `ttxly`/`tthai` là JSON integer — gỡ nhãn CHƯA KIỂM CHỨNG cho `tdlap`, mở khóa **U5**. Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
 - **Người quyết định:** Chủ dự án (luutuanvu.gl@gmail.com)
 - **Phạm vi ảnh hưởng:** Hiến pháp `CLAUDE.md` (mục "Ngăn xếp công nghệ", "Kiến trúc — quy tắc cứng"), các luật `.claude/rules/*.md`, khung `backend/` + `frontend/` hiện có.
 - **Nguồn tra cứu:** Tài liệu chính thức Cloudflare (developers.cloudflare.com), truy cập 2026-07-11. Các mốc giới hạn dẫn trong tài liệu này lấy từ trang docs cập nhật tháng 4–6/2026.
 
 > ⚠️ **Cảnh báo quản trị.** Quyết định này **mâu thuẫn trực diện** với Hiến pháp hiện hành (Python/FastAPI/PostgreSQL/Celery/Redis). Theo chính khung quản trị của dự án ("khi một luật mâu thuẫn với Hiến pháp, Hiến pháp thắng — sửa luật, không sửa hiến pháp để né"), việc chuyển sang Cloudflare **bắt buộc phải sửa Hiến pháp một cách tường minh**, không được lặng lẽ đi chệch. Mục "Hệ quả" liệt kê các thay đổi Hiến pháp cần thông qua.
+
+---
+
+## Amendment #7 (2026-07-13) — Định dạng `tdlap`/`ncnhat` trả về trong `datas[]` đã kiểm chứng, gỡ nút chặn U5
+
+> Đóng đúng khoảng trống nêu ở prompt `docs/prompts/U5-probe-tdlap.md`: Amendment #5 chỉ xác nhận `tdlap` **có mặt** trong row + cú pháp filter **gửi đi**; chưa ai ghi lại *giá trị GDT trả về*. Vì `tdlap` là một phần khóa tự nhiên/UNIQUE 6 trường dùng cho upsert idempotent ở U5, map sai định dạng sẽ hỏng idempotent. Chủ dự án tự đăng nhập + tự thao tác DevTools (Network → Preview/Response → Copy response) trên `GET /api/query/invoices/purchase` của MST của chính mình; dán nguyên `datas[]` cho Cowork phân tích. **Không dùng dữ liệu bên thứ ba, không phá captcha.**
+>
+> Ghi chú vận hành: lần probe này KHÔNG dùng được Chrome extension MCP (`mcp__Control_Chrome__*`) — `list_tabs`/`get_current_tab` chạy được nhưng `execute_javascript`/`get_page_content` báo lỗi cố định "Google Chrome is not running" qua nhiều lần thử lại trên nhiều tab khác nhau; nguyên nhân nằm ở quyền/kết nối của extension, không tự sửa được từ phía Cowork. Chuyển sang thao tác thủ công của chủ dự án là đường duy nhất khả dụng.
+>
+> **Xử lý dữ liệu nhạy cảm:** payload thật chứa MST/tên/địa chỉ/SĐT/CCCD/số tài khoản ngân hàng của bên bán và bên mua — vượt quá phạm vi "chỉ giữ hình dạng" đã yêu cầu. Cowork **không lưu** payload thô vào bất kỳ file hay bộ nhớ nào; chỉ trích xuất kết luận về *kiểu dữ liệu/định dạng* bên dưới, dùng giá trị placeholder cho số tiền.
+
+### Bằng chứng (2026-07-13, `datas[0..14]` của `GET /api/query/invoices/purchase`, HĐ khởi tạo từ máy tính tiền `thlap=202604`)
+
+| Trường | Quan sát thật | Kiểu/định dạng |
+|---|---|---|
+| **`tdlap`** ⭐ | ví dụ `"2026-04-12T17:00:00Z"` — **giống hệt nhau ở mọi dòng** trong lô, luôn giờ `17:00:00Z` | string, ISO-8601 UTC, **KHÔNG** mili giây, dạng `YYYY-MM-DDTHH:mm:ssZ`; `17:00:00Z` = `00:00:00` giờ VN (UTC+7) của ngày lập ⇒ `tdlap` mang ngữ nghĩa **ngày** nhưng serialize thành thời khắc UTC lệch múi giờ VN |
+| `ncnhat` | ví dụ `"2026-04-13T09:44:51.456Z"` — khác nhau từng dòng (mili-giây) | string, ISO-8601 UTC **CÓ** mili giây, dạng `YYYY-MM-DDTHH:mm:ss.sssZ` — **khác `tdlap`** (không có `.sss`) |
+| `tgtcthue` / `tgtttbso` | ví dụ `1234567.0` (nhỏ) và `1.4727778E7` (lớn, dạng khoa học) | JSON number (không phải chuỗi); giá trị lớn có thể serialize ở **dạng khoa học** — `JSON.parse` chuẩn xử lý được, cần test riêng để không quên |
+| `ttxly` | `8` | JSON integer |
+| `tthai` | `1` | JSON integer |
+
+### Kết luận
+
+- **Gỡ nhãn `CHƯA KIỂM CHỨNG`** cho giá trị trả về của `tdlap` (trước đây chỉ biết *có mặt* + cú pháp filter gửi đi, Amendment #5). Giả thuyết cũ dựa trên `backend/gdt_client.py:417-421` (`fromisoformat` khi có `"T"`) **được xác nhận đúng hướng** (ISO-8601) nhưng cần bổ sung chi tiết: không có mili giây, và giờ cố định lệch múi giờ VN — hai điểm mà mã di sản không thể hiện, do đó **không được copy nguyên `normalize_row()` sang TS** mà phải viết mapper mới có test riêng cho quy luật `17:00:00Z ⇔ 00:00:00 ICT`.
+- Mapper `tdlap` ở U5 (`packages/sync` → cột `hoa_don.tdlap timestamptz`) nên lưu **nguyên thời khắc UTC** (Postgres `timestamptz` tự quy đổi hiển thị theo timezone truy vấn) — KHÔNG tự trừ/cộng giờ thủ công trong code ứng dụng; chỉ cần parse đúng ISO-8601 chuẩn (`new Date(tdlap)` / Zod `.datetime()`), việc "ngày lập theo giờ VN" là vấn đề hiển thị, không phải vấn đề lưu trữ.
+- `tgtcthue`/`tgtttbso` đã là number nên không cần parse chuỗi số; cần ít nhất 1 test với giá trị dạng khoa học (`E7`/`E8`) để tránh hồi quy nếu ai đó đổi sang xử lý chuỗi.
+- U5 (`docs/plans/U5-plan.md`, `docs/prompts/U5-prompt.md`) sẵn sàng chạy `/start-unit U5`.
+
+### Giới hạn của bằng chứng (không phóng đại)
+
+- Chỉ quan sát **một lô** hóa đơn khởi tạo từ máy tính tiền (`khhdon=C26MYY`, cùng `thlap=202604`) nên **mọi dòng có `tdlap` giống hệt nhau** (cùng ngày lập) — quy luật `17:00:00Z ⇔ 00:00:00 ICT` suy ra từ **1 giá trị lặp lại**, chưa kiểm chứng với hóa đơn lập vào ngày/giờ khác hoặc hóa đơn **thường** (không phải máy tính tiền); chưa loại trừ khả năng GDT dùng giờ khác `00:00:00 ICT` làm mốc cho loại hóa đơn khác.
+- Chỉ quan sát chiều **mua vào** (`purchase`); `sold` **suy từ đối xứng cùng envelope** (đã có ở Amendment #5), chưa tự gọi lại riêng trong lần probe này.
+- Probe qua **trình duyệt người dùng đã đăng nhập sẵn** (thao tác thủ công, không qua Chrome extension MCP do lỗi kết nối nêu trên) — kiểm chứng **định dạng dữ liệu**, không kiểm lại egress T0 (đã có ở Amendment #3/#4).
+- Chưa quan sát `tdlap`/`ncnhat` khi hóa đơn bị điều chỉnh/thay thế (chỉ thấy `tthai=1`, trạng thái gốc).
 
 ---
 

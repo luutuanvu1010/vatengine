@@ -1,0 +1,4 @@
+# Mẫu biến môi trường local cho @vat/sync (KHÔNG commit .dev.vars thật — nằm trong .gitignore).
+# Chỉ cần cho test integration nếu chạy trên Postgres thật thay PGlite. Mặc định test
+# dùng PGlite in-memory nên KHÔNG cần biến này.
+DATABASE_URL=postgres://user:pass@localhost:5432/vatcrawlbot

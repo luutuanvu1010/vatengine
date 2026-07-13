@@ -6,15 +6,17 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 ## Trạng thái tiến độ (đọc trước tiên)
 
-> **Cập nhật: 2026-07-13 · U4 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
+> **Cập nhật: 2026-07-14 · U5 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · **`U5 ⬜ ← KẾ TIẾP`** · `U6 ⬜` · `U7 ⬜` · `U8 ⬜` · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · **`U6 ⬜ ← KẾ TIẾP`** · `U7 ⬜` · `U8 ⬜` · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
 > **Đã xong — U4 (Mô hình dữ liệu + migration, `packages/db` = `@vat/db`):** lược đồ Drizzle 7 thực thể (mục 7.1); khóa tự nhiên **6 trường** UNIQUE `(tenant_id, nbmst, khmshdon, khhdon, shdon, tdlap)`; `raw_json` JSONB; **RLS `ENABLE` + `FORCE`** theo `tenant_id` (ràng buộc cả owner). Kiểm bằng **PGlite offline** (14 test: ràng buộc + cách ly tenant owner/non-owner), coverage 100%. `make migrate` = `drizzle-kit migrate` (cần `DATABASE_URL` thật; test dùng PGlite nên không chặn).
 >
-> **Kế tiếp — U5 (Dịch vụ đồng bộ idempotent):** `sync()` upsert theo khóa tự nhiên 6 trường lên `hoa_don` (`packages/db`), cập nhật `ttxly`/`tthai`, ghi `lan_dong_bo`; 401 dừng, lỗi tạm retry. Xem `KIEN_TRUC_VA_KE_HOACH.md` mục 7.2.
+> **Đã xong — U5 (Dịch vụ đồng bộ idempotent, `packages/sync` = `@vat/sync`):** `sync()` gọi adapter → upsert theo khóa tự nhiên 6 trường lên `hoa_don` (trong `withTenant` để RLS chốt tenant) → ghi `lan_dong_bo`; idempotent (chạy lại không nhân đôi), cập nhật `ttxly`/`tthai` (không tạo mới), đếm mới/cập nhật, 401 dừng + ghi `failed` (không retry credential), không ghi dở dang khi lỗi giữa chừng. **Định dạng `tdlap` ISO-8601 UTC đã kiểm chứng** (ADR-0001 Amendment #7) — mapper lưu nguyên thời khắc UTC, không tự quy đổi múi giờ. Kiểm bằng **PGlite offline** (14 test: idempotent/cập nhật/đếm/lịch sử/cách ly tenant/401). Quyết định phạm vi: **#A (e) thông báo HOÃN** (U5 chỉ phát hiện, trả `SyncResult.changes`, không dựng bảng); **#B chỉ cấp hóa đơn** (không `dong_hang_hoa`).
+>
+> **Kế tiếp — U6 (REST API tra cứu + lọc + tổng hợp):** Hono `app.request`, mock adapter; mọi endpoint dữ liệu gắn `tenant_id` + JWT nội bộ; binding Hyperdrive. Xem `KIEN_TRUC_VA_KE_HOACH.md` mục 7 + `docs/prompts` (chưa có).
 >
 > **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
 
@@ -107,6 +109,11 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
   - Cú pháp RSQL thật `tdlap=ge=…T00:00:00;tdlap=le=…T23:59:59` khớp `buildSearch()`; row đủ 5 trường khóa tự nhiên.
   - Đã gỡ nhãn `CHƯA KIỂM CHỨNG` trong `endpoints.ts` + `gdt-contract-schema.json`. Chi tiết: ADR-0001 **Amendment #5**.
   - Còn lại (nhẹ): `/api/sco-query/invoices/sold` suy từ đối xứng, chưa gọi trực tiếp; probe qua egress máy người dùng (không kiểm lại egress T0 — đã có ở Amendment #3/#4).
+- [x] ✅ **ĐÃ KIỂM CHỨNG (2026-07-13, probe bổ sung — định dạng GIÁ TRỊ `tdlap`/`ncnhat` trả về trong `datas[]`, chốt cho U5):**
+  - `tdlap`: string ISO-8601 UTC **không** mili giây (`YYYY-MM-DDTHH:mm:ssZ`), quan sát luôn ở giờ `17:00:00Z` = `00:00:00` giờ VN (UTC+7) của ngày lập.
+  - `ncnhat`: string ISO-8601 UTC **có** mili giây (`YYYY-MM-DDTHH:mm:ss.sssZ`) — khác `tdlap`.
+  - `tgtcthue`/`tgtttbso`: JSON number, có thể ở dạng khoa học cho giá trị lớn (vd `1.4727778E7`). `ttxly`/`tthai`: JSON integer.
+  - Đã gỡ nhãn `CHƯA KIỂM CHỨNG` cho giá trị `tdlap`. Chi tiết + giới hạn bằng chứng: ADR-0001 **Amendment #7**.
 
 ### ✅ U3 — GDT Adapter: detail dòng hàng · review: `contract-guardian` **PASS** + `security-reviewer` **PASS** (2026-07-13)
 
@@ -129,14 +136,15 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] Mọi bảng nghiệp vụ có `tenant_id` NOT NULL; `raw_json` kiểu JSONB. → unit test (1)(4)(5) introspect lược đồ; integration (9) chèn thiếu `tenant_id` → lỗi; (11) `raw_json` round-trip JSONB. **Không** cột mật khẩu thô ở `tai_khoan_thue` (test (3)).
 - [x] Bật **Row-Level Security** theo `tenant_id`. → `ENABLE` + **`FORCE`** ROW LEVEL SECURITY + policy fail-closed (`NULLIF(current_setting('app.tenant_id', true), '')`); test (13) chứng minh cách ly cho **cả role owner (nhờ FORCE) lẫn non-owner**. Ràng buộc vận hành: role app U6 không được là superuser (xem `.claude/rules/multi-tenant.md`).
 
-### ⬜ U5 — Dịch vụ đồng bộ idempotent (upsert)
+### ✅ U5 — Dịch vụ đồng bộ idempotent (upsert) · `packages/sync` = `@vat/sync` · review: `security-reviewer` + `dod-auditor` (+ `contract-guardian` nhẹ) · *ĐẠT (`make lint && make test` xanh; coverage nhánh 83%, câu lệnh/hàm 99–100%)*
 
-- [ ] (a) Chạy đồng bộ 2 lần cùng kỳ → **không nhân đôi** bản ghi.
-- [ ] (b) `ttxly`/`tthai` đổi giữa 2 lần → **cập nhật**, không tạo mới.
-- [ ] (c) Bản ghi lần đồng bộ ghi đúng số HĐ mới / số HĐ cập nhật.
-- [ ] (d) Lỗi mạng tạm → retry; 401 → dừng + báo. *(Mỗi ý (a)–(d) có ≥ 1 test.)*
-- [ ] (e) **Thông báo thay đổi hóa đơn**: khi `ttxly/tthai` đổi giữa 2 lần đồng bộ → sinh sự kiện thông báo cho tenant (VD: "HĐ Mới → HĐ Đã bị điều chỉnh"). *(Đối sánh NIBOT — khảo sát mục 8a; test: đổi trạng thái → có đúng 1 thông báo, không trùng.)*
-- [ ] (f) **Lịch sử đồng bộ có phiên bản**: mỗi phiên đồng bộ ghi mốc thời gian + số HĐ mới/cập nhật, truy vấn lại được theo tenant. *(NIBOT hiển thị "V:554"; test: 2 phiên tạo 2 bản ghi lịch sử phân biệt.)*
+- [x] (a) Chạy đồng bộ 2 lần cùng kỳ → **không nhân đôi** bản ghi. → integration test (a): 3 HĐ, sync 2 lần → vẫn 3 dòng, `soHdMoi=0`/`soHdCapNhat=0` lần 2 (upsert theo khóa tự nhiên 6 trường, `withTenant`).
+- [x] (b) `ttxly`/`tthai` đổi giữa 2 lần → **cập nhật**, không tạo mới. → test (b): đổi `ttxly 8→6`, `tthai 1→2` → **cùng `id`** update, `soHdCapNhat=1`, `SyncResult.changes` ghi cũ→mới.
+- [x] (c) Bản ghi lần đồng bộ ghi đúng số HĐ mới / số HĐ cập nhật. → test (c): 1 mới + 1 đổi trạng thái → `soHdMoi=1`, `soHdCapNhat=1` (HĐ không đổi không bị đếm).
+- [x] (d) Lỗi mạng tạm → retry; 401 → dừng + báo. → retry tạm do adapter `fetchWithRetry` (U1–U3); test (d): 401 → `trangThai='failed'`, **không** ghi hóa đơn, transport gọi **đúng 1 lần** (không retry credential); 401 giữa phân trang → rollback, không ghi dở dang.
+- [x] (f) **Lịch sử đồng bộ có phiên bản**: mỗi phiên đồng bộ ghi mốc thời gian + số HĐ mới/cập nhật, truy vấn lại được theo tenant. → test (c)+(f): 2 phiên → 2 bản ghi `lan_dong_bo` phân biệt (`batDau`/`ketThuc`, `soHdMoi`/`soHdCapNhat`), truy theo `tenant_id`.
+- [x] Cách ly tenant (`multi-tenant.md`): test (7) role non-superuser + RLS `FORCE` → sync tenant A không lộ sang tenant B.
+- [~] (e) **Thông báo thay đổi hóa đơn** — **HOÃN sang unit riêng** (quyết định #A, chủ dự án 2026-07-13). U5 **phát hiện** `ttxly`/`tthai` đổi và trả `SyncResult.changes` (test (b) kiểm cũ→mới), nhưng **không** dựng bảng `thong_bao`/kênh phân phối — tránh U5 lấn mô hình hóa dữ liệu của U4 + tạo nguồn sự thật thứ hai. Bảng thông báo + phân phối tách thành đơn vị sau.
 
 ### ⬜ U6 — REST API tra cứu + lọc + tổng hợp · review: `security-reviewer`
 
