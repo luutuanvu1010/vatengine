@@ -13,7 +13,7 @@ Dựng đường egress GDT **đặt tại VN, ẩn hoàn toàn khỏi Internet 
 
 ```
 Worker (Cloudflare)
-   │  HTTPS tới relay.<domain>  + header Access service token (CF-Access-Client-Id/Secret)
+   │  HTTPS tới vatengine.khanhhoatravel.com.vn  + header Access service token (CF-Access-Client-Id/Secret)
    ▼
 Cloudflare Access (chặn ở biên: chỉ token của Worker mới qua)
    ▼
@@ -31,7 +31,7 @@ GET https://hoadondientu.gdt.gov.vn:30000/...   ◄── cuộc gọi RA CỤC 
 ## 3. Quyết định con cần chốt trong U1a
 
 1. **Relay = cloudflared ingress thẳng tới GDT, hay + app forward mỏng?**
-   - *Ingress thẳng* (khuyến nghị thử trước): cloudflared route `relay.<domain>` → `https://hoadondientu.gdt.gov.vn:30000` (đặt `originRequest.httpHostHeader`). **Không cần viết app**, ít bề mặt nhất, cloudflared vốn stateless. Rủi ro: kiểm soát "che metadata/không log" và rewrite Host/SNI phụ thuộc cấu hình cloudflared.
+   - *Ingress thẳng* (khuyến nghị thử trước): cloudflared route `vatengine.khanhhoatravel.com.vn` → `https://hoadondientu.gdt.gov.vn:30000` (đặt `originRequest.httpHostHeader`). **Không cần viết app**, ít bề mặt nhất, cloudflared vốn stateless. Rủi ro: kiểm soát "che metadata/không log" và rewrite Host/SNI phụ thuộc cấu hình cloudflared.
    - *App forward mỏng* (dự phòng): cloudflared → `localhost:PORT` (app Go single-binary) → GDT. Kiểm soát tường minh kỷ luật `security.md` (stateless, không log body, che metadata). Dùng khi ingress thẳng không đủ điều khiển.
 2. **Xác thực Worker ↔ relay:** **Cloudflare Access service token** (khuyến nghị — hợp mô hình Tunnel; chặn ở biên trước khi vào tunnel) và/hoặc **mTLS** qua Access mTLS. → **Cần cập nhật `security.md`**: mục "Relay VN" hiện ghi "mTLS + shared-secret" cho mô hình cổng-mở; với Tunnel, cơ chế tương đương-hoặc-mạnh-hơn là "Access service token (+ tùy chọn mTLS) + tunnel ẩn, không cổng vào". Ghi là **đề xuất sửa luật**, chờ chốt (Hiến pháp cho phép sửa luật khi có lý do; giữ nguyên *ý định*: chỉ Worker của dự án gọi được).
 3. **Ngôn ngữ app forward** (nếu chọn nhánh app): **Go single-binary** (khuyến nghị) — nhỏ, tĩnh, dễ hardening.
@@ -43,12 +43,12 @@ GET https://hoadondientu.gdt.gov.vn:30000/...   ◄── cuộc gọi RA CỤC 
 - Cài `cloudflared` chạy quyền tối thiểu (non-root, systemd), bật auto-update; tắt/che log nhạy cảm.
 
 **b. Thiết lập Tunnel + Access**
-- Tạo tunnel, gắn hostname `relay.<domain>`, viết ingress rule (nhánh 3.1 đã chọn).
+- Tạo tunnel, gắn hostname `vatengine.khanhhoatravel.com.vn`, viết ingress rule (nhánh 3.1 đã chọn).
 - Bật **Cloudflare Access** cho hostname; tạo **service token** cho Worker; policy chỉ chấp nhận token đó.
 - Nạp token id/secret vào Worker qua **Workers Secrets** (không commit).
 
 **c. Transport `vn-relay` trong `packages/gdt-client`**
-- Hiện thực `GdtTransport` name = `"vn-relay"`: đổi base URL GDT → `relay.<domain>`, đính header Access service token; **timeout + retry backoff**; **401 → dừng + báo hết phiên** (theo `gdt-adapter.md`). Với Tunnel HTTP, gọi thẳng như HTTP thường — **không cần envelope** `{method,url,headers,body}` như ghi chú cũ ở ADR-0001 (ghi chú đó cho hạn chế `fetch()` không proxy; Tunnel là reverse-tunnel HTTP nên không cần).
+- Hiện thực `GdtTransport` name = `"vn-relay"`: đổi base URL GDT → `vatengine.khanhhoatravel.com.vn`, đính header Access service token; **timeout + retry backoff**; **401 → dừng + báo hết phiên** (theo `gdt-adapter.md`). Với Tunnel HTTP, gọi thẳng như HTTP thường — **không cần envelope** `{method,url,headers,body}` như ghi chú cũ ở ADR-0001 (ghi chú đó cho hạn chế `fetch()` không proxy; Tunnel là reverse-tunnel HTTP nên không cần).
 - Unit test (mock transport): base-swap đúng, gắn header đúng, timeout/retry, 401 dừng.
 
 **d. Cập nhật luật**
@@ -83,8 +83,7 @@ Access service token (client id/secret), tunnel credentials, cấu hình origin 
 ## 8. Điều kiện tiên quyết
 
 - **VPS VN sẵn sàng** (IP tĩnh VN, Linux). *(Đang thuê — chưa xong thì chưa chạy U1a.)*
-- Tài khoản **Cloudflare Zero Trust (Access)** bật được; kiểm tra khả dụng/chi phí Access + Tunnel.
-- Tên miền quản trị để gắn hostname `relay.<domain>`.
+- ✅ **Zero Trust (Access) + hostname đã chốt:** `vatengine.khanhhoatravel.com.vn`. Yêu cầu kèm: zone `khanhhoatravel.com.vn` (hoặc bản ghi tương ứng) nằm trên Cloudflare để gắn Tunnel + Access; kiểm tra khả dụng/chi phí gói Access + Tunnel.
 
 ## 9. Vòng lặp & Definition of Done
 
