@@ -38,6 +38,13 @@ Số IP VN cần ≈ **(số DN cần đồng bộ mỗi ngày) ÷ 10**. Với 1
 
 Kết luận: **con số 10 không phải là thứ quyết định quy mô — tần suất đồng bộ mới là.** Thiết kế phải cho phép **cấu hình tần suất theo nhu cầu tenant** (đa số nghiệp vụ thuế theo tháng/quý), tránh mặc định "đồng bộ hằng ngày cho tất cả" vốn đẩy nhu cầu IP lên bậc chục nghìn. Chi phí/vận hành một pool cỡ chục nghìn IP VN là rào cản thực tế cần cân nhắc ở tầng mô hình kinh doanh, không chỉ kỹ thuật.
 
+## 3b. Quyết định phạm vi đồng bộ (2026-07-13)
+
+Chủ dự án chốt: hỗ trợ **cả đồng bộ nền tự động lẫn on-demand**, vì nhu cầu doanh nghiệp khác nhau (hạch toán theo ngày / tuần / tháng) → **tần suất cấu hình theo tenant**. Hệ quả cứng:
+
+- **Pool relay VN là baseline BẮT BUỘC.** Vì đồng bộ nền phải chạy cả khi máy khách tắt, phải có egress VN 24/7 độc lập máy khách. Daemon client-side (nếu làm, xem ADR-0003) **chỉ bổ trợ, KHÔNG thay thế** relay: khi daemon online → ưu tiên (đi IP khách, gánh bớt pool); khi offline lúc tới lịch → **rơi về relay**. Bài toán pool IP mục 3 vẫn còn nguyên, chỉ nhẹ theo tỉ lệ khách cài daemon.
+- **Giới hạn thật của "tự động" là token + captcha, sâu hơn uptime.** Đồng bộ nền chỉ chạy khi **token thuế còn hợp lệ** (cloud/relay giữ token mã hoá, vòng đời ngắn — không giữ mật khẩu thô). Token hết hạn ⇒ đăng nhập lại cần **captcha do người dùng nhập** (Hiến pháp cấm bypass). Không mô hình nào "tự động vĩnh viễn"; thiết kế: chạy nền tối đa khi token còn sống + **nhắc khách xác thực lại** khi token chết. Ràng buộc do GDT áp, không phải do kiến trúc.
+
 ## 4. Hướng giải (nguyên tắc — chi tiết hoãn sang U1a)
 
 - **Pool nhiều IP VN + ghim tenant↔IP:** mỗi IP phục vụ một nhóm ≤ ngưỡng DN/ngày; phân bổ ổn định để không tạo dấu vết "đổi IP loạn xạ".
