@@ -10,5 +10,9 @@
   "invoice_envelope": {
     "description": "GET /api/(sco-)query/invoices/{purchase,sold} — phong bì danh sách hóa đơn: {datas, total, state, time}. ĐÃ KIỂM CHỨNG (2026-07-13, probe query thật từ Chrome đăng nhập thật): 'datas' (mảng HĐ) LUÔN hiện diện kể cả khi rỗng (sco-query/purchase trả datas:[]) — giải toả điểm mơ hồ cũ; 'state' là chuỗi con trỏ phân trang khi có dữ liệu, null khi rỗng. Vẫn giữ kiểm hợp đồng MỀM (missingContractKeys → chỉ cảnh báo, KHÔNG mở circuit breaker) ở tầng query như lớp phòng thủ; có thể nâng hard-raise theo .claude/rules/gdt-adapter.md (quyết định governance riêng, cần cập nhật ngoại lệ trong rule + test). Bằng chứng: docs/CHECKLIST-NGHIEM-THU.md (U2) + ADR-0001 Amendment #5.",
     "required_keys": ["datas"]
+  },
+  "invoice_detail": {
+    "description": "GET /api/query/invoices/detail?nbmst&khhdon&shdon&khmshdon (CHỈ 4 tham số, KHÔNG có tdlap) — chi tiết một hóa đơn. ĐÃ KIỂM CHỨNG (2026-07-13, probe detail thật từ Chrome đăng nhập thật — HĐ mua vào thường, dòng thuế suất 8%): body chứa mảng dòng hàng ở khóa 'hdhhdvu'; mỗi dòng có stt/ten/dvtinh/sluong/dgia/thtien + thuế suất ở HAI trường 'ltsuat' (chuỗi hiển thị vd '8%') và 'tsuat' (số thập phân vd 0.08); tiền thuế dòng 'tthue' (có thể null). Kiểm hợp đồng MỀM (missingContractKeys → chỉ cảnh báo, KHÔNG mở circuit breaker) đồng nhất invoice_envelope — chưa nâng hard-raise (chỉ 1 hóa đơn 8% quan sát; chưa thấy HĐ máy tính tiền / mã thuế đặc biệt KCT/KKKNT). Bằng chứng: docs/CHECKLIST-NGHIEM-THU.md (U3) + ADR-0001 Amendment #6.",
+    "required_keys": ["hdhhdvu"]
   }
 }

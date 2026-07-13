@@ -94,10 +94,19 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
   - Đã gỡ nhãn `CHƯA KIỂM CHỨNG` trong `endpoints.ts` + `gdt-contract-schema.json`. Chi tiết: ADR-0001 **Amendment #5**.
   - Còn lại (nhẹ): `/api/sco-query/invoices/sold` suy từ đối xứng, chưa gọi trực tiếp; probe qua egress máy người dùng (không kiểm lại egress T0 — đã có ở Amendment #3/#4).
 
-### ⬜ U3 — GDT Adapter: detail dòng hàng · review: `contract-guardian`
+### ✅ U3 — GDT Adapter: detail dòng hàng · review: `contract-guardian` **PASS** + `security-reviewer` **PASS** (2026-07-13)
 
-- [ ] Test ánh xạ dòng hàng, thuế suất từ endpoint detail.
-- [ ] Contract test cho cấu trúc detail; lệch → dừng + cập nhật schema tường minh (không nới assertion).
+> `dod-auditor` bị gián đoạn bởi giới hạn phiên (không phải do phát hiện lỗi); các gate DoD (lint/test/coverage/scope/nhất quán tài liệu) đã được `contract-guardian` tự chạy và xác minh độc lập. Đã áp các phát hiện review: (a) thay MST thật trong fixture test bằng MST giả (`security-reviewer`, Low); (b) khai báo `invoice_detail` là ngoại lệ hợp đồng mềm thứ hai trong `.claude/rules/gdt-adapter.md` (`contract-guardian`); (c) thêm ghi chú CHƯA KIỂM CHỨNG tại test KCT/KKKNT + cảnh báo bảo mật tại field `raw`.
+
+- [x] Test ánh xạ dòng hàng, thuế suất từ endpoint detail. (`mapDetailLines()` trong `packages/gdt-client/src/detail.ts`; `test/unit/detail.test.ts` — 18 test: ánh xạ `ten/dvtinh/sluong/dgia/thtien` + thuế suất hai trường `ltsuat`/`tsuat`, giữ `raw`, ca mã chữ KCT/KKKNT giữ nguyên, biên rỗng/null.)
+- [x] Contract test cho cấu trúc detail; lệch → dừng + cập nhật schema tường minh (không nới assertion). (`test/contract/detail.contract.test.ts`, `it.skipIf(!TOKEN)`, khớp `gdt-contract-schema.json` → `invoice_detail`.)
+- [x] `getInvoiceDetail()` cô lập qua `GdtTransport`; 401 → `SESSION_EXPIRED`; kiểm hợp đồng mềm `invoice_detail`. `make lint` sạch; `make test` xanh (**59 unit** gdt-client + 2 apps/api); coverage `detail.ts` **100%** (stmts/lines/branch/funcs; ngưỡng 80%).
+- [x] ✅ **ĐÃ KIỂM CHỨNG (2026-07-13, probe detail thật từ Chrome đăng nhập thật của người dùng — HĐ mua vào thường, dòng thuế suất 8%; chỉ đọc network, không ghi token/giá trị hóa đơn):**
+  - `GET /api/query/invoices/detail?nbmst&khhdon&shdon&khmshdon` → `200`. **CHỈ 4 tham số, KHÔNG có `tdlap`** (lệch giả thuyết cũ 5 tham số).
+  - Mảng dòng hàng ở khóa **`hdhhdvu`** (khớp giả thuyết). Mỗi dòng: `stt, ten, dvtinh, sluong, dgia, thtien, tchat`…
+  - **Thuế suất = HAI trường:** `ltsuat` (chuỗi `"8%"`) + `tsuat` (số `0.08`); tiền thuế dòng `tthue` (null ở dòng này). `mapDetailLines` giữ NGUYÊN cả hai + `raw`, không ép kiểu.
+  - Đã gỡ nhãn CHƯA KIỂM CHỨNG cho `DETAIL_ENDPOINTS.normal` + `gdt-contract-schema.json` (`invoice_detail`). Chi tiết: ADR-0001 **Amendment #6**.
+  - Còn lại (giữ nhãn CHƯA KIỂM CHỨNG): `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) suy từ đối xứng, chưa gọi trực tiếp (tài khoản không có HĐ máy tính tiền); mã thuế đặc biệt KCT/KKKNT chưa quan sát (mới thấy 8%).
 
 ### ⬜ U4 — Mô hình dữ liệu + migration (PostgreSQL/Drizzle qua Hyperdrive) · review: `security-reviewer`
 

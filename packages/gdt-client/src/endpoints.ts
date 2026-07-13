@@ -29,5 +29,18 @@ export const INVOICE_ENDPOINTS = {
   scoSold: "/api/sco-query/invoices/sold",
 } as const;
 
+// Chi tiết dòng hàng của một hóa đơn (gộp hai họ: thường + máy tính tiền).
+// ĐÃ KIỂM CHỨNG (2026-07-13, probe detail thật từ Chrome đăng nhập thật của người
+// dùng — HĐ mua vào thường): GET /api/query/invoices/detail?nbmst&khhdon&shdon&
+// khmshdon (CHỈ 4 tham số định danh, KHÔNG có tdlap) trả 200; body chứa mảng dòng
+// hàng ở khóa `hdhhdvu`. Bằng chứng: docs/CHECKLIST-NGHIEM-THU.md (U3) +
+// docs/adr/0001-nen-tang-cloudflare.md Amendment #6. Không ghi token/giá trị hóa đơn.
+// CHƯA KIỂM CHỨNG: `sco` (/api/sco-query/invoices/detail) — suy từ đối xứng với
+// INVOICE_ENDPOINTS, chưa gọi trực tiếp (tài khoản probe không có HĐ máy tính tiền).
+export const DETAIL_ENDPOINTS = {
+  normal: "/api/query/invoices/detail",
+  sco: "/api/sco-query/invoices/detail",
+} as const;
+
 // Endpoint công khai để probe khả năng tới máy chủ (không cần đăng nhập).
 export const PUBLIC_PROBE_PATH = CAPTCHA_PATH;

@@ -3,12 +3,40 @@
 - **Trạng thái:** ✅ Đã chấp thuận (Accepted) — 2026-07-11 · **sửa đổi 2026-07-12, 2026-07-13** (xem "Amendment" bên dưới)
 - **Quyết định đã chốt:** **4A = A2** (PostgreSQL ngoài + Hyperdrive) · **4B = B1** (TypeScript trên Workers) · Egress: **T0 (thuần Cloudflare) là đường ra CHÍNH THỨC cho API GDT `/api/*` (Amendment #3, 2026-07-13)**; relay VN/T1/U1a **TREO, không dựng** trừ khi phát sinh bằng chứng chặn địa lý mới.
 - **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress, sau này xác định dựa trên tiền đề sai) · 2026-07-13 (Amendment #2 đính chính tiền đề `:30000`; Amendment #3 xác nhận T0 chạy được với `/api/captcha`; Amendment #4 xác nhận T0 tới được endpoint xác thực `/api/security-taxpayer/authenticate`)
-- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Amendment #4 — probe đăng nhập thật (QĐ-2, có người trực nhập captcha) trả **200 + `{token}` (JWT)** từ T0 ⇒ **T0 tới được cả endpoint xác thực** `/api/security-taxpayer/authenticate`, gỡ nhãn CHƯA KIỂM CHỨNG cho `AUTH_PATH`. Amendment #5 — probe query thật (Chrome đăng nhập thật, chỉ đọc network) xác nhận `INVOICE_ENDPOINTS` `/api/(sco-)query/invoices/*` trả **200 + phong bì `{datas, total, state, time}`** (datas luôn hiện diện kể cả rỗng, state=null khi rỗng), gỡ nhãn CHƯA KIỂM CHỨNG cho query hóa đơn (U2). Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
+- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Amendment #4 — probe đăng nhập thật (QĐ-2, có người trực nhập captcha) trả **200 + `{token}` (JWT)** từ T0 ⇒ **T0 tới được cả endpoint xác thực** `/api/security-taxpayer/authenticate`, gỡ nhãn CHƯA KIỂM CHỨNG cho `AUTH_PATH`. Amendment #5 — probe query thật (Chrome đăng nhập thật, chỉ đọc network) xác nhận `INVOICE_ENDPOINTS` `/api/(sco-)query/invoices/*` trả **200 + phong bì `{datas, total, state, time}`** (datas luôn hiện diện kể cả rỗng, state=null khi rỗng), gỡ nhãn CHƯA KIỂM CHỨNG cho query hóa đơn (U2). Amendment #6 — probe detail thật (Chrome đăng nhập thật) xác nhận hợp đồng endpoint chi tiết dòng hàng `GET /api/query/invoices/detail` (**4 tham số `nbmst,khhdon,shdon,khmshdon`, KHÔNG tdlap**; mảng dòng hàng ở khóa `hdhhdvu`; thuế suất HAI trường `ltsuat` chuỗi "8%" + `tsuat` số 0.08), gỡ nhãn CHƯA KIỂM CHỨNG cho `DETAIL_ENDPOINTS.normal` (U3). Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
 - **Người quyết định:** Chủ dự án (luutuanvu.gl@gmail.com)
 - **Phạm vi ảnh hưởng:** Hiến pháp `CLAUDE.md` (mục "Ngăn xếp công nghệ", "Kiến trúc — quy tắc cứng"), các luật `.claude/rules/*.md`, khung `backend/` + `frontend/` hiện có.
 - **Nguồn tra cứu:** Tài liệu chính thức Cloudflare (developers.cloudflare.com), truy cập 2026-07-11. Các mốc giới hạn dẫn trong tài liệu này lấy từ trang docs cập nhật tháng 4–6/2026.
 
 > ⚠️ **Cảnh báo quản trị.** Quyết định này **mâu thuẫn trực diện** với Hiến pháp hiện hành (Python/FastAPI/PostgreSQL/Celery/Redis). Theo chính khung quản trị của dự án ("khi một luật mâu thuẫn với Hiến pháp, Hiến pháp thắng — sửa luật, không sửa hiến pháp để né"), việc chuyển sang Cloudflare **bắt buộc phải sửa Hiến pháp một cách tường minh**, không được lặng lẽ đi chệch. Mục "Hệ quả" liệt kê các thay đổi Hiến pháp cần thông qua.
+
+---
+
+## Amendment #6 (2026-07-13) — Hợp đồng endpoint DETAIL (chi tiết dòng hàng) đã kiểm chứng cho họ `normal` (U3)
+
+> Nối tiếp Amendment #5 (query). Probe detail THẬT qua **Chrome đăng nhập thật của người dùng** (người dùng tự đăng nhập + nhập captcha — KHÔNG bypass; token KHÔNG ghi lại; giá trị hóa đơn che). Mở chi tiết một hóa đơn mua vào thường → quan sát **request + hình dạng response** ở tầng mạng (đọc tên khóa/kiểu + cách mã hoá thuế suất, KHÔNG đọc số tiền/tên đối tác).
+
+### Bằng chứng (2026-07-13, HĐ mua vào thường, dòng thuế suất 8%)
+
+| Mục | Quan sát thật |
+|---|---|
+| Đường dẫn | `GET /api/query/invoices/detail` → `200` |
+| Tham số | CHỈ 4: `nbmst, khhdon, shdon, khmshdon` — **KHÔNG có `tdlap`** (lệch giả thuyết cũ 5 tham số của `invoice_detail` Python) |
+| Khóa mảng dòng hàng | `hdhhdvu` (khớp giả thuyết) |
+| Trường mỗi dòng | `stt`(number), `ten`(string), `dvtinh`(string), `sluong`(number), `dgia`(number), `thtien`(number), `tchat`(number)… |
+| **Thuế suất** | HAI trường: `ltsuat` (chuỗi hiển thị `"8%"`) **và** `tsuat` (số thập phân `0.08`) |
+| Tiền thuế dòng | `tthue` (null ở dòng 8% này) |
+| Cấp hóa đơn | envelope đầy đủ (`nbmst, nbten, nmmst, nmten, khmshdon, khhdon, shdon, tdlap, tgtcthue, tgtthue, tgtttbso, ttxly, tthai`…) + `thttltsuat` (bảng tổng hợp theo thuế suất) + `qrcode`/chữ ký số |
+
+### Kết luận
+
+- Thêm `DETAIL_ENDPOINTS` (`endpoints.ts`) + schema `invoice_detail` (`required_keys: ["hdhhdvu"]`); **gỡ nhãn CHƯA KIỂM CHỨNG** cho họ `normal`. Hiện thực `getInvoiceDetail()` (fetch 4 tham số, KHÔNG tdlap) + `mapDetailLines()` (giữ `raw`, giữ NGUYÊN cả `ltsuat` chuỗi lẫn `tsuat` số — **không ép kiểu**; chuẩn hóa/đối chiếu là U4/U5).
+
+### Giới hạn của bằng chứng (không phóng đại)
+
+- Probe qua **trình duyệt người dùng** (egress = máy người dùng), kiểm chứng **hợp đồng** (path + 4 tham số + khóa `hdhhdvu` + thuế suất), KHÔNG kiểm lại egress T0 (đã có ở Amendment #3/#4, cùng host `hoadondientu.gdt.gov.vn`).
+- **`sco`** (`/api/sco-query/invoices/detail`) **suy từ đối xứng**, chưa gọi trực tiếp (tài khoản probe không có HĐ máy tính tiền — khớp Amendment #5 thấy sco-query rỗng). Giữ nhãn CHƯA KIỂM CHỨNG cho `DETAIL_ENDPOINTS.sco`.
+- Chỉ quan sát **một** dòng thuế suất `8%`. Biểu diễn thuế suất cho **mã đặc biệt** (`KCT`/`KKKNT`/`0%`) và `tthue` khi khác null **chưa quan sát** — `mapDetailLines` giữ `raw` nên an toàn dữ liệu; test unit đã phủ ca mã chữ theo giả thuyết. Giữ kiểm hợp đồng **mềm** cho `invoice_detail`.
 
 ---
 
