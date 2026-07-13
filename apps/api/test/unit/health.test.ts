@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import app from "../../src/index";
-import type { Env } from "../../src/index";
-
-const env: Env = { ENVIRONMENT: "test" };
+import { makeEnv } from "../helpers";
 
 describe("health-check", () => {
   it("trả về status ok", async () => {
-    const res = await app.request("/health", {}, env);
+    const res = await app.request("/health", {}, makeEnv());
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string; service: string };
     expect(body.status).toBe("ok");
@@ -14,7 +12,7 @@ describe("health-check", () => {
   });
 
   it("trả 404 cho route không tồn tại", async () => {
-    const res = await app.request("/khong-ton-tai", {}, env);
+    const res = await app.request("/khong-ton-tai", {}, makeEnv());
     expect(res.status).toBe(404);
   });
 });

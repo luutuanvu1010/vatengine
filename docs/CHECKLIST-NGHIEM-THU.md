@@ -6,9 +6,9 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 ## Trạng thái tiến độ (đọc trước tiên)
 
-> **Cập nhật: 2026-07-14 · U5 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
+> **Cập nhật: 2026-07-14 · U6 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · **`U6 ⬜ ← KẾ TIẾP`** · `U7 ⬜` · `U8 ⬜` · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · **`U7 ⬜ ← KẾ TIẾP`** · `U8 ⬜` · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
@@ -16,7 +16,9 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 >
 > **Đã xong — U5 (Dịch vụ đồng bộ idempotent, `packages/sync` = `@vat/sync`):** `sync()` gọi adapter → upsert theo khóa tự nhiên 6 trường lên `hoa_don` (trong `withTenant` để RLS chốt tenant) → ghi `lan_dong_bo`; idempotent (chạy lại không nhân đôi), cập nhật `ttxly`/`tthai` (không tạo mới), đếm mới/cập nhật, 401 dừng + ghi `failed` (không retry credential), không ghi dở dang khi lỗi giữa chừng. **Định dạng `tdlap` ISO-8601 UTC đã kiểm chứng** (ADR-0001 Amendment #7) — mapper lưu nguyên thời khắc UTC, không tự quy đổi múi giờ. Kiểm bằng **PGlite offline** (14 test: idempotent/cập nhật/đếm/lịch sử/cách ly tenant/401). Quyết định phạm vi: **#A (e) thông báo HOÃN** (U5 chỉ phát hiện, trả `SyncResult.changes`, không dựng bảng); **#B chỉ cấp hóa đơn** (không `dong_hang_hoa`).
 >
-> **Kế tiếp — U6 (REST API tra cứu + lọc + tổng hợp):** Hono `app.request`, mock adapter; mọi endpoint dữ liệu gắn `tenant_id` + JWT nội bộ; binding Hyperdrive. Xem `KIEN_TRUC_VA_KE_HOACH.md` mục 7 + `docs/prompts` (chưa có).
+> **Đã xong — U6 (REST API tra cứu + lọc + tổng hợp, `packages/query` = `@vat/query` + `apps/api`):** Hono nối `@vat/query` (list/summary/get-one) qua Hyperdrive→Postgres, sau middleware xác minh **JWT nội bộ HS256** trích `tenant_id`. Đọc dữ liệu **đã đồng bộ** (KHÔNG gọi GDT). Cách ly tenant hai lớp (lọc `tenant_id` tường minh + `withTenant`/RLS) — có test cách ly **qua route API**. Kiểm bằng **PGlite offline** (42 test: lọc/phân trang/tổng hợp/get-one/401/400/404/cách ly). Quyết định: **(A)** verify JWT nội bộ (phát hành + RBAC → U8); **(#2)** `/invoices/:id` chỉ header từ DB (không dòng hàng). Xem `docs/plans/U6-plan.md`.
+>
+> **Kế tiếp — U7 (Xuất Excel/CSV theo mẫu):** kết xuất từ dữ liệu tra cứu U6; đọc lại file kiểm đúng cột + định dạng tiền. Xem `KIEN_TRUC_VA_KE_HOACH.md` mục 12b (P6).
 >
 > **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
 
@@ -146,10 +148,13 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] Cách ly tenant (`multi-tenant.md`): test (7) role non-superuser + RLS `FORCE` → sync tenant A không lộ sang tenant B.
 - [~] (e) **Thông báo thay đổi hóa đơn** — **HOÃN sang unit riêng** (quyết định #A, chủ dự án 2026-07-13). U5 **phát hiện** `ttxly`/`tthai` đổi và trả `SyncResult.changes` (test (b) kiểm cũ→mới), nhưng **không** dựng bảng `thong_bao`/kênh phân phối — tránh U5 lấn mô hình hóa dữ liệu của U4 + tạo nguồn sự thật thứ hai. Bảng thông báo + phân phối tách thành đơn vị sau.
 
-### ⬜ U6 — REST API tra cứu + lọc + tổng hợp · review: `security-reviewer`
+### ✅ U6 — REST API tra cứu + lọc + tổng hợp · `packages/query` = `@vat/query` + `apps/api` · review: `security-reviewer` **PASS** + `dod-auditor` + correctness đối nghịch (2026-07-14) · *ĐẠT (`make lint && make test` xanh; coverage `@vat/query` 100% dòng/82% nhánh, `apps/api` 100% dòng/90% nhánh)*
 
-- [ ] Test API (Hono `app.request`, mock adapter): lọc, phân trang, tổng hợp.
-- [ ] Mọi endpoint dữ liệu gắn `tenant_id`; xác thực JWT nội bộ (trừ health-check).
+- [x] Test API (Hono `app.request`, PGlite offline — đọc DB đã đồng bộ, KHÔNG mock adapter/không gọi GDT): `GET /invoices` (lọc `chieu`/`nguon`/`ttxly`/`tthai`/`nbmst`/khoảng `tdlap` + kết hợp), phân trang `limit`/`offset` (`total` độc lập, sắp `tdlap desc` + tie-breaker `id`), `GET /invoices/summary` (count + sum tiền gom theo chiều + tổng chung, tiền giữ chuỗi — kiểm số > 2^53), `GET /invoices/:id`.
+- [x] Mọi endpoint dữ liệu gắn `tenant_id` **tường minh** (lớp 1, `@vat/query.buildWhere` luôn kèm `eq(tenant_id)`) **+** `withTenant`/RLS (lớp 2); xác thực **JWT nội bộ HS256** trích `tenant_id` (trừ `/health`). **Test cách ly tenant qua route API** (bắt buộc — `multi-tenant.md`): JWT tenant A không đọc/không tổng hợp dữ liệu B; `GET /invoices/:idCủaB` → 404. 401 thiếu/hỏng/hết hạn JWT hoặc thiếu claim `tenant_id`; 400 tham số sai.
+- [x] **Quyết định phạm vi (chủ dự án 2026-07-14):** (A) xác thực = verify JWT nội bộ, trích `tenant_id` (phát hành token + RBAC để **U8**); (#2) `/invoices/:id` **chỉ header từ DB**, KHÔNG kèm dòng hàng, KHÔNG gọi GDT. Xem `docs/plans/U6-plan.md`.
+- [x] **Sửa từ review (2026-07-14):** fail-loud ngày lọc tràn số ngày của tháng (`2026-02-30` không âm thầm cuộn); tie-breaker `id` cho phân trang ổn định khi trùng `tdlap`; chặn `test/contract/**` khỏi `make test` của `apps/api`.
+- [ ] ⚠️ Wiring `apps/api/src/db.ts` (pg qua Hyperdrive) + binding `wrangler.jsonc` **CHƯA kiểm chứng với Hyperdrive/Postgres thật** — test dùng PGlite tiêm; cần probe khi deploy (U6-plan "Rủi ro").
 
 ### ⬜ U7 — Xuất Excel/CSV theo mẫu
 

@@ -1,10 +1,21 @@
 import { defineConfig } from "vitest/config";
 
-// U0: unit test chạy trên Node thuần — Hono `app.request()` không cần workerd.
-// Khi cần binding thật (D1/KV/Durable Objects/Hyperdrive) sẽ chuyển sang
-// @cloudflare/vitest-pool-workers (Miniflare) với ma trận phiên bản đã ghim (U4+).
+// U6: unit (Hono app.request + auth JWT, offline) + integration (PGlite — Postgres
+// WASM trong Node, đi qua route thật với db tiêm). Cả hai offline → vào `make test`
+// (testing.md). Chưa cần vitest-pool-workers: chưa chạm binding runtime thật.
 export default defineConfig({
   test: {
-    include: ["**/*.test.ts"],
+    // CHỈ unit + integration (offline). KHÔNG gộp `test/contract/**` (gọi mạng thật
+    // GDT) vào `make test` — nhóm contract chạy riêng qua `test:contract` (testing.md).
+    include: ["test/unit/**/*.test.ts", "test/integration/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.ts"],
+      // Wiring/kiểu thuần — loại khỏi ngưỡng phủ (testing.md "trừ wiring thuần"):
+      // index.ts (compose default), db.ts (pg/Hyperdrive prod, test tiêm PGlite),
+      // types.ts (chỉ kiểu).
+      exclude: ["src/index.ts", "src/db.ts", "src/types.ts"],
+      thresholds: { lines: 80, statements: 80, branches: 80, functions: 80 },
+    },
   },
 });

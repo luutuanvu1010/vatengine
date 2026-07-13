@@ -7,12 +7,18 @@
   "observability": { "enabled": true },
 
   // CPU tối đa 5 phút (mặc định 30s) — nâng khi có step batch nặng.
-  "limits": { "cpu_ms": 30000 }
+  "limits": { "cpu_ms": 30000 },
 
-  // --- Binding sẽ bật dần theo lộ trình (giữ comment ở U0) ---
-  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<HYPERDRIVE_ID>" }],   // U4: Postgres
+  // U6: Postgres qua Hyperdrive. Thay "id" bằng id thật khi deploy
+  // (`wrangler hyperdrive create`). Dev local: đặt WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
+  // trong .dev.vars (KHÔNG commit chuỗi kết nối — security.md).
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }]
+
+  // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình
   // "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }],         // XML/PDF, kết xuất
-  // "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] }, // U8: đồng bộ nền
+  // "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] }, // U9: đồng bộ nền
   // "durable_objects": { "bindings": [{ "name": "TENANT_LIMITER", "class_name": "TenantLimiter" }] }
+  //
+  // JWT_SECRET (khóa ký JWT nội bộ) nạp qua `wrangler secret put JWT_SECRET` — security.md.
 }

@@ -1,0 +1,77 @@
+// Route tra cứu hóa đơn (U6): list + summary + get-one. Chỉ ĐỌC dữ liệu đã đồng bộ
+// (KHÔNG gọi GDT). Mọi truy vấn chạy trong `withTenant` (RLS lớp 2) + lọc `tenant_id`
+// tường minh trong @vat/query (lớp 1). tenantId lấy từ JWT (middleware requireTenant).
+import { withTenant } from "@vat/db";
+import {
+  getInvoiceById,
+  invoiceFilterSchema,
+  listInvoices,
+  pageSchema,
+  summarizeInvoices,
+} from "@vat/query";
+import { Hono } from "hono";
+import { isUuid, requireTenant } from "../auth";
+import type { AppDeps, AppEnv } from "../types";
+
+export function invoicesRoutes(deps: AppDeps) {
+  const r = new Hono<AppEnv>();
+
+  // Mọi route con của /invoices cần JWT hợp lệ (security.md). /health nằm ngoài (app.ts).
+  r.use("*", requireTenant);
+
+  // GET /invoices — danh sách + lọc + phân trang.
+  r.get("/", async (c) => {
+    const q = c.req.query();
+    const filter = invoiceFilterSchema.safeParse(q);
+    const page = pageSchema.safeParse(q);
+    if (!filter.success || !page.success) return c.json({ error: "bad_request" }, 400);
+
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const result = await withTenant(db, tenantId, (tx) =>
+        listInvoices(tx, tenantId, filter.data, page.data),
+      );
+      return c.json(result);
+    } finally {
+      await close();
+    }
+  });
+
+  // GET /invoices/summary — tổng hợp (count + sum tiền) trên cùng bộ lọc. Đăng ký
+  // TRƯỚC /:id để route tĩnh thắng route tham số.
+  r.get("/summary", async (c) => {
+    const filter = invoiceFilterSchema.safeParse(c.req.query());
+    if (!filter.success) return c.json({ error: "bad_request" }, 400);
+
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const summary = await withTenant(db, tenantId, (tx) =>
+        summarizeInvoices(tx, tenantId, filter.data),
+      );
+      return c.json(summary);
+    } finally {
+      await close();
+    }
+  });
+
+  // GET /invoices/:id — một hóa đơn header trong phạm vi tenant (CHỐT #2: không dòng hàng).
+  r.get("/:id", async (c) => {
+    const id = c.req.param("id");
+    // id không phải UUID → request sai (tránh lỗi 22P02 ở Postgres).
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const row = await withTenant(db, tenantId, (tx) => getInvoiceById(tx, tenantId, id));
+      if (!row) return c.json({ error: "not_found" }, 404);
+      return c.json(row);
+    } finally {
+      await close();
+    }
+  });
+
+  return r;
+}
