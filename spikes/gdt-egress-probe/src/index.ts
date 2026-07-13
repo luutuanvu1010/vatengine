@@ -74,10 +74,34 @@ async function runOriginProbe(env: Env, force?: "fetch" | "tcp"): Promise<Origin
   );
 }
 
+// Phép thử quyết định (ADR-0001 Amendment #2, mục 5.1 của docs/00-BAT-DAU-TAI-DAY.md):
+// gọi ĐÚNG https://hoadondientu.gdt.gov.vn/api/captcha từ biên Cloudflare thật
+// (wrangler dev --remote / deploy), đọc status + bodyPreview + egressCountry.
+// KHÔNG phá captcha — chỉ đọc response thô để phân loại 200/403/451/lỗi khác.
+async function runDecisionTest(env: Env): Promise<{
+  status: number;
+  egressCountry: string | undefined;
+  bodyPreview: string;
+}> {
+  const r = await fetch(env.GDT_PROBE_URL, {
+    headers: { accept: "application/json, text/plain, */*", "end-point": "/" },
+  });
+  const body = await r.text();
+  const trace = await (await fetch(env.TRACE_URL)).text();
+  return {
+    status: r.status,
+    egressCountry: (trace.match(/loc=(\w+)/) || [])[1],
+    bodyPreview: body.slice(0, 300),
+  };
+}
+
 export default {
   // Gọi thử theo yêu cầu (HTTP) — tiện xem kết quả trên trình duyệt.
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
+    if (url.pathname === "/decision") {
+      return Response.json(await runDecisionTest(env), { status: 200 });
+    }
     if (url.pathname === "/origin") {
       const force = url.searchParams.get("force");
       const originResult = await runOriginProbe(

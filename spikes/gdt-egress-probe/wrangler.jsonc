@@ -11,8 +11,8 @@
 
   "vars": {
     // Endpoint công khai, nhẹ của GDT để thử khả năng tới máy chủ (KHÔNG đăng nhập).
-    // TODO: thay bằng endpoint công khai xác thực trong quá trình khảo sát adapter.
-    "GDT_PROBE_URL": "https://hoadondientu.gdt.gov.vn/",
+    // Đã sửa theo ADR-0001 Amendment #2 (2026-07-13): API thật ở :443, tiền tố /api.
+    "GDT_PROBE_URL": "https://hoadondientu.gdt.gov.vn/api/captcha",
     // Cloudflare trace: trả ip= và loc= (mã quốc gia) của IP egress.
     "TRACE_URL": "https://www.cloudflare.com/cdn-cgi/trace",
     "PROBE_TIMEOUT_MS": "8000",

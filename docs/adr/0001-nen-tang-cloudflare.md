@@ -1,14 +1,44 @@
 # ADR-0001 — Nền tảng triển khai Backend & Frontend trên hệ sinh thái Cloudflare
 
-- **Trạng thái:** ✅ Đã chấp thuận (Accepted) — 2026-07-11 · **sửa đổi 2026-07-12** (xem "Amendment" bên dưới)
-- **Quyết định đã chốt:** **4A = A2** (PostgreSQL ngoài + Hyperdrive) · **4B = B1** (TypeScript trên Workers) · Egress: **~~T0 (thuần Cloudflare) làm chính~~ → BỊ BÁC BỎ cho API (Amendment 2026-07-12)**; **T1 relay VN là ĐƯỜNG CHÍNH cho API `:30000`**, T0 chỉ cho tài nguyên công khai `:443`/probe.
-- **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress)
-- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật; T1 relay VN thành đường chính + thành phần trọng yếu bảo mật. Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên.
+- **Trạng thái:** ✅ Đã chấp thuận (Accepted) — 2026-07-11 · **sửa đổi 2026-07-12, 2026-07-13** (xem "Amendment" bên dưới)
+- **Quyết định đã chốt:** **4A = A2** (PostgreSQL ngoài + Hyperdrive) · **4B = B1** (TypeScript trên Workers) · Egress: **T0 (thuần Cloudflare) là đường ra CHÍNH THỨC cho API GDT `/api/*` (Amendment #3, 2026-07-13)**; relay VN/T1/U1a **TREO, không dựng** trừ khi phát sinh bằng chứng chặn địa lý mới.
+- **Ngày:** 2026-07-11 (bản gốc) · 2026-07-12 (amendment egress, sau này xác định dựa trên tiền đề sai) · 2026-07-13 (Amendment #2 đính chính tiền đề `:30000`; Amendment #3 xác nhận T0 chạy được với endpoint đúng)
+- **Changelog:** `2026-07-12` — Egress T0 bị bác bỏ cho API sau probe edge thật (**sau này phát hiện probe nhắm sai cổng `:30000`, xem Amendment #2**); T1 relay VN thành đường chính. `2026-07-13` — Amendment #2 đính chính `:30000` là cổng chết, API thật ở `/api` `:443`. Amendment #3 — phép thử quyết định nhắm đúng `/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) trả **200 + `{key,content}` hợp lệ** ⇒ **T0 thuần Cloudflare CHẠY**, gỡ TREO, bỏ nhu cầu relay VN. Nền tảng còn lại (Workers/TS, Postgres/Hyperdrive) giữ nguyên trong mọi lần sửa đổi.
 - **Người quyết định:** Chủ dự án (luutuanvu.gl@gmail.com)
 - **Phạm vi ảnh hưởng:** Hiến pháp `CLAUDE.md` (mục "Ngăn xếp công nghệ", "Kiến trúc — quy tắc cứng"), các luật `.claude/rules/*.md`, khung `backend/` + `frontend/` hiện có.
 - **Nguồn tra cứu:** Tài liệu chính thức Cloudflare (developers.cloudflare.com), truy cập 2026-07-11. Các mốc giới hạn dẫn trong tài liệu này lấy từ trang docs cập nhật tháng 4–6/2026.
 
 > ⚠️ **Cảnh báo quản trị.** Quyết định này **mâu thuẫn trực diện** với Hiến pháp hiện hành (Python/FastAPI/PostgreSQL/Celery/Redis). Theo chính khung quản trị của dự án ("khi một luật mâu thuẫn với Hiến pháp, Hiến pháp thắng — sửa luật, không sửa hiến pháp để né"), việc chuyển sang Cloudflare **bắt buộc phải sửa Hiến pháp một cách tường minh**, không được lặng lẽ đi chệch. Mục "Hệ quả" liệt kê các thay đổi Hiến pháp cần thông qua.
+
+---
+
+## Amendment #3 (2026-07-13) — Phép thử quyết định: T0 thuần Cloudflare CHẠY với endpoint đúng; gỡ TREO, bỏ relay VN
+
+> Thực thi đúng bước "Test quyết định còn lại" mà Amendment #2 đã đặt ra. Kiểm chứng bằng `wrangler dev --remote` (edge Cloudflare thật, KHÔNG local) nhắm **đúng** `https://hoadondientu.gdt.gov.vn/api/captcha`.
+
+### Bằng chứng (2026-07-13, `wrangler dev --remote`, spike `spikes/gdt-egress-probe`, route `/decision`)
+
+Worker (chạy trên colo Cloudflare thật, không phải máy local) gọi trực tiếp `GET https://hoadondientu.gdt.gov.vn/api/captcha` rồi đọc `https://www.cloudflare.com/cdn-cgi/trace` để xác nhận IP egress không phải VN (loại trừ khả năng "đạt giả" do egress cục bộ trùng IP VN).
+
+| Lần gọi | `status` | `egressCountry` (từ `cdn-cgi/trace`, xác nhận egress là colo CF thật — không phải máy local VN) | `bodyPreview` |
+|---|---|---|---|
+| 1 | `200` | `HK` | `{"key":"6a549f29add46b3412d172ac","content":"<svg ...>"}` |
+| 2 | `200` | `HK` | `{"key":"6a549f2fadd46b3412d174eb","content":"<svg ...>"}` |
+| 3 | `200` | `HK` | `{"key":"6a549f310375c3799e8c2023","content":"<svg ...>"}` |
+
+3 lần gọi liên tiếp, đều `200`, đều JSON hợp lệ đúng hình dạng `{key, content}` (khớp `packages/gdt-client/gdt-contract-schema.json` kỳ vọng cho `/captcha`), đều từ colo `HK` (Hồng Kông — nước ngoài, không phải VN) ⇒ loại trừ giả thuyết "đạt do egress cục bộ mang IP Việt Nam".
+
+### Kết luận
+
+- **Nhánh quyết định ở Amendment #2 mục "2. Test quyết định còn lại" chọn nhánh đầu:** `200` + JSON `{key,content}` từ colo nước ngoài ⇒ **T0 (Workers `fetch()` trực tiếp, thuần Cloudflare) tới được API GDT thật `/api/captcha` qua `:443`**.
+- **Gỡ TREO** đặt ra ở Amendment #2: nhánh relay VN/VPS/Tunnel/`ADR-0002`/`U1a` **không cần dựng** cho đường API — giữ nguyên trạng thái *lưu trữ làm bằng chứng lịch sử*, không xoá tài liệu, nhưng **không còn là việc phải làm trước U1**.
+- `GdtTransport` mặc định quay lại **`direct-cf` (T0)**; `vn-relay` (T1) hạ xuống vai trò dự phòng lý thuyết — chỉ dựng lại nếu probe định kỳ (mục "Đường ra & fallback", `.claude/rules/gdt-adapter.md`) phát hiện `GEO_BLOCKED`/breaker mở thật sự trong tương lai.
+- **Việc kế tiếp (đã có bằng chứng, không còn là giả định):** sửa `BASE` trong `packages/gdt-client/src/endpoints.ts` + `backend/gdt_client.py` → `https://hoadondientu.gdt.gov.vn` (`:443`), path `/api/...`, kèm contract test khoá `{key, content}`; sau đó vào **U1** (không còn bị U1a chặn).
+
+### Giới hạn của bằng chứng (nói thẳng, không phóng đại)
+
+- Route `/decision` gọi `/api/captcha` — endpoint công khai duy nhất đã kiểm chứng. **Chưa** kiểm chứng T0 có tới được các endpoint cần xác thực (`/authenticate`, `/query/invoices/*`) — đó là việc của U1/U2, không suy diễn từ kết quả này.
+- Egress country quan sát được (`HK`) là colo phục vụ request tại thời điểm test; Cloudflare có thể route qua colo khác ở lần gọi sau — không ảnh hưởng kết luận (mọi colo nước ngoài đều xác nhận "không phải egress cục bộ VN"), nhưng không nên hiểu nhầm là "luôn luôn cố định HK".
 
 ---
 

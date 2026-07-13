@@ -54,19 +54,19 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] `Makefile` (bọc npm/Wrangler) + CI GitHub Actions.
 - [x] `make lint` và `make test` xanh trên máy (xác nhận cuối cùng).
 
-### ⏸️ U1a — Dựng relay VN + kiểm chứng egress `:30000`  ·  *TREO — tiền đề sai (ADR-0001 Amendment #2, 2026-07-13)* · review: `security-reviewer` + `contract-guardian`
+### 🗄️ U1a — Dựng relay VN + kiểm chứng egress `:30000`  ·  *BỎ — không cần, T0 thuần Cloudflare đã CHẠY (ADR-0001 Amendment #3, 2026-07-13)* · review: `security-reviewer` + `contract-guardian`
 
-> ⛔ **TREO 2026-07-13:** `:30000` là **cổng chết** (curl từ VN → *connection refused*); API thật ở **`https://hoadondientu.gdt.gov.vn/api/captcha`** (`:443`). Cả mốc U1a (và nhu cầu relay) **có thể bị gỡ bỏ** — chờ **egress probe nhắm đúng `/api/captcha` từ biên Cloudflare**. Nếu Workers tới được ⇒ xoá U1a, trở lại T0 thuần Cloudflare. Xem ADR-0001 Amendment #2.
+> ✅ **Đã kiểm chứng 2026-07-13 (Amendment #3):** phép thử quyết định gọi **đúng** `https://hoadondientu.gdt.gov.vn/api/captcha` từ biên Cloudflare thật (`wrangler dev --remote`) → **200 + JSON `{key,content}` hợp lệ**, 3 lần liên tiếp, từ colo nước ngoài (`HK`). ⇒ **T0 (thuần Cloudflare) CHẠY** cho API GDT thật. Mốc này **không cần thực hiện** — giữ lại checklist bên dưới làm bằng chứng lịch sử (nhánh đã cân nhắc, không phải việc còn phải làm), không xoá.
 >
-> *(Tiền đề cũ — giữ làm bằng chứng:) Amendment 2026-07-12 cho rằng biên Cloudflare không tới được API `:30000` nên cần relay VN + VPS. Tiền đề `:30000` này đã được chứng minh sai.*
+> *(Tiền đề cũ — giữ làm bằng chứng:) Amendment 2026-07-12 cho rằng biên Cloudflare không tới được API `:30000` nên cần relay VN + VPS. Tiền đề `:30000` đã bị chứng minh sai ở Amendment #2 (cổng chết); Amendment #3 xác nhận endpoint đúng `/api/captcha` không hề bị chặn.*
 
-- [ ] Relay **stateless** đặt tại VN (VPS Viettel/VNPT/FPT…); xác thực **mTLS + shared-secret**; chỉ Worker của dự án gọi được; không lưu/không log body (token, credential, `raw_json`) — theo `.claude/rules/security.md` mục "Relay VN (egress GDT)".
-- [ ] Từ **vantage VN thật**: `curl https://103.9.200.142:30000/captcha` (Host: `hoadondientu.gdt.gov.vn`) trả JSON hợp lệ `{key, content}`.
-- [ ] Worker gọi GDT **thành công qua relay** (`GdtTransport = vn-relay`): probe/`getCaptcha` qua relay trả về đúng payload.
-- [ ] Bí mật relay (khóa mTLS, shared-secret) nạp qua Workers Secrets/Secrets Store, không commit, xoay vòng được.
-- [ ] **Đo ngưỡng danh tính egress (ADR-0002):** xác định **đơn vị + con số thật** GDT siết một IP (kiểm chứng giả định tạm *≤10 DN/IP/ngày*); ghi rõ GDT có nhạy với "1 token đổi nhiều IP" / "1 IP đổi nhiều token" hay không. Từ kết quả → **tính cỡ pool IP VN** theo tần suất đồng bộ và cập nhật ADR-0002 sang *Accepted*.
+- [ ] ~~Relay **stateless** đặt tại VN (VPS Viettel/VNPT/FPT…); xác thực **mTLS + shared-secret**; chỉ Worker của dự án gọi được; không lưu/không log body (token, credential, `raw_json`) — theo `.claude/rules/security.md` mục "Relay VN (egress GDT)".~~
+- [ ] ~~Từ **vantage VN thật**: `curl https://103.9.200.142:30000/captcha` (Host: `hoadondientu.gdt.gov.vn`) trả JSON hợp lệ `{key, content}`.~~
+- [ ] ~~Worker gọi GDT **thành công qua relay** (`GdtTransport = vn-relay`): probe/`getCaptcha` qua relay trả về đúng payload.~~
+- [ ] ~~Bí mật relay (khóa mTLS, shared-secret) nạp qua Workers Secrets/Secrets Store, không commit, xoay vòng được.~~
+- [ ] ~~**Đo ngưỡng danh tính egress (ADR-0002):** xác định **đơn vị + con số thật** GDT siết một IP...~~ — chỉ cần lại nếu probe định kỳ trong tương lai phát hiện `GEO_BLOCKED` thật sự.
 
-### ⬜ U1 — GDT Adapter: captcha + authenticate  ·  *BỊ CHẶN bởi U1a* · review: `contract-guardian`
+### ⬜ U1 — GDT Adapter: captcha + authenticate  ·  review: `contract-guardian`
 
 - [ ] Mọi gọi GDT đi qua `GdtTransport` trong `packages/gdt-client` (không `fetch` trực tiếp nơi khác).
 - [ ] `getCaptcha()` chỉ trả ảnh cho người dùng nhập — **không** tự giải/bypass.
