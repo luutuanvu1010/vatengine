@@ -54,9 +54,11 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] `Makefile` (bọc npm/Wrangler) + CI GitHub Actions.
 - [x] `make lint` và `make test` xanh trên máy (xác nhận cuối cùng).
 
-### ⬜ U1a — Dựng relay VN + kiểm chứng egress `:30000`  ·  *TIẾP THEO (chặn U1)* · review: `security-reviewer` + `contract-guardian`
+### ⏸️ U1a — Dựng relay VN + kiểm chứng egress `:30000`  ·  *TREO — tiền đề sai (ADR-0001 Amendment #2, 2026-07-13)* · review: `security-reviewer` + `contract-guardian`
 
-> Điều kiện tiên quyết mới theo Amendment ADR-0001 (2026-07-12): biên Cloudflare **không** tới được API GDT `:30000`; mọi gọi API phải đi qua relay đặt tại VN. **Cần một VPS tại VN** trước khi dựng — chưa có VPS ⇒ chưa vào U1a.
+> ⛔ **TREO 2026-07-13:** `:30000` là **cổng chết** (curl từ VN → *connection refused*); API thật ở **`https://hoadondientu.gdt.gov.vn/api/captcha`** (`:443`). Cả mốc U1a (và nhu cầu relay) **có thể bị gỡ bỏ** — chờ **egress probe nhắm đúng `/api/captcha` từ biên Cloudflare**. Nếu Workers tới được ⇒ xoá U1a, trở lại T0 thuần Cloudflare. Xem ADR-0001 Amendment #2.
+>
+> *(Tiền đề cũ — giữ làm bằng chứng:) Amendment 2026-07-12 cho rằng biên Cloudflare không tới được API `:30000` nên cần relay VN + VPS. Tiền đề `:30000` này đã được chứng minh sai.*
 
 - [ ] Relay **stateless** đặt tại VN (VPS Viettel/VNPT/FPT…); xác thực **mTLS + shared-secret**; chỉ Worker của dự án gọi được; không lưu/không log body (token, credential, `raw_json`) — theo `.claude/rules/security.md` mục "Relay VN (egress GDT)".
 - [ ] Từ **vantage VN thật**: `curl https://103.9.200.142:30000/captcha` (Host: `hoadondientu.gdt.gov.vn`) trả JSON hợp lệ `{key, content}`.

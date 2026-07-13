@@ -12,6 +12,33 @@
 
 ---
 
+## Amendment #2 (2026-07-13) — Tiền đề cổng `:30000` SAI; API thật ở `/api` trên `:443`
+
+> Kiểm chứng bằng `curl` từ **vantage VN thật** + đọc **lưu lượng sống** của trang login GDT. **Đảo một tiền đề nền của Amendment 2026-07-12.** Nền tảng (Workers/TS, Postgres/Hyperdrive) giữ nguyên; phần **egress/relay bị TREO để tái thẩm định**.
+
+### Bằng chứng (2026-07-13, vantage VN)
+
+| Phép thử | Kết quả | Diễn giải |
+|---|---|---|
+| `curl :30000/captcha` (hostname → 103.9.200.142) | **Connection refused ~34ms** | Không dịch vụ nào lắng nghe `:30000`. Refused (không timeout) ⇒ **không phải** chặn địa lý. |
+| `dig +short hoadondientu.gdt.gov.vn` | **103.9.200.142** (netname GDT-VN) | Phân giải **thẳng** origin VN — **KHÔNG** sau Cloudflare. Đính chính khẳng định "zone Cloudflare proxied" ở Amendment #1. |
+| `curl :443/captcha` (± `Accept: json`) | **404** Next.js `_error` (`isServer:true`) | `/captcha` không tồn tại ở host này ⇒ path BASE cũ sai. |
+| **Lưu lượng sống trang login** | `GET https://hoadondientu.gdt.gov.vn/api/captcha` | **API thật: `:443`, cùng host, tiền tố `/api`.** |
+
+### Kết luận
+
+- **`BASE = https://hoadondientu.gdt.gov.vn:30000` là SAI** (kế thừa từ chú thích chưa kiểm chứng ở `backend/gdt_client.py` dòng 27–31). Đúng: **`https://hoadondientu.gdt.gov.vn`** (`:443`), captcha ở **`/api/captcha`**.
+- **521 ở Amendment #1 là ARTIFACT của việc gọi cổng chết `:30000`**, KHÔNG phải bằng chứng GDT chặn biên Cloudflare. Suy luận "cần relay VN" đứng trên tiền đề sai.
+- GDT **không** nằm sau Cloudflare; `:443` mở và spike gốc **đã trả 200 từ colo CF SG** ⇒ **prior mạnh rằng Workers tới được API `:443` (T0) — nhiều khả năng KHÔNG cần relay/VPS/Tunnel.**
+
+### TREO & bước sửa (chưa xoá — giữ làm bằng chứng lịch sử)
+
+1. **TREO để tái thẩm định:** quyết định relay (Amendment #1), `ADR-0002`, mốc `U1a`, mục "Relay VN" trong `.claude/rules/security.md`, mọi dòng `:30000` trong docs/code.
+2. **Test quyết định còn lại:** chạy lại egress probe nhắm **đúng** `https://hoadondientu.gdt.gov.vn/api/captcha` **từ biên Cloudflare** (`wrangler dev --remote`/deploy). `{key, content}` ⇒ **gỡ bỏ relay/VPS/Tunnel/U1a, trở lại T0 thuần Cloudflare**; nếu bị chặn địa lý ⇒ tái lập relay nhưng nhắm **đúng** endpoint 443 `/api`.
+3. **Sửa `BASE`** ở `packages/gdt-client/src/endpoints.ts` + `backend/gdt_client.py` (→ `:443`, path `/api/...`) kèm contract test — việc của phiên Claude Code (không làm ở đây).
+
+---
+
 ## Amendment (2026-07-12) — Egress T0 (thuần Cloudflare) BỊ BÁC BỎ cho API; T1 relay VN là ĐƯỜNG CHÍNH
 
 > Bổ sung sau khi **kiểm chứng lại egress bằng probe trên edge thật** (`wrangler dev --remote`, colo SG). ADR **giữ trạng thái Accepted**; đây là changelog sửa **một giả định sai của bản gốc** (mục 5B, 8, 9), **không** đảo quyết định nền tảng — Workers/TS + Postgres/Hyperdrive giữ nguyên.

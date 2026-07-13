@@ -2,9 +2,9 @@
 
 Tài liệu này là **cửa vào duy nhất** cho mỗi phiên làm việc mới. Đọc file này trước, nó chỉ tới mọi thứ còn lại.
 
-Cập nhật lần chốt: **2026-07-12** · Vị trí lộ trình: **U0 ✅ ĐẠT (`make lint && make test` xanh trên máy — commit `757ec3a`, `fa0988b`) → mốc kế tiếp = U1a (dựng relay VN + kiểm chứng egress `:30000`); U1 BỊ CHẶN bởi U1a**.
+Cập nhật lần chốt: **2026-07-13** · Vị trí lộ trình: **U0 ✅ ĐẠT → mốc kế tiếp = SỬA TIỀN ĐỀ EGRESS rồi mới quyết U1** (U1a relay **TREO**).
 
-> ⚠️ **U1a chặn U1** (Amendment ADR-0001, 2026-07-12): biên Cloudflare không tới được API GDT `:30000` → mọi gọi API phải qua relay đặt tại VN. **U1a cần một VPS tại VN**; chưa có VPS ⇒ chưa dựng relay, chưa vào U1a/U1.
+> ⛔ **Đính chính lớn 2026-07-13 (ADR-0001 Amendment #2):** cổng `:30000` là **cổng chết** (curl từ VN → *connection refused*); **API thật ở `https://hoadondientu.gdt.gov.vn/api/captcha`** (`:443`, tiền tố `/api`). Cái "521 → cần relay" hôm 2026-07-12 là **artifact do gọi nhầm cổng chết**. ⇒ Nhánh **relay/VPS/Tunnel/U1a TREO**. **Bước kế tiếp:** chạy egress probe nhắm **đúng `/api/captcha` từ biên Cloudflare**; nếu Workers tới được ⇒ **gỡ relay, trở lại T0 thuần Cloudflare**, và sửa `BASE` (`packages/gdt-client`, `backend/gdt_client.py`) sang `:443` `/api`.
 
 ---
 
