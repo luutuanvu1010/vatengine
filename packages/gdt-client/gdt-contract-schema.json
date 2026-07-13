@@ -6,5 +6,9 @@
   "authenticate": {
     "description": "POST /api/security-taxpayer/authenticate — đổi captcha đã nhập lấy JWT token. ĐÃ KIỂM CHỨNG (2026-07-13, ADR-0001 Amendment #4): probe đăng nhập thật (QĐ-2) từ biên Cloudflare (T0) trả 200 + {token} (JWT), egress SG. Không tự động vào CI (cần captcha người thật) — CI chỉ giữ contract công khai /api/captcha.",
     "required_keys": ["token"]
+  },
+  "invoice_envelope": {
+    "description": "GET /api/(sco-)query/invoices/{purchase,sold} — phong bì danh sách hóa đơn: 'datas' (mảng HĐ) + 'state' (con trỏ phân trang). CHƯA KIỂM CHỨNG (2026-07-13): hình dạng mới suy từ mã Python di sản backend/gdt_client.py, CHƯA có probe query thật (endpoint cần token + captcha người thật). Kiểm hợp đồng MỀM (chỉ cảnh báo, KHÔNG mở circuit breaker) theo ngoại lệ trong .claude/rules/gdt-adapter.md, vì chưa xác nhận GDT luôn trả 'datas' kể cả khi rỗng. Gỡ nhãn + nâng thành kiểm cứng sau khi có log thật (runbook probe query, giống U1-probe-authenticate.md).",
+    "required_keys": ["datas"]
   }
 }

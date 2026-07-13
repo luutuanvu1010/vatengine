@@ -79,12 +79,13 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] ✅ **AUTH_PATH ĐÃ KIỂM CHỨNG (2026-07-13):** probe đăng nhập thật (QĐ-2, runbook `docs/prompts/U1-probe-authenticate.md`) với tài khoản MST hợp pháp → **`httpStatus=200` + `{token}` (JWT), `hasToken=true`**, egress **`SG`** từ biên Cloudflare (T0, `wrangler dev --remote`). Người trực đọc/nhập captcha (**không** bypass); credential nạp ephemeral qua `.dev.vars`, **đã xoá ngay sau probe**; token **không** ghi lại (chỉ log bản che). Đã gỡ nhãn `CHƯA KIỂM CHỨNG` khỏi `endpoints.ts` (`AUTH_PATH`) + cập nhật `gdt-contract-schema.json` (`authenticate`); ghi vào ADR-0001 **Amendment #4**. Mã probe **tạm đã revert** (`git status` sạch).
 - [ ] ⚠️ **Nợ kiểm chứng còn lại (chuyển sang U2):** `INVOICE_ENDPOINTS` (`/api/query/invoices/*` + `/api/sco-query/invoices/*`) **CHƯA KIỂM CHỨNG** — chỉ có unit test mock, chưa gọi thật. Giữ nhãn `CHƯA KIỂM CHỨNG` trong `endpoints.ts` cho tới khi kiểm chứng bằng gọi thật ở **U2** (query purchase/sold).
 
-### ⬜ U2 — Query purchase/sold + phân trang + gộp sco + khử trùng · review: `contract-guardian`
+### ✅ U2 — Query purchase/sold + phân trang + gộp sco + khử trùng · review: `contract-guardian`
 
-- [ ] Truy vấn và **gộp hai họ endpoint**: `/query/invoices/{purchase,sold}` và `/sco-query/invoices/{purchase,sold}`.
-- [ ] Test phân trang nhiều trang (đủ, không sót/lặp trang).
-- [ ] Khử trùng lặp theo khóa tự nhiên `(tenant_id, nbmst, khmshdon, khhdon, shdon, tdlap)`.
-- [ ] Luôn giữ `raw_json` cho mỗi hóa đơn.
+- [x] Truy vấn và **gộp hai họ endpoint**: `/query/invoices/{purchase,sold}` và `/sco-query/invoices/{purchase,sold}`. (`queryInvoices()` trong `packages/gdt-client/src/query.ts`; test `query.test.ts` "gộp normal + sco".)
+- [x] Test phân trang nhiều trang (đủ, không sót/lặp trang). (Test: dừng khi trang ngắn hơn size, dừng khi thiếu `state`, chặn vòng lặp vô hạn + cảnh báo cắt cụt.)
+- [x] Khử trùng lặp theo khóa tự nhiên. Ở **tầng adapter (U2)** dùng **5 trường** `(nbmst, khmshdon, khhdon, shdon, tdlap)` — `tenant_id` (khóa 6 trường cho upsert DB) bổ sung ở tầng đồng bộ **U4/U5**, không thuộc adapter. (Test: "khử trùng theo khóa tự nhiên khi trùng giữa normal và sco".)
+- [x] Luôn giữ nguyên bản thô của hóa đơn (nền tảng cho cột `raw_json` khi lưu DB ở U4): adapter trả nguyên toàn bộ trường, chỉ gắn thêm `_source`/`_direction`. (Test: "bảo toàn TOÀN BỘ trường thô của hóa đơn".)
+- [ ] ⚠️ **Nợ kiểm chứng (chuyển sang runbook probe query):** hình dạng phong bì `{datas, state}`, cú pháp RSQL, cách gắn token `Bearer`, và giả định "một số tài khoản không có sco" đều **CHƯA KIỂM CHỨNG** (suy từ mã Python di sản). Contract test `invoices.contract.test.ts` gated bằng `GDT_CONTRACT_TOKEN` ghi kỳ vọng; gỡ nhãn trong `endpoints.ts` + `gdt-contract-schema.json` sau khi có log gọi thật.
 
 ### ⬜ U3 — GDT Adapter: detail dòng hàng · review: `contract-guardian`
 
