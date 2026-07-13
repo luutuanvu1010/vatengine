@@ -4,6 +4,18 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 > Quy tắc thông qua: một mốc chỉ được đánh `✅ ĐẠT` khi **toàn bộ** tiêu chí riêng của nó **và** Definition of Done chung (mục A) đều xanh. Nếu thiếu bất kỳ mục nào → **chưa đạt, tự vòng lại** bước thực thi cho tới khi đủ.
 
+## Trạng thái tiến độ (đọc trước tiên)
+
+> **Cập nhật: 2026-07-13 · commit gần nhất `737e67d` · nhánh `feat/cloudflare-stack-u0`.**
+>
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · **`U4 ⬜ ← KẾ TIẾP`** · `U5 ⬜` · `U6 ⬜` · `U7 ⬜` · `U8 ⬜` · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
+>
+> **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
+>
+> **Kế tiếp — U4 (Mô hình dữ liệu + migration):** Drizzle/PostgreSQL qua Hyperdrive; khóa tự nhiên **6 trường** `(tenant_id, nbmst, khmshdon, khhdon, shdon, tdlap)` (khác adapter 5 trường — thêm `tenant_id`); `raw_json` JSONB; **RLS** theo `tenant_id`; bảng `HoaDon` + `DongHangHoa` (ánh xạ từ `mapDetailLines`). Xem `KIEN_TRUC_VA_KE_HOACH.md` mục 7.
+>
+> **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
+
 ## Vòng lặp mỗi mốc
 
 ```
