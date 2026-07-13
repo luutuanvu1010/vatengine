@@ -85,6 +85,18 @@ Theo `TRIEN_KHAI_BANG_CLAUDE_CODE.md`, đóng gói trong skill `/start-unit`: (1
 
 Thứ tự triển khai: U0 (khung dự án + Makefile + CI) → U1–U3 (GDT Adapter) → U4–U5 (mô hình dữ liệu + đồng bộ idempotent) → U6–U7 (API tra cứu + kết xuất) → U8+ (đa tenant, đồng bộ nền, đối chiếu…).
 
+## Nguyên tắc bằng chứng (không giả định vô căn cứ)
+
+Mọi nhận định làm cơ sở cho quyết định, tài liệu hoặc mã nguồn phải **truy được về bằng chứng cụ thể, tái lập được** — tuyệt đối không suy đoán rồi trình bày như sự thật. Đây là nguyên tắc tối cao, ngang các quy tắc cứng.
+
+- **Phân biệt rạch ròi "đã kiểm chứng" với "giả định".** *Đã kiểm chứng* = có bằng chứng tái lập được, kèm ngày: lệnh + kết quả thật, tài liệu chính thức, hoặc lưu lượng/quan sát trực tiếp. *Giả định* = chưa có bằng chứng → **phải gắn nhãn "CHƯA KIỂM CHỨNG" ở mọi nơi nó xuất hiện.**
+- **Không để giả định hoá thành "chốt".** Trước khi một giả định về hệ thống bên ngoài (đặc biệt API thuế) trở thành tiền đề của ADR/kiến trúc/mã, phải có **một phép kiểm chứng tái lập được** (curl/probe/contract test) và **ghi lại kết quả**. Không kiểm chứng ⇒ không được "chốt".
+- **"Đã có trong tài liệu/mã cũ" KHÔNG phải bằng chứng.** Một khẳng định nằm sẵn trong chú thích/tài liệu/mã kế thừa không chứng minh nó đúng; tiền đề nền phải **tự kiểm lại từ nguồn sơ cấp**, không tin theo dây chuyền. *(Bài học `:30000`: một chú thích "Portal dùng cổng 30000" chưa ai chạy thử đã lan vào ADR + mã và suýt dựng cả hạ tầng relay/VPS vô ích — xem ADR-0001 Amendment #2.)*
+- **Khi chưa chắc, nói thẳng "chưa kiểm chứng".** Thà thừa nhận chưa biết còn hơn phát biểu tự tin sai. **Độ tự tin không thay thế bằng chứng.**
+- **Trích nguồn khi khẳng định** về hành vi hệ thống bên ngoài: dẫn lệnh/kết quả/tài liệu cụ thể, tái lập được.
+
+Nguyên tắc này củng cố mục "Khi gặp mơ hồ" bên dưới và được ép thi hành qua contract test + probe định kỳ trong Definition of Done.
+
 ## Khi gặp mơ hồ
 
 Nếu cần **đoán cấu trúc phản hồi API thuế** hoặc gặp yêu cầu chưa rõ: **DỪNG và hỏi**, kèm phương án đề xuất và một contract test để kiểm chứng. Không tự giả định thầm rồi code tiếp.
