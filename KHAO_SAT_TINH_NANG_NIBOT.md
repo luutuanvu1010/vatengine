@@ -90,3 +90,34 @@ Cấu trúc điều hướng: thanh trên cùng (TIỆN ÍCH, HƯỚNG DẪN, H�
 ## 7. Ghi chú phương pháp & phạm vi
 
 Toàn bộ quan sát lấy từ giao diện người dùng khi đăng nhập bằng tài khoản hợp lệ của chính doanh nghiệp; chỉ đọc những gì phần mềm hiển thị cho người dùng. Không thu thập dữ liệu của bên thứ ba, không phân tích lưu lượng mạng nội bộ, không dịch ngược mã nguồn NIBOT. Về bản chất, NIBOT bọc quanh **hệ thống hóa đơn điện tử và thuế điện tử của Tổng cục Thuế** — cũng chính là các hệ thống mà VATCrawlbot kết nối trực tiếp theo kênh chính thức. Bản khảo sát này là danh sách năng lực ở mức "người dùng nhìn thấy gì", đủ để làm mốc tính năng cho sản phẩm tự xây, không phải bản hướng dẫn sao chép hệ thống của NIBOT.
+
+---
+
+## 8. Cập nhật 13/07/2026 — quan sát trực tiếp + tinh chỉnh gap analysis
+
+*Phương pháp: quan sát hộp đen giao diện dashboard trên tài khoản hợp lệ của chính doanh nghiệp (TOUR ĐẢO, MST 4201969169) tại `nibot9.com:7979`. Không mổ lưu lượng mạng, không dịch ngược — giữ nguyên ranh giới mục 7.*
+
+**Xác nhận trạng thái sản phẩm (mới so với 11/07):** miền hiện hành `nibot9.com:7979`; tổng **21.382 HĐ** (mua vào + bán ra); đồng bộ đã tới **phiên bản V:554 (13.07.26 09:16)**. Dashboard chạy **hệ thống cảnh báo thay đổi hóa đơn** — ví dụ thật: *"[CẢNH BÁO – 4201969169] Hóa đơn có sự thay đổi, Nibot đã đồng bộ lại HĐ này… trạng thái từ HĐ Mới thành HĐ Đã bị điều chỉnh"*. Kèm menu công khai NĐ44/NĐ174, và các nút Xử lý hàng loạt / Tra cứu DN rủi ro / Kiểm tra tình trạng MST / Thống kê tình trạng sử dụng HĐ ngay trên dashboard.
+
+### 8a. NIBOT có, kế hoạch ta còn mỏng hoặc thiếu (ưu tiên xử lý)
+
+- **Kết xuất đa định dạng** (xlsx, xml.zip, html.zip, pdf.zip, AIO.pdf) — ta mới định Excel/CSV. Bổ sung rẻ vào U7. *(→ đã đưa vào checklist U7.)*
+- **Cảnh báo thay đổi hóa đơn + lịch sử đồng bộ có phiên bản** (V:554) — ta phát hiện được đổi `ttxly/tthai` (U5) nhưng **chưa có tầng thông báo + versioning phiên đồng bộ**. *(→ đã đưa vào checklist U5/U9.)*
+- Quy trình **duyệt nội bộ** + thao tác hàng loạt — chưa có trong lộ trình.
+- **Danh mục hàng hóa** + gán mã tài khoản kế toán + gom mặt hàng + quy đổi ĐVT — mới chạm ở U11.
+- **Định khoản kép** từ sao kê ngân hàng (OCR) + tờ khai hải quan, cập nhật tỷ giá — ngoài scope hiện tại.
+- Tra cứu MST kèm **công văn rủi ro** + kiểm tra người bán real-time; tra cứu **NĐ44/NĐ174** (8% vs 10%) — chưa có.
+- Convert sang phần mềm kế toán (SmartKTSC) → U11. **Cổng thuế điện tử – dịch vụ công** → **ngoài Hiến pháp của ta** (ta chỉ làm `hoadondientu`, NIBOT bọc thêm `thuedientu`).
+- Bộ PRO OCR: DOLAGO, DOSAKE, PDFGURU.
+
+### 8b. Chỗ ta chủ trương làm TỐT HƠN (chiều sâu, không đua bề rộng)
+
+NIBOT rộng (9 nghiệp vụ + cổng thuế + PRO OCR) → đua phủ ngay là dàn trải. Lợi thế bền của VATCrawlbot đặt ở chiều sâu mà kiến trúc Cloudflare + Hiến pháp cho phép:
+
+- **Độ tin cậy đồng bộ ở quy mô lớn**: Queues/Workflows + Durable Object rate-limit/circuit-breaker hướng 100k tenant.
+- **Tin cậy & kiểm chứng được**: idempotent + giữ trọn `raw_json` + audit log + nguyên tắc bằng chứng → "số liệu đối chiếu được".
+- **Cách ly tenant thật + tuân thủ** (RLS, NĐ13/2023, mã hóa bí mật, không lưu mật khẩu thô) làm hạng nhất.
+- **API-first**: truy cập lập trình được cho tích hợp, không chỉ UI.
+- **Chiều sâu đối chiếu (U10)** làm chắc thay vì mỏng-mà-rộng.
+
+**Kết luận điều hướng lộ trình:** giữ trọng tâm M1–M4 (lõi hóa đơn + đồng bộ + đa tenant + bảo mật/vận hành), chèn thêm 2 hạng mục nhỏ mà NIBOT coi là lõi (kết xuất đa định dạng; thông báo thay đổi + versioning). OCR sao kê/hải quan, danh mục kế toán bề rộng, cổng thuế điện tử → xếp v2, không để kéo lệch trọng tâm.

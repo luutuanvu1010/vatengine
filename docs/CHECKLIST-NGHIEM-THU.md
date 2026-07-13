@@ -103,6 +103,8 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [ ] (b) `ttxly`/`tthai` đổi giữa 2 lần → **cập nhật**, không tạo mới.
 - [ ] (c) Bản ghi lần đồng bộ ghi đúng số HĐ mới / số HĐ cập nhật.
 - [ ] (d) Lỗi mạng tạm → retry; 401 → dừng + báo. *(Mỗi ý (a)–(d) có ≥ 1 test.)*
+- [ ] (e) **Thông báo thay đổi hóa đơn**: khi `ttxly/tthai` đổi giữa 2 lần đồng bộ → sinh sự kiện thông báo cho tenant (VD: "HĐ Mới → HĐ Đã bị điều chỉnh"). *(Đối sánh NIBOT — khảo sát mục 8a; test: đổi trạng thái → có đúng 1 thông báo, không trùng.)*
+- [ ] (f) **Lịch sử đồng bộ có phiên bản**: mỗi phiên đồng bộ ghi mốc thời gian + số HĐ mới/cập nhật, truy vấn lại được theo tenant. *(NIBOT hiển thị "V:554"; test: 2 phiên tạo 2 bản ghi lịch sử phân biệt.)*
 
 ### ⬜ U6 — REST API tra cứu + lọc + tổng hợp · review: `security-reviewer`
 
@@ -113,6 +115,7 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 
 - [ ] Test đọc lại file kết xuất: đúng cột và **định dạng tiền**.
 - [ ] File lớn lưu **R2** (không giữ trong bộ nhớ Worker).
+- [ ] **Kết xuất đa định dạng** (đối sánh NIBOT — khảo sát mục 8a): tối thiểu `xlsx` + `csv`; lộ trình đủ parity gồm `xml.zip`, `pdf.zip`, và gộp `AIO.pdf`. *(Test: mỗi định dạng mở lại được, đúng số bản ghi.)*
 
 ### ⬜ U8 — Auth người dùng nội bộ + RBAC + đa tenant · review: `security-reviewer` (rò rỉ chéo = Critical)
 
