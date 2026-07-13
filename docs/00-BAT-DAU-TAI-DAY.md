@@ -67,25 +67,42 @@ Mẹo cho người không lập trình: có thể mô tả ý muốn bằng lờ
 
 **Cowork (chỗ này) là tùy chọn, KHÔNG nằm trong vòng lặp:** chỉ dùng khi cần việc tách biệt bất đồng bộ — nghiên cứu (ví dụ GDT đổi API), soạn tài liệu/báo cáo. Không dùng để "điều phối" từng mốc, vì điều đó tạo ra chính việc chép qua chép lại cần tránh.
 
-## 4. Trạng thái chốt phiên này
+## 4. Trạng thái chốt phiên này (cập nhật 2026-07-13)
 
-- ✅ Chọn nền tảng Cloudflare + ghi ADR-0001 (Accepted); chốt Postgres+Hyperdrive (A2) + TypeScript (B1).
-- ✅ Gỡ rủi ro egress: cơ chế `GdtTransport` T0/T1 + probe; spike chạy thật → GDT trả 200 từ colo SG (đạt sơ bộ).
-- ✅ Sửa Hiến pháp + 4 Luật + 2 hook sang stack mới.
-- ✅ Dựng khung U0: monorepo `apps/api` (Hono) + `packages/gdt-client` + CI + Makefile.
-- ✅ Đủ bộ skill/agent vòng đời + checklist nghiệm thu U0–U12.
+**Nền (giữ nguyên):** Cloudflare + TypeScript + Postgres/Hyperdrive (ADR-0001, Accepted); khung **U0 ✅ ĐẠT**; đủ bộ skill/agent + checklist U0–U12.
 
-## 5. Việc còn treo (làm đầu phiên sau)
+**Phiên 2026-07-13 — ĐÍNH CHÍNH LỚN + quản trị:**
 
-- ✅ **Đã xong (2026-07-12):** commit đợt cuối; `make lint && make test` xanh trên máy; U0 tick đủ và đổi trạng thái `✅ ĐẠT` trong checklist (commit `757ec3a`, `fa0988b`).
-- ✅ **Đã kết luận egress `:30000` (2026-07-12):** probe edge thật cho thấy biên Cloudflare **KHÔNG** tới được API `:30000` (`fetch` → 521; TCP `connect()` → không nối được); thử direct-origin (`resolveOverride` + TCP) **inconclusive**, giữ làm bằng chứng (commit `fb54fea`). → Amendment ADR-0001 **bác bỏ T0 cho API**; **T1 relay VN là đường chính**.
-- ⬜ **U1a — Dựng relay VN + kiểm chứng egress `:30000` (chặn U1):** cần **VPS tại VN** trước; từ VN `curl :30000/captcha` trả `{key, content}`; relay stateless mTLS+secret; Worker gọi GDT qua relay. **Chưa có VPS ⇒ chưa vào U1a/U1.**
-- 🔄 **Egress (xuyên suốt):** tiếp tục theo dõi ở U1–U3 (nhiều colo, tải cao, endpoint có token).
-- ℹ️ **Nạp lại skill:** khởi động lại phiên Claude Code khi thêm skill mới trong `.claude/skills/`.
+- 🔴 **Tiền đề `:30000` SAI (kiểm chứng từ vantage VN).** `curl :30000/captcha` → *connection refused* (cổng chết); `dig` → `103.9.200.142` (GDT **không** sau Cloudflare); **API thật = `https://hoadondientu.gdt.gov.vn/api/captcha`** (`:443`, tiền tố `/api`, đọc từ lưu lượng sống trang login). "521 → cần relay" hôm 2026-07-12 chỉ là **artifact gọi cổng chết**. → ADR-0001 **Amendment #2** (commit `de80e84`).
+- ⏸️ **TREO toàn bộ nhánh relay/VPS/Tunnel/U1a** (giữ làm bằng chứng, **chưa xoá**): `ADR-0002`, kế hoạch U1a (`docs/plans/`), mục "Relay VN" trong `security.md`, domain `vatengine.khanhhoatravel.com.vn`.
+- ✅ **Hiến pháp:** thêm mục **"Nguyên tắc bằng chứng"** — không giả định vô căn cứ; giả định phải gắn nhãn CHƯA KIỂM CHỨNG (commit `b088cb5`).
+- ✅ Dọn commit treo + tài liệu egress-identity (`ADR-0002` + mục 3b: cần cả đồng bộ nền lẫn on-demand) + prompt nghiên cứu daemon (bổ trợ, phiên riêng).
+
+## 5. Việc còn treo — LÀM ĐẦU PHIÊN SAU (theo thứ tự)
+
+1. 🔵 **PHÉP THỬ QUYẾT ĐỊNH — chạy trước hết:** gọi `https://hoadondientu.gdt.gov.vn/api/captcha` **từ biên Cloudflare** (`wrangler dev --remote`, **KHÔNG** local — local egress = IP VN → "đạt" giả). Đọc `status` / `bodyPreview` / `egressCountry`.
+   - `200` + JSON `{key,content}` từ colo nước ngoài → **T0 thuần Cloudflare CHẠY → GỠ BỎ relay/VPS/Tunnel/U1a**, gỡ TREO.
+   - `403/451` → chặn địa lý → **tái lập relay VN nhưng nhắm ĐÚNG `:443 /api`** (kế hoạch U1a sửa endpoint, không phải `:30000`).
+2. 🔵 **Sửa `BASE`** (hệ quả trực tiếp, việc code — TDD): `packages/gdt-client/src/endpoints.ts` + `backend/gdt_client.py` → `https://hoadondientu.gdt.gov.vn` (`:443`), path `/api/...`; kèm **contract test**. Cả spike `spikes/gdt-egress-probe` (`GDT_PROBE_URL`) đang trỏ URL cũ.
+3. 🔵 **Khoá contract captcha:** `curl .../api/captcha` lấy **body thật**, xác nhận `{key, content}` (chưa dán ở phiên này).
+4. ⚪ **Nghiên cứu daemon egress client** — phiên riêng, prompt sẵn ở `docs/prompts/nghien-cuu-daemon-egress-client.md` (nhánh bổ trợ, chỉ khi cần).
+5. ℹ️ Sau khi egress chốt xong mới quay lại **U1** (GDT Adapter: captcha + authenticate), port từ `backend/gdt_client.py`.
+
+Mẫu Worker cho bước 1 (spike passthrough, chạy `wrangler dev --remote`):
+
+```js
+export default { async fetch() {
+  const r = await fetch("https://hoadondientu.gdt.gov.vn/api/captcha",
+    { headers: { "accept": "application/json, text/plain, */*", "end-point": "/" } });
+  const body = await r.text();
+  const trace = await (await fetch("https://www.cloudflare.com/cdn-cgi/trace")).text();
+  return Response.json({ status: r.status, egressCountry: (trace.match(/loc=(\w+)/)||[])[1], bodyPreview: body.slice(0,300) });
+}};
+```
 
 ## 6. Khởi động phiên mới — làm gì trước
 
-1. Đọc file này + `docs/CHECKLIST-NGHIEM-THU.md` để biết mốc kế tiếp (**U1a**).
-2. **Điều kiện tiên quyết U1a: có một VPS tại VN.** Chưa có ⇒ **DỪNG**, không dựng relay, không code U1a/U1. Khi có VPS: chạy `/plan-unit U1a` (dựng relay VN stateless mTLS+secret + kiểm chứng `curl :30000/captcha` từ VN trả `{key, content}` + Worker gọi GDT qua relay).
-3. Sau khi U1a ĐẠT (relay chạy, egress `:30000` kiểm chứng xong): `/plan-unit U1` (GDT Adapter: captcha + authenticate) — port từ `backend/gdt_client.py` sang `packages/gdt-client` bằng TypeScript.
-4. Theo vòng lặp mục 3 cho tới khi `/qa-unit` báo ĐẠT, rồi tick mốc trong checklist và commit.
+1. Đọc file này + `docs/adr/0001-nen-tang-cloudflare.md` **Amendment #2** + `docs/CHECKLIST-NGHIEM-THU.md` (mốc U1a đang **⏸️ TREO**).
+2. Chạy **phép thử quyết định** (mục 5.1) — kết quả quyết định toàn bộ hướng đi (bỏ relay hay không). **Chưa có kết quả ⇒ chưa chốt gì về egress.**
+3. Theo kết quả: sửa `BASE` + contract test (mục 5.2–5.3), rồi vào **U1**. Giữ vòng lặp `/plan-unit → /start-unit → /verify → /qa-unit`.
+4. Tôn trọng **"Nguyên tắc bằng chứng"** (Hiến pháp): không chốt bất cứ điều gì về API thuế nếu chưa có phép kiểm chứng tái lập được.
