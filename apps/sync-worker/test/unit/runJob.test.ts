@@ -196,6 +196,20 @@ describe("runScheduledSync — điều phối job đồng bộ nền", () => {
     expect(calls.reauthPreflight).toEqual([]);
   });
 
+  it("[U14 fix pass 2 — hồi quy] tài khoản TỒN TẠI nhưng token vừa bị xóa (VD: job chiều còn lại vừa nhận 401 và reauthRuntime null hóa token) → needs_reauth qua reauthPreflight, KHÔNG rơi vào nhánh 'tài khoản không tồn tại'", async () => {
+    // loadAccountToken PHẢI phân biệt: tài khoản không tồn tại (null nguyên khối) vs.
+    // tài khoản tồn tại nhưng mất token ({ tokenHienTai: null, tokenHetHan: null }).
+    // Bug hồi quy: dùng readToken (gộp 2 ca) khiến ca này lẫn vào "retry, không ghi reauth".
+    const { deps, calls } = makeDeps({
+      account: { tokenHienTai: null, tokenHetHan: null },
+    });
+    const out = await runScheduledSync(deps, MSG);
+    expect(out.kind).toBe("needs_reauth");
+    expect(calls.sync).toBe(0); // không chạm GDT
+    expect(calls.reauthPreflight).toHaveLength(1); // đi qua nhánh reauth, không dead-letter
+    expect(calls.reauthRuntime).toEqual([]);
+  });
+
   it("circuit breaker MỞ → bỏ qua tick, không gọi sync/GDT, ghi breakerSkip", async () => {
     const { deps, calls } = makeDeps({ permit: { allowed: false, reason: "breaker_open" } });
     const out = await runScheduledSync(deps, MSG);

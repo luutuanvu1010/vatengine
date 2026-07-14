@@ -1,17 +1,19 @@
-import { maskSensitive } from "@vat/crypto";
+import { maskSensitive, openSecret } from "@vat/crypto";
 // U9 — Ghi vết job đồng bộ nền vào DB (lan_dong_bo + audit_log) + đánh dấu token
 // chết. MỌI truy cập tenant-scoped qua withTenant (RLS, lớp phòng thủ 2) + lọc
 // tường minh tenant_id (multi-tenant.md). KHÔNG lưu mật khẩu/không log token
 // (security.md). loadAccountToken chỉ đọc trạng thái token (đủ để pre-flight).
 //
 // U12 — chi_tiet audit đi qua maskSensitive trước khi ghi (che credential nếu lỡ lọt
-// vào chuỗi lỗi). Token tại nghỉ: seam mã hóa `@vat/db` storeToken/readToken.
+// vào chuỗi lỗi). Token tại nghỉ: seam mã hóa `@vat/db` storeToken (ghi) và giải mã
+// inline dưới đây (đọc, vì cần phân biệt 3 ca — xem loadAccountToken).
 //
-// U14 — loadAccountToken nối vào readToken (giải mã tại nghỉ). Cột
-// `tai_khoan_thue.token_hien_tai` lưu chuỗi sealed `v1$aesgcm$…`; readToken tự
-// tenant-scoped (withTenant) + giải mã (openSecret) nên hàm dưới đây trả TOKEN
-// THẬT cho runJob gửi GDT, không còn trả thẳng chuỗi sealed.
-import { auditLog, lanDongBo, readToken, taiKhoanThue, withTenant } from "@vat/db";
+// U14 (fix pass 2) — loadAccountToken TỰ chọn dòng + giải mã inline (openSecret),
+// KHÔNG dùng readToken nữa: readToken gộp "tài khoản không tồn tại" và "tồn tại
+// nhưng chưa có token" thành cùng một `null`, trong khi runJob.ts cần phân biệt
+// rạch ròi (không tồn tại → dead-letter; có tài khoản nhưng mất token → reauth
+// preflight). Cột `tai_khoan_thue.token_hien_tai` lưu chuỗi sealed `v1$aesgcm$…`.
+import { auditLog, lanDongBo, taiKhoanThue, withTenant } from "@vat/db";
 import { and, eq } from "drizzle-orm";
 import { parseDdmmyyyy } from "./schedule";
 import type { AccountToken, AnyDb, JobRecorder, SyncJobMessage } from "./types";
@@ -23,18 +25,31 @@ export const AUDIT_HANH_DONG_REAUTH = "dong_bo_can_dang_nhap_lai";
 /** Hành động audit khi bỏ qua tick vì circuit breaker mở. */
 export const AUDIT_HANH_DONG_BREAKER_SKIP = "dong_bo_bo_qua_breaker";
 
-/** Đọc + giải mã token của một tài khoản (tenant-scoped). null nếu tài khoản không có
- * hoặc chưa có token. `kekB64` là secret KEK (Workers Secret, security.md). */
+/** Đọc + giải mã token của một tài khoản (tenant-scoped). Phân biệt 3 ca (bắt buộc để
+ * runJob.ts định tuyến đúng — xem chú thích U14 fix pass 2 ở đầu file):
+ * - tài khoản KHÔNG tồn tại (thuộc tenant) → trả `null`.
+ * - tài khoản tồn tại nhưng CHƯA có token (chưa đăng nhập/đã bị xóa runtime) → trả
+ *   `{ tokenHienTai: null, tokenHetHan }`.
+ * - tài khoản tồn tại + có token → giải mã (openSecret) và trả TOKEN THẬT.
+ * `kekB64` là secret KEK (Workers Secret, security.md). */
 export async function loadAccountToken(
   db: AnyDb,
   msg: SyncJobMessage,
   kekB64: string,
 ): Promise<AccountToken | null> {
-  // readToken tự tenant-scoped (withTenant) + giải mã (openSecret). Trả null nếu chưa
-  // có token/không thuộc tenant. tokenHienTai giờ là TOKEN THẬT (đã giải mã), không sealed.
-  const dec = await readToken(db, msg.tenantId, msg.taikhoanId, kekB64);
-  if (!dec) return null;
-  return { tokenHienTai: dec.token, tokenHetHan: dec.tokenHetHan };
+  return withTenant(db, msg.tenantId, async (tx) => {
+    const rows = await tx
+      .select({ tokenHienTai: taiKhoanThue.tokenHienTai, tokenHetHan: taiKhoanThue.tokenHetHan })
+      .from(taiKhoanThue)
+      .where(and(eq(taiKhoanThue.id, msg.taikhoanId), eq(taiKhoanThue.tenantId, msg.tenantId)));
+    const row = rows[0];
+    if (!row) return null; // tài khoản KHÔNG tồn tại
+    if (row.tokenHienTai === null) return { tokenHienTai: null, tokenHetHan: row.tokenHetHan }; // tồn tại nhưng CHƯA có token
+    return {
+      tokenHienTai: await openSecret(row.tokenHienTai, kekB64),
+      tokenHetHan: row.tokenHetHan,
+    };
+  });
 }
 
 export function dbRecorder(db: AnyDb): JobRecorder {

@@ -184,10 +184,13 @@ describe("runScheduledSync — end-to-end với sync() + recorder thật (PGlite
     expect(out.kind).toBe("needs_reauth");
 
     // Token bị đánh dấu chết (xóa token_hien_tai) để tick sau pre-flight bỏ qua sạch.
-    // U14: loadAccountToken (readToken) trả null nguyên khối khi chưa có token — không
-    // còn trả { tokenHienTai: null } như trước.
+    // U14 (fix pass 2): tài khoản VẪN tồn tại, chỉ mất token → loadAccountToken trả
+    // { tokenHienTai: null, tokenHetHan: null }, KHÔNG phải null nguyên khối (null chỉ
+    // dành cho "tài khoản không tồn tại" — xem recorder.ts).
     const acc = await loadAccountToken(db as unknown as AnyDb, msgFor(tenantId, taikhoanId), KEK);
-    expect(acc).toBeNull();
+    expect(acc).not.toBeNull();
+    expect(acc?.tokenHienTai).toBeNull();
+    expect(acc?.tokenHetHan).toBeNull();
 
     // Audit ghi hành động cần đăng nhập lại.
     const audits = await db.select().from(auditLog).where(eq(auditLog.tenantId, tenantId));

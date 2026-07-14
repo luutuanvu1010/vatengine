@@ -53,12 +53,28 @@ describe("loadAccountToken (giải mã token tại nghỉ)", () => {
     expect(res?.tokenHetHan?.getTime()).toBe(hetHan.getTime());
   });
 
-  it("chưa có token → null", async () => {
+  it("tài khoản TỒN TẠI nhưng chưa có token → { tokenHienTai: null, ... }, KHÔNG phải null", async () => {
     const tenantId = await makeTenant(db);
     const taikhoanId = await makeAccount(db, tenantId);
     const msg = {
       tenantId,
       taikhoanId,
+      direction: "purchase",
+      dateFrom: "01/07/2026",
+      dateTo: "31/07/2026",
+      period: "2026-07",
+    } as SyncJobMessage;
+    const res = await loadAccountToken(db as never, msg, KEK);
+    expect(res).not.toBeNull();
+    expect(res?.tokenHienTai).toBeNull();
+    expect(res?.tokenHetHan).toBeNull();
+  });
+
+  it("tài khoản KHÔNG tồn tại → null", async () => {
+    const tenantId = await makeTenant(db);
+    const msg = {
+      tenantId,
+      taikhoanId: "00000000-0000-0000-0000-000000000000",
       direction: "purchase",
       dateFrom: "01/07/2026",
       dateTo: "31/07/2026",
