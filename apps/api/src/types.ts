@@ -1,3 +1,4 @@
+import type { GdtTransport } from "@vat/gdt-client";
 // Kiểu dùng chung cho Worker API (U6). Tầng ứng dụng PHI TRẠNG THÁI (mục 11).
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
@@ -11,6 +12,8 @@ export interface Env {
   JWT_SECRET: string;
   // R2: lưu file kết xuất (U7) — không giữ file lớn trong RAM Worker (ADR-0001).
   RAW: R2Bucket;
+  // U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
+  TOKEN_KEK: string;
   // Binding khác thêm dần theo lộ trình (KV, Queues, Durable Objects).
 }
 
@@ -42,4 +45,7 @@ export interface StorageHandle {
 export interface AppDeps {
   getDb: (env: Env) => Promise<DbHandle>;
   getStorage: (env: Env) => StorageHandle;
+  // U14 — đường ra GDT (getCaptcha/authenticate). Production = createDirectCfTransport();
+  // test tiêm transport giả (không mạng). Cô lập adapter (gdt-adapter.md).
+  getTransport: (env: Env) => GdtTransport;
 }

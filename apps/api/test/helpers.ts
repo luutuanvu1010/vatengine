@@ -2,7 +2,8 @@
 // bằng khóa test. KHÔNG mạng, KHÔNG dữ liệu thật (testing.md). Db PGlite được TIÊM
 // vào app qua `createApp({ getDb })` để integration test đi qua route + auth thật.
 import { PGlite } from "@electric-sql/pglite";
-import { hoaDon, nguoiDung, tenants } from "@vat/db";
+import { hoaDon, nguoiDung, taiKhoanThue, tenants } from "@vat/db";
+import type { GdtTransport } from "@vat/gdt-client";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sign } from "hono/jwt";
@@ -14,6 +15,9 @@ const MIGRATIONS = new URL("../../../packages/db/migrations", import.meta.url).p
 
 export const TEST_SECRET = "test-jwt-secret-u6";
 
+// U14 — KEK test hợp lệ (32 byte zero, base64). KHÔNG dùng ngoài test (security.md).
+export const TEST_KEK = btoa(String.fromCharCode(...new Uint8Array(32)));
+
 export type Db = ReturnType<typeof drizzle>;
 
 export function makeEnv(over: Partial<Env> = {}): Env {
@@ -23,6 +27,7 @@ export function makeEnv(over: Partial<Env> = {}): Env {
     // HYPERDRIVE/RAW không dùng khi getDb/getStorage được tiêm — cast dummy ở ranh giới test.
     HYPERDRIVE: {} as Hyperdrive,
     RAW: {} as R2Bucket,
+    TOKEN_KEK: TEST_KEK,
     ...over,
   };
 }
@@ -69,12 +74,28 @@ export function makeStorage(): FakeStorage {
   };
 }
 
-/** Tiêm db PGlite + R2 giả vào createApp (close = noop trong test). storage tùy chọn để
- * test đọc lại object đã ghi. */
-export function injectDb(db: Db, storage: FakeStorage = makeStorage()) {
+// U14 — transport GDT giả để test tiêm (không mạng). Mặc định trả lỗi để ép test khai rõ
+// hành vi mong đợi thay vì im lặng dùng default. Cô lập adapter (gdt-adapter.md).
+export function makeTransport(over: Partial<GdtTransport> = {}): GdtTransport {
+  return {
+    name: "fake",
+    fetch: async () => new Response("no", { status: 500 }),
+    probe: async () => ({ transport: "fake", verdict: "OK", latencyMs: 0 }),
+    ...over,
+  };
+}
+
+/** Tiêm db PGlite + R2 giả + transport GDT giả vào createApp (close = noop trong test).
+ * storage/transport tùy chọn để test đọc lại object đã ghi / khai hành vi transport riêng. */
+export function injectDb(
+  db: Db,
+  storage: FakeStorage = makeStorage(),
+  transport: GdtTransport = makeTransport(),
+) {
   return {
     getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }),
     getStorage: () => storage,
+    getTransport: () => transport,
   };
 }
 
@@ -117,6 +138,22 @@ export async function seedInvoice(
     .returning({ id: hoaDon.id });
   const row = rows[0];
   if (!row) throw new Error("insert hoa_don không trả về id");
+  return row.id;
+}
+
+/** Seed một tài khoản đăng nhập thuế (U14) cho một tenant — dùng làm điều kiện tiên quyết
+ * cho các test route getCaptcha/authenticate/login-thuế. */
+export async function seedTaxAccount(
+  db: Db,
+  tenantId: string,
+  over: Partial<typeof taiKhoanThue.$inferInsert> = {},
+): Promise<string> {
+  const rows = await db
+    .insert(taiKhoanThue)
+    .values({ tenantId, username: "0100000001", ...over })
+    .returning({ id: taiKhoanThue.id });
+  const row = rows[0];
+  if (!row) throw new Error("insert tai_khoan_thue không trả về id");
   return row.id;
 }
 
