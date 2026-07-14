@@ -2,8 +2,8 @@
 // requireTenant + requireRole(ke_toan_truong|quan_tri), trong withTenant (RLS lớp 2)
 // + lọc tenant_id tường minh (lớp 1). Gọi GDT CHỈ qua @vat/gdt-client (gdt-adapter.md).
 import { maskSensitive } from "@vat/crypto";
-import { auditLog, taiKhoanThue, withTenant } from "@vat/db";
-import { getCaptcha } from "@vat/gdt-client";
+import { auditLog, storeToken, taiKhoanThue, withTenant } from "@vat/db";
+import { GdtError, authenticate, deriveTokenExpiry, getCaptcha } from "@vat/gdt-client";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -14,6 +14,12 @@ import type { AppDeps, AppEnv } from "../types";
 const registerSchema = z.object({
   username: z.string().min(1),
   loai: z.enum(["chinh", "con"]).optional(),
+});
+
+const loginSchema = z.object({
+  password: z.string().min(1),
+  ckey: z.string().min(1),
+  cvalue: z.string().min(1),
 });
 
 export function taxAccountsRoutes(deps: AppDeps) {
@@ -92,6 +98,74 @@ export function taxAccountsRoutes(deps: AppDeps) {
     const transport = deps.getTransport(c.env);
     const cap = await getCaptcha(transport);
     return c.json({ key: cap.key, content: cap.content });
+  });
+
+  // POST /tax-accounts/:id/login — captcha người dùng đã gõ → authenticate() → lưu token
+  // MÃ HÓA. 409 nếu chưa ủy quyền. 401 nếu GDT từ chối (KHÔNG lưu). KHÔNG lưu mật khẩu.
+  r.post("/:id/login", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "bad_request" }, 400);
+    }
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: "bad_request" }, 400);
+
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      // Tải tài khoản (tenant-scoped): lấy username + kiểm ủy quyền. Cách ly: không thấy
+      // tài khoản tenant khác → 404.
+      const acc = await withTenant(db, tenantId, async (tx) => {
+        const rows = await tx
+          .select({ username: taiKhoanThue.username, uyQuyenLuc: taiKhoanThue.uyQuyenLuc })
+          .from(taiKhoanThue)
+          .where(and(eq(taiKhoanThue.id, id), eq(taiKhoanThue.tenantId, tenantId)));
+        return rows[0] ?? null;
+      });
+      if (!acc) return c.json({ error: "not_found" }, 404);
+      if (!acc.uyQuyenLuc) return c.json({ error: "chua_uy_quyen" }, 409);
+
+      // Gọi GDT qua adapter. 401/sai captcha → GdtError → KHÔNG lưu token.
+      let gdtToken: string;
+      try {
+        const authRes = await authenticate(deps.getTransport(c.env), {
+          username: acc.username,
+          password: parsed.data.password,
+          ckey: parsed.data.ckey,
+          cvalue: parsed.data.cvalue,
+        });
+        gdtToken = authRes.token;
+      } catch (err) {
+        // Audit thất bại (mask), rồi 401 gọn. Không phân biệt sai captcha vs mật khẩu.
+        await withTenant(db, tenantId, async (tx) => {
+          await tx.insert(auditLog).values({
+            tenantId,
+            hanhDong: "dang_nhap_thue_that_bai",
+            doiTuong: id,
+            chiTiet: maskSensitive({ reason: err instanceof GdtError ? err.message : "loi" }),
+          });
+        });
+        return c.json({ error: "unauthorized" }, 401);
+      }
+
+      const tokenHetHan = deriveTokenExpiry(gdtToken);
+      await storeToken(db, tenantId, id, gdtToken, tokenHetHan, c.env.TOKEN_KEK);
+      await withTenant(db, tenantId, async (tx) => {
+        await tx.insert(auditLog).values({
+          tenantId,
+          hanhDong: "dang_nhap_thue_thanh_cong",
+          doiTuong: id,
+          chiTiet: maskSensitive({ tokenHetHan: tokenHetHan.toISOString() }),
+        });
+      });
+      return c.json({ ok: true, tokenHetHan: tokenHetHan.toISOString() });
+    } finally {
+      await close();
+    }
   });
 
   return r;
