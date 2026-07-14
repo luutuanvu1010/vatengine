@@ -53,6 +53,18 @@
 | **`GET /tax-accounts/:id/captcha`** | `:id` UUID | `200 {key, content}` — `content` = **SVG markup thô** (không base64) | `400` | `ke_toan_truong`,`quan_tri` |
 | **`POST /tax-accounts/:id/login`** | `{password, ckey, cvalue}` | `200 {ok:true, tokenHetHan}` (lưu token GDT mã hoá) | `400` · `401` GDT từ chối (sai captcha/mật khẩu — KHÔNG lưu) · `404` · **`409` chưa ủy quyền** | `ke_toan_truong`,`quan_tri` |
 
+## 3b. Endpoint bổ sung U15 (A1/A2 — ĐÃ có trong mã, chủ dự án chuẩn thuận 2026-07-15)
+
+> Xem `docs/plans/U15-buoc4-soat-khop-va-quyet-dinh.md` §4. Đọc-only, không lộ bí mật.
+
+| Method + path | Request | Response OK | RBAC | Nguồn |
+|---|---|---|---|---|
+| `GET /me` | — (tenant từ token) | `200 {ten, mst, goiDichVu, role}` (hồ sơ tenant + vai; email KHÔNG trả — client biết từ login) | 3 vai | `apps/api/src/routes/me.ts` |
+| `GET /tax-accounts` | — | `200 [{id, username, loai, uyQuyenLuc, tokenHetHan, ngayTao}]` (KHÔNG `tokenHienTai`/`secretRef`) | `ke_toan_truong`,`quan_tri` | `apps/api/src/routes/taxAccounts.ts` |
+| `GET /tax-accounts/:id` | `:id` UUID | `200 {…}` · `404` khác tenant | `ke_toan_truong`,`quan_tri` | như trên |
+
+Bề mặt UI bổ sung (ngoài S0–S5, từ brief §3 + quyết định): **Dashboard** (`/invoices/summary` + `/reconcile`) · **Cài đặt chung** (`/me` — bỏ địa chỉ, hiện MST; B6). S5 dùng A2 để khôi phục stepper + panel token. S0 "Ghi nhớ đăng nhập"/"Quên mật khẩu?" dựng sẵn chỗ, chờ backend A3/A4 (tách unit sau).
+
 ## 4. Ánh xạ trường dữ liệu (API → hiển thị)
 
 ### 4.1. Cột bảng hóa đơn = `EXPORT_COLUMNS` (nguồn chân lý — KHÔNG bịa cột mới)

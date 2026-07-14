@@ -42,6 +42,12 @@ Worker tách bạch, không phục vụ HTTP người dùng. **Cron** liệt kê
 - **Audit bất biến (append-only):** migration `0002` cài trigger chặn UPDATE/DELETE trên `audit_log` (kể cả owner/superuser). `chi_tiet` đi qua `maskSensitive` trước khi ghi (che token/connection-string).
 - **Rate limit làm cứng:** ngưỡng `TenantLimiter` tinh chỉnh qua `vars` (`LIMITER_CAPACITY`/`LIMITER_REFILL_PER_SEC`/`LIMITER_FAILURE_THRESHOLD`/`LIMITER_COOLDOWN_MS`); log quan sát có cấu trúc khi chặn. Xem `docs/plans/U12-plan.md`.
 
+### Frontend SPA (`apps/web`, U15) — React + Vite, tiêu thụ API nội bộ
+
+- **Ngăn xếp** (ADR-0003): React + TypeScript + Vite SPA, TanStack Query, React Router; deploy Cloudflare Workers Static Assets. Design tokens: `docs/07-DESIGN_TOKENS.md` (nguồn DUY NHẤT → `apps/web/src/styles/tokens.css`).
+- **Màn**: Đăng nhập nội bộ · Tổng quan · Danh sách hóa đơn (+ lọc/phân trang/tổng hợp) · Chi tiết (header) · Kết xuất & Convert · Đối chiếu · Kết nối tài khoản thuế (GDT) · Cài đặt chung. RBAC phản chiếu server (`ke_toan` ẩn kết xuất/kết nối thuế). JWT giữ **in-memory** (không localStorage).
+- **Chạy dev**: `npm run dev -w apps/web` (Vite tại `http://localhost:5173`). Trỏ API qua biến build `VITE_API_BASE` (mặc định same-origin). Build: `npm run build -w apps/web`. Test web nằm trong `make test` (Vitest + Testing Library).
+
 ## Kiến trúc nhanh
 
 ```
