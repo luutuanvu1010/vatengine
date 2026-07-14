@@ -1,6 +1,6 @@
 // apps/api/test/integration/taxAccounts.login.test.ts
-import { readToken, taiKhoanThue } from "@vat/db";
-import { eq } from "drizzle-orm";
+import { auditLog, readToken, taiKhoanThue } from "@vat/db";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
 import {
@@ -92,6 +92,22 @@ describe("POST /tax-accounts/:id/login (PGlite)", () => {
     const [acc] = await db.select().from(taiKhoanThue).where(eq(taiKhoanThue.id, accId));
     if (!acc) throw new Error("tài khoản không tồn tại sau login");
     expect(acc.tokenHienTai).toBeNull();
+  });
+
+  it("token GDT không phải JWT có exp → 502 token_shape_unexpected, KHÔNG lưu token, có audit thất bại", async () => {
+    const app = createApp(injectDb(db, undefined, okTransport("not-a-jwt")));
+    const jwt = await tokenFor(tenantA, { role: "quan_tri" });
+    const res = await app.request(`/tax-accounts/${accId}/login`, loginReq(accId, jwt), makeEnv());
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "token_shape_unexpected" });
+    const [acc] = await db.select().from(taiKhoanThue).where(eq(taiKhoanThue.id, accId));
+    if (!acc) throw new Error("tài khoản không tồn tại sau login");
+    expect(acc.tokenHienTai).toBeNull();
+    const rows = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.doiTuong, accId), eq(auditLog.hanhDong, "dang_nhap_thue_that_bai")));
+    expect(rows.length).toBeGreaterThan(0);
   });
 
   it("vai ke_toan → 403", async () => {

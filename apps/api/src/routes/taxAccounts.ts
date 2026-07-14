@@ -3,7 +3,13 @@
 // + lọc tenant_id tường minh (lớp 1). Gọi GDT CHỈ qua @vat/gdt-client (gdt-adapter.md).
 import { maskSensitive } from "@vat/crypto";
 import { auditLog, storeToken, taiKhoanThue, withTenant } from "@vat/db";
-import { GdtError, authenticate, deriveTokenExpiry, getCaptcha } from "@vat/gdt-client";
+import {
+  GdtContractDriftError,
+  GdtError,
+  authenticate,
+  deriveTokenExpiry,
+  getCaptcha,
+} from "@vat/gdt-client";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -140,6 +146,8 @@ export function taxAccountsRoutes(deps: AppDeps) {
         });
         gdtToken = authRes.token;
       } catch (err) {
+        // Lệch hợp đồng API thuế ≠ 401 nghiệp vụ — phải lộ ra, không được nuốt thành 401.
+        if (err instanceof GdtContractDriftError) throw err;
         // Audit thất bại (mask), rồi 401 gọn. Không phân biệt sai captcha vs mật khẩu.
         await withTenant(db, tenantId, async (tx) => {
           await tx.insert(auditLog).values({
@@ -152,17 +160,32 @@ export function taxAccountsRoutes(deps: AppDeps) {
         return c.json({ error: "unauthorized" }, 401);
       }
 
-      const tokenHetHan = deriveTokenExpiry(gdtToken);
-      await storeToken(db, tenantId, id, gdtToken, tokenHetHan, c.env.TOKEN_KEK);
-      await withTenant(db, tenantId, async (tx) => {
-        await tx.insert(auditLog).values({
-          tenantId,
-          hanhDong: "dang_nhap_thue_thanh_cong",
-          doiTuong: id,
-          chiTiet: maskSensitive({ tokenHetHan: tokenHetHan.toISOString() }),
+      // deriveTokenExpiry ném lỗi nếu token GDT không đúng dạng JWT có exp (giả định
+      // CHƯA KIỂM CHỨNG). Bọc derive+store+audit để lỗi hình dạng token fail có kiểm
+      // soát (502 + audit), không lộ 500 trần trụi. KHÔNG đưa token vào audit.
+      try {
+        const tokenHetHan = deriveTokenExpiry(gdtToken);
+        await storeToken(db, tenantId, id, gdtToken, tokenHetHan, c.env.TOKEN_KEK);
+        await withTenant(db, tenantId, async (tx) => {
+          await tx.insert(auditLog).values({
+            tenantId,
+            hanhDong: "dang_nhap_thue_thanh_cong",
+            doiTuong: id,
+            chiTiet: maskSensitive({ tokenHetHan: tokenHetHan.toISOString() }),
+          });
         });
-      });
-      return c.json({ ok: true, tokenHetHan: tokenHetHan.toISOString() });
+        return c.json({ ok: true, tokenHetHan: tokenHetHan.toISOString() });
+      } catch (_err) {
+        await withTenant(db, tenantId, async (tx) => {
+          await tx.insert(auditLog).values({
+            tenantId,
+            hanhDong: "dang_nhap_thue_that_bai",
+            doiTuong: id,
+            chiTiet: maskSensitive({ reason: "token_shape_unexpected" }),
+          });
+        });
+        return c.json({ error: "token_shape_unexpected" }, 502);
+      }
     } finally {
       await close();
     }
