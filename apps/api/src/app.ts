@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { authRoutes } from "./routes/auth";
 import { exportsRoutes } from "./routes/exports";
 import { invoicesRoutes } from "./routes/invoices";
+import { reconcileRoutes } from "./routes/reconcile";
 import type { AppDeps, AppEnv } from "./types";
 
 export function createApp(deps: AppDeps) {
@@ -21,6 +22,8 @@ export function createApp(deps: AppDeps) {
   app.route("/invoices", invoicesRoutes(deps));
   // U7: kết xuất (POST /exports) + tải (GET /exports/:id) — đều sau requireTenant.
   app.route("/exports", exportsRoutes(deps));
+  // U10: đối chiếu (GET /reconcile) — đọc-only, sau requireTenant + RBAC.
+  app.route("/reconcile", reconcileRoutes(deps));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   return app;

@@ -6,9 +6,9 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 ## Trạng thái tiến độ (đọc trước tiên)
 
-> **Cập nhật: 2026-07-14 · U9 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
+> **Cập nhật: 2026-07-14 · U10 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · **`U10 ⬜ ← KẾ TIẾP`** · `U11 ⬜` · `U12 ⬜`
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · `U10 ✅` · **`U11 ⬜ ← KẾ TIẾP`** · `U12 ⬜`
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
@@ -29,6 +29,8 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 > **Nợ vận hành U9 (điều kiện tiên quyết production):** kết nối lập lịch của `sync-worker` (`listActiveTenantIds`) cần quyền **control-plane** đọc sổ đăng ký `tenants` — RLS keyed theo `id` khiến role app tenant-scoped fail-closed (0 hàng); phải tách vai control-plane khỏi đường dữ liệu per-tenant. Bindings deploy: `wrangler queues create vat-sync` (+ DLQ `vat-sync-dlq`), Hyperdrive id thật, migration DO `TenantLimiter`. Cùng lớp nợ với Hyperdrive/role app U6/U8.
 >
 > **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
+>
+> **Đã xong — U10 (Module đối chiếu, `packages/reconcile` = `@vat/reconcile` + `apps/api`):** `reconcile()` đọc-only trên hóa đơn đã đồng bộ (KHÔNG gọi GDT), findings tính **on-read** (không bảng mới). Ba kiểm tra: **lệch thuế** (số học nội tại header `tgtcthue − ttcktmai + tgtthue = tgtttbso`, tính trong **SQL `numeric`** không ép float, dung sai cấu hình); **thiếu số HĐ đầu ra** (khoảng trống dãy `shdon` theo `(nbmst, khhdon)`, chỉ `chieu='sold'`); **hủy/thay thế** (cơ chế phân loại tách khỏi giá trị mã — `classifyStatus(row, map)`). `GET /reconcile` sau `requireTenant` + RBAC 3 vai, cách ly tenant hai lớp (`buildWhere` lọc `tenant_id` + `withTenant`/RLS) — test qua route thật. Kiểm bằng **PGlite offline** (28 test `@vat/reconcile` + 5 route; coverage 100% dòng / 89% nhánh). **Nguyên tắc bằng chứng:** map trạng thái production `STATUS_CODE_MAP` **RỖNG** vì mã `tthai`/`ttxly` hủy/thay thế **CHƯA KIỂM CHỨNG** (ADR-0001 dòng 45 — mới thấy `tthai=1`); cổng guard `statusCodes.contract.test.ts` đỏ nếu ai điền mã chưa probe. Quyết định (chủ dự án 2026-07-14): #1 HĐ thiếu = gap dãy đầu ra · #2 hủy/thay thế = cơ chế + bảng mã chờ xác nhận · #3 lệch thuế = số học nội tại header. Xem `docs/plans/U10-plan.md`.
 
 ## Vòng lặp mỗi mốc
 
@@ -190,10 +192,15 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] **Ranh giới token nền (quyết định #1):** chỉ đồng bộ tài khoản token còn hạn; hết hạn → `lan_dong_bo`=`can_dang_nhap_lai` + audit, **KHÔNG tự đăng nhập, KHÔNG captcha** (test chứng minh 0 call GDT ở nhánh pre-flight). Lịch = **cửa sổ trượt** tháng hiện tại (giờ VN), không bảng lịch (quyết định #4).
 - [x] **Cô lập adapter:** worker nền KHÔNG tự `fetch()` GDT — chỉ qua `sync()`→`GdtTransport`; egress T0 `createDirectCfTransport` nằm ở `packages/gdt-client` (điểm gọi GDT duy nhất). Xem `docs/plans/U9-plan.md`.
 
-### ⬜ U10 — Module đối chiếu (thiếu HĐ, lệch thuế, HĐ hủy/thay thế)
+### ✅ U10 — Module đối chiếu (thiếu HĐ, lệch thuế, HĐ hủy/thay thế) · `packages/reconcile` = `@vat/reconcile` + `apps/api` · *ĐẠT (`make lint && make test` xanh; coverage `@vat/reconcile` 100% dòng / 89% nhánh, mọi trục ≥ 80%)*
 
-- [ ] Test theo bộ dữ liệu tình huống (thiếu, lệch thuế, hủy/thay thế).
-- [ ] Dùng `raw_json` để đối chiếu; xử lý đúng hóa đơn hủy/thay thế.
+> Quyết định phạm vi (chủ dự án, 2026-07-14 — xem `docs/plans/U10-plan.md`): #1 **HĐ thiếu = gap dãy số đầu ra** (không đối chiếu sổ ngoài); #2 **hủy/thay thế = dựng cơ chế + bảng mã CHƯA KIỂM CHỨNG**; #3 **lệch thuế = số học nội tại header**. Module **đọc-only** (KHÔNG gọi GDT), findings **tính on-read** (không bảng mới, không nguồn sự thật thứ hai).
+
+- [x] Test theo **bộ dữ liệu tình huống** (28 test `@vat/reconcile` + 5 route `apps/api`): **lệch thuế** (`taxIntegrity` — khớp/lệch/chiết khấu/null không false-positive/dung sai/số > 2^53/lọc kỳ); **thiếu số đầu ra** (`sequenceGaps` — gap giữa dãy, chỉ `chieu='sold'`, nhóm `(nbmst,khhdon)` độc lập, shdon phi số bỏ qua); **hủy/thay thế** (`statusAnomaly` — phân loại theo bảng mã tiêm ở test).
+- [x] **Lệch thuế** đối chiếu trên cột header **đã ánh xạ từ `raw_json`** (U5): định danh `tgtcthue − ttcktmai + tgtthue = tgtttbso`, tính **trong SQL `numeric`** (không ép float); dung sai cấu hình (mặc định khớp tuyệt đối). *(Đối chiếu bảng `thttltsuat` trong `raw_json` — HOÃN, quyết định #3.)*
+- [x] **HĐ hủy/thay thế:** cơ chế phân loại tách rời khỏi GIÁ TRỊ mã (`classifyStatus(row, map)`); map production `STATUS_CODE_MAP` **RỖNG** vì mã `tthai`/`ttxly` **CHƯA KIỂM CHỨNG** (ADR-0001 dòng 45 — chỉ mới thấy `tthai=1`). Cổng guard `statusCodes.contract.test.ts` **đỏ nếu ai điền mã chưa probe**. Nguyên tắc bằng chứng của Hiến pháp: KHÔNG "chốt" mã.
+- [x] **Cách ly tenant:** mọi truy vấn lọc `tenant_id` tường minh (`buildWhere` của @vat/query, lớp 1) + endpoint `GET /reconcile` trong `withTenant` (RLS lớp 2), RBAC `ke_toan`+; test tenant A không thấy anomaly của B (package + route) xanh.
+- [x] **Read-only:** 0 bảng mới, 0 gọi GDT (không import `@vat/gdt-client`/`fetch`), không đụng adapter/401/captcha/mật khẩu thô.
 
 ### ⬜ U11 — Tích hợp/xuất sang phần mềm kế toán
 
