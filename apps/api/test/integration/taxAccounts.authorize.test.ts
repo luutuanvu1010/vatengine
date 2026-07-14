@@ -35,7 +35,8 @@ describe("POST /tax-accounts/:id/authorize (PGlite)", () => {
     );
     expect(res.status).toBe(200);
     const [acc] = await db.select().from(taiKhoanThue).where(eq(taiKhoanThue.id, accId));
-    expect(acc?.uyQuyenLuc).not.toBeNull();
+    if (!acc) throw new Error("tài khoản không tồn tại sau authorize");
+    expect(acc.uyQuyenLuc).not.toBeNull();
     const audits = await db
       .select()
       .from(auditLog)
@@ -52,5 +53,15 @@ describe("POST /tax-accounts/:id/authorize (PGlite)", () => {
       makeEnv(),
     );
     expect(res.status).toBe(404);
+  });
+
+  it(":id không phải UUID hợp lệ → 400", async () => {
+    const token = await tokenFor(tenantA, { role: "quan_tri" });
+    const res = await app.request(
+      "/tax-accounts/not-a-uuid/authorize",
+      { method: "POST", headers: bearer(token) },
+      makeEnv(),
+    );
+    expect(res.status).toBe(400);
   });
 });
