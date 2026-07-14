@@ -3,6 +3,7 @@
 // + lọc tenant_id tường minh (lớp 1). Gọi GDT CHỈ qua @vat/gdt-client (gdt-adapter.md).
 import { maskSensitive } from "@vat/crypto";
 import { auditLog, taiKhoanThue, withTenant } from "@vat/db";
+import { getCaptcha } from "@vat/gdt-client";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -81,6 +82,16 @@ export function taxAccountsRoutes(deps: AppDeps) {
     } finally {
       await close();
     }
+  });
+
+  // GET /tax-accounts/:id/captcha — proxy ảnh captcha GDT cho người dùng gõ. KHÔNG tự
+  // giải captcha (ranh giới Hiến pháp). :id để gắn RBAC/ngữ cảnh; captcha GDT là công khai.
+  r.get("/:id/captcha", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    const transport = deps.getTransport(c.env);
+    const cap = await getCaptcha(transport);
+    return c.json({ key: cap.key, content: cap.content });
   });
 
   return r;
