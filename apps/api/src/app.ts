@@ -6,6 +6,7 @@ import { authRoutes } from "./routes/auth";
 import { exportsRoutes } from "./routes/exports";
 import { invoicesRoutes } from "./routes/invoices";
 import { reconcileRoutes } from "./routes/reconcile";
+import { taxAccountsRoutes } from "./routes/taxAccounts";
 import type { AppDeps, AppEnv } from "./types";
 
 export function createApp(deps: AppDeps) {
@@ -24,6 +25,8 @@ export function createApp(deps: AppDeps) {
   app.route("/exports", exportsRoutes(deps));
   // U10: đối chiếu (GET /reconcile) — đọc-only, sau requireTenant + RBAC.
   app.route("/reconcile", reconcileRoutes(deps));
+  // U14: quản lý tài khoản thuế (POST /tax-accounts, ...) — sau requireTenant + RBAC.
+  app.route("/tax-accounts", taxAccountsRoutes(deps));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   return app;
