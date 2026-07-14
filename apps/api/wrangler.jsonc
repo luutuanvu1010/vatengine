@@ -7,12 +7,14 @@
   "observability": { "enabled": true },
 
   // CPU tối đa 5 phút (mặc định 30s) — nâng khi có step batch nặng.
-  "limits": { "cpu_ms": 30000 },
+  // TẮT trên Free (2026-07-14): Workers Free KHÔNG hỗ trợ đặt `limits` (deploy lỗi 100328).
+  // Chạy với trần CPU mặc định Free 10ms/lần (I/O không tính). KHÔI PHỤC khi nâng Paid.
+  // "limits": { "cpu_ms": 30000 },
 
   // U6: Postgres qua Hyperdrive. Thay "id" bằng id thật khi deploy
   // (`wrangler hyperdrive create`). Dev local: đặt WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
   // trong .dev.vars (KHÔNG commit chuỗi kết nối — security.md).
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "1011ff82e7154531883f0f2e62d344f0" }],
 
   // U7: R2 lưu file kết xuất (xlsx/csv). Tạo bucket lúc deploy:
   // `wrangler r2 bucket create vat-raw`. Dev local: Miniflare mô phỏng R2 tự động.

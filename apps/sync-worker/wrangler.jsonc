@@ -8,7 +8,10 @@
 
   // Job đồng bộ nền có thể chạy dài (phân trang nhiều kỳ) — nâng trần CPU.
   // Cron wall-time 15' / CPU 15' nếu chu kỳ ≥ 1h (ADR-0001 §3).
-  "limits": { "cpu_ms": 300000 },
+  // TẮT trên Free (2026-07-14): Workers Free KHÔNG hỗ trợ đặt `limits` (deploy lỗi 100328).
+  // Chạy với trần CPU mặc định Free 10ms/lần (I/O không tính) — job nặng có thể vượt →
+  // đây là chỗ smoke test sẽ lộ. KHÔI PHỤC cpu_ms khi nâng Paid.
+  // "limits": { "cpu_ms": 300000 },
 
   // Cron:
   //  - "0 3 * * *" (03:00 UTC = 10:00 VN): phát tán job đồng bộ — liệt kê account
@@ -19,7 +22,7 @@
   "triggers": { "crons": ["0 3 * * *", "*/15 * * * *"] },
 
   // Postgres qua Hyperdrive (giống apps/api). Thay "id" bằng id thật khi deploy.
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "1011ff82e7154531883f0f2e62d344f0" }],
 
   // Hàng đợi job đồng bộ: worker này VỪA là producer (scheduled() enqueue) VỪA là
   // consumer (queue() xử lý). Tạo lúc deploy: `wrangler queues create vat-sync`.
