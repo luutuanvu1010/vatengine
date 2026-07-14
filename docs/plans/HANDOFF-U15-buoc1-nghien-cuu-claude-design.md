@@ -13,6 +13,7 @@
 | `docs/adr/0003-frontend-react-vite.md` | 🟢 Accepted (2026-07-14) | Ngăn xếp đã chốt: React+Vite SPA · gồm màn kết nối thuế · JWT in-memory |
 | `docs/06-BINDING_MAP.md` | 🟢 Chính thức | **Đây là "nguyên liệu" sẽ đóng gói ở Bước 2** — ánh xạ 12 endpoint (gồm U14) → bề mặt, ràng buộc dữ liệu/RBAC/bảo mật |
 | `docs/plans/U15-plan.md` | Kế hoạch | Nội dung màn hình/UX chi tiết + 6 lát cắt U15.0–U15.5 |
+| `docs/plans/U15-DESIGN-BRIEF.md` | 🟡 Dự thảo | **Nguyên liệu thiết kế độc lập định dạng** (bối cảnh/người dùng/màn/luồng/UX/tông điệu/ràng buộc) — sẵn để đóng gói ở Bước 2 |
 
 Hard-stop Hiến pháp §3 (Design cần `06-BINDING_MAP` trước) **đã gỡ** — vai Design được phép chạy. Nhưng quy trình đòi **nghiên cứu trước, thiết kế sau**.
 
@@ -35,7 +36,7 @@ Hard-stop Hiến pháp §3 (Design cần `06-BINDING_MAP` trước) **đã gỡ*
 
 ## 4. Sau Bước 1 (bối cảnh, không làm ở phiên đó)
 
-- **Bước 2:** đóng gói `06-BINDING_MAP` (+ ràng buộc từ U15-plan) theo đúng định dạng Claude Design đòi.
+- **Bước 2:** đóng gói `U15-DESIGN-BRIEF.md` + `06-BINDING_MAP` (+ ràng buộc từ U15-plan) theo đúng định dạng Claude Design đòi (nguyên liệu đã sẵn — chỉ cần chuyển định dạng).
 - **Bước 3:** thiết kế UI qua Claude Design (thiết kế trước, chưa code).
 - **Bước 4:** dịch thiết kế đã duyệt → `apps/web` (React/Vite trên Workers Static Assets), nối API thật; chạy qua 6 lát cắt U15.0–U15.5 (`U15-plan.md`).
 
