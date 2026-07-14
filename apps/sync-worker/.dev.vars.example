@@ -5,4 +5,8 @@ ENVIRONMENT="dev"
 
 # U9 — Postgres qua Hyperdrive. Chuỗi kết nối local cho `wrangler dev` (Hyperdrive
 # dùng biến này thay cho kết nối thật khi chạy local). CHỈ local, không commit:
-WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgres://user:pass@localhost:5432/vat"
+CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgres://user:pass@localhost:5432/vat"
+
+# U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Sinh: openssl rand -base64 32
+# Local: đặt ở .dev.vars (đã .gitignore). Production: wrangler secret put TOKEN_KEK
+TOKEN_KEK=REPLACE_WITH_BASE64_32BYTE_KEK

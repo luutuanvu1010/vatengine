@@ -77,6 +77,10 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r backend/requirements.txt
 ```
 
+### Cấu hình bí mật (Secrets)
+
+- `wrangler secret put TOKEN_KEK` (cả apps/api và apps/sync-worker) — KEK mã hóa token thuế. Bắt buộc trước khi bật đường login GDT (U14).
+
 ## Chạy
 
 ```bash
