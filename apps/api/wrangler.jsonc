@@ -20,8 +20,9 @@
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình
-  // "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] }, // U9: đồng bộ nền
-  // "durable_objects": { "bindings": [{ "name": "TENANT_LIMITER", "class_name": "TenantLimiter" }] }
+  //
+  // U9 (đồng bộ nền: Cron + Queues + Durable Object TENANT_LIMITER) nằm ở WORKER RIÊNG
+  // `apps/sync-worker` — KHÔNG gộp vào API stateless này. Xem apps/sync-worker/wrangler.jsonc.
   //
   // JWT_SECRET (khóa ký JWT nội bộ) nạp qua `wrangler secret put JWT_SECRET` — security.md.
 }

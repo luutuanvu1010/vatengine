@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vat-sync-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // Job đồng bộ nền có thể chạy dài (phân trang nhiều kỳ) — nâng trần CPU.
+  // Cron wall-time 15' / CPU 15' nếu chu kỳ ≥ 1h (ADR-0001 §3).
+  "limits": { "cpu_ms": 300000 },
+
+  // Cron phát tán job đồng bộ. Mỗi tick: liệt kê account có token còn hạn → enqueue.
+  // Ví dụ 03:00 UTC hằng ngày (10:00 giờ VN) — giãn tải, tôn trọng máy chủ thuế.
+  "triggers": { "crons": ["0 3 * * *"] },
+
+  // Postgres qua Hyperdrive (giống apps/api). Thay "id" bằng id thật khi deploy.
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
+
+  // Hàng đợi job đồng bộ: worker này VỪA là producer (scheduled() enqueue) VỪA là
+  // consumer (queue() xử lý). Tạo lúc deploy: `wrangler queues create vat-sync`.
+  "queues": {
+    "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }],
+    "consumers": [
+      {
+        "queue": "vat-sync",
+        // Retry lỗi tạm (transient) — chốt chặn: sau max_retries → dead-letter.
+        "max_retries": 5,
+        "max_batch_size": 10,
+        "dead_letter_queue": "vat-sync-dlq"
+      }
+    ]
+  },
+
+  // Durable Object giữ token-bucket rate limit + circuit breaker theo tenant/MST
+  // (ADR-0001 §5). U9: tối thiểu đủ "không gọi dồn dập"; làm cứng đầy đủ ở U12.
+  "durable_objects": {
+    "bindings": [{ "name": "TENANT_LIMITER", "class_name": "TenantLimiter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantLimiter"] }]
+
+  // JWT_SECRET / bí mật egress nạp qua `wrangler secret put` — security.md.
+  // Chuỗi kết nối Postgres dev đặt trong .dev.vars (KHÔNG commit) — xem .dev.vars.example.
+}

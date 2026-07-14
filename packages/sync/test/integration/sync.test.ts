@@ -217,6 +217,35 @@ describe("sync — upsert idempotent (integration, PGlite)", () => {
     expect(runs[0]?.trangThai).toBe("failed");
   });
 
+  it("(U9) 401 → failureKind='session_expired' (tín hiệu KHÔNG retry cho tầng nền)", async () => {
+    const { transport } = makeTransport(() => new Response("{}", { status: 401 }));
+    const r = await sync({ db, transport, tenantId, taikhoanId, ...BASE_OPTS });
+    expect(r.trangThai).toBe("failed");
+    expect(r.failureKind).toBe("session_expired");
+  });
+
+  it("(U9) lỗi HTTP tạm (500) → failureKind='transient' (tín hiệu RETRY cho tầng nền)", async () => {
+    const { transport } = makeTransport(() => new Response("{}", { status: 500 }));
+    // maxAttempts:1 → không retry cấp adapter (test nhanh); 500 → GdtError HTTP_ERROR.
+    const r = await sync({
+      db,
+      transport,
+      tenantId,
+      taikhoanId,
+      ...BASE_OPTS,
+      retry: { maxAttempts: 1, backoffMs: 0 },
+    });
+    expect(r.trangThai).toBe("failed");
+    expect(r.failureKind).toBe("transient");
+  });
+
+  it("(U9) đồng bộ thành công → không gắn failureKind", async () => {
+    const { transport } = makeTransport(onePage([inv("1")]));
+    const r = await sync({ db, transport, tenantId, taikhoanId, ...BASE_OPTS });
+    expect(r.trangThai).toBe("completed");
+    expect(r.failureKind).toBeUndefined();
+  });
+
   it("(d) 401 giữa chừng phân trang → không ghi bản ghi dở dang (rollback)", async () => {
     // Trang 1 đầy (size=2) + có con trỏ state → adapter đi tiếp; trang 2 trả 401.
     const reply: Reply = (params) => {

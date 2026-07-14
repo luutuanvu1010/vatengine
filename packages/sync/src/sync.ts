@@ -1,5 +1,5 @@
 import { hoaDon, lanDongBo, withTenant } from "@vat/db";
-import { queryInvoices } from "@vat/gdt-client";
+import { GdtError, queryInvoices } from "@vat/gdt-client";
 import type { GdtTransport, InvoiceDirection, InvoiceRow, RetryOptions } from "@vat/gdt-client";
 // Dịch vụ đồng bộ idempotent (U5). Gọi adapter lấy hóa đơn MỘT chiều trong MỘT
 // khoảng ngày → upsert vào `hoa_don` theo khóa tự nhiên 6 trường (trong `withTenant`
@@ -65,6 +65,15 @@ export interface SyncResult {
   soHdCapNhat: number;
   trangThai: "completed" | "failed";
   thongDiepLoi?: string;
+  /**
+   * Phân loại lỗi (chỉ khi `trangThai === "failed"`) để tầng điều phối nền (U9)
+   * quyết định RETRY hay không mà KHÔNG phải dò chuỗi `thongDiepLoi` (mong manh):
+   * - `session_expired`: 401/hết phiên — token đã chết, KHÔNG retry (báo đăng nhập lại).
+   * - `transient`: lỗi tạm (mạng/5xx/DB) — nên retry qua hàng đợi.
+   * `sync()` đã tự retry cấp adapter (5xx/timeout) trước khi trả về; nhãn này dành
+   * cho vòng retry cấp job (Queue) của U9.
+   */
+  failureKind?: "session_expired" | "transient";
   changes: InvoiceChange[];
 }
 
@@ -93,6 +102,15 @@ function parseDdmmyyyy(s: string): Date {
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Phân loại lỗi cho `SyncResult.failureKind`. Chỉ 401/hết phiên là `session_expired`
+ * (token chết, không retry); mọi lỗi còn lại coi là `transient` (mạng/5xx/DB — retry
+ * cấp job an toàn, có trần lần thử của hàng đợi làm chốt chặn). */
+function classifyFailure(err: unknown): "session_expired" | "transient" {
+  return err instanceof GdtError && err.code === "SESSION_EXPIRED"
+    ? "session_expired"
+    : "transient";
 }
 
 /** Upsert idempotent một lô hóa đơn cho một tenant, trong transaction đã đặt ngữ
@@ -190,6 +208,7 @@ async function recordFailed<
   tenantId: string,
   meta: RunMeta,
   message: string,
+  failureKind: "session_expired" | "transient",
 ): Promise<SyncResult> {
   const id = await withTenant(db, tenantId, async (tx) => {
     const inserted = await tx
@@ -218,6 +237,7 @@ async function recordFailed<
     soHdCapNhat: 0,
     trangThai: "failed",
     thongDiepLoi: message,
+    failureKind,
     changes: [],
   };
 }
@@ -254,7 +274,7 @@ export async function sync<
       opts.retry,
     );
   } catch (err) {
-    return recordFailed(db, tenantId, meta, errMsg(err));
+    return recordFailed(db, tenantId, meta, errMsg(err), classifyFailure(err));
   }
 
   // Bước 2 — upsert + ghi lịch sử NGUYÊN TỬ: mọi lỗi giữa chừng → rollback, không có
@@ -288,6 +308,6 @@ export async function sync<
       };
     });
   } catch (err) {
-    return recordFailed(db, tenantId, meta, errMsg(err));
+    return recordFailed(db, tenantId, meta, errMsg(err), classifyFailure(err));
   }
 }

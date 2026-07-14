@@ -25,6 +25,10 @@ Mọi endpoint (trừ `/health`) cần JWT nội bộ HS256 (`Authorization: Bea
 
 Kết xuất bám mẫu cột chuẩn (`@vat/export`): tiền giữ chuỗi numeric chính xác, ô tiền `xlsx` định dạng `#,##0`; file lớn không giữ nguyên khối trong bộ nhớ Worker (CSV stream thẳng vào R2).
 
+### Worker đồng bộ nền (`apps/sync-worker`, U9) — Cron + Queues + Durable Object
+
+Worker tách bạch, không phục vụ HTTP người dùng. **Cron** liệt kê tài khoản thuế có token **còn hạn** → **Queue** một message/(tài khoản × chiều) mang `tenant_id` tường minh → consumer gọi `sync()` (U5, idempotent). **Durable Object `TenantLimiter`** giữ token-bucket + circuit breaker theo tenant/MST ("không gọi dồn dập" máy chủ thuế). Token hết hạn → ghi nhật ký `can_dang_nhap_lai` + audit, **KHÔNG tự đăng nhập, KHÔNG giải captcha** (người dùng đăng nhập lại — U1). Lỗi tạm → queue thử lại (trần `max_retries` → dead-letter); 401 → dừng, không thử lại token chết. Xem `docs/plans/U9-plan.md`.
+
 ## Kiến trúc nhanh
 
 ```

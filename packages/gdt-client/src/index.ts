@@ -4,6 +4,7 @@
 
 export { authenticate, type AuthCredentials, type AuthResult } from "./auth";
 export { getCaptcha, type Captcha } from "./captcha";
+export { createDirectCfTransport } from "./directTransport";
 export {
   getInvoiceDetail,
   mapDetailLines,

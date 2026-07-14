@@ -1,0 +1,24 @@
+{
+  "name": "@vat/sync-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:contract": "vitest run --dir test/contract --passWithNoTests"
+  },
+  "dependencies": {
+    "@vat/db": "*",
+    "@vat/gdt-client": "*",
+    "@vat/sync": "*",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/pg": "^8.11.10"
+  }
+}

@@ -6,9 +6,9 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 ## Trạng thái tiến độ (đọc trước tiên)
 
-> **Cập nhật: 2026-07-14 · U7 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
+> **Cập nhật: 2026-07-14 · U9 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · **`U9 ⬜ ← KẾ TIẾP`** · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · **`U10 ⬜ ← KẾ TIẾP`** · `U11 ⬜` · `U12 ⬜`
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
@@ -23,6 +23,10 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 > **Đã xong — U8 (Auth người dùng nội bộ + RBAC + đa tenant, `apps/api` + `@vat/db`):** `POST /auth/login` (email+mật khẩu) băm/so khớp **PBKDF2 qua WebCrypto** (workerd-safe, không Node bcrypt) → phát hành **JWT nội bộ HS256** mang `tenant_id`+`role` (vòng đời 8h). **RBAC 3 vai** `ke_toan`/`ke_toan_truong`/`quan_tri` (nguồn chân lý `rbac.ts`), vai trong claim JWT (quyết định #3); `requireRole` gác: đọc `/invoices*` = cả 3 vai, kết xuất `/exports*` = kế toán trưởng+quản trị (`ke_toan` → **403**). 401 (xác thực) vs 403 (ủy quyền) phân biệt rạch ròi. **Cách ly tenant giữ nguyên**: token gắn đúng 1 tenant, `quan_tri` của A KHÔNG chạm dữ liệu B (test qua route). **Login vs RLS**: login xảy ra TRƯỚC khi biết tenant nhưng `nguoi_dung` bật FORCE RLS ⇒ tra cứu qua hàm **SECURITY DEFINER `auth_lookup_user`** (owner role `auth_lookup` NOLOGIN+BYPASSRLS, bề mặt hẹp, **least-privilege: REVOKE PUBLIC**, chỉ cấp EXECUTE tường minh cho role app — sửa từ security-reviewer). `email` UNIQUE toàn cục. Kiểm bằng **PGlite offline** (apps/api 47 test, coverage 100% dòng; db test `(U8-14)` chứng minh hàm vượt RLS dưới role non-superuser + chặn role không được cấp). Quyết định (chủ dự án 2026-07-14): #1 login email+mật khẩu PBKDF2 · #2 RBAC 3 vai · #3 role trong claim JWT · #4 tra cứu login qua SECURITY DEFINER + email toàn cục. Xem `docs/plans/U8-plan.md`.
 >
 > **Nợ vận hành U8 (điều kiện tiên quyết production, CHƯA KIỂM CHỨNG trên DB thật — cùng lớp với nợ Hyperdrive U6):** provision role app (Hyperdrive) rồi `GRANT EXECUTE ON FUNCTION auth_lookup_user(text)` cho nó; role `auth_lookup` BYPASSRLS có thể cần quyền admin của Neon/Supabase khi tạo.
+>
+> **Đã xong — U9 (Đồng bộ nền theo lịch, `apps/sync-worker` = `@vat/sync-worker`):** Cron→Queues→consumer→`runScheduledSync`→`sync()` (U5) + Durable Object `TenantLimiter` (token-bucket + circuit breaker theo tenant/MST). Điều phối một job: **pre-flight token** (quyết định #1 — chỉ token còn hạn; hết hạn → ghi `lan_dong_bo`=`can_dang_nhap_lai` + audit, **0 call GDT, KHÔNG captcha**) → limiter → `sync()` → phân loại outcome dựa **`SyncResult.failureKind`** (mới): `transient`→`retry` (queue thử lại, trần `max_retries`→DLQ), `session_expired`→đánh dấu token chết + audit, KHÔNG retry. Idempotent kế thừa upsert U5 (test e2e chạy 2 lần không nhân đôi). `tenant_id` **tường minh** trong mỗi message; mọi truy cập tenant-scoped (`withTenant`), ca cách ly tenant qua role non-superuser + RLS FORCE. Logic (schedule/runJob/rateLimiter/recorder) test **PGlite/thuần offline** (27 test `@vat/sync-worker`, coverage 98.8% dòng, mọi file logic ≥ 80%); Cron/Queue/DO là wiring kiểm khi deploy. **Sai lệch có chủ đích (drift, xem `docs/plans/U9-plan.md`):** (+) `@vat/sync` phơi `failureKind` (thay vì dò chuỗi lỗi); (+) `@vat/gdt-client` thêm `createDirectCfTransport` (egress T0 — điểm gọi GDT duy nhất, `gdt-adapter.md`). Quyết định (chủ dự án 2026-07-14): #1 chỉ token còn hạn · #2 worker riêng · #3 DO tối thiểu · #4 cửa sổ trượt, không bảng lịch. Xem `docs/plans/U9-plan.md`.
+>
+> **Nợ vận hành U9 (điều kiện tiên quyết production):** kết nối lập lịch của `sync-worker` (`listActiveTenantIds`) cần quyền **control-plane** đọc sổ đăng ký `tenants` — RLS keyed theo `id` khiến role app tenant-scoped fail-closed (0 hàng); phải tách vai control-plane khỏi đường dữ liệu per-tenant. Bindings deploy: `wrangler queues create vat-sync` (+ DLQ `vat-sync-dlq`), Hyperdrive id thật, migration DO `TenantLimiter`. Cùng lớp nợ với Hyperdrive/role app U6/U8.
 >
 > **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
 
@@ -178,11 +182,13 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] **Login vs RLS** (điểm kiến trúc): login xảy ra TRƯỚC khi biết tenant nhưng `nguoi_dung` FORCE RLS ⇒ tra cứu qua hàm **SECURITY DEFINER `auth_lookup_user`** (owner `auth_lookup` NOLOGIN+BYPASSRLS, bề mặt hẹp; **least-privilege: REVOKE FROM PUBLIC**, chỉ EXECUTE tường minh cho role app). `email` UNIQUE toàn cục. Test `(U8-14)` chứng minh hàm vượt RLS dưới role non-superuser, SELECT thường bị chặn, và role không được cấp EXECUTE bị từ chối.
 - [ ] ⚠️ **Nợ vận hành** (production, CHƯA KIỂM CHỨNG trên DB thật): `GRANT EXECUTE` hàm `auth_lookup_user` cho role app Hyperdrive khi provision; role BYPASSRLS có thể cần quyền admin Neon/Supabase. Cùng lớp nợ với wiring Hyperdrive U6 (test dùng PGlite tiêm).
 
-### ⬜ U9 — Đồng bộ nền theo lịch (Cloudflare Queues + Workflows + Cron)
+### ✅ U9 — Đồng bộ nền theo lịch (Cloudflare Cron + Queues + Durable Object) · `apps/sync-worker` = `@vat/sync-worker` · *ĐẠT (`make lint && make test` xanh; coverage `@vat/sync-worker` 98.8% dòng, mọi file logic ≥ 80% mọi trục)*
 
-- [ ] Test job **idempotent**; retry khi lỗi tạm.
-- [ ] `tenant_id` nằm tường minh trong payload message/Workflow event.
-- [ ] Rate limit + circuit breaker theo tenant/MST (Durable Object); không gọi dồn dập máy chủ thuế.
+- [x] Test job **idempotent** (chạy lại cùng kỳ không nhân đôi — e2e PGlite qua `sync()` U5); retry khi lỗi tạm (`failureKind='transient'` → outcome `retry` → `message.retry()`, trần `max_retries`→DLQ); **401 KHÔNG retry** (`session_expired` → đánh dấu token chết + audit).
+- [x] `tenant_id` nằm **tường minh** trong payload message (`SyncJobMessage`); mọi truy cập dữ liệu tenant-scoped qua `withTenant` (RLS); ca cách ly tenant qua role non-superuser + RLS FORCE xanh.
+- [x] Rate limit + circuit breaker theo tenant/MST (**Durable Object `TenantLimiter`**, tối thiểu — quyết định #3); logic thuần test 100%. Breaker mở → bỏ qua tick, **0 call GDT**.
+- [x] **Ranh giới token nền (quyết định #1):** chỉ đồng bộ tài khoản token còn hạn; hết hạn → `lan_dong_bo`=`can_dang_nhap_lai` + audit, **KHÔNG tự đăng nhập, KHÔNG captcha** (test chứng minh 0 call GDT ở nhánh pre-flight). Lịch = **cửa sổ trượt** tháng hiện tại (giờ VN), không bảng lịch (quyết định #4).
+- [x] **Cô lập adapter:** worker nền KHÔNG tự `fetch()` GDT — chỉ qua `sync()`→`GdtTransport`; egress T0 `createDirectCfTransport` nằm ở `packages/gdt-client` (điểm gọi GDT duy nhất). Xem `docs/plans/U9-plan.md`.
 
 ### ⬜ U10 — Module đối chiếu (thiếu HĐ, lệch thuế, HĐ hủy/thay thế)
 
