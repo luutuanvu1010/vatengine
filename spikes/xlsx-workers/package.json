@@ -1,0 +1,9 @@
+{
+  "name": "xlsx-workers-spike",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Spike U7: kiểm chứng encoder xlsx của @vat/export chạy trên workerd (không nodejs_compat). Dùng node_modules gốc của monorepo (fflate/wrangler).",
+  "scripts": {
+    "dev": "wrangler dev"
+  }
+}

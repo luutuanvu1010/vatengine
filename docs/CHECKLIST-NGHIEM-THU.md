@@ -6,9 +6,9 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 ## Trạng thái tiến độ (đọc trước tiên)
 
-> **Cập nhật: 2026-07-14 · U6 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
+> **Cập nhật: 2026-07-14 · U7 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · **`U7 ⬜ ← KẾ TIẾP`** · `U8 ⬜` · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · **`U8 ⬜ ← KẾ TIẾP`** · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
@@ -18,7 +18,9 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 >
 > **Đã xong — U6 (REST API tra cứu + lọc + tổng hợp, `packages/query` = `@vat/query` + `apps/api`):** Hono nối `@vat/query` (list/summary/get-one) qua Hyperdrive→Postgres, sau middleware xác minh **JWT nội bộ HS256** trích `tenant_id`. Đọc dữ liệu **đã đồng bộ** (KHÔNG gọi GDT). Cách ly tenant hai lớp (lọc `tenant_id` tường minh + `withTenant`/RLS) — có test cách ly **qua route API**. Kiểm bằng **PGlite offline** (42 test: lọc/phân trang/tổng hợp/get-one/401/400/404/cách ly). Quyết định: **(A)** verify JWT nội bộ (phát hành + RBAC → U8); **(#2)** `/invoices/:id` chỉ header từ DB (không dòng hàng). Xem `docs/plans/U6-plan.md`.
 >
-> **Kế tiếp — U7 (Xuất Excel/CSV theo mẫu):** kết xuất từ dữ liệu tra cứu U6; đọc lại file kiểm đúng cột + định dạng tiền. Xem `KIEN_TRUC_VA_KE_HOACH.md` mục 12b (P6).
+> **Đã xong — U7 (Kết xuất Excel/CSV, `packages/export` = `@vat/export` + `apps/api`):** renderer thuần (mẫu cột chuẩn duy nhất, `csv` + `xlsx` tự dựng SpreadsheetML + `fflate`) + nạp keyset trên `@vat/query` + `POST /exports` ghi **R2** (CSV stream thật, không giữ cả file trong RAM) → trả link, `GET /exports/:id` tải giới hạn tenant qua tiền tố key. Tiền giữ **chuỗi numeric** (không ép float); ô tiền xlsx `numFmt "#,##0"`. Audit `export` (chốt #4). Kiểm bằng **PGlite + R2 giả offline** (59 test; coverage `@vat/export` 100% dòng, `apps/api` 100% dòng); **spike workerd thật** xác minh encoder xlsx chạy không cần `nodejs_compat` (`spikes/xlsx-workers`). Quyết định (chủ dự án 2026-07-14): #1 R2+link · #2 thư viện nhẹ+spike · #3 ttxly/tthai MÃ số · #4 audit tối thiểu. Xem `docs/plans/U7-plan.md`.
+>
+> **Kế tiếp — U8 (Auth người dùng nội bộ + RBAC + đa tenant):** phát hành JWT nội bộ + RBAC mở rộng trên seam `requireTenant` của U6/U7; test cách ly dữ liệu 2 tenant. Xem `TRIEN_KHAI_BANG_CLAUDE_CODE.md` dòng 106.
 >
 > **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
 
@@ -156,11 +158,15 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] **Sửa từ review (2026-07-14):** fail-loud ngày lọc tràn số ngày của tháng (`2026-02-30` không âm thầm cuộn); tie-breaker `id` cho phân trang ổn định khi trùng `tdlap`; chặn `test/contract/**` khỏi `make test` của `apps/api`.
 - [ ] ⚠️ Wiring `apps/api/src/db.ts` (pg qua Hyperdrive) + binding `wrangler.jsonc` **CHƯA kiểm chứng với Hyperdrive/Postgres thật** — test dùng PGlite tiêm; cần probe khi deploy (U6-plan "Rủi ro").
 
-### ⬜ U7 — Xuất Excel/CSV theo mẫu
+### ✅ U7 — Kết xuất Excel/CSV theo mẫu · `packages/export` = `@vat/export` + `apps/api` · *ĐẠT (`make lint && make test` xanh; coverage `@vat/export` 100% dòng/96.7% nhánh, `apps/api` 100% dòng/91.7% nhánh)*
 
-- [ ] Test đọc lại file kết xuất: đúng cột và **định dạng tiền**.
-- [ ] File lớn lưu **R2** (không giữ trong bộ nhớ Worker).
-- [ ] **Kết xuất đa định dạng** (đối sánh NIBOT — khảo sát mục 8a): tối thiểu `xlsx` + `csv`; lộ trình đủ parity gồm `xml.zip`, `pdf.zip`, và gộp `AIO.pdf`. *(Test: mỗi định dạng mở lại được, đúng số bản ghi.)*
+- [x] Test **đọc lại file** kết xuất: đúng cột và **định dạng tiền**. → `xlsx`: reader tự viết (`fflate.unzipSync` + parse) khẳng định ô tiền là **số** + `numFmt "#,##0"` + giữ giá trị lớn (2^53+1) CHÍNH XÁC (không ép float); `csv`: parse RFC-4180 khẳng định header + tiền chuỗi nguyên bản + BOM UTF-8 + escape. Tiền lưu **chuỗi numeric** xuyên suốt (mục 7.1).
+- [x] File lớn lưu **R2** (không giữ trong bộ nhớ Worker). → `POST /exports` ghi object R2 qua seam `getStorage`; nạp hàng bằng keyset `(tdlap,id)` lô-by-lô (không `SELECT *` cả tập một lần). **CSV = stream thật** (`ReadableStream` + generator, không gom cả file vào RAM). **XLSX = gom cả file trước khi ghi** (bản chất zip — không stream được từng phần; ghi chú minh bạch tại `xlsx.ts:111`), bị chặn bởi trần dòng Excel (~1.048M); tập cực lớn nên đi **CSV** hoặc kết xuất **nền U9**. Test dùng **R2 giả tiêm** (offline); binding R2 thật **CHƯA kiểm chứng** — probe khi deploy (như Hyperdrive U6).
+- [x] **Kết xuất đa định dạng**: `xlsx` + `csv` (tối thiểu theo checklist + khảo sát 8a). `xml.zip`/`pdf.zip`/`AIO.pdf` — lộ trình sau (renderer để mở thêm định dạng). *(Test: mỗi định dạng tải lại được + đúng số bản ghi.)*
+- [x] **Cách ly tenant qua kết xuất** (multi-tenant.md): key R2 mang tiền tố `tenant_id`; tải chỉ dựng key từ tenant người gọi → A không tải được object của B (→ 404); export của A không chứa dữ liệu B. Mọi truy vấn trong `withTenant` + `buildWhere` lọc `tenant_id` tường minh.
+- [x] **Audit "xuất dữ liệu"** (security.md, chốt #4): mỗi export ghi một dòng `audit_log` (`hanh_dong='export'`) append; không log `raw_json`/token. Append-only đầy đủ + masking → U12.
+- [x] **Cổng spike (chốt #2):** encoder xlsx kiểm chứng chạy trên **workerd thật** (`spikes/xlsx-workers`, `wrangler dev` **không** `nodejs_compat`, 2026-07-14) — `ok:true`, `hasMoneyNumFmt:true`, `keepsBigMoneyExact:true`. Không ép nâng vitest 3→4 để chạy `vitest-pool-workers` (ngoài phạm vi U7).
+- [x] **Review chéo (2026-07-14): `dod-auditor` PASS + `security-reviewer` PASS** (không rò rỉ chéo tenant). **Sửa từ review:** (a) chống **CSV/Excel formula injection** — ô văn bản (`nbten`/`nmten` từ GDF/bên thứ ba) bắt đầu `= + - @` được chèn `'` trong CSV (`guardCsvText`); xlsx an toàn sẵn (`t="inlineStr"` không diễn giải công thức) — có test cả hai; (b) `EXPORT_FORMATS`/`isExportFormat` thành nguồn định dạng duy nhất, route dùng thay vì hardcode.
 
 ### ⬜ U8 — Auth người dùng nội bộ + RBAC + đa tenant · review: `security-reviewer` (rò rỉ chéo = Critical)
 

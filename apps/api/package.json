@@ -13,6 +13,7 @@
   "dependencies": {
     "hono": "^4.6.0",
     "@vat/db": "*",
+    "@vat/export": "*",
     "@vat/gdt-client": "*",
     "@vat/query": "*",
     "drizzle-orm": "^0.45.2",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
-    "@types/pg": "^8.11.10"
+    "@types/pg": "^8.11.10",
+    "fflate": "^0.8.2"
   }
 }

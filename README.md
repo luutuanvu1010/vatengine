@@ -10,6 +10,21 @@ và **xuất Excel** để đối chiếu, kê khai và nhập vào phần mềm
 
 > 📌 **Cập nhật ngăn xếp (2026-07-11):** Ngăn xếp thực thi đã chuyển sang **Cloudflare Workers + TypeScript** theo `docs/adr/0001-nen-tang-cloudflare.md` (Accepted). Phần mô tả Python/FastAPI + cách cài/chạy bên dưới là **bối cảnh MVP cũ**, giữ để tham chiếu nghiệp vụ. Cách chạy mới: `make up && make run`. **Điểm vào phiên làm việc: `docs/00-BAT-DAU-TAI-DAY.md`.**
 
+### API Worker hiện có (`apps/api`, Hono) — đọc dữ liệu ĐÃ đồng bộ, sau JWT nội bộ
+
+Mọi endpoint (trừ `/health`) cần JWT nội bộ HS256 (`Authorization: Bearer …`, claim `tenant_id`).
+
+| Method & path | Mốc | Vai trò |
+|---|---|---|
+| `GET /health` | U6 | Health-check (miễn xác thực) |
+| `GET /invoices` · `?chieu&tuNgay&denNgay&ttxly&tthai&nbmst&nmmst&nguon&limit&offset` | U6 | Danh sách + lọc + phân trang |
+| `GET /invoices/summary` | U6 | Tổng hợp (count + sum tiền) trên cùng bộ lọc |
+| `GET /invoices/:id` | U6 | Một hóa đơn (header) trong phạm vi tenant |
+| `POST /exports?format=xlsx\|csv&<bộ lọc như /invoices>` | **U7** | Kết xuất → ghi **R2** → trả `{ id, key, url }` |
+| `GET /exports/:id` | **U7** | Tải file kết xuất (stream từ R2, giới hạn tenant) |
+
+Kết xuất bám mẫu cột chuẩn (`@vat/export`): tiền giữ chuỗi numeric chính xác, ô tiền `xlsx` định dạng `#,##0`; file lớn không giữ nguyên khối trong bộ nhớ Worker (CSV stream thẳng vào R2).
+
 ## Kiến trúc nhanh
 
 ```

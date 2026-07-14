@@ -6,7 +6,7 @@ import { hoaDon, tenants } from "@vat/db";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sign } from "hono/jwt";
-import type { AnyDb, Env } from "../src/types";
+import type { AnyDb, Env, StorageHandle } from "../src/types";
 
 // migrations của @vat/db (áp bằng PGlite) — giải qua URL để không phụ thuộc cwd.
 const MIGRATIONS = new URL("../../../packages/db/migrations", import.meta.url).pathname;
@@ -19,8 +19,9 @@ export function makeEnv(over: Partial<Env> = {}): Env {
   return {
     ENVIRONMENT: "test",
     JWT_SECRET: TEST_SECRET,
-    // HYPERDRIVE không dùng khi getDb được tiêm — cast dummy ở ranh giới test.
+    // HYPERDRIVE/RAW không dùng khi getDb/getStorage được tiêm — cast dummy ở ranh giới test.
     HYPERDRIVE: {} as Hyperdrive,
+    RAW: {} as R2Bucket,
     ...over,
   };
 }
@@ -31,9 +32,49 @@ export async function freshDb(): Promise<Db> {
   return db;
 }
 
-/** Bọc db PGlite thành DbHandle để tiêm vào createApp (close = noop trong test). */
-export function injectDb(db: Db) {
-  return { getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }) };
+// R2 giả trong bộ nhớ để integration test đi qua route thật (put/get) mà không cần binding
+// R2 thật. `map` mở ra để test đọc trực tiếp object đã ghi (đối chiếu nội dung/khóa).
+export interface FakeStorage extends StorageHandle {
+  map: Map<string, Uint8Array>;
+}
+
+async function toBytes(body: Uint8Array | ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  if (body instanceof Uint8Array) return body;
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const merged = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    merged.set(c, off);
+    off += c.length;
+  }
+  return merged;
+}
+
+export function makeStorage(): FakeStorage {
+  const map = new Map<string, Uint8Array>();
+  return {
+    map,
+    put: async (key, body) => {
+      map.set(key, await toBytes(body));
+    },
+    get: async (key) => map.get(key) ?? null,
+  };
+}
+
+/** Tiêm db PGlite + R2 giả vào createApp (close = noop trong test). storage tùy chọn để
+ * test đọc lại object đã ghi. */
+export function injectDb(db: Db, storage: FakeStorage = makeStorage()) {
+  return {
+    getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }),
+    getStorage: () => storage,
+  };
 }
 
 export async function makeTenant(db: Db, ten: string, mst: string): Promise<string> {

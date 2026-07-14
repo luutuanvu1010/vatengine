@@ -13,8 +13,8 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       // Wiring/kiểu thuần — loại khỏi ngưỡng phủ (testing.md "trừ wiring thuần"):
       // index.ts (compose default), db.ts (pg/Hyperdrive prod, test tiêm PGlite),
-      // types.ts (chỉ kiểu).
-      exclude: ["src/index.ts", "src/db.ts", "src/types.ts"],
+      // storage.ts (R2 prod, test tiêm R2 giả), types.ts (chỉ kiểu).
+      exclude: ["src/index.ts", "src/db.ts", "src/storage.ts", "src/types.ts"],
       thresholds: { lines: 80, statements: 80, branches: 80, functions: 80 },
     },
   },

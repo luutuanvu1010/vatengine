@@ -2,10 +2,11 @@
 // U6: nối app Hono (tra cứu hóa đơn) với kết nối Postgres thật qua Hyperdrive.
 import { createApp } from "./app";
 import { getDbFromHyperdrive } from "./db";
+import { getStorageFromR2 } from "./storage";
 import type { Env } from "./types";
 
 export type { Env };
 
-const app = createApp({ getDb: getDbFromHyperdrive });
+const app = createApp({ getDb: getDbFromHyperdrive, getStorage: getStorageFromR2 });
 
 export default app;

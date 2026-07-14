@@ -12,11 +12,14 @@
   // U6: Postgres qua Hyperdrive. Thay "id" bằng id thật khi deploy
   // (`wrangler hyperdrive create`). Dev local: đặt WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
   // trong .dev.vars (KHÔNG commit chuỗi kết nối — security.md).
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }]
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
+
+  // U7: R2 lưu file kết xuất (xlsx/csv). Tạo bucket lúc deploy:
+  // `wrangler r2 bucket create vat-raw`. Dev local: Miniflare mô phỏng R2 tự động.
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }]
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình
-  // "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }],         // XML/PDF, kết xuất
   // "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] }, // U9: đồng bộ nền
   // "durable_objects": { "bindings": [{ "name": "TENANT_LIMITER", "class_name": "TenantLimiter" }] }
   //

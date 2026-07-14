@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xlsx-workers-spike",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-01",
+  // CỐ Ý KHÔNG bật nodejs_compat: chứng minh encoder xlsx (fflate.zipSync/unzipSync +
+  // TextEncoder/TextDecoder) chạy THUẦN trên runtime workerd, không cần shim Node.
+  "observability": { "enabled": true }
+}
