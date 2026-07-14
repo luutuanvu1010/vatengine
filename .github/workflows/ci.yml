@@ -5,12 +5,15 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    # Contract test hằng ngày 02:00 UTC (bắt GDT đổi API + kiểm egress).
+    # GIÁM SÁT mục C — Vòng 1: contract test hằng ngày 02:00 UTC (bắt GDT đổi API +
+    # kiểm egress). Thất bại → GitHub tự thông báo (kênh cảnh báo Vòng 1).
     - cron: "0 2 * * *"
+  # Cho phép chạy contract test thủ công (kiểm chứng theo yêu cầu, không đợi lịch).
+  workflow_dispatch:
 
 jobs:
   quality:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +33,7 @@ jobs:
   # Contract test gọi GDT thật + probe egress — chỉ chạy theo lịch, không chặn PR
   # (tránh phụ thuộc mạng ngoài trong CI PR). Xem .claude/rules/gdt-adapter.md.
   contract:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

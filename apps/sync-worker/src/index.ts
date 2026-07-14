@@ -5,16 +5,27 @@
 //  - export TenantLimiter: Durable Object rate-limit/circuit-breaker theo tenant/MST.
 // Logic (schedule/runJob/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
 import { getDbFromHyperdrive } from "./db";
-import { listActiveTenantIds, makeJobDeps } from "./deps";
+import { listActiveTenantIds, makeEgressProbeDeps, makeJobDeps } from "./deps";
+import { EgressHealth } from "./egressHealth";
+import { runEgressProbe } from "./egressProbe";
 import { runScheduledSync } from "./runJob";
 import { buildMessages, currentPeriodWindow, enumerateDueAccounts } from "./schedule";
 import { TenantLimiter } from "./tenantLimiter";
 import type { Env, SyncJobMessage } from "./types";
 
-export { TenantLimiter };
+export { TenantLimiter, EgressHealth };
+
+// GIÁM SÁT (mục C) — cron probe egress (mỗi 15'); TÁCH khỏi cron đồng bộ (0 3 * * *).
+const EGRESS_PROBE_CRON = "*/15 * * * *";
 
 export default {
-  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+  async scheduled(event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    // GIÁM SÁT: tick probe egress — không đụng DB đồng bộ, chỉ probe T0 + health-state.
+    if (event.cron === EGRESS_PROBE_CRON) {
+      await runEgressProbe(makeEgressProbeDeps(env));
+      return;
+    }
+
     const { db, close } = await getDbFromHyperdrive(env);
     try {
       const nowMs = Date.now();

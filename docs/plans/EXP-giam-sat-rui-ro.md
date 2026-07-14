@@ -61,8 +61,16 @@ Dựng **hai chuông báo động tự chạy theo lịch**: (1) **Contract đ�
 
 ## Quyết định đã chốt (chủ dự án, 2026-07-14)
 
-1. **Kênh cảnh báo = audit log + Workers observability.** Ghi audit CRITICAL + Workers Logs (đã bật `observability`); đánh dấu `GdtContractDriftError` CRITICAL. Không hạ tầng ngoài, hợp `security.md`. Email/webhook để tách đơn vị sau nếu cần. *Kiểm chứng:* test khẳng định nhánh verdict xấu ghi đúng bản ghi audit cảnh báo.
+1. **Kênh cảnh báo = ~~audit log +~~ Workers observability.** ⚠️ **DRIFT khi hiện thực (ghi lại theo CLAUDE.md §8):** quyết định gốc là "audit log + observability", nhưng **audit_log KHÔNG dùng được cho probe egress** vì `audit_log.tenant_id` là **NOT NULL + RLS** ([packages/db/src/schema/auditLog.ts:13](../../packages/db/src/schema/auditLog.ts)) — probe egress là sự kiện **TOÀN HỆ THỐNG, không tenant**, không thể gắn vào bảng tenant-scoped mà không bịa tenant giả. `security.md` cũng chỉ bắt audit 4 loại hành động tenant (đăng nhập/đồng bộ/xuất/đổi cấu hình) — giám sát egress không thuộc. **Hệ quả:** cảnh báo phát **chỉ qua Workers observability** (`console.error` structured CRITICAL — [deps.ts makeEgressProbeDeps](../../apps/sync-worker/src/deps.ts)). security-reviewer đã xác nhận đây là lựa chọn đúng. **Cần chủ dự án xác nhận lại** drift này. *(Lưu ý vận hành security-reviewer nêu: chưa có alerting chủ động/Logpush gắn với console.error → cân nhắc đơn vị sau.)*
 2. **Probe egress = cron thứ hai trong `apps/sync-worker`** (không tạo worker mới) — tái dùng gdt-client + DO + cron sẵn có, giảm bề mặt deploy.
 3. **Ngưỡng "ổn định" = 3 tick xấu liên tiếp; chu kỳ cron probe = mỗi 15'** (`*/15 * * * *`). OK ở giữa reset chuỗi. Cảnh báo phát đúng một lần khi vượt ngưỡng.
 
-Kết thúc: kế hoạch đã đủ chặt để hiện thực. Bước kế tiếp — `/write-prompt` (sinh prompt thực thi) hoặc hiện thực trực tiếp theo vòng lặp (test-trước → tối thiểu → lint/test → review chéo).
+## Trạng thái hiện thực (2026-07-14)
+
+- **Vòng 1 (contract định kỳ) = ĐÃ CÓ SẴN trong `.github/workflows/ci.yml`** — job `contract` chạy `test:contract` theo `schedule: 0 2 * * *`; thất bại → GitHub tự thông báo (kênh cảnh báo Vòng 1). **KHÔNG tạo `contract-schedule.yml`** (tránh trùng lặp). Bổ sung `workflow_dispatch` để chạy contract thủ công (đáp ứng tiêu chí "chạy thử theo yêu cầu").
+- **Vòng 2 (probe egress) = ĐÃ HIỆN THỰC** trong `apps/sync-worker`:
+  - `src/health.ts` (logic thuần, coverage 100%), `src/egressProbe.ts` (điều phối, 100%), `src/egressHealth.ts` (DO singleton, loại coverage như tenantLimiter), test `test/unit/health.test.ts` + `egressProbe.test.ts` (11 test).
+  - `src/index.ts` phân nhánh `scheduled()` theo `event.cron`; `wrangler.jsonc` thêm cron `*/15 * * * *` + DO `EgressHealth` (migration v2).
+  - `make lint` sạch; `make test` xanh (355 test toàn repo); coverage health/egressProbe = 100%.
+- **Review chéo:** contract-guardian **PASS**, security-reviewer **PASS**, dod-auditor các phát hiện đã xử lý (drift #1 ghi lại ở trên; Vòng 1 tài liệu hóa; commit tách phạm vi).
+- **CÒN TREO:** cập nhật `docs/CHECKLIST-NGHIEM-THU.md` mục C sang `[x]` — **hoãn** vì file đang bị phiên U13 song song sửa; tránh trộn đơn vị. Làm sau khi phiên kia xong.

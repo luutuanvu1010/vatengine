@@ -17,6 +17,10 @@ export interface Env extends LimiterEnv {
   SYNC_QUEUE: Queue<SyncJobMessage>;
   // Durable Object: token-bucket rate limit + circuit breaker theo tenant/MST.
   TENANT_LIMITER: DurableObjectNamespace;
+  // GIÁM SÁT (mục C): Durable Object singleton giữ health-state probe egress
+  // (toàn hệ thống, không theo tenant — gdt-adapter.md "lưu trạng thái sức khỏe
+  // trong Durable Object").
+  EGRESS_HEALTH: DurableObjectNamespace;
 }
 
 // Db bất kỳ (pg/Hyperdrive khi chạy; PGlite khi test). sync()/withTenant là generic

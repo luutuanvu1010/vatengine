@@ -5,12 +5,39 @@ import { tenants } from "@vat/db";
 import { createDirectCfTransport } from "@vat/gdt-client";
 import { sync } from "@vat/sync";
 import { eq } from "drizzle-orm";
+import { egressHealthClient } from "./egressHealth";
+import type { EgressProbeDeps } from "./egressProbe";
 import { dbRecorder, loadAccountToken } from "./recorder";
 import { tenantLimiterClient } from "./tenantLimiter";
 import type { AnyDb, Env, RunJobDeps, SyncJobMessage } from "./types";
 
 // Egress T0 (direct-cf) — điểm gọi GDT DUY NHẤT đi qua adapter (gdt-adapter.md).
 const transport = createDirectCfTransport();
+
+/** GIÁM SÁT (mục C) — dựng deps cho probe egress. Sink cảnh báo = Workers
+ * observability (structured log CRITICAL): sự kiện TOÀN HỆ THỐNG, không tenant →
+ * KHÔNG audit_log (tenant-scoped). Chỉ metadata vận hành, KHÔNG token/secret
+ * (security.md — probe gọi endpoint công khai, không đăng nhập). */
+export function makeEgressProbeDeps(env: Env): EgressProbeDeps {
+  return {
+    transport,
+    ...egressHealthClient(env.EGRESS_HEALTH),
+    emitAlert(alert, result) {
+      console.error(
+        JSON.stringify({
+          level: "CRITICAL",
+          event: "egress_probe_alert",
+          transport: result.transport,
+          verdict: alert.verdict,
+          consecutiveBad: alert.consecutiveBad,
+          httpStatus: result.httpStatus,
+          egressCountry: result.egressCountry,
+          latencyMs: result.latencyMs,
+        }),
+      );
+    },
+  };
+}
 
 /**
  * CONTROL-PLANE: đọc sổ đăng ký tenant để Cron lập lịch.

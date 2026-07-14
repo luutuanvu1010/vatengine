@@ -10,9 +10,13 @@
   // Cron wall-time 15' / CPU 15' nếu chu kỳ ≥ 1h (ADR-0001 §3).
   "limits": { "cpu_ms": 300000 },
 
-  // Cron phát tán job đồng bộ. Mỗi tick: liệt kê account có token còn hạn → enqueue.
-  // Ví dụ 03:00 UTC hằng ngày (10:00 giờ VN) — giãn tải, tôn trọng máy chủ thuế.
-  "triggers": { "crons": ["0 3 * * *"] },
+  // Cron:
+  //  - "0 3 * * *" (03:00 UTC = 10:00 VN): phát tán job đồng bộ — liệt kê account
+  //    token còn hạn → enqueue; giãn tải, tôn trọng máy chủ thuế.
+  //  - "*/15 * * * *" (mỗi 15'): GIÁM SÁT (mục C) — probe egress T0; verdict xấu ổn
+  //    định (3 tick liên tiếp) → cảnh báo qua Workers observability. scheduled() phân
+  //    nhánh theo event.cron. KHÔNG bật T1 (đang TREO) — chỉ phát hiện + cảnh báo.
+  "triggers": { "crons": ["0 3 * * *", "*/15 * * * *"] },
 
   // Postgres qua Hyperdrive (giống apps/api). Thay "id" bằng id thật khi deploy.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
@@ -36,9 +40,16 @@
   // (ADR-0001 §5). U9: tối thiểu đủ "không gọi dồn dập". U12: ngưỡng TINH CHỈNH qua
   // vars (resolveLimiterConfig) + log quan sát khi chặn (limiterEvent).
   "durable_objects": {
-    "bindings": [{ "name": "TENANT_LIMITER", "class_name": "TenantLimiter" }]
+    "bindings": [
+      { "name": "TENANT_LIMITER", "class_name": "TenantLimiter" },
+      // GIÁM SÁT (mục C): singleton giữ health-state probe egress (id cố định "egress").
+      { "name": "EGRESS_HEALTH", "class_name": "EgressHealth" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantLimiter"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["TenantLimiter"] },
+    { "tag": "v2", "new_sqlite_classes": ["EgressHealth"] }
+  ],
 
   // U12 — Ngưỡng rate-limit client (tinh chỉnh theo môi trường; bỏ trống → mặc định
   // trong rateLimiter.ts). Đây là cấu hình KHÔNG nhạy cảm nên đặt ở vars, không secret.

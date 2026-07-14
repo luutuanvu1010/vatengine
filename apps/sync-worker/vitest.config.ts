@@ -16,7 +16,16 @@ export default defineConfig({
       // deps production), tenantLimiter.ts (Durable Object), db.ts (Hyperdrive),
       // types.ts (chỉ kiểu). Logic nghiệp vụ (schedule/runJob/rateLimiter/recorder)
       // vẫn bị ngưỡng phủ ràng buộc.
-      exclude: ["src/index.ts", "src/deps.ts", "src/tenantLimiter.ts", "src/db.ts", "src/types.ts"],
+      exclude: [
+        "src/index.ts",
+        "src/deps.ts",
+        "src/tenantLimiter.ts",
+        // GIÁM SÁT: DO health runtime (nạp/lưu state) — logic gộp verdict đã phủ ở
+        // health.test.ts/egressProbe.test.ts; DO chỉ wiring mỏng, kiểm khi deploy.
+        "src/egressHealth.ts",
+        "src/db.ts",
+        "src/types.ts",
+      ],
       thresholds: { lines: 80, statements: 80, branches: 80, functions: 80 },
     },
   },
