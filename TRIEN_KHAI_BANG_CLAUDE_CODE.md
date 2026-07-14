@@ -108,8 +108,11 @@ Mỗi đơn vị đủ nhỏ để chạy trọn một vòng lặp và kiểm th
 | U10 | Module đối chiếu (thiếu HĐ, lệch thuế, HĐ hủy/thay thế) | Test theo bộ dữ liệu tình huống |
 | U11 | Tích hợp/xuất sang phần mềm kế toán | Test ánh xạ định dạng mục tiêu |
 | U12 | Bảo mật: mã hóa bí mật, audit log, rate limit client | Test mã hóa/giải mã, ghi audit, chặn vượt ngưỡng |
+| U13 | **Giám sát rủi ro (mục C)**: contract test định kỳ (CI theo lịch) + probe egress định kỳ (cron Cloudflare) | Test logic health-state (chuỗi verdict xấu ổn định → cảnh báo), probe qua `GdtTransport`. Chi tiết: `docs/plans/EXP-giam-sat-rui-ro.md` |
+| U14 | **Backend login/token GDT (API-only)**: đường GHI token (login→`storeToken` mã hóa) + sửa đường ĐỌC (`readToken`), secret `TOKEN_KEK`, ủy quyền tối thiểu | Test login ghi token `v1$…`, đọc giải mã, chưa ủy quyền→409, RBAC, cách ly tenant. Chi tiết: `docs/plans/U14-design.md` |
+| U15 | **Frontend (Tầng trình bày)**: SPA khách-hàng-thấy — đăng nhập nội bộ + màn Login thuế, tra cứu/lọc, kết xuất, đối chiếu (cụm 6 lát cắt U15.0–U15.5, trên API U6–U11 + U14) | Test formatter tiền-chuỗi/ngày-VN/nhãn trạng thái, ánh xạ lọc→API, guard vai (RBAC), e2e happy-path. Chi tiết: `docs/plans/U15-plan.md` |
 
-Khung tham chiếu đã có (`backend/gdt_client.py`, `backend/main.py`, `frontend/index.html`) tương ứng phần đầu U1–U2–U6–U7 ở mức MVP; Claude Code dùng làm điểm khởi động rồi nâng lên chuẩn có test + lưu trữ bền vững.
+Khung tham chiếu đã có (`backend/gdt_client.py`, `backend/main.py`, `frontend/index.html`) tương ứng phần đầu U1–U2–U6–U7 ở mức MVP; Claude Code dùng làm điểm khởi động rồi nâng lên chuẩn có test + lưu trữ bền vững. Riêng `frontend/index.html` là PoC mà **U15** thay bằng SPA production (Tầng trình bày — `docs/plans/U15-plan.md`); U15 là **một cụm** chạy qua 6 lát cắt con U15.0–U15.5, mỗi lát tự chạy + tự test (giữ nguyên tắc "mỗi vòng lặp một lát nhỏ").
 
 ---
 

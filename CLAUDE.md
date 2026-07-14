@@ -83,7 +83,7 @@ Một đơn vị chỉ "xong" khi: có test tự động phủ đúng tiêu chí
 
 Theo `TRIEN_KHAI_BANG_CLAUDE_CODE.md`, đóng gói trong skill `/start-unit`: (1) đọc spec + bối cảnh → (2) kế hoạch ngắn → (3) **viết test trước** → (4) hiện thực tối thiểu → (5) `make lint && make test` → (6) đỏ thì tự sửa và lặp; xanh thì (7) review chéo bằng subagent + commit. **Mỗi lần chỉ một đơn vị.**
 
-Thứ tự triển khai: U0 (khung dự án + Makefile + CI) → U1–U3 (GDT Adapter) → U4–U5 (mô hình dữ liệu + đồng bộ idempotent) → U6–U7 (API tra cứu + kết xuất) → U8+ (đa tenant, đồng bộ nền, đối chiếu…).
+Thứ tự triển khai: U0 (khung dự án + Makefile + CI) → U1–U3 (GDT Adapter) → U4–U5 (mô hình dữ liệu + đồng bộ idempotent) → U6–U7 (API tra cứu + kết xuất) → U8–U12 (đa tenant, đồng bộ nền, đối chiếu, kế toán, bảo mật) → **U13 (Giám sát rủi ro: contract định kỳ + probe egress; `docs/plans/EXP-giam-sat-rui-ro.md`)** → **U14 (Backend login/token GDT — API-only; `docs/plans/U14-design.md`)** → **U15 (Frontend — Tầng trình bày: SPA tra cứu/kết xuất/đối chiếu + màn Login, trên API nội bộ; `docs/plans/U15-plan.md`)**.
 
 ## Nguyên tắc bằng chứng (không giả định vô căn cứ)
 

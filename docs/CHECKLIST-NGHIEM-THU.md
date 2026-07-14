@@ -8,7 +8,9 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 > **Cập nhật: 2026-07-14 · U10 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · `U10 ✅` · `U11 ✅` · **`U12 ✅`**
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · `U10 ✅` · `U11 ✅` · `U12 ✅` · **`U13 ✅ Giám sát`** · `U14 ⬜ THIẾT KẾ (login/token)` · `U15 ⬜ KẾ HOẠCH (Frontend)`
+>
+> **Cập nhật kế hoạch 2026-07-14:** bổ sung **cụm `U15` — Frontend (Tầng trình bày)** để khép **lớp thứ ba** mà U0–U12 (Backend + Xử lý/Dữ liệu) cố ý chưa phủ. Trạng thái: **kế hoạch, chưa hiện thực** — đặc tả đầy đủ ở `docs/plans/U15-plan.md`. U15 là một cụm chạy qua 6 lát cắt U15.0→U15.5, thuần frontend trên API `apps/api` (U6–U11), KHÔNG gọi GDT/không thêm endpoint backend.
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
@@ -223,15 +225,32 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] **Chặn vượt ngưỡng** rate limit client: test tường minh vượt `capacity` (từ env) → `rate_limited`; breaker mở sau `failureThreshold` lỗi → `breaker_open` (kế thừa U9 + đường config từ env).
 - [x] **Review chéo (2026-07-14): `security-reviewer` — không Critical/High, không rò rỉ chéo tenant.** Hai phát hiện đã sửa (TDD): (a) **Medium** — `audit_log` chưa chặn `TRUNCATE` (trigger row-level không bắt lệnh statement-level) → thêm trigger `BEFORE TRUNCATE FOR EACH STATEMENT` + `REVOKE TRUNCATE` (migration `0002`, test TRUNCATE→ném); (b) **Low** — `maskSensitive` bỏ sót JWT thô nhúng trong chuỗi tự do dưới khóa vô hại → thêm pattern JWT vào `maskString` (test). Đồng thời áp `maskSensitive` cho `chi_tiet` route `/exports` + `/exports/convert` (`apps/api`) — bộ lọc `nbmst` là chuỗi tự do có thể mang giá trị nhạy cảm (test JWT-trong-nbmst).
 
+### ⬜ U15 — Frontend: SPA khách-hàng-thấy (cụm: đặc tả · ánh xạ dữ liệu · UX) · *KẾ HOẠCH — chưa hiện thực · `docs/plans/U15-plan.md`*
+
+> Lớp thứ ba (Tầng trình bày) — U0–U12 cố ý chưa chạm (chỉ PoC `frontend/index.html`). **Một cụm**, chạy qua 6 lát cắt U15.0→U15.5. **Thuần frontend**: chỉ tiêu thụ API `apps/api` (U6–U11), KHÔNG gọi GDT, KHÔNG thêm endpoint backend. Ngăn xếp đề xuất: React+TS+Vite trên Workers Static Assets (chốt Điểm mơ hồ #1 của plan).
+
+- [ ] **U15.0** Khung `apps/web` + build Static Assets + harness test (Vitest/TL + Playwright) + `apiClient` gõ kiểu (ánh xạ 401/403/400/404); `make test` xanh trên khung.
+- [ ] **U15.1** Đăng nhập nội bộ `POST /auth/login` + giữ JWT + guard vai (RBAC `rbac.ts`) + 401→login; nút kết xuất **ẩn với `ke_toan`**.
+- [ ] **U15.2** Tra cứu `GET /invoices`(+`/summary`) — toàn bộ bộ lọc (`filters.ts`) + phân trang (`limit`≤200); formatter **tiền-chuỗi KHÔNG ép float** (test >2^53), ngày-VN, nhãn trạng thái.
+- [ ] **U15.3** Chi tiết `GET /invoices/:id` (chỉ header — U6 #2).
+- [ ] **U15.4** Kết xuất `POST /exports` + convert (chỉ profile khả dụng) + tải `GET /exports/:id`; RBAC ẩn với `ke_toan`.
+- [ ] **U15.5** Đối chiếu `GET /reconcile` — 4 loại finding + tóm tắt; gap nhãn "nghi thiếu".
+- [ ] **Ánh xạ dữ liệu (Nguyên tắc bằng chứng):** nhãn `ttxly`/`tthai` CHỈ cho mã đã kiểm chứng, mã lạ → số + "(chưa rõ)" (đồng bộ `@vat/reconcile statusCodes`); cột bảng = `EXPORT_COLUMNS`.
+- [ ] **Cách ly tenant + bảo mật client:** `tenant_id` lấy từ token (không tin client); không bí mật/không token trong mã/log.
+- [ ] **DoD chung (mục A)** + coverage tầng logic UI (formatter/mapping/guard) ≥ 80% + a11y smoke + **hồi quy U0–U15 xanh**.
+- [ ] **Fenced (chờ đơn vị BACKEND trước):** UI đăng nhập thuế + captcha (chưa có đường ghi token GDT), "đồng bộ ngay", lịch sử đồng bộ, Cổng Admin, webhook tích hợp — xem `docs/plans/U15-plan.md` §NGOÀI phạm vi.
+
 ---
 
-## C. Vòng lặp giám sát rủi ro (xuyên suốt, không phải một mốc)
+## C. Vòng lặp giám sát rủi ro (xuyên suốt, không phải một mốc) — **= U13 ✅ (commit `08b3f76`)**
 
-- [ ] **Contract test định kỳ** (CI theo lịch) gọi endpoint công khai GDT — phát hiện khi cơ quan thuế đổi API → tạo nhiệm vụ cập nhật adapter.
-- [ ] **Probe egress định kỳ** — theo dõi T0 (thuần Cloudflare) còn gọi được GDT không; nếu `GEO_BLOCKED`/`RATE_LIMITED` ổn định → kích hoạt T1 (relay VN) và cảnh báo. (ADR-0001 mục 5B.)
+> U13 hiện thực mục C (`docs/plans/EXP-giam-sat-rui-ro.md`): review chéo contract-guardian **PASS** + security-reviewer **PASS**; `make lint` sạch; `make test` xanh (355 test); coverage `health.ts`/`egressProbe.ts` 100%. Drift QĐ #1 (cảnh báo audit_log→observability, vì audit_log tenant-scoped) đã ghi trong plan — **chủ dự án đã xác nhận (2026-07-14)**.
+
+- [x] **Contract test định kỳ** (CI theo lịch) gọi endpoint công khai GDT — phát hiện khi cơ quan thuế đổi API. → `.github/workflows/ci.yml` job `contract` chạy `test:contract` theo `schedule: 0 2 * * *`; thất bại → GitHub tự thông báo. Bổ sung `workflow_dispatch` để chạy thủ công.
+- [x] **Probe egress định kỳ** — theo dõi T0 (thuần Cloudflare) còn gọi được GDT không; `GEO_BLOCKED`/`RATE_LIMITED` ổn định (3 tick liên tiếp) → cảnh báo (Workers observability). → cron `*/15 * * * *` trong `apps/sync-worker` (`egressProbe.ts`/`health.ts` + DO `EgressHealth`). **KHÔNG bật T1** (đang TREO) — chỉ phát hiện + cảnh báo. (ADR-0001 mục 5B.)
 
 ---
 
 ## D. Điều kiện hoàn thành toàn dự án
 
-Tất cả U0–U12 đạt Definition of Done, test hồi quy toàn bộ xanh, và hai vòng giám sát rủi ro (mục C) đang chạy ổn định.
+Tất cả U0–U15 đạt Definition of Done, test hồi quy toàn bộ xanh, và hai vòng giám sát rủi ro (mục C) đang chạy ổn định. **Lưu ý phạm vi:** U0–U12 (Backend + Xử lý/Dữ liệu) đã ✅; **U15 (Frontend — Tầng trình bày) hiện KẾ HOẠCH, chưa hiện thực** — dự án chỉ "hoàn thành đủ 3 lớp vận hành" khi U15 đạt DoD.
