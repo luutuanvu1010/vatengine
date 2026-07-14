@@ -61,7 +61,7 @@ export async function listActiveTenantIds(db: AnyDb): Promise<string[]> {
 export function makeJobDeps(env: Env, db: AnyDb, msg: SyncJobMessage): RunJobDeps {
   return {
     now: () => Date.now(),
-    loadAccount: (m) => loadAccountToken(db, m),
+    loadAccount: (m) => loadAccountToken(db, m, env.TOKEN_KEK),
     limiter: tenantLimiterClient(env.TENANT_LIMITER, msg.tenantId),
     sync: (o) => sync({ db, ...o }),
     transport,

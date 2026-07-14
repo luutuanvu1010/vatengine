@@ -21,6 +21,8 @@ export interface Env extends LimiterEnv {
   // (toàn hệ thống, không theo tenant — gdt-adapter.md "lưu trạng thái sức khỏe
   // trong Durable Object").
   EGRESS_HEALTH: DurableObjectNamespace;
+  // U14 — KEK giải mã token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
+  TOKEN_KEK: string;
 }
 
 // Db bất kỳ (pg/Hyperdrive khi chạy; PGlite khi test). sync()/withTenant là generic

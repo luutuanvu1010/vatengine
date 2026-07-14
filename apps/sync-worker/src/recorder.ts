@@ -1,14 +1,17 @@
+import { maskSensitive } from "@vat/crypto";
 // U9 — Ghi vết job đồng bộ nền vào DB (lan_dong_bo + audit_log) + đánh dấu token
 // chết. MỌI truy cập tenant-scoped qua withTenant (RLS, lớp phòng thủ 2) + lọc
 // tường minh tenant_id (multi-tenant.md). KHÔNG lưu mật khẩu/không log token
 // (security.md). loadAccountToken chỉ đọc trạng thái token (đủ để pre-flight).
 //
 // U12 — chi_tiet audit đi qua maskSensitive trước khi ghi (che credential nếu lỡ lọt
-// vào chuỗi lỗi). Token tại nghỉ: seam mã hóa `@vat/db` storeToken/readToken SẴN SÀNG;
-// điểm đọc này sẽ chuyển sang readToken CÙNG với đường GHI token (login→lưu mã hóa),
-// tách đơn vị sau (quyết định #1: U12 = seam + fixture, KHÔNG wiring GHI runtime).
-import { maskSensitive } from "@vat/crypto";
-import { auditLog, lanDongBo, taiKhoanThue, withTenant } from "@vat/db";
+// vào chuỗi lỗi). Token tại nghỉ: seam mã hóa `@vat/db` storeToken/readToken.
+//
+// U14 — loadAccountToken nối vào readToken (giải mã tại nghỉ). Cột
+// `tai_khoan_thue.token_hien_tai` lưu chuỗi sealed `v1$aesgcm$…`; readToken tự
+// tenant-scoped (withTenant) + giải mã (openSecret) nên hàm dưới đây trả TOKEN
+// THẬT cho runJob gửi GDT, không còn trả thẳng chuỗi sealed.
+import { auditLog, lanDongBo, readToken, taiKhoanThue, withTenant } from "@vat/db";
 import { and, eq } from "drizzle-orm";
 import { parseDdmmyyyy } from "./schedule";
 import type { AccountToken, AnyDb, JobRecorder, SyncJobMessage } from "./types";
@@ -20,21 +23,18 @@ export const AUDIT_HANH_DONG_REAUTH = "dong_bo_can_dang_nhap_lai";
 /** Hành động audit khi bỏ qua tick vì circuit breaker mở. */
 export const AUDIT_HANH_DONG_BREAKER_SKIP = "dong_bo_bo_qua_breaker";
 
-/** Đọc trạng thái token của một tài khoản (tenant-scoped). null nếu tài khoản không có. */
+/** Đọc + giải mã token của một tài khoản (tenant-scoped). null nếu tài khoản không có
+ * hoặc chưa có token. `kekB64` là secret KEK (Workers Secret, security.md). */
 export async function loadAccountToken(
   db: AnyDb,
   msg: SyncJobMessage,
+  kekB64: string,
 ): Promise<AccountToken | null> {
-  return withTenant(db, msg.tenantId, async (tx) => {
-    const rows = await tx
-      .select({
-        tokenHienTai: taiKhoanThue.tokenHienTai,
-        tokenHetHan: taiKhoanThue.tokenHetHan,
-      })
-      .from(taiKhoanThue)
-      .where(and(eq(taiKhoanThue.id, msg.taikhoanId), eq(taiKhoanThue.tenantId, msg.tenantId)));
-    return rows[0] ?? null;
-  });
+  // readToken tự tenant-scoped (withTenant) + giải mã (openSecret). Trả null nếu chưa
+  // có token/không thuộc tenant. tokenHienTai giờ là TOKEN THẬT (đã giải mã), không sealed.
+  const dec = await readToken(db, msg.tenantId, msg.taikhoanId, kekB64);
+  if (!dec) return null;
+  return { tokenHienTai: dec.token, tokenHetHan: dec.tokenHetHan };
 }
 
 export function dbRecorder(db: AnyDb): JobRecorder {

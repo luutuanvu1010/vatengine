@@ -4,7 +4,15 @@
 // (chạy lại không nhân đôi), 401 runtime → cần đăng nhập lại + token chết, pre-flight
 // token hết hạn → KHÔNG chạm GDT (không captcha).
 import { PGlite } from "@electric-sql/pglite";
-import { auditLog, hoaDon, lanDongBo, taiKhoanThue, tenants, withTenant } from "@vat/db";
+import {
+  auditLog,
+  hoaDon,
+  lanDongBo,
+  storeToken,
+  taiKhoanThue,
+  tenants,
+  withTenant,
+} from "@vat/db";
 import { INVOICE_ENDPOINTS } from "@vat/gdt-client";
 import type { GdtTransport, InvoiceRow } from "@vat/gdt-client";
 import { sync } from "@vat/sync";
@@ -24,6 +32,9 @@ import type { AnyDb, RunJobDeps, SyncJobMessage, TenantLimiterClient } from "../
 
 const MIGRATIONS = new URL("../../../../packages/db/migrations", import.meta.url).pathname;
 const NOW = Date.UTC(2026, 6, 14, 3, 0, 0);
+// U14 — loadAccountToken giờ giải mã qua readToken/storeToken (@vat/db); test cần
+// KEK để seal/mở token thay vì lưu chuỗi thô như trước.
+const KEK = btoa(String.fromCharCode(...new Uint8Array(32)));
 
 type Db = ReturnType<typeof drizzle>;
 
@@ -46,12 +57,15 @@ async function makeAccount(db: Db, tenantId: string, tokenHetHan: Date | null): 
     .values({
       tenantId,
       username: `${mstOf(tenantId)}-user`,
-      tokenHienTai: tokenHetHan ? "jwt-token" : null,
+      tokenHienTai: null,
       tokenHetHan,
     })
     .returning({ id: taiKhoanThue.id });
   const row = rows[0];
   if (!row) throw new Error("insert tai_khoan_thue không trả về id");
+  if (tokenHetHan) {
+    await storeToken(db as unknown as AnyDb, tenantId, row.id, "jwt-token", tokenHetHan, KEK);
+  }
   return row.id;
 }
 function mstOf(s: string): string {
@@ -116,7 +130,7 @@ function makeDeps(db: Db, transport: GdtTransport): RunJobDeps {
   const anyDb = db as unknown as AnyDb;
   return {
     now: () => NOW,
-    loadAccount: (msg) => loadAccountToken(anyDb, msg),
+    loadAccount: (msg) => loadAccountToken(anyDb, msg, KEK),
     limiter: allowAll,
     // db được BOUND vào sync() ở đây (giống deps.ts production) → runJob không cần db.
     sync: (o) => sync({ db: anyDb, ...o }),
@@ -170,8 +184,10 @@ describe("runScheduledSync — end-to-end với sync() + recorder thật (PGlite
     expect(out.kind).toBe("needs_reauth");
 
     // Token bị đánh dấu chết (xóa token_hien_tai) để tick sau pre-flight bỏ qua sạch.
-    const acc = await loadAccountToken(db as unknown as AnyDb, msgFor(tenantId, taikhoanId));
-    expect(acc?.tokenHienTai).toBeNull();
+    // U14: loadAccountToken (readToken) trả null nguyên khối khi chưa có token — không
+    // còn trả { tokenHienTai: null } như trước.
+    const acc = await loadAccountToken(db as unknown as AnyDb, msgFor(tenantId, taikhoanId), KEK);
+    expect(acc).toBeNull();
 
     // Audit ghi hành động cần đăng nhập lại.
     const audits = await db.select().from(auditLog).where(eq(auditLog.tenantId, tenantId));
