@@ -2,10 +2,11 @@
 // bằng khóa test. KHÔNG mạng, KHÔNG dữ liệu thật (testing.md). Db PGlite được TIÊM
 // vào app qua `createApp({ getDb })` để integration test đi qua route + auth thật.
 import { PGlite } from "@electric-sql/pglite";
-import { hoaDon, tenants } from "@vat/db";
+import { hoaDon, nguoiDung, tenants } from "@vat/db";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sign } from "hono/jwt";
+import { hashPassword } from "../src/password";
 import type { AnyDb, Env, StorageHandle } from "../src/types";
 
 // migrations của @vat/db (áp bằng PGlite) — giải qua URL để không phụ thuộc cwd.
@@ -119,13 +120,36 @@ export async function seedInvoice(
   return row.id;
 }
 
-/** Ký JWT nội bộ test (HS256) với claim `tenant_id`. `extra` để test exp/thiếu claim. */
+/** Seed một người dùng nội bộ (U8) với mật khẩu đã băm PBKDF2 thật (qua đúng hàm login
+ * dùng) → integration test đi trọn vòng hash→verify. Vai mặc định `ke_toan`. */
+export async function seedUser(
+  db: Db,
+  tenantId: string,
+  email: string,
+  password: string,
+  vaiTro = "ke_toan",
+): Promise<string> {
+  const passwordHash = await hashPassword(password);
+  const rows = await db
+    .insert(nguoiDung)
+    .values({ tenantId, email, passwordHash, vaiTro })
+    .returning({ id: nguoiDung.id });
+  const row = rows[0];
+  if (!row) throw new Error("insert nguoi_dung không trả về id");
+  return row.id;
+}
+
+/** Ký JWT nội bộ test (HS256) với claim `tenant_id` + `role` (U8). Vai mặc định
+ * `quan_tri` (qua mọi cổng RBAC) để test U6/U7 không phải khai vai. Ghi đè bằng
+ * `extra.role`; truyền `role: null` để test ca token THIẾU vai. */
 export async function tokenFor(
   tenantId: string | undefined,
   extra: Record<string, unknown> = {},
 ): Promise<string> {
-  const payload: Record<string, unknown> = { ...extra };
+  const payload: Record<string, unknown> = { role: "quan_tri", ...extra };
   if (tenantId !== undefined) payload.tenant_id = tenantId;
+  // role: null (ca test token THIẾU vai) → bỏ khỏi payload (sign JSON-hóa, rớt undefined).
+  if (payload.role === null) payload.role = undefined;
   return sign(payload, TEST_SECRET, "HS256");
 }
 

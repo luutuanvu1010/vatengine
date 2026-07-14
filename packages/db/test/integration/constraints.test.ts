@@ -179,4 +179,57 @@ describe("U4 ràng buộc DB (integration, PGlite)", () => {
     await assertIsolatedUnderRole(a, b, "owner_role(owner+FORCE)");
     await db.execute(sql`reset role`);
   });
+
+  it("(U8-14) auth_lookup_user() tra cứu login XUYÊN tenant dưới role app (non-superuser) dù RLS chặn SELECT thường", async () => {
+    const a = await makeTenant(db, "Cty A", "0100000001");
+    const b = await makeTenant(db, "Cty B", "0100000002");
+    // Seed người dùng dưới role mặc định (PGlite superuser → bỏ qua RLS khi seed).
+    await db.execute(
+      sql`insert into nguoi_dung (tenant_id, email, password_hash, vai_tro)
+          values (${a}, 'ke.toan@a.vn', 'hash-A', 'ke_toan'),
+                 (${b}, 'admin@b.vn',  'hash-B', 'quan_tri')`,
+    );
+
+    // Role app production: non-superuser, KHÔNG sở hữu bảng, KHÔNG có BYPASSRLS.
+    await db.execute(sql`create role app_user2 nosuperuser`);
+    await db.execute(sql`grant usage on schema public to app_user2`);
+    await db.execute(sql`grant select on all tables in schema public to app_user2`);
+    await db.execute(sql`grant execute on function auth_lookup_user(text) to app_user2`);
+
+    await db.execute(sql`set role app_user2`);
+    // (a) SELECT thường trên nguoi_dung KHÔNG có tenant ctx → RLS chặn hết (0 hàng).
+    const direct = await db.execute(sql`select id from nguoi_dung where email = 'admin@b.vn'`);
+    expect(direct.rows.length, "SELECT thường bị RLS chặn khi chưa set tenant").toBe(0);
+
+    // (b) Hàm SECURITY DEFINER (owner BYPASSRLS) VẪN tìm được người dùng — đây là lối
+    // tra cứu login hợp lệ TRƯỚC khi biết tenant. Trả đúng tenant_id + vai_tro + hash.
+    const viaFn = await db.execute(
+      sql`select id, tenant_id, vai_tro, password_hash from auth_lookup_user('admin@b.vn')`,
+    );
+    expect(viaFn.rows.length, "auth_lookup_user tìm được người dùng xuyên tenant").toBe(1);
+    const row = viaFn.rows[0] as {
+      tenant_id: string;
+      vai_tro: string;
+      password_hash: string;
+    };
+    expect(row.tenant_id).toBe(b);
+    expect(row.vai_tro).toBe("quan_tri");
+    expect(row.password_hash).toBe("hash-B");
+
+    // (c) Email không tồn tại → rỗng (login sẽ 401).
+    const none = await db.execute(sql`select id from auth_lookup_user('khong-ton-tai@x.vn')`);
+    expect(none.rows.length).toBe(0);
+    await db.execute(sql`reset role`);
+
+    // (d) LEAST-PRIVILEGE: role KHÔNG được cấp EXECUTE tường minh (mô phỏng role báo
+    // cáo/BI thêm sau) → KHÔNG gọi được hàm (chặn regression nếu ai đó cấp lại TO PUBLIC).
+    await db.execute(sql`create role reporter nosuperuser`);
+    await db.execute(sql`grant usage on schema public to reporter`);
+    await db.execute(sql`set role reporter`);
+    // Ném (permission denied) — tương phản với app_user2 (được cấp) gọi THÀNH CÔNG ở
+    // trên chính là bằng chứng "grant tường minh mới mở đường". PGlite bọc lỗi PG trong
+    // "Failed query: …" nên chỉ khẳng định có ném, không so khớp thông điệp gốc.
+    await expect(db.execute(sql`select id from auth_lookup_user('admin@b.vn')`)).rejects.toThrow();
+    await db.execute(sql`reset role`);
+  });
 });

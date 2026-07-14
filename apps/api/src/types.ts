@@ -1,6 +1,7 @@
 // Kiểu dùng chung cho Worker API (U6). Tầng ứng dụng PHI TRẠNG THÁI (mục 11).
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import type { Role } from "./rbac";
 
 export interface Env {
   ENVIRONMENT?: string;
@@ -13,10 +14,11 @@ export interface Env {
   // Binding khác thêm dần theo lộ trình (KV, Queues, Durable Objects).
 }
 
-// tenantId trích từ JWT (phương án A) — mọi route /invoices* dùng để lọc + RLS.
+// Trích từ JWT nội bộ (U6/U8): `tenantId` để lọc + RLS; `role` (vai RBAC, U8) để
+// requireRole gác route. Cả hai do requireTenant xác minh và đặt vào context.
 export type AppEnv = {
   Bindings: Env;
-  Variables: { tenantId: string };
+  Variables: { tenantId: string; role: Role };
 };
 
 // Db route dùng: một PgDatabase bất kỳ (pg/Hyperdrive khi chạy; PGlite khi test).

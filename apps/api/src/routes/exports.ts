@@ -13,6 +13,7 @@ import {
 import { invoiceFilterSchema } from "@vat/query";
 import { Hono } from "hono";
 import { requireTenant } from "../auth";
+import { requireRole } from "../rbac";
 import type { AppDeps, AppEnv } from "../types";
 
 // id đối tượng kết xuất: "<uuid>.<xlsx|csv>". Dùng để dựng lại key theo tenant khi tải.
@@ -33,7 +34,10 @@ export function exportsRoutes(deps: AppDeps) {
   const r = new Hono<AppEnv>();
 
   // Mọi route cần JWT hợp lệ (security.md). tenantId lấy từ context (middleware).
+  // RBAC (U8): KẾT XUẤT là hành động nhạy cảm (audit "export") → chỉ kế toán trưởng +
+  // quản trị; vai `ke_toan` bị 403 (ma trận quyền U8-plan).
   r.use("*", requireTenant);
+  r.use("*", requireRole("ke_toan_truong", "quan_tri"));
 
   // POST /exports?format=xlsx|csv&<bộ lọc U6> — tạo file kết xuất (có side effect: ghi
   // R2 + audit) → dùng POST, không GET.

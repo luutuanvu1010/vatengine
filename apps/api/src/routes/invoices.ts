@@ -11,13 +11,16 @@ import {
 } from "@vat/query";
 import { Hono } from "hono";
 import { isUuid, requireTenant } from "../auth";
+import { requireRole } from "../rbac";
 import type { AppDeps, AppEnv } from "../types";
 
 export function invoicesRoutes(deps: AppDeps) {
   const r = new Hono<AppEnv>();
 
   // Mọi route con của /invoices cần JWT hợp lệ (security.md). /health nằm ngoài (app.ts).
+  // RBAC (U8): TRA CỨU dành cho cả 3 vai (kế toán trở lên) — ma trận quyền U8-plan.
   r.use("*", requireTenant);
+  r.use("*", requireRole("ke_toan", "ke_toan_truong", "quan_tri"));
 
   // GET /invoices — danh sách + lọc + phân trang.
   r.get("/", async (c) => {

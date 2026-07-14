@@ -130,6 +130,22 @@ describe("U4 lược đồ — ràng buộc mô hình hóa (unit, offline)", () 
     }
   });
 
+  it("(U8) nguoi_dung có password_hash (nullable), email UNIQUE toàn cục, vai_tro default 'ke_toan'", () => {
+    const cfg = getTableConfig(nguoiDung);
+    const pw = cfg.columns.find((c) => c.name === "password_hash");
+    expect(pw, "phải có cột password_hash").toBeDefined();
+    expect(pw?.notNull, "password_hash nullable (không chặn hàng cũ)").toBe(false);
+
+    // Email UNIQUE toàn cục (không kèm tenant_id) — login xảy ra trước khi biết tenant.
+    const emailIdx = cfg.indexes.find((i) => i.config.name === "nguoi_dung_email_unique");
+    expect(emailIdx, "phải có unique index nguoi_dung_email_unique").toBeDefined();
+    expect(emailIdx?.config.unique).toBe(true);
+    expect(emailIdx?.config.columns.map((c) => ("name" in c ? c.name : ""))).toEqual(["email"]);
+
+    const vaiTro = cfg.columns.find((c) => c.name === "vai_tro");
+    expect(vaiTro?.default, "vai_tro default = ke_toan (vai ít quyền nhất)").toBe("ke_toan");
+  });
+
   it("(FK) khóa ngoại trỏ đúng bảng đích (cột nội bộ → bảng ngoài)", () => {
     const cases: Array<[Parameters<typeof getTableConfig>[0], Record<string, string>]> = [
       [taiKhoanThue, { tenant_id: "tenants" }],

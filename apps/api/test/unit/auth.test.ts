@@ -60,6 +60,20 @@ describe("requireTenant (auth JWT nội bộ)", () => {
     expect(res.status).toBe(401);
   });
 
+  it("token THIẾU vai (role) → 401 (U8: token phải mang vai hợp lệ)", async () => {
+    const app = probeApp();
+    const token = await tokenFor(VALID_TENANT, { role: null });
+    const res = await app.request("/probe", { headers: bearer(token) }, makeEnv());
+    expect(res.status).toBe(401);
+  });
+
+  it("token có vai KHÔNG hợp lệ → 401", async () => {
+    const app = probeApp();
+    const token = await tokenFor(VALID_TENANT, { role: "member" });
+    const res = await app.request("/probe", { headers: bearer(token) }, makeEnv());
+    expect(res.status).toBe(401);
+  });
+
   it("ký bằng khóa KHÁC secret của env → 401", async () => {
     const app = probeApp();
     const token = await tokenFor(VALID_TENANT);

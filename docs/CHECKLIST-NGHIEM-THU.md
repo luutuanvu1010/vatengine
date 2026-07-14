@@ -8,7 +8,7 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 > **Cập nhật: 2026-07-14 · U7 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · **`U8 ⬜ ← KẾ TIẾP`** · `U9 ⬜` · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · **`U9 ⬜ ← KẾ TIẾP`** · `U10 ⬜` · `U11 ⬜` · `U12 ⬜`
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
@@ -20,7 +20,9 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 >
 > **Đã xong — U7 (Kết xuất Excel/CSV, `packages/export` = `@vat/export` + `apps/api`):** renderer thuần (mẫu cột chuẩn duy nhất, `csv` + `xlsx` tự dựng SpreadsheetML + `fflate`) + nạp keyset trên `@vat/query` + `POST /exports` ghi **R2** (CSV stream thật, không giữ cả file trong RAM) → trả link, `GET /exports/:id` tải giới hạn tenant qua tiền tố key. Tiền giữ **chuỗi numeric** (không ép float); ô tiền xlsx `numFmt "#,##0"`. Audit `export` (chốt #4). Kiểm bằng **PGlite + R2 giả offline** (59 test; coverage `@vat/export` 100% dòng, `apps/api` 100% dòng); **spike workerd thật** xác minh encoder xlsx chạy không cần `nodejs_compat` (`spikes/xlsx-workers`). Quyết định (chủ dự án 2026-07-14): #1 R2+link · #2 thư viện nhẹ+spike · #3 ttxly/tthai MÃ số · #4 audit tối thiểu. Xem `docs/plans/U7-plan.md`.
 >
-> **Kế tiếp — U8 (Auth người dùng nội bộ + RBAC + đa tenant):** phát hành JWT nội bộ + RBAC mở rộng trên seam `requireTenant` của U6/U7; test cách ly dữ liệu 2 tenant. Xem `TRIEN_KHAI_BANG_CLAUDE_CODE.md` dòng 106.
+> **Đã xong — U8 (Auth người dùng nội bộ + RBAC + đa tenant, `apps/api` + `@vat/db`):** `POST /auth/login` (email+mật khẩu) băm/so khớp **PBKDF2 qua WebCrypto** (workerd-safe, không Node bcrypt) → phát hành **JWT nội bộ HS256** mang `tenant_id`+`role` (vòng đời 8h). **RBAC 3 vai** `ke_toan`/`ke_toan_truong`/`quan_tri` (nguồn chân lý `rbac.ts`), vai trong claim JWT (quyết định #3); `requireRole` gác: đọc `/invoices*` = cả 3 vai, kết xuất `/exports*` = kế toán trưởng+quản trị (`ke_toan` → **403**). 401 (xác thực) vs 403 (ủy quyền) phân biệt rạch ròi. **Cách ly tenant giữ nguyên**: token gắn đúng 1 tenant, `quan_tri` của A KHÔNG chạm dữ liệu B (test qua route). **Login vs RLS**: login xảy ra TRƯỚC khi biết tenant nhưng `nguoi_dung` bật FORCE RLS ⇒ tra cứu qua hàm **SECURITY DEFINER `auth_lookup_user`** (owner role `auth_lookup` NOLOGIN+BYPASSRLS, bề mặt hẹp, **least-privilege: REVOKE PUBLIC**, chỉ cấp EXECUTE tường minh cho role app — sửa từ security-reviewer). `email` UNIQUE toàn cục. Kiểm bằng **PGlite offline** (apps/api 47 test, coverage 100% dòng; db test `(U8-14)` chứng minh hàm vượt RLS dưới role non-superuser + chặn role không được cấp). Quyết định (chủ dự án 2026-07-14): #1 login email+mật khẩu PBKDF2 · #2 RBAC 3 vai · #3 role trong claim JWT · #4 tra cứu login qua SECURITY DEFINER + email toàn cục. Xem `docs/plans/U8-plan.md`.
+>
+> **Nợ vận hành U8 (điều kiện tiên quyết production, CHƯA KIỂM CHỨNG trên DB thật — cùng lớp với nợ Hyperdrive U6):** provision role app (Hyperdrive) rồi `GRANT EXECUTE ON FUNCTION auth_lookup_user(text)` cho nó; role `auth_lookup` BYPASSRLS có thể cần quyền admin của Neon/Supabase khi tạo.
 >
 > **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
 
@@ -168,10 +170,13 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] **Cổng spike (chốt #2):** encoder xlsx kiểm chứng chạy trên **workerd thật** (`spikes/xlsx-workers`, `wrangler dev` **không** `nodejs_compat`, 2026-07-14) — `ok:true`, `hasMoneyNumFmt:true`, `keepsBigMoneyExact:true`. Không ép nâng vitest 3→4 để chạy `vitest-pool-workers` (ngoài phạm vi U7).
 - [x] **Review chéo (2026-07-14): `dod-auditor` PASS + `security-reviewer` PASS** (không rò rỉ chéo tenant). **Sửa từ review:** (a) chống **CSV/Excel formula injection** — ô văn bản (`nbten`/`nmten` từ GDF/bên thứ ba) bắt đầu `= + - @` được chèn `'` trong CSV (`guardCsvText`); xlsx an toàn sẵn (`t="inlineStr"` không diễn giải công thức) — có test cả hai; (b) `EXPORT_FORMATS`/`isExportFormat` thành nguồn định dạng duy nhất, route dùng thay vì hardcode.
 
-### ⬜ U8 — Auth người dùng nội bộ + RBAC + đa tenant · review: `security-reviewer` (rò rỉ chéo = Critical)
+### ✅ U8 — Auth người dùng nội bộ + RBAC + đa tenant · `apps/api` + `@vat/db` · *ĐẠT (`make lint && make test` xanh; coverage `apps/api` 100% dòng/93.5% nhánh) · review: `security-reviewer` PASS (1 Medium đã sửa) + `dod-auditor` PASS*
 
-- [ ] Test **cách ly dữ liệu**: tạo 2 tenant, xác nhận A không đọc/ghi được dữ liệu B.
-- [ ] RBAC theo vai trò; RLS là lớp phòng thủ thứ hai.
+- [x] Test **cách ly dữ liệu**: tạo 2 tenant, xác nhận A không đọc/ghi được dữ liệu B. → `rbac.route.test.ts`: `quan_tri` của A vẫn chỉ thấy dữ liệu A qua `/invoices` và kết xuất `/exports` không lẫn B (RBAC KHÔNG nới cách ly). Token gắn đúng 1 `tenant_id`; `withTenant` + lọc `tenant_id` tường minh giữ nguyên.
+- [x] **RBAC theo vai trò**; RLS là lớp phòng thủ thứ hai. → 3 vai `ke_toan`/`ke_toan_truong`/`quan_tri` (nguồn chân lý `apps/api/src/rbac.ts`), vai trong **claim JWT** (quyết định #3). `requireRole`: đọc = cả 3 vai; kết xuất = kế toán trưởng+quản trị (`ke_toan` → 403). Thiếu/sai token → 401; đúng token sai vai → 403 (test `rbac.test.ts` + `rbac.route.test.ts`).
+- [x] **Phát hành + xác thực token** (mở rộng seam `requireTenant` U6/U7): `POST /auth/login` email+mật khẩu → JWT HS256 mang `tenant_id`+`role`, ký bằng Workers Secret `JWT_SECRET`. Mật khẩu băm **PBKDF2/WebCrypto** (100k vòng, salt/hash 256-bit, so sánh hằng thời gian); sai email/mật khẩu → 401 gọn (không rò lý do). Test `auth.route.test.ts` + `password.test.ts`.
+- [x] **Login vs RLS** (điểm kiến trúc): login xảy ra TRƯỚC khi biết tenant nhưng `nguoi_dung` FORCE RLS ⇒ tra cứu qua hàm **SECURITY DEFINER `auth_lookup_user`** (owner `auth_lookup` NOLOGIN+BYPASSRLS, bề mặt hẹp; **least-privilege: REVOKE FROM PUBLIC**, chỉ EXECUTE tường minh cho role app). `email` UNIQUE toàn cục. Test `(U8-14)` chứng minh hàm vượt RLS dưới role non-superuser, SELECT thường bị chặn, và role không được cấp EXECUTE bị từ chối.
+- [ ] ⚠️ **Nợ vận hành** (production, CHƯA KIỂM CHỨNG trên DB thật): `GRANT EXECUTE` hàm `auth_lookup_user` cho role app Hyperdrive khi provision; role BYPASSRLS có thể cần quyền admin Neon/Supabase. Cùng lớp nợ với wiring Hyperdrive U6 (test dùng PGlite tiêm).
 
 ### ⬜ U9 — Đồng bộ nền theo lịch (Cloudflare Queues + Workflows + Cron)
 
