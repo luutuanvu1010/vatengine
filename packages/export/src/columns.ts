@@ -45,6 +45,26 @@ export function formatDate(d: Date): string {
   );
 }
 
+// Cột RENDER tổng quát: encoder (csv/xlsx) chỉ cần `header` (nhãn) + `money` (có áp numFmt
+// "#,##0" cho ô số không) + hàm `cell` sinh ExportCell từ một hóa đơn. Đây là lớp chung cho
+// CẢ mẫu native (U7) LẪN profile ánh xạ kế toán (U11) → một encoder duy nhất, không nhân
+// đôi logic mã hóa (tránh nguồn sự thật thứ hai).
+export interface RenderColumn {
+  header: string;
+  money: boolean;
+  cell: (row: HoaDonRow) => ExportCell;
+}
+
+/** Cột render cho mẫu native (U7): EXPORT_COLUMNS → RenderColumn. Nhãn = label, tiền =
+ * kind 'money', ô = cellFor. Giữ nguyên hành vi U7 (wrapper csv/xlsx dùng list này). */
+export function nativeRenderColumns(): RenderColumn[] {
+  return EXPORT_COLUMNS.map((col) => ({
+    header: col.label,
+    money: col.kind === "money",
+    cell: (row: HoaDonRow) => cellFor(col, row),
+  }));
+}
+
 /** Chuẩn hóa một ô theo cột + hàng. null/undefined → trống (không giá trị giả). */
 export function cellFor(col: ExportColumn, row: HoaDonRow): ExportCell {
   const raw = row[col.key];

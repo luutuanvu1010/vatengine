@@ -21,12 +21,15 @@ Mọi endpoint (trừ `/health`) cần JWT nội bộ HS256 (`Authorization: Bea
 | `GET /invoices/summary` | U6 | Tổng hợp (count + sum tiền) trên cùng bộ lọc |
 | `GET /invoices/:id` | U6 | Một hóa đơn (header) trong phạm vi tenant |
 | `POST /exports?format=xlsx\|csv&<bộ lọc như /invoices>` | **U7** | Kết xuất → ghi **R2** → trả `{ id, key, url }` |
-| `GET /exports/:id` | **U7** | Tải file kết xuất (stream từ R2, giới hạn tenant) |
+| `GET /exports/:id` | **U7** | Tải file kết xuất/convert (stream từ R2, giới hạn tenant) |
 | `GET /reconcile?<bộ lọc như /invoices>` | **U10** | Đối chiếu: lệch thuế, thiếu số HĐ đầu ra, hủy/thay thế |
+| `POST /exports/convert?profile=<id>&format=xlsx\|csv&<bộ lọc như /invoices>` | **U11** | Ánh xạ sang định dạng phần mềm kế toán theo profile → ghi **R2** → `{ id, key, url, profile }`; tải qua `GET /exports/:id` |
 
 Kết xuất bám mẫu cột chuẩn (`@vat/export`): tiền giữ chuỗi numeric chính xác, ô tiền `xlsx` định dạng `#,##0`; file lớn không giữ nguyên khối trong bộ nhớ Worker (CSV stream thẳng vào R2).
 
 Đối chiếu (`@vat/reconcile`, U10) đọc-only trên hóa đơn đã đồng bộ, tính on-read: **lệch thuế** (số học nội tại header `tgtcthue − ttcktmai + tgtthue = tgtttbso`, tính trong SQL `numeric`), **thiếu số HĐ đầu ra** (khoảng trống dãy `shdon` theo `(nbmst, khhdon)`), **hủy/thay thế** (theo bảng mã trạng thái — hiện **RỖNG** vì mã `tthai`/`ttxly` chưa kiểm chứng, chờ probe; xem `docs/plans/U10-plan.md`).
+
+Convert kế toán (`@vat/export`, U11) tổng quát hóa encoder xuất U7 qua **profile ánh xạ** (`MappingProfile`): mỗi profile định nghĩa cột đích + định dạng của một phần mềm kế toán. Convert đọc-only, keyset streaming, ghi **R2** + trả link (như U7). Định dạng import thật của MISA/FAST/SmartKTSC **CHƯA KIỂM CHỨNG** (chưa có template) → nằm ở `PENDING_PROFILES`, chưa khả dụng (`profile=misa` → 400); hiện chỉ có **profile tham chiếu** chứng minh cơ chế. Điền profile thật chỉ khi có template chính thức (Nguyên tắc bằng chứng); xem `docs/plans/U11-plan.md`.
 
 ### Worker đồng bộ nền (`apps/sync-worker`, U9) — Cron + Queues + Durable Object
 

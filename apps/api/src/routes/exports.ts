@@ -5,8 +5,12 @@
 import { auditLog, withTenant } from "@vat/db";
 import {
   type ExportFormat,
+  accountingCsvStream,
+  accountingXlsxFromBatches,
   csvStream,
+  getProfile,
   isExportFormat,
+  isProfileId,
   iterateInvoices,
   toXlsxFromBatches,
 } from "@vat/export";
@@ -75,6 +79,48 @@ export function exportsRoutes(deps: AppDeps) {
       await close();
     }
     return c.json({ id, key, url: `/exports/${id}` }, 201);
+  });
+
+  // POST /exports/convert?profile=<id>&format=xlsx|csv&<bộ lọc U6> — ÁNH XẠ hóa đơn sang
+  // định dạng nhập liệu phần mềm kế toán theo PROFILE (U11). Dùng chung hạ tầng U7: keyset
+  // streaming + R2 (tiền tố tenant) + audit. profile CHƯA KIỂM CHỨNG (chưa khả dụng) → 400.
+  // Tải lại qua GET /exports/:id (id là <uuid>.<fmt> — cùng keyspace).
+  r.post("/convert", async (c) => {
+    const profileId = c.req.query("profile");
+    // Nguồn profile hợp lệ = @vat/export registry (không hardcode; không phục vụ layout
+    // CHƯA KIỂM CHỨNG — Nguyên tắc bằng chứng).
+    if (!isProfileId(profileId)) return c.json({ error: "bad_request" }, 400);
+    const format = c.req.query("format");
+    if (!isExportFormat(format)) return c.json({ error: "bad_request" }, 400);
+    const filter = invoiceFilterSchema.safeParse(c.req.query());
+    if (!filter.success) return c.json({ error: "bad_request" }, 400);
+    const profile = getProfile(profileId);
+
+    const tenantId = c.get("tenantId");
+    const id = `${crypto.randomUUID()}.${format}`;
+    const key = exportKey(tenantId, id);
+    const storage = deps.getStorage(c.env);
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      await withTenant(db, tenantId, async (tx) => {
+        const batches = iterateInvoices(tx, tenantId, filter.data);
+        if (format === "csv") {
+          await storage.put(key, accountingCsvStream(profile, batches));
+        } else {
+          await storage.put(key, await accountingXlsxFromBatches(profile, batches));
+        }
+        // Audit "xuất dữ liệu" cho convert (append; security.md). doiTuong = profile id.
+        await tx.insert(auditLog).values({
+          tenantId,
+          hanhDong: "convert",
+          doiTuong: profileId,
+          chiTiet: { key, format, filter: filter.data },
+        });
+      });
+    } finally {
+      await close();
+    }
+    return c.json({ id, key, url: `/exports/${id}`, profile: profileId }, 201);
   });
 
   // GET /exports/:id — tải file từ R2, giới hạn tenant qua tiền tố key.

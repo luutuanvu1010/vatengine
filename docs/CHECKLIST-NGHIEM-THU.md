@@ -8,7 +8,7 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 > **Cập nhật: 2026-07-14 · U10 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · `U10 ✅` · **`U11 ⬜ ← KẾ TIẾP`** · `U12 ⬜`
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · `U10 ✅` · `U11 ✅` · **`U12 ⬜ ← KẾ TIẾP`**
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
@@ -202,9 +202,16 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] **Cách ly tenant:** mọi truy vấn lọc `tenant_id` tường minh (`buildWhere` của @vat/query, lớp 1) + endpoint `GET /reconcile` trong `withTenant` (RLS lớp 2), RBAC `ke_toan`+; test tenant A không thấy anomaly của B (package + route) xanh.
 - [x] **Read-only:** 0 bảng mới, 0 gọi GDT (không import `@vat/gdt-client`/`fetch`), không đụng adapter/401/captcha/mật khẩu thô.
 
-### ⬜ U11 — Tích hợp/xuất sang phần mềm kế toán
+### ✅ U11 — Tích hợp/xuất sang phần mềm kế toán · review: `security-reviewer` + `dod-auditor`
 
-- [ ] Test ánh xạ đúng định dạng mục tiêu của phần mềm kế toán.
+> Quyết định phạm vi (chủ dự án, 2026-07-14 — xem `docs/plans/U11-plan.md`): #1 **cơ chế + profile tham chiếu** (chưa có template thật → không bịa layout); #2 **file convert** (R2 + link, như U7; webhook/pull API tách sau); #3 **KHÔNG gán mã tài khoản kế toán** (P12 tách đơn vị). Đọc-only (KHÔNG gọi GDT), tổng quát hóa encoder U7 qua **profile ánh xạ** (không nguồn sự thật thứ hai).
+
+- [x] **Test ánh xạ đúng định dạng mục tiêu** (11 unit `accountingFile` + 8 unit `profiles` + 8 route `apps/api`): file đọc lại → **header ĐÍCH đúng thứ tự** của profile (khác nhãn native), **transform** định dạng (ngày `dd/MM/yyyy`), tiền = **chuỗi numeric nguyên bản** + numFmt `#,##0` (xlsx), giá trị > 2^53 chính xác, null → ô trống.
+- [x] **Cơ chế profile cắm được** (`@vat/export`): `MappingProfile`/`MappingColumn` + `toAccountingFile`/`accountingCsvStream`/`accountingXlsxFromBatches` dựng TRÊN encoder csv/xlsx **tổng quát hóa** (`*For(columns)`) — U7 giữ nguyên (68 test export xanh, csv/xlsx/columns/rows không đổi hành vi). Registry là **nguồn sự thật** profile khả dụng (route validate qua `isProfileId`).
+- [x] **Nguyên tắc bằng chứng:** MISA/FAST/SmartKTSC ở `PENDING_PROFILES` (**CHƯA KIỂM CHỨNG** — chưa có template) → KHÔNG khả dụng (`profile=misa` → 400). Cổng guard `accountingProfiles.contract.test.ts`: mọi profile khả dụng phải `verified=true`; mục tiêu thật vẫn bị chặn tới khi có template.
+- [x] **File convert:** `POST /exports/convert?profile=<id>&format=xlsx|csv&<bộ lọc U6>` → keyset streaming (không gom RAM) → **R2** (tiền tố tenant) + link; tải qua `GET /exports/:id` (cùng keyspace U7).
+- [x] **Cách ly tenant + RBAC + audit:** `buildWhere` lọc `tenant_id` tường minh (lớp 1) + `withTenant`/RLS (lớp 2); test A **không** convert/tải được dữ liệu B (→ 404); RBAC `ke_toan` → **403** (như export); audit `hanh_dong='convert'`, `doi_tuong=<profile>`, không log `raw_json`/token.
+- [x] **Read-only:** 0 bảng mới, 0 gọi GDT (không import `@vat/gdt-client`/`fetch`), không đụng adapter/401/captcha/mật khẩu thô; không gán mã tài khoản (P12 tách). Coverage `@vat/export` 98.77% (≥80%); `make lint` sạch.
 
 ### ⬜ U12 — Bảo mật: mã hóa bí mật, audit log, rate limit client · review: `security-reviewer`
 
