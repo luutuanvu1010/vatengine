@@ -161,20 +161,14 @@ export function taxAccountsRoutes(deps: AppDeps) {
       }
 
       // deriveTokenExpiry ném lỗi nếu token GDT không đúng dạng JWT có exp (giả định
-      // CHƯA KIỂM CHỨNG). Bọc derive+store+audit để lỗi hình dạng token fail có kiểm
-      // soát (502 + audit), không lộ 500 trần trụi. KHÔNG đưa token vào audit.
+      // CHƯA KIỂM CHỨNG). Bọc CHỈ derive để lỗi hình dạng token fail có kiểm soát
+      // (502 + audit), không lộ 500 trần trụi. storeToken + audit thành công chạy
+      // NGOÀI catch này — lỗi DB thật (vd audit insert transient fail) không được
+      // gán nhãn nhầm thành "token_shape_unexpected" trong khi token đã lưu.
+      // KHÔNG đưa token vào audit.
+      let tokenHetHan: Date;
       try {
-        const tokenHetHan = deriveTokenExpiry(gdtToken);
-        await storeToken(db, tenantId, id, gdtToken, tokenHetHan, c.env.TOKEN_KEK);
-        await withTenant(db, tenantId, async (tx) => {
-          await tx.insert(auditLog).values({
-            tenantId,
-            hanhDong: "dang_nhap_thue_thanh_cong",
-            doiTuong: id,
-            chiTiet: maskSensitive({ tokenHetHan: tokenHetHan.toISOString() }),
-          });
-        });
-        return c.json({ ok: true, tokenHetHan: tokenHetHan.toISOString() });
+        tokenHetHan = deriveTokenExpiry(gdtToken);
       } catch (_err) {
         await withTenant(db, tenantId, async (tx) => {
           await tx.insert(auditLog).values({
@@ -186,6 +180,16 @@ export function taxAccountsRoutes(deps: AppDeps) {
         });
         return c.json({ error: "token_shape_unexpected" }, 502);
       }
+      await storeToken(db, tenantId, id, gdtToken, tokenHetHan, c.env.TOKEN_KEK);
+      await withTenant(db, tenantId, async (tx) => {
+        await tx.insert(auditLog).values({
+          tenantId,
+          hanhDong: "dang_nhap_thue_thanh_cong",
+          doiTuong: id,
+          chiTiet: maskSensitive({ tokenHetHan: tokenHetHan.toISOString() }),
+        });
+      });
+      return c.json({ ok: true, tokenHetHan: tokenHetHan.toISOString() });
     } finally {
       await close();
     }
