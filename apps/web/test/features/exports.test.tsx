@@ -1,0 +1,76 @@
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ExportsPage } from "../../src/features/exports/ExportsPage";
+import { clearToken, setToken } from "../../src/lib/apiClient";
+import { renderWithProviders } from "../helpers/renderApp";
+
+let calls: { url: string; method: string }[];
+
+function mockExports() {
+  calls = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    calls.push({ url, method });
+    if (url.includes("/exports/convert")) {
+      return new Response(JSON.stringify({ id: "e1", key: "k", url: "u", profile: "reference" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (method === "POST" && url.includes("/exports")) {
+      return new Response(JSON.stringify({ id: "e1", key: "k", url: "u" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    // GET /exports/e1 → blob tải về
+    return new Response("filebytes", { status: 200 });
+  });
+}
+
+describe("U15.4 — kết xuất & convert", () => {
+  beforeEach(() => {
+    setToken("t");
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:x"),
+      revokeObjectURL: vi.fn(),
+    });
+    mockExports();
+  });
+  afterEach(() => {
+    clearToken();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("chỉ reference khả dụng; MISA/FAST/SMART 'Sắp có' (khóa)", () => {
+    renderWithProviders(<ExportsPage />);
+    expect(screen.getByText("Khả dụng")).toBeInTheDocument();
+    expect(screen.getAllByText("Sắp có")).toHaveLength(3);
+    expect(screen.getByText("MISA")).toBeInTheDocument();
+  });
+
+  it("mẫu chuẩn (native) → POST /exports?format=xlsx rồi tải", async () => {
+    renderWithProviders(<ExportsPage />);
+    await userEvent.click(screen.getByRole("button", { name: "Tạo & tải file" }));
+    await waitFor(() => {
+      expect(calls.some((c) => c.method === "POST" && c.url.includes("/exports?format=xlsx"))).toBe(
+        true,
+      );
+      expect(calls.some((c) => c.url.includes("/exports/e1"))).toBe(true);
+    });
+    expect(await screen.findByText(/bắt đầu tải xuống/)).toBeInTheDocument();
+  });
+
+  it("chọn reference → POST /exports/convert?profile=reference", async () => {
+    renderWithProviders(<ExportsPage />);
+    await userEvent.click(screen.getByText("Định dạng tham chiếu (reference)"));
+    await userEvent.click(screen.getByRole("button", { name: "Tạo & tải file" }));
+    await waitFor(() => {
+      expect(calls.some((c) => c.url.includes("/exports/convert?profile=reference"))).toBe(true);
+    });
+  });
+});

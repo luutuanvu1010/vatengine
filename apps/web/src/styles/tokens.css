@@ -1,0 +1,81 @@
+/* Design tokens — serialization máy của docs/07-DESIGN_TOKENS.md §7 (nguồn token DUY
+   NHẤT). KHÔNG hardcode hex trong component; chỉ dùng biến --… dưới đây. Đổi giá trị →
+   sửa docs/07-DESIGN_TOKENS.md trước rồi đồng bộ về đây. */
+:root {
+  /* brand (đỏ thương hiệu) */
+  --brand-600: #c5221f;
+  --brand-700: #a52714;
+  --brand-800: #8e1714;
+  --brand-50: #fcf6f5;
+  /* danger (đỏ cảnh báo — TÁCH khỏi brand) */
+  --danger-600: #d93025;
+  --danger-50: #fce8e6;
+  --danger-200: #f5c6c0;
+  /* info (xanh dương) */
+  --info-600: #1a73e8;
+  --info-700: #1558b0;
+  --info-50: #e8f0fe;
+  --info-200: #c6dafc;
+  /* success (xanh lá) */
+  --success-600: #188038;
+  --success-700: #256b3f;
+  --success-50: #e6f4ea;
+  --success-200: #a8dab5;
+  /* warning (hổ phách) */
+  --warning-700: #b06000;
+  --warning-800: #8a5a00;
+  --warning-50: #fef7e0;
+  --warning-200: #fde9a8;
+  /* text */
+  --text-primary: #202124;
+  --text-secondary: #3c4043;
+  --text-tertiary: #5f6368;
+  --text-disabled: #80868b;
+  /* border + surface */
+  --border-strong: #bdc1c6;
+  --border: #dadce0;
+  --border-subtle: #e6e8eb;
+  --surface-page: #f8f9fa;
+  --surface-card: #ffffff;
+  --surface-muted: #f1f3f4;
+  --surface-hover: #eef0f2;
+  --neutral-chip-bg: #f1f3f4;
+  --neutral-chip-fg: #3c4043;
+  /* type */
+  --font-sans: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-extrabold: 800;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 30px;
+  --lh-body: 1.5;
+  --lh-heading: 1.25;
+  /* spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  /* radius */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 20px;
+  --radius-full: 9999px;
+  /* elevation */
+  --shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.08), 0 1px 3px rgba(60, 64, 67, 0.06);
+  --shadow-md: 0 1px 3px rgba(60, 64, 67, 0.12), 0 4px 8px rgba(60, 64, 67, 0.08);
+}

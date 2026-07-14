@@ -1,0 +1,10 @@
+{
+  // U15 — SPA tĩnh trên Cloudflare Workers Static Assets (ADR-0003). Build Vite → dist/,
+  // Worker phục vụ asset; SPA routing fallback về index.html (not_found_handling).
+  "name": "vat-web",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

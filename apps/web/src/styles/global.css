@@ -1,0 +1,63 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  color: var(--text-primary);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: var(--lh-heading);
+  margin: 0;
+}
+
+a {
+  color: var(--info-600);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--info-700);
+  text-decoration: underline;
+}
+
+/* Số tabular cho cột tiền/số liệu — căn cột đều (07-DESIGN_TOKENS §4). */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chỉ hiện cho trình đọc màn hình (a11y). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--info-600);
+  outline-offset: 2px;
+}
