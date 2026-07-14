@@ -21,6 +21,8 @@ export const taiKhoanThue = pgTable(
     // sealed `v1$aesgcm$…`, KHÔNG phải token thô.
     tokenHienTai: text("token_hien_tai"),
     tokenHetHan: timestamp("token_het_han", { withTimezone: true }),
+    // U14 — mốc ủy quyền tenant (NĐ 13/2023). null = CHƯA ủy quyền → chặn login GDT.
+    uyQuyenLuc: timestamp("uy_quyen_luc", { withTimezone: true }),
     ngayTao: timestamp("ngay_tao", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [tenantIsolationPolicy("tai_khoan_thue", t.tenantId)],
