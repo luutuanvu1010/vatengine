@@ -45,6 +45,17 @@ Luồng stateless: `GET captcha` → nhận `{key, content}` → gõ captcha →
 
 ⚠️ **Không giả định TTL (Hiến pháp — nguyên tắc bằng chứng).** `authenticate()` chỉ trả `{token}`; **chưa biết** cách lấy `token_het_han` (JWT claim `exp`? TTL cố định?). **Bước ĐẦU TIÊN của plan** = contract test probe login thật, quan sát dạng token + cách suy ra hạn, **ghi lại kết quả**. Cơ chế đặt sau hàm nhỏ `deriveTokenExpiry(token)`, chỉ hiện thực SAU probe. Không hardcode TTL trước khi có bằng chứng.
 
+### 4b. Kết quả probe — ĐÃ KIỂM CHỨNG 2026-07-14
+
+Chạy `packages/gdt-client/test/contract/authenticate.contract.test.ts` (Bước B) với MST + mật khẩu thật + captcha người thật gõ, egress T0 (`direct-cf`). Quan sát (giá trị `sub` = MST đã redact vì là dữ liệu tenant):
+
+- `TOKEN_PARTS = 3` · `TOKEN_LEN = 192` → **token GDT LÀ JWT** (`header.payload.signature`).
+- `TOKEN_PAYLOAD = {"sub":"<mst>","type":2,"exp":1784116400,"iat":1784030000}` · `HAS_EXP = number`.
+- Payload **có claim `exp` (epoch giây)** → `token_het_han = new Date(exp*1000)`.
+- **TTL quan sát = `exp − iat` = 1784116400 − 1784030000 = 86400s = đúng 24 giờ** (không hardcode; đọc từ `exp` mỗi lần).
+
+**Quyết định (Task 1 Step 5, nhánh "có exp"):** giữ nguyên `deriveTokenExpiry(token)` (đọc claim `exp`, ném nếu thiếu — không đoán TTL). Contract test Bước B nâng thành **assertion** (JWT 3 phần + `exp` kiểu số) thay vì chỉ log. `gdt-contract-schema.json` mục `authenticate` cập nhật ghi chú "token = JWT có claim `exp`, kiểm chứng 2026-07-14". *Giới hạn bằng chứng: quan sát trên MỘT tài khoản/một lần đăng nhập; TTL 24h là quan sát, không phải cam kết của GDT — cơ chế vẫn đọc `exp` động nên đúng kể cả nếu GDT đổi TTL.*
+
 ## 5. Sửa đường ĐỌC (khử mâu thuẫn ngầm)
 
 `apps/sync-worker/src/recorder.ts` (đọc token, ~line 31–35): thay dùng thẳng `tokenHienTai` bằng `readToken(db, tenantId, id, env.TOKEN_KEK)` (giải mã). Đây là bug ngầm EXP-doc mục 4 cảnh báo — nối GHI mà quên sửa ĐỌC ⇒ sync gửi `v1$aesgcm$…` cho GDT. Làm CÙNG U14 để schema ↔ consumer nhất quán. Giữ nguyên nhánh 401/hết hạn hiện có.

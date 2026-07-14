@@ -4,7 +4,7 @@
     "required_keys": ["key", "content"]
   },
   "authenticate": {
-    "description": "POST /api/security-taxpayer/authenticate — đổi captcha đã nhập lấy JWT token. ĐÃ KIỂM CHỨNG (2026-07-13, ADR-0001 Amendment #4): probe đăng nhập thật (QĐ-2) từ biên Cloudflare (T0) trả 200 + {token} (JWT), egress SG. Không tự động vào CI (cần captcha người thật) — CI chỉ giữ contract công khai /api/captcha.",
+    "description": "POST /api/security-taxpayer/authenticate — đổi captcha đã nhập lấy JWT token. ĐÃ KIỂM CHỨNG (2026-07-13, ADR-0001 Amendment #4): probe đăng nhập thật (QĐ-2) từ biên Cloudflare (T0) trả 200 + {token} (JWT), egress SG. Dạng token — ĐÃ KIỂM CHỨNG (2026-07-14, probe authenticate.contract.test.ts Bước B): token LÀ JWT 3 phần, payload có claim 'exp' (epoch giây) + 'iat' + 'sub'(MST) + 'type'; token_het_han = new Date(exp*1000) (dùng deriveTokenExpiry, đọc 'exp' động — KHÔNG hardcode TTL); TTL quan sát exp−iat = 86400s = 24h trên 1 mẫu. Không tự động vào CI (cần captcha người thật) — CI chỉ giữ contract công khai /api/captcha.",
     "required_keys": ["token"]
   },
   "invoice_envelope": {
