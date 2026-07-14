@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { authRoutes } from "./routes/auth";
 import { exportsRoutes } from "./routes/exports";
 import { invoicesRoutes } from "./routes/invoices";
+import { meRoutes } from "./routes/me";
 import { reconcileRoutes } from "./routes/reconcile";
 import { taxAccountsRoutes } from "./routes/taxAccounts";
 import type { AppDeps, AppEnv } from "./types";
@@ -19,6 +20,9 @@ export function createApp(deps: AppDeps) {
 
   // U8: phát hành token — NGOÀI requireTenant (login xảy ra trước khi có token/tenant).
   app.route("/auth", authRoutes(deps));
+
+  // A1 (U15): hồ sơ tenant + vai — đọc-only, sau requireTenant (cả 3 vai).
+  app.route("/me", meRoutes(deps));
 
   app.route("/invoices", invoicesRoutes(deps));
   // U7: kết xuất (POST /exports) + tải (GET /exports/:id) — đều sau requireTenant.

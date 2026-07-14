@@ -66,6 +66,59 @@ export function taxAccountsRoutes(deps: AppDeps) {
     }
   });
 
+  // A2 (U15) — GET /tax-accounts: liệt kê tài khoản thuế của tenant (đọc trạng thái cho
+  // S5). CHỈ trường trạng thái; KHÔNG token_hien_tai/secret_ref (bí mật). Cách ly tenant.
+  r.get("/", async (c) => {
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const rows = await withTenant(db, tenantId, (tx) =>
+        tx
+          .select({
+            id: taiKhoanThue.id,
+            username: taiKhoanThue.username,
+            loai: taiKhoanThue.loai,
+            uyQuyenLuc: taiKhoanThue.uyQuyenLuc,
+            tokenHetHan: taiKhoanThue.tokenHetHan,
+            ngayTao: taiKhoanThue.ngayTao,
+          })
+          .from(taiKhoanThue)
+          .where(eq(taiKhoanThue.tenantId, tenantId)),
+      );
+      return c.json(rows);
+    } finally {
+      await close();
+    }
+  });
+
+  // A2 — GET /tax-accounts/:id: một tài khoản (đọc trạng thái). Khác tenant → 404.
+  r.get("/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const row = await withTenant(db, tenantId, async (tx) => {
+        const rows = await tx
+          .select({
+            id: taiKhoanThue.id,
+            username: taiKhoanThue.username,
+            loai: taiKhoanThue.loai,
+            uyQuyenLuc: taiKhoanThue.uyQuyenLuc,
+            tokenHetHan: taiKhoanThue.tokenHetHan,
+            ngayTao: taiKhoanThue.ngayTao,
+          })
+          .from(taiKhoanThue)
+          .where(and(eq(taiKhoanThue.id, id), eq(taiKhoanThue.tenantId, tenantId)));
+        return rows[0] ?? null;
+      });
+      if (!row) return c.json({ error: "not_found" }, 404);
+      return c.json(row);
+    } finally {
+      await close();
+    }
+  });
+
   // POST /tax-accounts/:id/authorize — ghi nhận ủy quyền tenant (NĐ 13). Login sẽ chặn
   // nếu chưa ủy quyền. Audit (append-only). Cách ly: chỉ tài khoản thuộc tenant hiện tại.
   r.post("/:id/authorize", async (c) => {
