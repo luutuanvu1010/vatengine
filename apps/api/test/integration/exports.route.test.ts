@@ -131,6 +131,15 @@ describe("REST /exports (integration, PGlite + R2 giả)", () => {
     expect(rows[0]?.tenantId).toBe(tenantA);
   });
 
+  it("audit chi_tiet MASK giá trị nhạy cảm lọt qua bộ lọc (nbmst chứa JWT) — U12/security.md", async () => {
+    const token = await tokenFor(tenantA);
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc_DEF-123";
+    // nbmst là chuỗi tự do (z.string().min(1)) → giá trị lọt vào chi_tiet.filter.
+    await createExport(token, `format=csv&nbmst=${jwt}`);
+    const rows = await withTenant(db, tenantA, (tx) => tx.select().from(auditLog));
+    expect(JSON.stringify(rows[0]?.chiTiet)).not.toContain(jwt);
+  });
+
   it("format thiếu/không hợp lệ → 400", async () => {
     const token = await tokenFor(tenantA);
     expect((await createExport(token, "")).status).toBe(400);

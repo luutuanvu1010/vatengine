@@ -3,10 +3,12 @@
 // test kỹ ở rateLimiter.ts. Không test-cover (cần runtime DO thật; logic đã phủ ở
 // unit rateLimiter.test.ts). Đơn luồng theo thiết kế DO → không cần khóa.
 import {
-  DEFAULT_LIMITER_CONFIG,
+  type RateLimiterConfig,
   type RateLimiterState,
   initialState,
+  limiterEvent,
   recordResult,
+  resolveLimiterConfig,
   tryAcquire,
 } from "./rateLimiter";
 import type { Env, TenantLimiterClient } from "./types";
@@ -15,14 +17,17 @@ const STATE_KEY = "state";
 
 export class TenantLimiter {
   private readonly ctx: DurableObjectState;
+  // U12: ngưỡng tiêm từ env (không hardcode) — tinh chỉnh theo môi trường.
+  private readonly cfg: RateLimiterConfig;
 
-  constructor(ctx: DurableObjectState, _env: Env) {
+  constructor(ctx: DurableObjectState, env: Env) {
     this.ctx = ctx;
+    this.cfg = resolveLimiterConfig(env);
   }
 
   private async load(nowMs: number): Promise<RateLimiterState> {
     const stored = await this.ctx.storage.get<RateLimiterState>(STATE_KEY);
-    return stored ?? initialState(DEFAULT_LIMITER_CONFIG, nowMs);
+    return stored ?? initialState(this.cfg, nowMs);
   }
 
   async fetch(req: Request): Promise<Response> {
@@ -31,13 +36,18 @@ export class TenantLimiter {
     const state = await this.load(nowMs);
 
     if (url.pathname === "/acquire") {
-      const r = tryAcquire(state, nowMs, DEFAULT_LIMITER_CONFIG);
+      const r = tryAcquire(state, nowMs, this.cfg);
       await this.ctx.storage.put(STATE_KEY, r.state);
+      // U12 — QUAN SÁT: log có cấu trúc khi chặn (Workers Logs/observability). Chỉ
+      // metadata vận hành (id DO), KHÔNG token/secret (security.md).
+      if (!r.allowed && r.reason) {
+        console.warn(JSON.stringify(limiterEvent(r.reason, this.ctx.id.toString(), nowMs)));
+      }
       return Response.json({ allowed: r.allowed, reason: r.reason });
     }
     if (url.pathname === "/result") {
       const ok = url.searchParams.get("ok") === "true";
-      await this.ctx.storage.put(STATE_KEY, recordResult(state, ok, nowMs, DEFAULT_LIMITER_CONFIG));
+      await this.ctx.storage.put(STATE_KEY, recordResult(state, ok, nowMs, this.cfg));
       return Response.json({ ok: true });
     }
     return new Response("not found", { status: 404 });

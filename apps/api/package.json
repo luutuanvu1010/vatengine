@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "hono": "^4.6.0",
+    "@vat/crypto": "*",
     "@vat/db": "*",
     "@vat/export": "*",
     "@vat/gdt-client": "*",

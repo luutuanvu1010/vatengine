@@ -4,3 +4,4 @@
 export * from "./naturalKey";
 export * from "./schema";
 export * from "./tenantContext";
+export * from "./tokenVault";

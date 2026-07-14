@@ -35,6 +35,13 @@ Convert kế toán (`@vat/export`, U11) tổng quát hóa encoder xuất U7 qua 
 
 Worker tách bạch, không phục vụ HTTP người dùng. **Cron** liệt kê tài khoản thuế có token **còn hạn** → **Queue** một message/(tài khoản × chiều) mang `tenant_id` tường minh → consumer gọi `sync()` (U5, idempotent). **Durable Object `TenantLimiter`** giữ token-bucket + circuit breaker theo tenant/MST ("không gọi dồn dập" máy chủ thuế). Token hết hạn → ghi nhật ký `can_dang_nhap_lai` + audit, **KHÔNG tự đăng nhập, KHÔNG giải captcha** (người dùng đăng nhập lại — U1). Lỗi tạm → queue thử lại (trần `max_retries` → dead-letter); 401 → dừng, không thử lại token chết. Xem `docs/plans/U9-plan.md`.
 
+### Bảo mật (`@vat/crypto`, U12) — mã hóa bí mật, audit bất biến, rate limit làm cứng
+
+- **Envelope encryption** (`@vat/crypto`): `sealSecret`/`openSecret` (AES-256-GCM, KEK bọc DEK ngẫu nhiên mỗi bản ghi, chuỗi tự mô tả `v1$aesgcm$…` để mở đường rotation). Seam `@vat/db` `storeToken`/`readToken` mã hóa token GDT **tại nghỉ** trong `tai_khoan_thue.token_hien_tai` — **không** lưu mật khẩu/token thô (`security.md`).
+  - **Provision KEK khi bật lưu token runtime:** `wrangler secret put SECRET_KEK` (32 byte base64). U12 giao **seam + test fixture**; đường GHI token (login→lưu mã hóa) là đơn vị sau — khi đó điểm đọc `loadAccountToken` chuyển sang `readToken`.
+- **Audit bất biến (append-only):** migration `0002` cài trigger chặn UPDATE/DELETE trên `audit_log` (kể cả owner/superuser). `chi_tiet` đi qua `maskSensitive` trước khi ghi (che token/connection-string).
+- **Rate limit làm cứng:** ngưỡng `TenantLimiter` tinh chỉnh qua `vars` (`LIMITER_CAPACITY`/`LIMITER_REFILL_PER_SEC`/`LIMITER_FAILURE_THRESHOLD`/`LIMITER_COOLDOWN_MS`); log quan sát có cấu trúc khi chặn. Xem `docs/plans/U12-plan.md`.
+
 ## Kiến trúc nhanh
 
 ```

@@ -2,6 +2,7 @@
 // GHI ra R2, trả liên kết tải (chốt #1). Tải lại stream từ R2, GIỚI HẠN TENANT qua tiền
 // tố key (chốt cách ly). Ghi audit "xuất dữ liệu" (chốt #4, security.md). Mọi truy vấn
 // chạy trong `withTenant` (RLS lớp 2) + buildWhere lọc `tenant_id` tường minh (lớp 1).
+import { maskSensitive } from "@vat/crypto";
 import { auditLog, withTenant } from "@vat/db";
 import {
   type ExportFormat,
@@ -67,12 +68,13 @@ export function exportsRoutes(deps: AppDeps) {
         } else {
           await storage.put(key, await toXlsxFromBatches(batches));
         }
-        // Audit "xuất dữ liệu" (append). KHÔNG log raw_json/token (security.md).
+        // Audit "xuất dữ liệu" (append). KHÔNG log raw_json/token (security.md). U12:
+        // mask chi_tiet — filter tự do (vd nbmst) có thể chứa giá trị nhạy cảm.
         await tx.insert(auditLog).values({
           tenantId,
           hanhDong: "export",
           doiTuong: format,
-          chiTiet: { key, filter: filter.data },
+          chiTiet: maskSensitive({ key, filter: filter.data }),
         });
       });
     } finally {
@@ -110,11 +112,12 @@ export function exportsRoutes(deps: AppDeps) {
           await storage.put(key, await accountingXlsxFromBatches(profile, batches));
         }
         // Audit "xuất dữ liệu" cho convert (append; security.md). doiTuong = profile id.
+        // U12: mask chi_tiet như route export.
         await tx.insert(auditLog).values({
           tenantId,
           hanhDong: "convert",
           doiTuong: profileId,
-          chiTiet: { key, format, filter: filter.data },
+          chiTiet: maskSensitive({ key, format, filter: filter.data }),
         });
       });
     } finally {

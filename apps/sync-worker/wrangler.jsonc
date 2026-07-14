@@ -33,11 +33,21 @@
   },
 
   // Durable Object giữ token-bucket rate limit + circuit breaker theo tenant/MST
-  // (ADR-0001 §5). U9: tối thiểu đủ "không gọi dồn dập"; làm cứng đầy đủ ở U12.
+  // (ADR-0001 §5). U9: tối thiểu đủ "không gọi dồn dập". U12: ngưỡng TINH CHỈNH qua
+  // vars (resolveLimiterConfig) + log quan sát khi chặn (limiterEvent).
   "durable_objects": {
     "bindings": [{ "name": "TENANT_LIMITER", "class_name": "TenantLimiter" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantLimiter"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantLimiter"] }],
+
+  // U12 — Ngưỡng rate-limit client (tinh chỉnh theo môi trường; bỏ trống → mặc định
+  // trong rateLimiter.ts). Đây là cấu hình KHÔNG nhạy cảm nên đặt ở vars, không secret.
+  "vars": {
+    "LIMITER_CAPACITY": "10",
+    "LIMITER_REFILL_PER_SEC": "2",
+    "LIMITER_FAILURE_THRESHOLD": "5",
+    "LIMITER_COOLDOWN_MS": "60000"
+  }
 
   // JWT_SECRET / bí mật egress nạp qua `wrangler secret put` — security.md.
   // Chuỗi kết nối Postgres dev đặt trong .dev.vars (KHÔNG commit) — xem .dev.vars.example.

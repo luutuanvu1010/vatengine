@@ -5,8 +5,11 @@ import type { GdtTransport, InvoiceDirection, RetryOptions } from "@vat/gdt-clie
 import type { SyncResult } from "@vat/sync";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import type { LimiterEnv } from "./rateLimiter";
 
-export interface Env {
+// U12: kế thừa LimiterEnv → ngưỡng rate-limit tinh chỉnh qua env (vars wrangler),
+// không hardcode trong Durable Object.
+export interface Env extends LimiterEnv {
   ENVIRONMENT?: string;
   // Postgres qua Hyperdrive (ADR-0001). `.connectionString` để mở kết nối pg.
   HYPERDRIVE: Hyperdrive;

@@ -30,6 +30,51 @@ export const DEFAULT_LIMITER_CONFIG: RateLimiterConfig = {
   cooldownMs: 60_000,
 };
 
+// U12 — Ngưỡng limiter TIÊM TỪ ENV (tinh chỉnh theo môi trường, không hardcode trong
+// Durable Object). Các biến env Workers là chuỗi; trường không hợp lệ (không phải số
+// dương) → về mặc định trường đó (fail-safe, không tắt limiter vì cấu hình sai).
+export interface LimiterEnv {
+  LIMITER_CAPACITY?: string;
+  LIMITER_REFILL_PER_SEC?: string;
+  LIMITER_FAILURE_THRESHOLD?: string;
+  LIMITER_COOLDOWN_MS?: string;
+}
+
+function positiveOr(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return raw !== undefined && raw !== "" && Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+export function resolveLimiterConfig(env: LimiterEnv): RateLimiterConfig {
+  return {
+    capacity: positiveOr(env.LIMITER_CAPACITY, DEFAULT_LIMITER_CONFIG.capacity),
+    refillPerSec: positiveOr(env.LIMITER_REFILL_PER_SEC, DEFAULT_LIMITER_CONFIG.refillPerSec),
+    failureThreshold: positiveOr(
+      env.LIMITER_FAILURE_THRESHOLD,
+      DEFAULT_LIMITER_CONFIG.failureThreshold,
+    ),
+    cooldownMs: positiveOr(env.LIMITER_COOLDOWN_MS, DEFAULT_LIMITER_CONFIG.cooldownMs),
+  };
+}
+
+// U12 — Sự kiện QUAN SÁT khi limiter chặn một lời gọi (rate_limited/breaker_open).
+// CHỈ metadata vận hành (không token/secret — security.md). Durable Object phát ra
+// qua log có cấu trúc; builder thuần để test được offline.
+export interface LimiterEvent {
+  type: "limiter_blocked";
+  reason: "rate_limited" | "breaker_open";
+  key: string;
+  at: number;
+}
+
+export function limiterEvent(
+  reason: "rate_limited" | "breaker_open",
+  key: string,
+  nowMs: number,
+): LimiterEvent {
+  return { type: "limiter_blocked", reason, key, at: nowMs };
+}
+
 export function initialState(cfg: RateLimiterConfig, nowMs: number): RateLimiterState {
   return {
     tokens: cfg.capacity,

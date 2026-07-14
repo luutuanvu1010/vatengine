@@ -8,7 +8,7 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 
 > **Cập nhật: 2026-07-14 · U10 xong (commit đi kèm thay đổi này) · nhánh `feat/cloudflare-stack-u0`.**
 >
-> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · `U10 ✅` · `U11 ✅` · **`U12 ⬜ ← KẾ TIẾP`**
+> `U0 ✅` · `U1 ✅` · `U2 ✅` · `U3 ✅` · `U4 ✅` · `U5 ✅` · `U6 ✅` · `U7 ✅` · `U8 ✅` · `U9 ✅` · `U10 ✅` · `U11 ✅` · **`U12 ✅`**
 >
 > **Đã xong — GDT Adapter tầng đọc hoàn chỉnh (`packages/gdt-client`):** U0 khung monorepo/CI; U1 captcha + authenticate; U2 query purchase/sold + phân trang `state` + gộp sco + khử trùng; U3 detail dòng hàng + thuế suất. **Bốn nhóm endpoint (captcha, authenticate, query, detail) đã KIỂM CHỨNG THẬT** (probe live, ADR-0001 Amendment #3–#6); egress **T0 thuần Cloudflare** hoạt động (relay VN/T1 **TREO**).
 >
@@ -213,12 +213,15 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [x] **Cách ly tenant + RBAC + audit:** `buildWhere` lọc `tenant_id` tường minh (lớp 1) + `withTenant`/RLS (lớp 2); test A **không** convert/tải được dữ liệu B (→ 404); RBAC `ke_toan` → **403** (như export); audit `hanh_dong='convert'`, `doi_tuong=<profile>`, không log `raw_json`/token.
 - [x] **Read-only:** 0 bảng mới, 0 gọi GDT (không import `@vat/gdt-client`/`fetch`), không đụng adapter/401/captcha/mật khẩu thô; không gán mã tài khoản (P12 tách). Coverage `@vat/export` 98.77% (≥80%); `make lint` sạch.
 
-### ⬜ U12 — Bảo mật: mã hóa bí mật, audit log, rate limit client · review: `security-reviewer`
+### ✅ U12 — Bảo mật: mã hóa bí mật, audit log, rate limit client · `@vat/crypto` + `@vat/db` + `apps/sync-worker` · *ĐẠT (`make lint && make test` xanh, coverage `@vat/crypto` 100% / `@vat/db` 100% dòng / `apps/sync-worker` 98.8%)*
 
-- [ ] Test mã hóa/giải mã bí mật (envelope); bí mật qua Workers Secrets/Secrets Store.
-- [ ] **Không** lưu mật khẩu thuế thô; chỉ token ngắn hạn đã mã hóa.
-- [ ] Audit log append-only cho hành động nhạy cảm.
-- [ ] Chặn vượt ngưỡng rate limit phía client.
+> **Đã xong — U12:** `@vat/crypto` mới (envelope encryption `sealSecret`/`openSecret` AES-256-GCM — KEK bọc DEK ngẫu nhiên mỗi bản ghi, IV 96-bit ngẫu nhiên, chuỗi tự mô tả `v1$aesgcm$…` mở đường rotation; `maskSensitive` che token/password/connection-string/`raw_json` đệ quy). Seam `@vat/db` `storeToken`/`readToken` mã hóa `tai_khoan_thue.token_hien_tai` tại nghỉ (tenant-scoped `withTenant`, test fixture chứng minh: đọc lại đúng token, cột DB không phải plaintext, cách ly tenant). `audit_log` **bất biến** qua trigger migration `0002` (chặn UPDATE/DELETE kể cả owner/superuser — kiểm dưới role PGlite). `recorder` mask `chi_tiet` trước khi ghi. `TenantLimiter` ngưỡng **tiêm từ env** (`resolveLimiterConfig`, fail-safe khi cấu hình sai) + log quan sát khi chặn (`limiterEvent`). Quyết định (chủ dự án 2026-07-14): #1 **seam + fixture** (đường GHI token runtime = đơn vị sau) · #2 **1 KEK + version-tag** (rotation sau) · #3 **counter/log đã mask** (Analytics Engine = wiring deploy). Xem `docs/plans/U12-plan.md`.
+
+- [x] Test mã hóa/giải mã bí mật (envelope): round-trip, ciphertext≠plaintext, không tất định (IV/DEK ngẫu nhiên), KEK sai → ném lỗi, chuỗi hỏng → thất bại có kiểm soát. Bí mật (KEK) qua **Workers Secret** — `wrangler secret put SECRET_KEK` (không hard-code/commit).
+- [x] **Không** lưu mật khẩu thuế thô; token lưu dạng **sealed** (`storeToken`), điểm đọc chuyển sang `readToken` cùng đường GHI token (đơn vị sau — quyết định #1).
+- [x] Audit log **append-only**: trigger `audit_log_immutable` chặn UPDATE/DELETE độc lập tên role app (chặn cả owner — như FORCE RLS); `chi_tiet` masked. **CHƯA KIỂM CHỨNG trên DB thật:** grant `SELECT, INSERT` cho role app khi provision.
+- [x] **Chặn vượt ngưỡng** rate limit client: test tường minh vượt `capacity` (từ env) → `rate_limited`; breaker mở sau `failureThreshold` lỗi → `breaker_open` (kế thừa U9 + đường config từ env).
+- [x] **Review chéo (2026-07-14): `security-reviewer` — không Critical/High, không rò rỉ chéo tenant.** Hai phát hiện đã sửa (TDD): (a) **Medium** — `audit_log` chưa chặn `TRUNCATE` (trigger row-level không bắt lệnh statement-level) → thêm trigger `BEFORE TRUNCATE FOR EACH STATEMENT` + `REVOKE TRUNCATE` (migration `0002`, test TRUNCATE→ném); (b) **Low** — `maskSensitive` bỏ sót JWT thô nhúng trong chuỗi tự do dưới khóa vô hại → thêm pattern JWT vào `maskString` (test). Đồng thời áp `maskSensitive` cho `chi_tiet` route `/exports` + `/exports/convert` (`apps/api`) — bộ lọc `nbmst` là chuỗi tự do có thể mang giá trị nhạy cảm (test JWT-trong-nbmst).
 
 ---
 

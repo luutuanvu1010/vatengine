@@ -2,6 +2,12 @@
 // chết. MỌI truy cập tenant-scoped qua withTenant (RLS, lớp phòng thủ 2) + lọc
 // tường minh tenant_id (multi-tenant.md). KHÔNG lưu mật khẩu/không log token
 // (security.md). loadAccountToken chỉ đọc trạng thái token (đủ để pre-flight).
+//
+// U12 — chi_tiet audit đi qua maskSensitive trước khi ghi (che credential nếu lỡ lọt
+// vào chuỗi lỗi). Token tại nghỉ: seam mã hóa `@vat/db` storeToken/readToken SẴN SÀNG;
+// điểm đọc này sẽ chuyển sang readToken CÙNG với đường GHI token (login→lưu mã hóa),
+// tách đơn vị sau (quyết định #1: U12 = seam + fixture, KHÔNG wiring GHI runtime).
+import { maskSensitive } from "@vat/crypto";
 import { auditLog, lanDongBo, taiKhoanThue, withTenant } from "@vat/db";
 import { and, eq } from "drizzle-orm";
 import { parseDdmmyyyy } from "./schedule";
@@ -54,7 +60,9 @@ export function dbRecorder(db: AnyDb): JobRecorder {
           tenantId: msg.tenantId,
           hanhDong: AUDIT_HANH_DONG_REAUTH,
           doiTuong: msg.taikhoanId,
-          chiTiet: { reason, period: msg.period, phase: "preflight" },
+          // U12: mask chi_tiet trước khi ghi (security.md) — reason có thể chứa
+          // chuỗi lỗi kèm credential.
+          chiTiet: maskSensitive({ reason, period: msg.period, phase: "preflight" }),
         });
       });
     },
@@ -72,7 +80,7 @@ export function dbRecorder(db: AnyDb): JobRecorder {
           tenantId: msg.tenantId,
           hanhDong: AUDIT_HANH_DONG_REAUTH,
           doiTuong: msg.taikhoanId,
-          chiTiet: { reason, period: msg.period, phase: "runtime" },
+          chiTiet: maskSensitive({ reason, period: msg.period, phase: "runtime" }),
         });
       });
     },
@@ -83,7 +91,7 @@ export function dbRecorder(db: AnyDb): JobRecorder {
           tenantId: msg.tenantId,
           hanhDong: AUDIT_HANH_DONG_BREAKER_SKIP,
           doiTuong: msg.taikhoanId,
-          chiTiet: { period: msg.period },
+          chiTiet: maskSensitive({ period: msg.period }),
         });
       });
     },

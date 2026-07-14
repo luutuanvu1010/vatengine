@@ -16,7 +16,9 @@ export const taiKhoanThue = pgTable(
     loai: text("loai").notNull().default("chinh"), // 'chinh' | 'con'
     // Tham chiếu tới bí mật đã mã hóa (KMS/Vault) — KHÔNG phải mật khẩu thô.
     secretRef: text("secret_ref"),
-    // Token JWT GDT — mã hóa tại nghỉ, vòng đời ngắn (envelope encryption thực thi ở U12).
+    // Token JWT GDT — mã hóa tại nghỉ, vòng đời ngắn. U12: envelope encryption qua
+    // seam `tokenVault` (storeToken/readToken, @vat/crypto). Giá trị lưu là chuỗi
+    // sealed `v1$aesgcm$…`, KHÔNG phải token thô.
     tokenHienTai: text("token_hien_tai"),
     tokenHetHan: timestamp("token_het_han", { withTimezone: true }),
     ngayTao: timestamp("ngay_tao", { withTimezone: true }).notNull().defaultNow(),

@@ -4,7 +4,8 @@ import { tenants } from "./tenants";
 
 // Nhật ký audit bất biến (chỉ append) cho hành động nhạy cảm: đăng nhập thuế, đồng
 // bộ, xuất dữ liệu, đổi cấu hình (security.md). Khung tối thiểu ở U4; ghi audit
-// runtime + ràng buộc không-ghi-đè đầy đủ là U12.
+// runtime ở U7/U9. U12: ràng buộc BẤT BIẾN thực thi bằng trigger append-only
+// (migration 0002 — chặn UPDATE/DELETE kể cả owner) + masking chi_tiet (@vat/crypto).
 export const auditLog = pgTable(
   "audit_log",
   {

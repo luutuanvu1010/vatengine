@@ -11,6 +11,7 @@
     "test:contract": "vitest run --dir test/contract --passWithNoTests"
   },
   "dependencies": {
+    "@vat/crypto": "*",
     "@vat/db": "*",
     "@vat/gdt-client": "*",
     "@vat/sync": "*",
