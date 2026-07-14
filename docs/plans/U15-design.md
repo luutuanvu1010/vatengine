@@ -1,14 +1,16 @@
-# U14 — Thiết kế: Đường login GDT + ghi/đọc token (API-only)
+# U15 — Thiết kế: Đường login GDT + ghi/đọc token (backend, API-only)
 
-> **Trạng thái: THIẾT KẾ ĐÃ DUYỆT** (brainstorm 2026-07-14, chủ dự án chốt 4 quyết định lớn + RBAC). Bước tiếp: viết plan hiện thực (U14-plan) rồi code theo TDD.
+> **Trạng thái: THIẾT KẾ ĐÃ DUYỆT** (brainstorm 2026-07-14, chủ dự án chốt 4 quyết định lớn + RBAC). Bước tiếp: viết plan hiện thực (U15-plan) rồi code theo TDD.
 >
-> **Nguồn gốc:** nối tiếp nghiên cứu [EXP-vong-doi-token-gdt.md](EXP-vong-doi-token-gdt.md) (mục 2 nêu 4 câu hỏi chờ chốt — nay đã chốt) và bàn giao [HANDOFF-phien-2026-07-14.md](HANDOFF-phien-2026-07-14.md) mục 4A (workstream B). Thứ tự chiến lược: **B (U14) → A (deploy) → C (frontend)**.
+> **Vị trí & thứ tự chạy (chốt 2026-07-14):** U15 là **tiền đề backend của U14 (Frontend, gồm màn Login)** — chạy TRƯỚC U14 dù số lớn hơn (số = thứ tự giao việc, không phải thứ tự chạy). Thứ tự thực thi: **U13 (Giám sát) → U15 (đơn vị này) → A (deploy) → U14 (Frontend tiêu thụ API của U15)**. Chủ dự án chọn "Cách 1": backend login là đơn vị RIÊNG, không gộp vào cụm frontend (giữ quyết định #1 "API-only, không UI").
 >
-> **Phối hợp U13 (phiên song song):** U13 dựng 2 vòng giám sát (API GDT đổi; egress biên Cloudflare bị chặn). U14 có 1 contract test probe `authenticate` — **tái dùng** hạ tầng contract/probe của U13 nếu đã có, KHÔNG dựng song song (tránh nguồn chân lý thứ hai). Hòa giải ở tầng plan nếu U13 đổi cấu trúc probe.
+> **Nguồn gốc:** nối tiếp nghiên cứu [EXP-vong-doi-token-gdt.md](EXP-vong-doi-token-gdt.md) (mục 2 nêu 4 câu hỏi chờ chốt — nay đã chốt) và bàn giao [HANDOFF-phien-2026-07-14.md](HANDOFF-phien-2026-07-14.md) mục 4A.
+>
+> **Phối hợp U13 (phiên song song):** U13 dựng 2 vòng giám sát (API GDT đổi; egress biên Cloudflare bị chặn — xem [EXP-giam-sat-rui-ro.md](EXP-giam-sat-rui-ro.md)). U15 có 1 contract test probe `authenticate` — **tái dùng** hạ tầng contract/probe có sẵn (`make test-contract`, `gdt-contract-schema.json`), KHÔNG dựng song song. Lưu ý: probe `authenticate` cần captcha người thật nhập nên là **kiểm chứng thủ công MỘT LẦN**, KHÔNG chạy nền trong vòng lịch của U13 (endpoint captcha/invoices công khai thì chạy nền được, `authenticate` thì không).
 
 ## 1. Vấn đề & phạm vi
 
-U12 đã dựng primitive mã hóa (`sealSecret`/`openSecret`) + seam vault (`storeToken`/`readToken`) nhưng **chưa nối vào luồng chạy thật** → không tenant nào có token → hệ thống không tự kéo được hóa đơn mới từ GDT. U14 nối đầu-cuối, **chỉ tầng API (không UI — UI để workstream C)**.
+U12 đã dựng primitive mã hóa (`sealSecret`/`openSecret`) + seam vault (`storeToken`/`readToken`) nhưng **chưa nối vào luồng chạy thật** → không tenant nào có token → hệ thống không tự kéo được hóa đơn mới từ GDT. U15 nối đầu-cuối, **chỉ tầng API (không UI — UI ở U14-Frontend)**.
 
 **Trong phạm vi:** đăng ký tài khoản thuế, ủy quyền tối thiểu, proxy captcha, đường GHI token (login→storeToken), sửa đường ĐỌC (readToken), secret `TOKEN_KEK`, audit.
 
@@ -45,7 +47,7 @@ Luồng stateless: `GET captcha` → nhận `{key, content}` → gõ captcha →
 
 ## 5. Sửa đường ĐỌC (khử mâu thuẫn ngầm)
 
-`apps/sync-worker/src/recorder.ts` (đọc token, ~line 31–35): thay dùng thẳng `tokenHienTai` bằng `readToken(db, tenantId, id, env.TOKEN_KEK)` (giải mã). Đây là bug ngầm EXP-doc mục 4 cảnh báo — nối GHI mà quên sửa ĐỌC ⇒ sync gửi `v1$aesgcm$…` cho GDT. Làm CÙNG U14 để schema ↔ consumer nhất quán. Giữ nguyên nhánh 401/hết hạn hiện có.
+`apps/sync-worker/src/recorder.ts` (đọc token, ~line 31–35): thay dùng thẳng `tokenHienTai` bằng `readToken(db, tenantId, id, env.TOKEN_KEK)` (giải mã). Đây là bug ngầm EXP-doc mục 4 cảnh báo — nối GHI mà quên sửa ĐỌC ⇒ sync gửi `v1$aesgcm$…` cho GDT. Làm CÙNG U15 để schema ↔ consumer nhất quán. Giữ nguyên nhánh 401/hết hạn hiện có.
 
 ## 6. Consent + audit
 
