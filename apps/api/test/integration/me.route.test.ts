@@ -36,6 +36,8 @@ describe("GET /me — hồ sơ tenant + vai", () => {
       ten: "Công ty TNHH Tour Đảo",
       mst: "4201568932",
       goiDichVu: "Miễn phí",
+      banQuyen: "Mặc định",
+      ghiChu: null,
       role: "ke_toan_truong",
     });
   });
