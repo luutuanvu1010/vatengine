@@ -236,30 +236,34 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
   );
 }
 
-function TokenPanel({ account }: { account: TaxAccountView }) {
+// Trạng thái ĐÃ KẾT NỐI (token còn hạn): báo thành công rõ ràng + CTA Đồng bộ ngay.
+// KHÔNG ép lại form captcha (đỡ gây rối); muốn lấy phiên mới thì bấm "Kết nối lại".
+function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: () => void }) {
+  const [reauth, setReauth] = useState(false);
   const sync = useMutation({ mutationFn: () => api.syncTaxAccount(account.id) });
-  if (!account.tokenHetHan) return null;
-  const expired = new Date(account.tokenHetHan).getTime() <= Date.now();
   return (
-    <div style={{ display: "grid", gap: "var(--sp-2)" }}>
-      <Alert tone={expired ? "warning" : "success"}>
-        {expired ? (
-          <>
-            Token kết nối đã hết hạn ({formatDateVN(account.tokenHetHan, true)}). Đăng nhập lại để
-            đồng bộ.
-          </>
-        ) : (
-          <>
-            Token kết nối còn hiệu lực · hết hạn lúc {formatDateVN(account.tokenHetHan, true)} (giờ
-            VN).
-          </>
-        )}
-      </Alert>
-      {!expired && (
-        <div style={{ display: "grid", gap: "var(--sp-2)", justifyItems: "start" }}>
-          <Button onClick={() => sync.mutate()} disabled={sync.isPending}>
-            {sync.isPending ? "Đang gửi yêu cầu…" : "Đồng bộ ngay"}
-          </Button>
+    <>
+      <Card>
+        <div style={{ display: "grid", gap: "var(--sp-3)" }}>
+          <Alert tone="success">
+            <strong>Đã kết nối mã số thuế {maskMst(account.username)} thành công.</strong> VATEngine
+            đang giữ phiên đăng nhập Tổng cục Thuế cho MST này.
+          </Alert>
+          <p style={{ color: "var(--text-secondary)", margin: 0 }}>
+            Bấm <strong>Đồng bộ ngay</strong> để kéo hóa đơn mua vào &amp; bán ra mới nhất về.
+          </p>
+          <div
+            style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", flexWrap: "wrap" }}
+          >
+            <Button onClick={() => sync.mutate()} disabled={sync.isPending}>
+              {sync.isPending ? "Đang gửi yêu cầu…" : "Đồng bộ ngay"}
+            </Button>
+            {account.tokenHetHan && (
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}>
+                Phiên còn hiệu lực đến {formatDateVN(account.tokenHetHan, true)} (giờ VN)
+              </span>
+            )}
+          </div>
           {sync.isSuccess && (
             <Alert tone="info">
               Đã gửi yêu cầu đồng bộ kỳ {sync.data.period}. Hóa đơn sẽ xuất hiện ở{" "}
@@ -269,13 +273,38 @@ function TokenPanel({ account }: { account: TaxAccountView }) {
           {sync.isError && (
             <Alert tone="danger">
               {sync.error instanceof ApiError && sync.error.status === 409
-                ? "Token đã hết hạn — vui lòng đăng nhập lại."
+                ? "Phiên đã hết hạn — vui lòng kết nối lại."
                 : "Không gửi được yêu cầu đồng bộ. Thử lại sau ít phút."}
             </Alert>
           )}
+          <button
+            type="button"
+            onClick={() => setReauth((v) => !v)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              padding: 0,
+              fontSize: "var(--fs-sm)",
+              textDecoration: "underline",
+              justifySelf: "start",
+            }}
+          >
+            {reauth ? "Ẩn kết nối lại" : "Kết nối lại (lấy phiên mới)"}
+          </button>
         </div>
+      </Card>
+      {reauth && (
+        <LoginStep
+          account={account}
+          onDone={() => {
+            setReauth(false);
+            onDone();
+          }}
+        />
       )}
-    </div>
+    </>
   );
 }
 
@@ -285,7 +314,13 @@ export function TaxAccountsPage() {
   const refresh = () => qc.invalidateQueries({ queryKey: ["tax-accounts"] });
 
   const account = list.data?.[0] ?? null;
-  const step = !account ? 0 : !account.uyQuyenLuc ? 1 : 2;
+  // ĐÃ KẾT NỐI = đã ủy quyền + có token CÒN HẠN. Khi đó KHÔNG hiện lại form captcha.
+  const connected = !!(
+    account?.uyQuyenLuc &&
+    account.tokenHetHan &&
+    new Date(account.tokenHetHan).getTime() > Date.now()
+  );
+  const step = !account ? 0 : !account.uyQuyenLuc ? 1 : connected ? 4 : 2;
 
   return (
     <div style={{ display: "grid", gap: "var(--sp-4)" }}>
@@ -301,10 +336,17 @@ export function TaxAccountsPage() {
         <RegisterForm onDone={refresh} />
       ) : !account.uyQuyenLuc ? (
         <AuthorizeStep account={account} onDone={refresh} />
+      ) : connected ? (
+        <ConnectedPanel account={account} onDone={refresh} />
       ) : (
         <>
+          {account.tokenHetHan && (
+            <Alert tone="warning">
+              Phiên đăng nhập Tổng cục Thuế đã hết hạn ({formatDateVN(account.tokenHetHan, true)}).
+              Đăng nhập lại để tiếp tục đồng bộ.
+            </Alert>
+          )}
           <LoginStep account={account} onDone={refresh} />
-          <TokenPanel account={account} />
         </>
       )}
     </div>

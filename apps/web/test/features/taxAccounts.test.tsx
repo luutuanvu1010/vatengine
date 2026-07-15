@@ -19,6 +19,7 @@ function mock(list: TaxAccountView[]) {
     if (url.includes("/authorize")) return json(200, { ok: true });
     if (url.includes("/login"))
       return json(200, { ok: true, tokenHetHan: "2026-07-15T10:30:00.000Z" });
+    if (url.includes("/sync")) return json(202, { enqueued: 2, period: "2026-07" });
     if (method === "POST" && url.includes("/tax-accounts")) return json(201, { id: "a1" });
     return json(200, list); // GET list
   });
@@ -29,9 +30,11 @@ const authorized: TaxAccountView = {
   username: "0311772540",
   loai: "chinh",
   uyQuyenLuc: "2026-07-01T00:00:00.000Z",
-  tokenHetHan: "2999-01-01T00:00:00.000Z",
+  tokenHetHan: "2999-01-01T00:00:00.000Z", // token còn hạn → ĐÃ KẾT NỐI
   ngayTao: "2026-07-01T00:00:00.000Z",
 };
+// Đã ủy quyền nhưng token HẾT HẠN → hiện lại form captcha để đăng nhập lại.
+const expired: TaxAccountView = { ...authorized, tokenHetHan: "2020-01-01T00:00:00.000Z" };
 
 describe("S5 — kết nối tài khoản thuế", () => {
   beforeEach(() => setToken("t"));
@@ -59,21 +62,33 @@ describe("S5 — kết nối tài khoản thuế", () => {
     await waitFor(() => expect(calls.some((c) => c.url.includes("/authorize"))).toBe(true));
   });
 
-  it("đã ủy quyền → captcha (là <img> an toàn) + panel token còn hiệu lực", async () => {
+  it("đã kết nối (token còn hạn) → báo thành công + Đồng bộ ngay, KHÔNG ép captcha", async () => {
     mock([authorized]);
+    renderWithProviders(<TaxAccountsPage />);
+    expect(await screen.findByText(/Đã kết nối mã số thuế .* thành công/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Đồng bộ ngay" })).toBeInTheDocument();
+    // KHÔNG hiện form captcha khi đã kết nối (đỡ gây rối UX).
+    expect(screen.queryByAltText(/captcha/i)).toBeNull();
+  });
+
+  it("đã kết nối → Đồng bộ ngay gọi POST /sync + báo đã gửi", async () => {
+    mock([authorized]);
+    renderWithProviders(<TaxAccountsPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Đồng bộ ngay" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "POST" && c.url.includes("/sync"))).toBe(true),
+    );
+    expect(await screen.findByText(/Đã gửi yêu cầu đồng bộ/)).toBeInTheDocument();
+  });
+
+  it("token hết hạn → hiện captcha (<img> an toàn); đăng nhập GDT gửi password + captcha", async () => {
+    mock([expired]);
     renderWithProviders(<TaxAccountsPage />);
     const img = await screen.findByAltText(/captcha/i);
     // BẢO MẬT: captcha render qua <img> data-URI, KHÔNG chèn SVG thô vào DOM.
     expect(img.tagName).toBe("IMG");
     expect(img.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
     expect(document.getElementById("cap")).toBeNull();
-    expect(screen.getByText(/Token kết nối còn hiệu lực/)).toBeInTheDocument();
-  });
-
-  it("đăng nhập GDT gửi password + captcha", async () => {
-    mock([authorized]);
-    renderWithProviders(<TaxAccountsPage />);
-    await screen.findByAltText(/captcha/i);
     await userEvent.type(screen.getByLabelText("Mật khẩu thuế"), "matkhauthue");
     await userEvent.type(screen.getByLabelText("Mã captcha"), "7K9P2");
     await userEvent.click(screen.getByRole("button", { name: "Đăng nhập GDT" }));
