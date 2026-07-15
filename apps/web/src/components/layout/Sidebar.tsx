@@ -22,7 +22,18 @@ const MAIN: NavItem[] = [
 
 const SYSTEM: NavItem[] = [{ to: "/settings", label: vi.navSettings }];
 
-function NavGroup({ title, items, role }: { title: string; items: NavItem[]; role: Role }) {
+function NavGroup({
+  title,
+  items,
+  role,
+  onNavigate,
+}: {
+  title: string;
+  items: NavItem[];
+  role: Role;
+  /** Gọi khi bấm một mục — dùng để đóng drawer trên mobile. */
+  onNavigate?: () => void;
+}) {
   const shown = items.filter((it) => !it.visible || it.visible(role));
   if (shown.length === 0) return null;
   return (
@@ -44,6 +55,7 @@ function NavGroup({ title, items, role }: { title: string; items: NavItem[]; rol
           key={it.to}
           to={it.to}
           end={it.end}
+          onClick={onNavigate}
           style={({ isActive }) => ({
             padding: "var(--sp-3) var(--sp-3)",
             borderRadius: "var(--radius-md)",
@@ -61,9 +73,20 @@ function NavGroup({ title, items, role }: { title: string; items: NavItem[]; rol
   );
 }
 
-export function Sidebar({ role }: { role: Role }) {
+export function Sidebar({
+  role,
+  onNavigate,
+  style,
+}: {
+  role: Role;
+  /** Đóng drawer sau khi điều hướng (mobile). Bỏ trống ở chế độ sidebar tĩnh (desktop). */
+  onNavigate?: () => void;
+  /** Ghi đè định vị cho chế độ drawer (fixed + translateX). Desktop giữ mặc định. */
+  style?: React.CSSProperties;
+}) {
   return (
     <nav
+      id="app-sidebar"
       aria-label="Điều hướng chính"
       style={{
         width: 248,
@@ -75,13 +98,14 @@ export function Sidebar({ role }: { role: Role }) {
         gap: "var(--sp-2)",
         alignContent: "start",
         minHeight: "100vh",
+        ...style,
       }}
     >
       <div style={{ padding: "var(--sp-2) var(--sp-3) var(--sp-3)" }}>
         <Brand />
       </div>
-      <NavGroup title="Chính" items={MAIN} role={role} />
-      <NavGroup title="Hệ thống" items={SYSTEM} role={role} />
+      <NavGroup title="Chính" items={MAIN} role={role} onNavigate={onNavigate} />
+      <NavGroup title="Hệ thống" items={SYSTEM} role={role} onNavigate={onNavigate} />
     </nav>
   );
 }

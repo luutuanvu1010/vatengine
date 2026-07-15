@@ -6,7 +6,28 @@ import { Brand } from "../../components/Brand";
 import { Alert, Button, TextField } from "../../components/ui/primitives";
 import { ApiError } from "../../lib/apiClient";
 import { vi } from "../../lib/i18n/vi";
+import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
 import { useAuth } from "./auth-context";
+
+// 4 fact nổi bật hiển thị ở panel phải màn đăng nhập (nội dung do chủ dự án chốt).
+const LOGIN_FACTS: ReadonlyArray<{ title: string; desc: string }> = [
+  {
+    title: "Dữ liệu gốc từ Tổng cục Thuế",
+    desc: "Hóa đơn mua vào & bán ra truy xuất trực tiếp từ Hệ thống HĐĐT của Tổng cục Thuế bằng chính tài khoản MST của bạn — đầy đủ dữ liệu.",
+  },
+  {
+    title: "Đủ hai chiều, đủ loại hóa đơn",
+    desc: "Đồng bộ cả HĐĐT thường lẫn hóa đơn máy tính tiền, cả mua vào và bán ra; tự khử trùng lặp và cập nhật trạng thái hủy/thay thế.",
+  },
+  {
+    title: "Bảo mật & đúng pháp lý",
+    desc: "Không lưu mật khẩu thuế, captcha do bạn tự nhập, dữ liệu mỗi doanh nghiệp cách ly tuyệt đối; tuân thủ NĐ 13/2023, NĐ 123/2020 & TT 78/2021.",
+  },
+  {
+    title: "Sẵn sàng đối chiếu & kê khai",
+    desc: "Tra cứu theo kỳ, phát hiện lệch thuế và kết xuất Excel/CSV chỉ trong vài cú nhấp — phục vụ đối chiếu, kê khai và tích hợp kế toán.",
+  },
+];
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
@@ -19,6 +40,7 @@ function errorMessage(err: unknown): string {
 
 export function LoginPage() {
   const { login } = useAuth();
+  const isMobile = useMediaQuery(MOBILE_QUERY);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -43,10 +65,17 @@ export function LoginPage() {
       style={{
         minHeight: "100vh",
         display: "grid",
-        gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
+        // Mobile: 1 cột (chỉ form). Desktop: form + panel marketing.
+        gridTemplateColumns: isMobile ? "1fr" : "minmax(0,1fr) minmax(0,1fr)",
       }}
     >
-      <div style={{ display: "grid", placeItems: "center", padding: "var(--sp-8)" }}>
+      <div
+        style={{
+          display: "grid",
+          placeItems: "center",
+          padding: isMobile ? "var(--sp-6)" : "var(--sp-8)",
+        }}
+      >
         <form
           onSubmit={onSubmit}
           style={{ width: "min(360px, 100%)", display: "grid", gap: "var(--sp-4)" }}
@@ -132,13 +161,15 @@ export function LoginPage() {
       </div>
 
       <aside
-        aria-hidden="true"
+        // Panel marketing chỉ hiện trên desktop — mobile tập trung vào form (thông điệp
+        // thử nghiệm đã có ở Alert trong form).
+        hidden={isMobile}
         style={{
+          display: isMobile ? "none" : "grid",
           background: "var(--brand-600)",
           color: "#fff",
-          display: "grid",
           alignContent: "center",
-          gap: "var(--sp-5)",
+          gap: "var(--sp-6)",
           padding: "var(--sp-12)",
         }}
       >
@@ -150,20 +181,68 @@ export function LoginPage() {
             opacity: 0.85,
           }}
         >
-          Kết nối trực tiếp Tổng cục Thuế
+          Vì sao chọn VATEngine
         </div>
-        <div
+        <ul
           style={{
-            fontSize: "var(--fs-3xl)",
-            fontWeight: "var(--fw-extrabold)",
-            lineHeight: "var(--lh-heading)",
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            display: "grid",
+            gap: "var(--sp-6)",
           }}
         >
-          Tra cứu, kết xuất & đối chiếu hóa đơn — chính xác đến từng đồng.
-        </div>
-        <p style={{ opacity: 0.9, margin: 0 }}>
-          Kéo hóa đơn mua vào & bán ra về một nơi bằng chính tài khoản MST của doanh nghiệp.
-        </p>
+          {LOGIN_FACTS.map((fact, i) => (
+            <li
+              key={fact.title}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto 1fr",
+                gap: "var(--sp-3)",
+                alignItems: "start",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 28,
+                  height: 28,
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "var(--radius-full)",
+                  background: "rgba(255,255,255,0.16)",
+                  fontWeight: "var(--fw-bold)",
+                  fontSize: "var(--fs-sm)",
+                }}
+              >
+                {i + 1}
+              </span>
+              <div style={{ display: "grid", gap: "var(--sp-1)" }}>
+                <div
+                  style={{
+                    fontSize: "var(--fs-lg)",
+                    fontWeight: "var(--fw-extrabold)",
+                    lineHeight: "var(--lh-heading)",
+                  }}
+                >
+                  {fact.title}
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    opacity: 0.9,
+                    fontSize: "var(--fs-sm)",
+                    lineHeight: "var(--lh-body)",
+                  }}
+                >
+                  {fact.desc}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
       </aside>
     </div>
   );
