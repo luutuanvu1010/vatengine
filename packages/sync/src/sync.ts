@@ -1,6 +1,13 @@
-import { hoaDon, lanDongBo, withTenant } from "@vat/db";
-import { GdtError, queryInvoices } from "@vat/gdt-client";
-import type { GdtTransport, InvoiceDirection, InvoiceRow, RetryOptions } from "@vat/gdt-client";
+import { TRANG_THAI_LAN_DONG_BO, hoaDon, lanDongBo, withTenant } from "@vat/db";
+import { GdtError, queryInvoices, toDetailRef } from "@vat/gdt-client";
+import type {
+  GdtTransport,
+  InvoiceDetailRef,
+  InvoiceDirection,
+  InvoiceLine,
+  InvoiceRow,
+  RetryOptions,
+} from "@vat/gdt-client";
 // Dịch vụ đồng bộ idempotent (U5). Gọi adapter lấy hóa đơn MỘT chiều trong MỘT
 // khoảng ngày → upsert vào `hoa_don` theo khóa tự nhiên 6 trường (trong `withTenant`
 // để RLS chốt tenant) → ghi MỘT bản ghi `lan_dong_bo`. Hàm thư viện, PHI TRẠNG THÁI:
@@ -10,6 +17,7 @@ import type { GdtTransport, InvoiceDirection, InvoiceRow, RetryOptions } from "@
 import { and, eq, inArray } from "drizzle-orm";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT, PgTransaction } from "drizzle-orm/pg-core";
+import { persistInvoiceLines } from "./detailLines";
 import { mapInvoiceRowToHoaDon } from "./mapInvoice";
 
 type NewHoaDon = typeof hoaDon.$inferInsert;
@@ -57,6 +65,17 @@ export interface SyncOptions<
   includeSco?: boolean;
   size?: number;
   retry?: RetryOptions;
+  /**
+   * Pha 2 (tùy chọn) — lấy dòng hàng chi tiết cho mỗi hóa đơn. Điểm INJECT: production
+   * truyền `adapterFetchDetail(transport, token, retry)` (getInvoiceDetail+mapDetailLines);
+   * test truyền bản giả offline. KHÔNG truyền = chỉ đồng bộ header (hành vi U5 gốc).
+   *
+   * LƯU Ý (fallback tạm được §1.1 cho phép): hiện lấy detail ĐỒNG BỘ trong pha 1, tuần
+   * tự (concurrency 1 — "không gọi song song dồn dập"), backoff do adapter. TODO chuyển
+   * sang 2 pha thật qua queue (message `kind:"detail"`) khi mở rộng tới 100k tenant —
+   * primitive `persistInvoiceLines` đã tách sẵn để migrate.
+   */
+  fetchDetail?: (ref: InvoiceDetailRef) => Promise<InvoiceLine[]>;
 }
 
 export interface SyncResult {
@@ -221,7 +240,7 @@ async function recordFailed<
         denNgay: meta.denNgay,
         soHdMoi: 0,
         soHdCapNhat: 0,
-        trangThai: "failed",
+        trangThai: TRANG_THAI_LAN_DONG_BO.THAT_BAI,
         thongDiepLoi: message,
         batDau: meta.batDau,
         ketThuc: new Date(),
@@ -235,11 +254,46 @@ async function recordFailed<
     lanDongBoId: id,
     soHdMoi: 0,
     soHdCapNhat: 0,
-    trangThai: "failed",
+    trangThai: TRANG_THAI_LAN_DONG_BO.THAT_BAI,
     thongDiepLoi: message,
     failureKind,
     changes: [],
   };
+}
+
+/**
+ * Pha 2 — resolve `hoadon_id` cho từng hóa đơn trong lô (sau upsert header) rồi lưu
+ * dòng hàng idempotent. Chạy TRONG transaction upsert (nguyên tử: lỗi giữa chừng →
+ * rollback cả header lẫn dòng). Detail đã được lấy TRƯỚC khi mở transaction (không
+ * giữ transaction mở trong lúc gọi mạng).
+ */
+async function persistLinesForBatch<
+  TQuery extends PgQueryResultHKT,
+  TFull extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+>(
+  tx: Tx<TQuery, TFull, TSchema>,
+  tenantId: string,
+  rows: InvoiceRow[],
+  linesByKey: Map<string, InvoiceLine[]>,
+): Promise<void> {
+  const shdons = [...new Set(rows.map((r) => String(r.shdon ?? "")))];
+  if (shdons.length === 0) return;
+  // Lọc TƯỜNG MINH theo tenant_id (multi-tenant.md) + thu hẹp theo shdon của lô.
+  const persisted = await tx
+    .select()
+    .from(hoaDon)
+    .where(and(eq(hoaDon.tenantId, tenantId), inArray(hoaDon.shdon, shdons)));
+  const idByKey = new Map(persisted.map((e) => [naturalKeyOf(e), e.id]));
+
+  const done = new Set<string>();
+  for (const row of rows) {
+    const key = naturalKeyOf(mapInvoiceRowToHoaDon(row, tenantId));
+    const hoaDonId = idByKey.get(key);
+    if (!hoaDonId || done.has(hoaDonId)) continue; // không thấy (bất thường) / đã xử lý
+    done.add(hoaDonId);
+    await persistInvoiceLines(tx, tenantId, hoaDonId, linesByKey.get(key) ?? []);
+  }
 }
 
 export async function sync<
@@ -277,11 +331,36 @@ export async function sync<
     return recordFailed(db, tenantId, meta, errMsg(err), classifyFailure(err));
   }
 
-  // Bước 2 — upsert + ghi lịch sử NGUYÊN TỬ: mọi lỗi giữa chừng → rollback, không có
-  // số đếm mà thiếu dữ liệu, không có hóa đơn ghi dở.
+  // Bước 1b (tùy chọn) — lấy dòng hàng chi tiết TRƯỚC khi mở transaction ghi (không
+  // giữ transaction mở khi gọi mạng). Tuần tự (concurrency 1) — "không gọi song song
+  // dồn dập" (gdt-adapter.md). 401 → session_expired (token chết, không retry); 5xx/
+  // timeout → transient. KHÔNG log giá trị dòng hàng (security.md).
+  //
+  // GIỚI HẠN ĐÃ BIẾT (không tuyên bố sai — Nguyên tắc bằng chứng): trong fallback
+  // đồng bộ này, detail KHÔNG đi qua TenantLimiter theo TỪNG request. runJob (U9)
+  // chỉ tiêu 1 permit token-bucket cho cả job, nên rate-respect ở cấp JOB dựa vào:
+  // (1) tuần tự concurrency 1, (2) backoff của adapter khi lỗi. Rate-limit theo từng
+  // request detail là phần của kiến trúc queue 2 pha thật (mỗi message detail tự lấy
+  // permit) — đó là nội dung của TODO chuyển queue ở SyncOptions.fetchDetail.
+  let linesByKey: Map<string, InvoiceLine[]> | undefined;
+  if (opts.fetchDetail) {
+    linesByKey = new Map();
+    try {
+      for (const row of rows) {
+        const lines = await opts.fetchDetail(toDetailRef(row));
+        linesByKey.set(naturalKeyOf(mapInvoiceRowToHoaDon(row, tenantId)), lines);
+      }
+    } catch (err) {
+      return recordFailed(db, tenantId, meta, errMsg(err), classifyFailure(err));
+    }
+  }
+
+  // Bước 2 — upsert header + persist dòng hàng + ghi lịch sử NGUYÊN TỬ: mọi lỗi giữa
+  // chừng → rollback, không có số đếm mà thiếu dữ liệu, không có hóa đơn/dòng ghi dở.
   try {
     return await withTenant(db, tenantId, async (tx) => {
       const { soHdMoi, soHdCapNhat, changes } = await upsertBatch(tx, tenantId, rows);
+      if (linesByKey) await persistLinesForBatch(tx, tenantId, rows, linesByKey);
       const inserted = await tx
         .insert(lanDongBo)
         .values({
@@ -292,7 +371,7 @@ export async function sync<
           denNgay: meta.denNgay,
           soHdMoi,
           soHdCapNhat,
-          trangThai: "completed",
+          trangThai: TRANG_THAI_LAN_DONG_BO.HOAN_THANH,
           batDau: meta.batDau,
           ketThuc: new Date(),
         })
@@ -303,7 +382,7 @@ export async function sync<
         lanDongBoId: row.id,
         soHdMoi,
         soHdCapNhat,
-        trangThai: "completed" as const,
+        trangThai: TRANG_THAI_LAN_DONG_BO.HOAN_THANH,
         changes,
       };
     });

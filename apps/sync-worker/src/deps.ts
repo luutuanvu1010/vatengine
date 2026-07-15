@@ -3,7 +3,7 @@
 // KHÔNG test-cover (test tiêm fake/PGlite trực tiếp vào runJob/enumerate).
 import { tenants } from "@vat/db";
 import { createDirectCfTransport } from "@vat/gdt-client";
-import { sync } from "@vat/sync";
+import { adapterFetchDetail, sync } from "@vat/sync";
 import { eq } from "drizzle-orm";
 import { egressHealthClient } from "./egressHealth";
 import type { EgressProbeDeps } from "./egressProbe";
@@ -63,7 +63,12 @@ export function makeJobDeps(env: Env, db: AnyDb, msg: SyncJobMessage): RunJobDep
     now: () => Date.now(),
     loadAccount: (m) => loadAccountToken(db, m, env.TOKEN_KEK),
     limiter: tenantLimiterClient(env.TENANT_LIMITER, msg.tenantId),
-    sync: (o) => sync({ db, ...o }),
+    // Pha 2 (dòng hàng): tiêm fetchDetail lấy chi tiết qua adapter trên transport
+    // egress T0 (getInvoiceDetail+mapDetailLines). sync() gọi TUẦN TỰ (concurrency 1)
+    // — không dồn dập. GIỚI HẠN: job này đã tiêu 1 permit TenantLimiter ở runJob;
+    // detail trong fallback đồng bộ KHÔNG lấy permit theo từng request (rate-limit
+    // per-request là kiến trúc queue 2 pha — TODO, xem SyncOptions.fetchDetail).
+    sync: (o) => sync({ db, ...o, fetchDetail: adapterFetchDetail(o.transport, o.token, o.retry) }),
     transport,
     recorder: dbRecorder(db),
     syncParams: { includeSco: true },
