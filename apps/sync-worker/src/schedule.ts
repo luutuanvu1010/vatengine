@@ -1,37 +1,18 @@
 import { taiKhoanThue, withTenant } from "@vat/db";
-// U9 — Lịch đồng bộ nền: cửa sổ kỳ hiện tại (theo giờ VN) + liệt kê tài khoản đến
-// hạn + dựng message job. Chính sách "đến hạn" của U9 = CỬA SỔ TRƯỢT mặc định (kỳ
-// tháng hiện tại), KHÔNG bảng lịch riêng (quyết định U9). Chỉ chọn tài khoản có
-// token CÒN HẠN — job nền KHÔNG tự đăng nhập, KHÔNG captcha (quyết định A, Hiến pháp).
-import type { InvoiceDirection } from "@vat/gdt-client";
+// U9 — Lịch đồng bộ nền: liệt kê tài khoản đến hạn (token CÒN HẠN) + tiện ích ngày.
+// Kỳ/cửa sổ + dựng message = @vat/sync (nguồn dùng chung producer/consumer — cron
+// scheduled() + endpoint "Đồng bộ ngay"). Chỉ chọn tài khoản token còn hạn — job nền
+// KHÔNG tự đăng nhập, KHÔNG captcha (quyết định A, Hiến pháp).
 import { and, eq, gt } from "drizzle-orm";
-import type { AnyDb, SyncJobMessage } from "./types";
+import type { AnyDb } from "./types";
 
-// Giờ VN = UTC+7. Dịch mốc UTC sang "giờ tường" VN rồi đọc bằng getUTC* để tính
-// đúng biên tháng theo lịch VN (portal thuế dùng ngày theo giờ VN).
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-export interface PeriodWindow {
-  /** "YYYY-MM" theo giờ VN. */
-  period: string;
-  /** Ngày đầu/cuối tháng, định dạng dd/mm/yyyy (khớp adapter GDT). */
-  dateFrom: string;
-  dateTo: string;
-}
-
-/** Kỳ đồng bộ mặc định = tháng hiện tại theo giờ VN, tại thời điểm `nowMs` (epoch ms). */
-export function currentPeriodWindow(nowMs: number): PeriodWindow {
-  const vn = new Date(nowMs + VN_OFFSET_MS);
-  const year = vn.getUTCFullYear();
-  const month = vn.getUTCMonth(); // 0-based
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  const mm = String(month + 1).padStart(2, "0");
-  return {
-    period: `${year}-${mm}`,
-    dateFrom: `01/${mm}/${year}`,
-    dateTo: `${String(lastDay).padStart(2, "0")}/${mm}/${year}`,
-  };
-}
+// Kỳ đồng bộ + dựng message job: re-export từ @vat/sync (NGUỒN SỰ THẬT DUY NHẤT) để
+// mọi import sẵn có qua `./schedule` + test giữ nguyên.
+export {
+  currentPeriodWindow,
+  buildSyncMessages as buildMessages,
+  type PeriodWindow,
+} from "@vat/sync";
 
 /** Chuyển dd/mm/yyyy → Date (UTC). Ném rõ ràng nếu sai định dạng (không đoán). */
 export function parseDdmmyyyy(s: string): Date {
@@ -76,26 +57,4 @@ export async function enumerateDueAccounts(
     for (const a of accts) due.push({ tenantId, taikhoanId: a.id });
   }
   return due;
-}
-
-/** Dựng một message / (tài khoản × chiều). tenant_id đi tường minh trong payload. */
-export function buildMessages(
-  due: DueAccount[],
-  window: PeriodWindow,
-  directions: InvoiceDirection[],
-): SyncJobMessage[] {
-  const msgs: SyncJobMessage[] = [];
-  for (const a of due) {
-    for (const direction of directions) {
-      msgs.push({
-        tenantId: a.tenantId,
-        taikhoanId: a.taikhoanId,
-        direction,
-        dateFrom: window.dateFrom,
-        dateTo: window.dateTo,
-        period: window.period,
-      });
-    }
-  }
-  return msgs;
 }

@@ -2,7 +2,7 @@
 // nặng chạy nền qua Cron → Queues → consumer; trạng thái phối hợp (rate limit,
 // circuit breaker) đặt trong Durable Object (ADR-0001 §3, §5).
 import type { GdtTransport, InvoiceDirection, RetryOptions } from "@vat/gdt-client";
-import type { SyncResult } from "@vat/sync";
+import type { SyncJobMessage, SyncResult } from "@vat/sync";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { LimiterEnv } from "./rateLimiter";
@@ -34,19 +34,11 @@ export interface DbHandle {
   close: () => Promise<void>;
 }
 
-// Payload MỘT job đồng bộ nền: một tenant, một tài khoản thuế, một chiều, một kỳ.
-// `tenantId` TƯỜNG MINH trong payload — job nền không có request context, không suy
-// đoán ngầm (multi-tenant.md "Job nền phải nằm tường minh trong payload").
-export interface SyncJobMessage {
-  tenantId: string;
-  taikhoanId: string;
-  direction: InvoiceDirection;
-  /** Khoảng ngày lập, định dạng dd/mm/yyyy (khớp adapter GDT). */
-  dateFrom: string;
-  dateTo: string;
-  /** Kỳ "YYYY-MM" (giờ VN) — truy vết + tính idempotent theo kỳ. */
-  period: string;
-}
+// Payload MỘT job đồng bộ nền — contract dùng chung producer/consumer. NGUỒN SỰ THẬT
+// DUY NHẤT ở @vat/sync (tránh nhân đôi giữa cron scheduled() và endpoint "Đồng bộ ngay"
+// của vat-api). Import ở trên (dùng nội bộ) + re-export để mọi `import ... from "./types"`
+// sẵn có giữ nguyên.
+export type { SyncJobMessage };
 
 // Token của một tài khoản thuế (đủ để pre-flight; KHÔNG lộ/không dùng secret thô).
 export interface AccountToken {

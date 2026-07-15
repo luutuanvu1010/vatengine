@@ -237,22 +237,45 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
 }
 
 function TokenPanel({ account }: { account: TaxAccountView }) {
+  const sync = useMutation({ mutationFn: () => api.syncTaxAccount(account.id) });
   if (!account.tokenHetHan) return null;
   const expired = new Date(account.tokenHetHan).getTime() <= Date.now();
   return (
-    <Alert tone={expired ? "warning" : "success"}>
-      {expired ? (
-        <>
-          Token kết nối đã hết hạn ({formatDateVN(account.tokenHetHan, true)}). Đăng nhập lại để
-          đồng bộ.
-        </>
-      ) : (
-        <>
-          Token kết nối còn hiệu lực · hết hạn lúc {formatDateVN(account.tokenHetHan, true)} (giờ
-          VN).
-        </>
+    <div style={{ display: "grid", gap: "var(--sp-2)" }}>
+      <Alert tone={expired ? "warning" : "success"}>
+        {expired ? (
+          <>
+            Token kết nối đã hết hạn ({formatDateVN(account.tokenHetHan, true)}). Đăng nhập lại để
+            đồng bộ.
+          </>
+        ) : (
+          <>
+            Token kết nối còn hiệu lực · hết hạn lúc {formatDateVN(account.tokenHetHan, true)} (giờ
+            VN).
+          </>
+        )}
+      </Alert>
+      {!expired && (
+        <div style={{ display: "grid", gap: "var(--sp-2)", justifyItems: "start" }}>
+          <Button onClick={() => sync.mutate()} disabled={sync.isPending}>
+            {sync.isPending ? "Đang gửi yêu cầu…" : "Đồng bộ ngay"}
+          </Button>
+          {sync.isSuccess && (
+            <Alert tone="info">
+              Đã gửi yêu cầu đồng bộ kỳ {sync.data.period}. Hóa đơn sẽ xuất hiện ở{" "}
+              <strong>Danh sách hóa đơn</strong> sau ít phút (chạy nền).
+            </Alert>
+          )}
+          {sync.isError && (
+            <Alert tone="danger">
+              {sync.error instanceof ApiError && sync.error.status === 409
+                ? "Token đã hết hạn — vui lòng đăng nhập lại."
+                : "Không gửi được yêu cầu đồng bộ. Thử lại sau ít phút."}
+            </Alert>
+          )}
+        </div>
       )}
-    </Alert>
+    </div>
   );
 }
 

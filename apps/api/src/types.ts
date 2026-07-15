@@ -1,4 +1,5 @@
 import type { GdtTransport } from "@vat/gdt-client";
+import type { SyncJobMessage } from "@vat/sync";
 // Kiểu dùng chung cho Worker API (U6). Tầng ứng dụng PHI TRẠNG THÁI (mục 11).
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
@@ -14,7 +15,9 @@ export interface Env {
   RAW: R2Bucket;
   // U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
   TOKEN_KEK: string;
-  // Binding khác thêm dần theo lộ trình (KV, Queues, Durable Objects).
+  // Hàng đợi đồng bộ nền — producer cho "Đồng bộ ngay" (POST /tax-accounts/:id/sync).
+  // Optional: chỉ có ở production (binding wrangler); dev/test tiêm qua makeEnv (hoặc bỏ).
+  SYNC_QUEUE?: Queue<SyncJobMessage>;
 }
 
 // Trích từ JWT nội bộ (U6/U8): `tenantId` để lọc + RLS; `role` (vai RBAC, U8) để

@@ -24,7 +24,11 @@
   "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }],
 
   // Nhãn môi trường (KHÔNG nhạy cảm) — /health báo env, phân nhánh hành vi nếu cần.
-  "vars": { "ENVIRONMENT": "production" }
+  "vars": { "ENVIRONMENT": "production" },
+
+  // "Đồng bộ ngay" (POST /tax-accounts/:id/sync) đẩy job vào hàng đợi vat-sync;
+  // consumer là apps/sync-worker. API chỉ là PRODUCER (giữ stateless — ADR-0001 §3).
+  "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] }
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình

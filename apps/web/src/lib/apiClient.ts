@@ -197,4 +197,8 @@ export const api = {
   ): Promise<TaxLoginResult> {
     return request("POST", `/tax-accounts/${id}/login`, { body: { password, ckey, cvalue } });
   },
+  // "Đồng bộ ngay": đẩy job kéo hóa đơn (kỳ hiện tại) vào hàng đợi nền.
+  syncTaxAccount(id: string): Promise<{ enqueued: number; period: string }> {
+    return request("POST", `/tax-accounts/${id}/sync`);
+  },
 };

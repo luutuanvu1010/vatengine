@@ -10,6 +10,7 @@ import {
   deriveTokenExpiry,
   getCaptcha,
 } from "@vat/gdt-client";
+import { buildSyncMessages, currentPeriodWindow } from "@vat/sync";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -243,6 +244,38 @@ export function taxAccountsRoutes(deps: AppDeps) {
         });
       });
       return c.json({ ok: true, tokenHetHan: tokenHetHan.toISOString() });
+    } finally {
+      await close();
+    }
+  });
+
+  // POST /tax-accounts/:id/sync — "Đồng bộ ngay": đẩy job (purchase+sold, kỳ hiện tại) vào
+  // hàng đợi để sync-worker kéo hóa đơn. API chỉ PRODUCER, giữ stateless (ADR-0001 §3).
+  // Token phải CÒN HẠN — job nền KHÔNG tự đăng nhập (quyết định A). Cách ly: chỉ tài
+  // khoản thuộc tenant hiện tại (withTenant + lọc tenant_id).
+  r.post("/:id/sync", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    const queue = c.env.SYNC_QUEUE;
+    if (!queue) return c.json({ error: "sync_unavailable" }, 503);
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const acc = await withTenant(db, tenantId, async (tx) => {
+        const rows = await tx
+          .select({ tokenHetHan: taiKhoanThue.tokenHetHan })
+          .from(taiKhoanThue)
+          .where(and(eq(taiKhoanThue.id, id), eq(taiKhoanThue.tenantId, tenantId)));
+        return rows[0] ?? null;
+      });
+      if (!acc) return c.json({ error: "not_found" }, 404);
+      if (!acc.tokenHetHan || acc.tokenHetHan.getTime() <= Date.now()) {
+        return c.json({ error: "token_het_han" }, 409);
+      }
+      const window = currentPeriodWindow(Date.now());
+      const msgs = buildSyncMessages([{ tenantId, taikhoanId: id }], window, ["purchase", "sold"]);
+      await queue.sendBatch(msgs.map((body) => ({ body })));
+      return c.json({ enqueued: msgs.length, period: window.period }, 202);
     } finally {
       await close();
     }
