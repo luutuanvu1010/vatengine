@@ -3,6 +3,9 @@
   "name": "vat-api",
   "main": "src/index.ts",
   "compatibility_date": "2025-10-01",
+  // Production: ẩn khỏi internet công cộng — chỉ gọi qua service binding từ front-door
+  // `vat-web` (same-origin). Không lộ hostname `.workers.dev`.
+  "workers_dev": false,
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
@@ -18,7 +21,10 @@
 
   // U7: R2 lưu file kết xuất (xlsx/csv). Tạo bucket lúc deploy:
   // `wrangler r2 bucket create vat-raw`. Dev local: Miniflare mô phỏng R2 tự động.
-  "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }]
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }],
+
+  // Nhãn môi trường (KHÔNG nhạy cảm) — /health báo env, phân nhánh hành vi nếu cần.
+  "vars": { "ENVIRONMENT": "production" }
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình

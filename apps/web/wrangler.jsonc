@@ -1,10 +1,19 @@
 {
-  // U15 — SPA tĩnh trên Cloudflare Workers Static Assets (ADR-0003). Build Vite → dist/,
-  // Worker phục vụ asset; SPA routing fallback về index.html (not_found_handling).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // U15 — SPA React+Vite (ADR-0003). Production: FRONT-DOOR same-origin (production-deploy.md §3).
+  // Worker `worker.ts`: phục vụ asset tĩnh + proxy `/api/*` → vat-api (service binding).
   "name": "vat-web",
+  "main": "worker.ts",
   "compatibility_date": "2026-07-01",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    // Worker chạy TRƯỚC assets → kiểm `/api/*` an toàn (không bị SPA-fallback nuốt).
+    "run_worker_first": true
+  },
+  // Service binding tới API Worker — proxy nội bộ, không qua internet công cộng.
+  "services": [{ "binding": "API", "service": "vat-api" }],
+  // Custom domain: wrangler tự tạo bản ghi DNS proxied cho hostname (zone tourdao.vn).
+  "routes": [{ "pattern": "vatengine.tourdao.vn", "custom_domain": true }]
 }

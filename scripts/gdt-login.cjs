@@ -18,7 +18,7 @@ const readline = require("node:readline");
 const { Writable } = require("node:stream");
 const { Client } = require("pg");
 
-const API = process.env.API_URL || "https://vat-api.l-u-tu-n-v.workers.dev";
+const API = process.env.API_URL || "https://vatengine.tourdao.vn/api";
 const REPO = path.resolve(__dirname, "..");
 const EMAIL = "smoke-test@vatengine.local";
 const TEST_MST_TENANT = "9999999999"; // tenant test (xoá được: delete from tenants where mst='9999999999')
