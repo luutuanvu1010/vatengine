@@ -14,6 +14,7 @@ Cụ thể hoá nguyên tắc "không hard-code bí mật, không lưu mật kh�
 ## Bắt buộc
 
 - Không commit mật khẩu, token, connection string, API key vào code, `wrangler.jsonc` hay `.dev.vars` đã track git. Dùng **Workers Secrets / Secrets Store** (`wrangler secret put`); `.dev.vars` chỉ dùng local và phải nằm trong `.gitignore`.
+- **Thi hành bằng máy (H-0.2):** CI chạy **gitleaks** (`.gitleaks.toml`, job `secret-scan`) quét TOÀN BỘ lịch sử git mỗi PR/push — phát hiện bí mật ⇒ CI đỏ, chặn merge. Đây là lớp cứng cạnh hook heuristic `.claude/hooks/block-dangerous.sh` (vốn chỉ chặn hành động ghi của Claude, không quét commit). Allowlist chỉ dành cho false-positive đã kiểm chứng, scope hẹp theo file — không allowlist `.env`/`.dev.vars`/`*.example`.
 - Mật khẩu tài khoản thuế của khách hàng: **không lưu trữ**. Chỉ giữ token JWT do Tổng cục Thuế cấp, mã hoá tại nghỉ (envelope encryption), vòng đời ngắn, gắn `token_het_han`.
 - Không log token, mật khẩu, hoặc `raw_json` chứa dữ liệu nhạy cảm ở mức log INFO trở lên (Workers Logs/Logpush). Nếu cần log để debug, che (mask) trước khi ghi.
 - Mọi endpoint nhận request từ bên ngoài phải xác thực (JWT nội bộ của SaaS, không phải token thuế; khu vực quản trị dùng Cloudflare Access) trước khi xử lý, trừ endpoint health-check.
