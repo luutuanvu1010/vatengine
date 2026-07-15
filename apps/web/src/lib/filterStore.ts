@@ -38,3 +38,13 @@ export function saveInvoiceFilter(filter: InvoiceFilter): void {
     /* localStorage không khả dụng (private mode) — bỏ qua, không chặn UI */
   }
 }
+
+// H-B.3 — xóa bộ lọc khi chuyển phiên (đăng xuất/401/đăng nhập). Bộ lọc chứa MST của
+// chính tenant (nbmst/nmmst) + kỳ → máy dùng chung không được để người kế tiếp thừa hưởng.
+export function clearInvoiceFilter(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* localStorage không khả dụng (private mode) — bỏ qua */
+  }
+}

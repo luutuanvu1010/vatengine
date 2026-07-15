@@ -19,6 +19,7 @@ Cụ thể hoá nguyên tắc "mọi truy vấn dữ liệu phải gắn tenant_
 - Session/token đăng nhập thuế gắn với đúng một `tenant_id`; không cho một tenant dùng token của tenant khác dù có quyền admin.
 - Job nền (Queue/Workflow) **không có request context** → `tenant_id` phải nằm tường minh trong payload message/Workflow event, không suy đoán ngầm.
 - Test phải có ít nhất một ca kiểm tra cách ly tenant: tạo 2 tenant, xác nhận tenant A không đọc được dữ liệu tenant B qua API.
+- **Dọn trạng thái client khi đổi phiên (H-B.3):** mọi ranh giới đổi phiên/đổi tenant ở SPA (`apps/web`) phải xóa sạch dữ liệu tenant còn ở client — tối thiểu `queryClient.clear()` (cache React Query là singleton toàn app) và `clearInvoiceFilter()` (localStorage chứa MST tenant). Hiện đủ 3 ranh giới trong `features/auth/auth-context.tsx`: `logout`, `onUnauthorized` (401), đầu `login`. **Bất kỳ luồng đổi tenant MỚI nào** (vd "chuyển tenant" trong cùng phiên, đồng bộ token đa-tab) **bắt buộc gọi cùng bước dọn này** — nếu không, việc chưa gắn `tenant_id` vào `queryKey` sẽ thành lỗ hổng rò dữ liệu thật.
 
 ## Khi gặp mơ hồ
 

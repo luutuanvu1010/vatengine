@@ -1,8 +1,10 @@
 // Phiên đăng nhập nội bộ — JWT giữ TRONG BỘ NHỚ (apiClient; ADR-0003 #3). Không bền qua
 // reload → khởi động luôn 'anon', đăng nhập lại (đúng chủ ý). Sau login: nạp /me (A1) lấy
 // hồ sơ tenant + vai. 401 bất kỳ (onUnauthorized) → về 'anon' (router đẩy tới /login).
+import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, clearToken, configureApi, setToken } from "../../lib/apiClient";
+import { clearInvoiceFilter } from "../../lib/filterStore";
 import type { MeResponse } from "../../types/api";
 
 type AuthStatus = "anon" | "authed";
@@ -21,17 +23,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("anon");
   const [me, setMe] = useState<MeResponse | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
+  // H-B.3 — dọn sạch dữ liệu tenant còn sót ở client khi ranh giới phiên thay đổi:
+  // cache React Query (singleton toàn app) + bộ lọc localStorage. Chống rò dữ liệu
+  // tenant trước cho người dùng kế tiếp trên máy dùng chung. (queryClient ổn định qua
+  // các lần render nên nằm trong deps không gây chạy lại effect.)
   useEffect(() => {
     configureApi({
       onUnauthorized: () => {
         clearToken();
+        queryClient.clear();
+        clearInvoiceFilter();
         setStatus("anon");
         setMe(null);
         setEmail(null);
       },
     });
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo<AuthValue>(
     () => ({
@@ -39,6 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       me,
       email,
       async login(inputEmail, password) {
+        // Xóa mọi tàn dư phiên trước TRƯỚC khi nạp dữ liệu tenant mới.
+        queryClient.clear();
+        clearInvoiceFilter();
         const { token } = await api.login(inputEmail, password);
         setToken(token);
         try {
@@ -54,12 +66,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       logout() {
         clearToken();
+        queryClient.clear();
+        clearInvoiceFilter();
         setStatus("anon");
         setMe(null);
         setEmail(null);
       },
     }),
-    [status, me, email],
+    [status, me, email, queryClient],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
