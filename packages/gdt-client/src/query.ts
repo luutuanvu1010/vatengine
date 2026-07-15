@@ -49,10 +49,18 @@ export type InvoiceRow = Record<string, unknown> & {
 const DEFAULT_SIZE = 50;
 // GDT CHỈ hỗ trợ sắp xếp MỘT trường. KIỂM CHỨNG 2026-07-15 (probe token production thật):
 // `sort=tdlap:desc,khmshdon:asc,shdon:desc` → HTTP 500 {"message":"Không hỗ trợ sắp xếp
-// theo nhiều trường"}; `sort=tdlap:desc` (một trường) → HTTP 200 + datas (kéo thật 16 HĐ).
-// CHƯA KIỂM CHỨNG: tính ổn định của con trỏ `state` khi CÓ NHIỀU TRANG và NHIỀU HĐ trùng
-// `tdlap` (tdlap phân giải theo NGÀY — Amendment #7). Bằng chứng 2026-07-15 chỉ có 1 trang
-// (16 < size 50). Khi gặp tenant >50 HĐ/ngày: probe xác nhận không mất/trùng giữa các trang.
+// theo nhiều trường"}; `sort=tdlap:desc` (một trường) → HTTP 200 + datas.
+// ĐÃ KIỂM CHỨNG tính ổn định phân trang con trỏ `state` với sort MỘT trường (2026-07-15,
+// scripts/gdt-paginate-probe.mjs, token production thật, MST 4201969169, endpoint
+// /api/query/invoices/purchase): dù `tdlap` phân giải theo NGÀY (Amendment #7) nên nhiều HĐ
+// trùng `tdlap` và ranh giới trang (ép size=5) rơi GIỮA cụm cùng ngày, con trỏ `state` KHÔNG
+// mất/trùng. Bằng chứng quyết định: kỳ 06/2026 = 53 HĐ / 11 trang → distinct 53 === total 53
+// GDT trả, 0 trùng chéo trang; đối chứng 05/2026 (38 HĐ/4 trang) + 03/2026 (22 HĐ/5 trang)
+// đều distinct === total. ⇒ con trỏ có tie-breaker ẩn đủ tin cậy; khử trùng theo khóa tự
+// nhiên bên dưới là lớp phòng thủ dư, không phải chỗ dựa cho việc mất trang.
+// RÀNG BUỘC GDT phát hiện kèm (cùng probe): mỗi truy vấn khoảng ngày ≤ 1 THÁNG — range >1
+// tháng → HTTP 400 "Khoảng thời gian tìm kiếm không được lớn hơn 1 tháng"; tầng đồng bộ phải
+// chia truy vấn theo tháng. (Probe cũng gặp HTTP 429 khi gọi dồn — GDT rate-limit phía server.)
 const DEFAULT_SORT = "tdlap:desc";
 // Trần số trang để chặn vòng lặp vô hạn nếu server trả `state` không dừng.
 const MAX_PAGES = 2000;
