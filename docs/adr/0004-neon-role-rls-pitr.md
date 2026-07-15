@@ -84,7 +84,8 @@ rls_enabled=true, rls_forced=true.
 - [x] RLS ENABLE+FORCE 7/7 bảng + fail-closed + không rò xuyên tenant dưới `vat_app` trên Neon thật → cách ly lớp 2 **đã kiểm chứng** (E3, E4, 2026-07-15).
 - [ ] **PITR khôi phục được → DR (E5) CHỜ** thao tác Neon console của chủ dự án; ghi runbook rollback.
 - [x] Tiền đề "thuộc tính role Neon + hiệu lực RLS thật" → **đã kiểm chứng 2026-07-15** (FORDEX-PROGRESS.md). Tiền đề DR/PITR vẫn CHỜ (E5).
-- [ ] **Mở khoá H-A.2** — health-check role lúc khởi động dùng ĐÚNG truy vấn đã kiểm chứng ở E1: `select rolsuper, rolbypassrls from pg_roles where rolname=current_user` + kiểm không sở hữu bảng; từ chối khởi động nếu role có bypass/super/owner. **Đủ điều kiện bắt đầu** (E1–E4 xong).
+- [x] **H-A.2 XONG** — `packages/db/src/roleGuard.ts` (`checkConnectionRole`+`assertConnectionRoleSafe`) dùng ĐÚNG truy vấn E1 (`pg_roles where rolname=current_user` + đếm `pg_tables` owner); wiring `apps/{api,sync-worker}/src/db.ts` kiểm 1 lần/isolate, từ chối khởi động nếu super/bypassrls/owner (fail-closed nếu role_not_found). Test unit + integration PGlite (catalog thật). QA 2 reviewer PASS.
+  - *Khuyến nghị Low (security-reviewer):* BYPASSRLS/SUPERUSER là thuộc tính trực tiếp (không kế thừa qua membership) → truy vấn đủ. Nếu TƯƠNG LAI có code path dùng `SET ROLE`, bổ sung kiểm `pg_auth_members` chống escalation gián tiếp. Hiện grep xác nhận không có `SET ROLE` runtime.
 
 ## Lưu ý runtime (cho H-A.2)
 
