@@ -19,7 +19,7 @@ Cách ly tenant lớp 2 (RLS `ENABLE`+`FORCE`, policy fail-closed) **thiết k�
 
 ## Phương pháp kiểm chứng (tái lập)
 
-- **Probe role + RLS:** `packages/db/provisioning/spike-role-rls-probe.sql` (psql) hoặc `spike-role-rls-probe.mjs` (node `pg`, đọc `DATABASE_URL_APP` từ env — KHÔNG paste chuỗi kết nối vào chat/commit).
+- **Probe role + RLS:** `packages/db/provisioning/spike-role-rls-probe.sql` (psql) hoặc `spike-role-rls-probe.mjs` (node `pg`, đọc `APP_DATABASE_URL` từ env — KHÔNG paste chuỗi kết nối vào chat/commit).
   - Chạy bằng **chuỗi kết nối role app `vat_app`** (endpoint DIRECT, không `-pooler`).
   - Tuỳ chọn `TENANT_REAL=<uuid tenant có data>` để kiểm POSITIVE + cross-leak.
 - **PITR:** trên Neon console/API — tạo branch tại timestamp quá khứ (hoặc restore), xác nhận đọc lại được dữ liệu; ghi lại thao tác + kết quả.

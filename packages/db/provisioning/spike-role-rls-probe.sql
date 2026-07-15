@@ -5,8 +5,8 @@
 -- Hiến pháp ("'đã có trong tài liệu' KHÔNG phải bằng chứng"; bài học :30000).
 --
 -- CÁCH CHẠY (KHÔNG paste chuỗi kết nối vào chat — đặt trong .dev.vars, đọc từ env):
---   psql "$DATABASE_URL_APP" -v tenant_real="<uuid-tenant-có-data>" -f spike-role-rls-probe.sql
---   ($DATABASE_URL_APP = chuỗi kết nối của ROLE APP `vat_app`, endpoint DIRECT không -pooler.)
+--   psql "$APP_DATABASE_URL" -v tenant_real="<uuid-tenant-có-data>" -f spike-role-rls-probe.sql
+--   ($APP_DATABASE_URL = chuỗi kết nối của ROLE APP `vat_app`, endpoint DIRECT không -pooler.)
 --   Nếu chưa có uuid tenant thật, chạy không có -v: bỏ qua phần POSITIVE, vẫn chứng
 --   minh được attrs + ownership + fail-closed.
 --

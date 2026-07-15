@@ -1,12 +1,13 @@
 // H-A.1 SPIKE — PROBE role Neon + RLS thật, bản Node (dùng khi không có psql).
-// Cách dùng (đúng quy ước .dev.vars của repo — KHÔNG paste chuỗi kết nối vào chat/commit):
-//   1) Tạo packages/db/.dev.vars (đã .gitignore) với:
-//        DATABASE_URL_APP=postgres://vat_app:<pw>@<host>/<db>?sslmode=require&channel_binding=require
-//        TENANT_REAL=<uuid tenant có data>   # tùy chọn, cho phần POSITIVE/cross-leak
-//   2) node packages/db/provisioning/spike-role-rls-probe.mjs
-// Biến trong ENV sẵn có sẽ ưu tiên hơn .dev.vars. Kết nối PHẢI là ROLE APP (vat_app),
-// endpoint DIRECT (không -pooler). Probe CHỈ ĐỌC. Chép TOÀN BỘ output (kèm ngày +
-// region Neon) vào docs/adr/0004-neon-role-rls-pitr.md.
+// Dùng ĐÚNG biến sẵn có trong packages/db/.dev.vars (đã .gitignore — KHÔNG paste vào
+// chat/commit):
+//   - APP_DATABASE_URL : chuỗi kết nối ROLE APP (vat_app) — probe cách ly RLS bằng role này.
+//   - DATABASE_URL     : chuỗi kết nối owner/migrate — CHỈ để tự tìm 1 tenant id (positive)
+//                        + đối chứng owner có/không bypass RLS. (Tùy chọn TENANT_REAL đè.)
+// Chạy: node packages/db/provisioning/spike-role-rls-probe.mjs
+// APP_DATABASE_URL nên là endpoint DIRECT (không -pooler). Probe CHỈ ĐỌC (SELECT/count +
+// set GUC trong transaction rồi rollback). Chép TOÀN BỘ output (kèm ngày + region Neon)
+// vào docs/adr/0004-neon-role-rls-pitr.md.
 import { existsSync, readFileSync } from "node:fs";
 import pg from "pg";
 
@@ -29,16 +30,32 @@ function loadDevVars(path) {
 }
 loadDevVars(new URL("../.dev.vars", import.meta.url).pathname); // packages/db/.dev.vars
 
-const url = process.env.DATABASE_URL_APP;
-if (!url) {
+const appUrl = process.env.APP_DATABASE_URL;
+if (!appUrl) {
   console.error(
-    "THIẾU DATABASE_URL_APP (chuỗi kết nối role app vat_app). Đặt trong packages/db/.dev.vars hoặc ENV. Xem ADR-0004.",
+    "THIẾU APP_DATABASE_URL (chuỗi kết nối role app vat_app) trong packages/db/.dev.vars hoặc ENV. Xem ADR-0004.",
   );
   process.exit(2);
 }
-const tenantReal = process.env.TENANT_REAL;
 
-const client = new pg.Client({ connectionString: url });
+// Tự tìm 1 tenant id qua owner (DATABASE_URL, bypass RLS) nếu chưa cho TENANT_REAL —
+// vì role app (vat_app) chưa set app.tenant_id thì thấy 0 hàng, không tự khám phá được.
+let tenantReal = process.env.TENANT_REAL;
+if (!tenantReal && process.env.DATABASE_URL) {
+  const owner = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  try {
+    await owner.connect();
+    const r = await owner.query("select id from tenants limit 1");
+    tenantReal = r.rows[0]?.id;
+    if (tenantReal) console.log("(Tự tìm được tenant qua owner cho phần POSITIVE.)");
+  } catch (e) {
+    console.warn("(Không tự tìm được tenant qua owner:", e.message, "— bỏ qua POSITIVE.)");
+  } finally {
+    await owner.end();
+  }
+}
+
+const client = new pg.Client({ connectionString: appUrl });
 
 async function show(title, sqlText, params = []) {
   console.log(`\n=== ${title} ===`);
