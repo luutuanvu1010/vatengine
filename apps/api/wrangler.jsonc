@@ -31,7 +31,18 @@
 
   // "Đồng bộ ngay" (POST /tax-accounts/:id/sync) đẩy job vào hàng đợi vat-sync;
   // consumer là apps/sync-worker. API chỉ là PRODUCER (giữ stateless — ADR-0001 §3).
-  "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] }
+  "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] },
+
+  // H-A.5b — Durable Object khóa đăng nhập per-account (lockout chống brute-force, lớp
+  // app bổ sung WAF per-IP ở edge). Trạng thái nhỏ theo email → SQLite-backed DO.
+  "durable_objects": {
+    "bindings": [{ "name": "LOGIN_LIMITER", "class_name": "LoginLimiter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LoginLimiter"] }]
+
+  // H-A.5b — ngưỡng khóa đăng nhập (KHÔNG nhạy cảm; bỏ trống → mặc định loginLimiter.ts:
+  // 10 lần sai / 15' → khóa 15'). Tinh chỉnh theo môi trường.
+  // "vars" thêm: LOGIN_MAX_FAILURES / LOGIN_WINDOW_MS / LOGIN_LOCKOUT_MS.
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình

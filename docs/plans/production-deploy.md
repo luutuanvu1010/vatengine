@@ -81,6 +81,7 @@
 - [ ] **Đồng bộ hóa đơn thật thành công** → hóa đơn hiện trên S1/S2. *(Nếu đụng trần CPU 10ms → kích hoạt mục treo O2.)*
 - [ ] **Bảo mật biên (H-A.6):** `curl -I https://vatengine.tourdao.vn` thấy đủ `content-security-policy`, `x-frame-options: DENY`, `x-content-type-options: nosniff`, `referrer-policy` (do front-door `vat-web` phát — tự động).
 - [ ] **HSTS ở TẦNG ZONE Cloudflare** (front-door CỐ Ý không phát HSTS — chỉ bật trên HTTPS, phủ cả redirect): bật `SSL/TLS → Edge Certificates → Always Use HTTPS` **và** `HSTS` (`max-age ≥ 15552000`, `includeSubDomains`) cho zone `tourdao.vn`; xác minh `curl -I` thấy `strict-transport-security`. *(Không có bước này ⇒ site chạy HTTPS nhưng KHÔNG có HSTS ở bất kỳ tầng nào — rủi ro SSL-stripping.)*
+- [ ] **WAF Rate-limit per-IP cho login (H-A.5b — lớp EDGE của phòng thủ 2 lớp):** Cloudflare `Security → WAF → Rate limiting rules` cho `tourdao.vn`: match `http.request.uri.path eq "/api/auth/login" and http.request.method eq "POST"`, ngưỡng ví dụ **10 req / 1 phút / IP**, action **Block** (hoặc Managed Challenge), thời gian chặn ~1 phút. *(Lớp app đã có: Durable Object `LoginLimiter` khóa per-account — chặn dò 1 tài khoản qua nhiều IP mà WAF per-IP không thấy. Hai lớp bù nhau: WAF chặn 1 IP dò nhiều tài khoản; DO chặn nhiều IP dò 1 tài khoản.)* Xác minh: gửi >ngưỡng POST/phút từ 1 IP → nhận 429 từ Cloudflare (trước cả khi chạm Worker).
 
 ---
 
@@ -90,7 +91,7 @@
 |---|---|---|
 | **O1** | **Onboarding tenant tự phục vụ CHƯA có** — tạo tenant/user bằng SQL tay. Tầm nhìn 100k khách cần luồng đăng ký/admin. | **Hạng mục sản phẩm riêng**, không thuộc deploy. Tạm: seed SQL cho khách đầu. **⚠️ Khi xây luồng tạo user/đặt mật khẩu (H-A.5a):** PHẢI gọi `hashPassword(pw, resolvePbkdf2Iterations(c.env))` (KHÔNG dùng mặc định) để var `PBKDF2_ITERATIONS` (flip 600k khi Paid) thực sự có tác dụng. |
 | **O2** | **Trần CPU 10ms (Free)** — sync HĐ nặng có thể vượt. | Nếu Phase 2 DoD sync fail vì CPU → **nâng Workers Paid ($5)** + bỏ comment `limits` ở 2 `wrangler.jsonc` → deploy lại. **Kèm khi lên Paid (H-A.5a):** đổi `PBKDF2_ITERATIONS` trong `apps/api/wrangler.jsonc` từ `"100000"` → `"600000"` (OWASP) — 600k ~42ms vượt trần Free 10ms nên chỉ bật sau Paid; hash cũ vẫn verify (định dạng tự mô tả số vòng). |
-| **O3** | A3 remember-me (cookie HttpOnly) + A4 quên-mật-khẩu(email) còn treo (S0 hiện "sắp có"). | Tách unit sau go-live. |
+| **O3** | A3 remember-me (cookie HttpOnly) + A4 quên-mật-khẩu(email) còn treo (S0 hiện "sắp có"). | Tách unit sau go-live. **Ghi chú H-A.5b:** khóa đăng nhập per-account (DO) đánh đổi có chủ đích — kẻ xấu biết email nạn nhân có thể khóa TẠM ~15' (khóa tự hết hạn, không vĩnh viễn). Khi làm **A4 (reset-password qua email)**, đó cũng là **kênh tự mở khóa** cho chủ tài khoản hợp lệ → hạ rủi ro account-lockout DoS. |
 | **O4** | Test tự động chạy PGlite, KHÔNG đụng Neon thật (bài học migration 0001). | Cân nhắc nhóm test `db-real` trên Neon branch — hạng mục riêng. |
 
 ## 6. Rollback

@@ -16,7 +16,15 @@ vi.mock("../../src/password", async (importOriginal) => {
 import { createApp } from "../../src/app";
 import { verifyPassword } from "../../src/password";
 import type { AnyDb } from "../../src/types";
-import { type Db, freshDb, injectDb, makeEnv, makeTenant, seedUser } from "../helpers";
+import {
+  type Db,
+  freshDb,
+  injectDb,
+  makeEnv,
+  makeLoginLimiterFactory,
+  makeTenant,
+  seedUser,
+} from "../helpers";
 
 const verifySpy = vi.mocked(verifyPassword);
 
@@ -154,6 +162,59 @@ describe("POST /auth/login — gia cố (H-A.5a)", () => {
       expect(res.status).toBe(500); // app.onError → {error:'internal'}, không lộ chi tiết
       expect(await res.json()).toEqual({ error: "internal" });
       expect(closeSpy).toHaveBeenCalledTimes(1); // catch đóng kết nối đúng một lần
+    });
+  });
+
+  describe("khóa per-account (lockout — H-A.5b)", () => {
+    // App với limiter ngưỡng THẤP (khóa sau 3 lần) để test nhanh; state riêng mỗi app.
+    function appWithLimiter(maxFailures = 3) {
+      const factory = makeLoginLimiterFactory({ maxFailures, windowMs: 60_000, lockoutMs: 60_000 });
+      return createApp({ ...injectDb(db), getLoginLimiter: factory });
+    }
+    function loginOn(a: ReturnType<typeof createApp>, email: string, password: string) {
+      return a.request(
+        "/auth/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        },
+        makeEnv(),
+      );
+    }
+
+    it("N lần sai (user thật) → lần kế bị KHÓA 429 + Retry-After", async () => {
+      const a = appWithLimiter(3);
+      for (let i = 0; i < 3; i++) {
+        expect((await loginOn(a, "ke.toan@a.vn", "sai")).status).toBe(401);
+      }
+      const locked = await loginOn(a, "ke.toan@a.vn", "sai");
+      expect(locked.status).toBe(429);
+      expect(locked.headers.get("Retry-After")).toBeTruthy();
+      expect(await locked.json()).toEqual({ error: "too_many_attempts" });
+    });
+
+    it("enumeration-neutral: email KHÔNG tồn tại cũng khóa sau N lần (429, không lộ tồn tại)", async () => {
+      const a = appWithLimiter(3);
+      for (let i = 0; i < 3; i++) await loginOn(a, "khong-ton-tai@x.vn", "sai");
+      expect((await loginOn(a, "khong-ton-tai@x.vn", "sai")).status).toBe(429);
+    });
+
+    it("đăng nhập ĐÚNG reset đếm → không bị khóa oan", async () => {
+      const a = appWithLimiter(3);
+      await loginOn(a, "ke.toan@a.vn", "sai");
+      await loginOn(a, "ke.toan@a.vn", "sai");
+      expect((await loginOn(a, "ke.toan@a.vn", "mat-khau-dung")).status).toBe(200); // reset
+      for (let i = 0; i < 3; i++) await loginOn(a, "ke.toan@a.vn", "sai");
+      expect((await loginOn(a, "ke.toan@a.vn", "sai")).status).toBe(429); // mới khóa lại
+    });
+
+    it("khóa theo TỪNG email — email khác KHÔNG bị vạ lây", async () => {
+      const a = appWithLimiter(3);
+      for (let i = 0; i < 4; i++) await loginOn(a, "ke.toan@a.vn", "sai"); // khóa email này
+      expect((await loginOn(a, "ke.toan@a.vn", "sai")).status).toBe(429);
+      // email khác chưa chạm ngưỡng → vẫn xử lý bình thường (401), KHÔNG 429.
+      expect((await loginOn(a, "khac@a.vn", "gi-do")).status).toBe(401);
     });
   });
 });

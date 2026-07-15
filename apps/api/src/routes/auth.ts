@@ -70,6 +70,17 @@ export function authRoutes(deps: AppDeps) {
     if (!parsed.success) return c.json({ error: "bad_request" }, 400);
     const { email, password } = parsed.data;
 
+    // H-A.5b — KHÓA per-account (lớp app, bổ sung WAF per-IP ở edge). Key = email chuẩn
+    // hóa; kiểm TRƯỚC mọi việc DB. Đếm theo email (KỂ CẢ email giả) ⇒ enumeration-neutral
+    // (email không tồn tại cũng bị khóa sau N lần). Khóa → 429 gọn (không lộ tài khoản).
+    const limiter = deps.getLoginLimiter(c.env, `login:${email.trim().toLowerCase()}`);
+    const gate = await limiter.check();
+    if (gate.locked) {
+      return c.json({ error: "too_many_attempts" }, 429, {
+        "Retry-After": String(Math.ceil(gate.retryAfterMs / 1000)),
+      });
+    }
+
     const { db, close } = await deps.getDb(c.env);
     let closed = false;
     const closeOnce = async () => {
@@ -109,14 +120,18 @@ export function authRoutes(deps: AppDeps) {
 
       // Thành công cần: user thật + có hash + mật khẩu khớp + vai hợp lệ (chặn dữ liệu bẩn).
       if (!row || !row.password_hash || !passwordOk || !isRole(row.vai_tro)) {
-        // Audit THẤT BẠI chỉ khi quy được về tenant (email có thật). Email không tồn tại
-        // → không tenant → không ghi (dò email do rate-limit/WAF lo — H-A.5b).
+        // Ghi một lần sai vào bộ đếm khóa — UNIFORM cho mọi nhánh sai (email thật lẫn giả)
+        // ⇒ không rò tồn tại. Audit THẤT BẠI chỉ khi quy được về tenant (email có thật).
+        await limiter.recordFailure();
         const audit = row?.password_hash
           ? auditLogin(db, row.tenant_id, row.id, "that_bai")
           : undefined;
         await settle(audit);
         return c.json({ error: "unauthorized" }, 401);
       }
+
+      // Đăng nhập đúng → reset bộ đếm khóa (không phạt oan phiên sau).
+      await limiter.recordSuccess();
 
       const token = await signToken(
         { tenantId: row.tenant_id, role: row.vai_tro, sub: row.id },
