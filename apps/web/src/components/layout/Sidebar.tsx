@@ -20,7 +20,10 @@ const MAIN: NavItem[] = [
   { to: "/tax-accounts", label: vi.navTaxAccounts, visible: canManageTaxAccounts },
 ];
 
-const SYSTEM: NavItem[] = [{ to: "/settings", label: vi.navSettings }];
+const SYSTEM: NavItem[] = [
+  { to: "/settings", label: vi.navSettings },
+  { to: "/gioi-thieu", label: vi.navAbout },
+];
 
 function NavGroup({
   title,

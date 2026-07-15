@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "../components/layout/AppLayout";
 import { PageHeader } from "../components/layout/PageHeader";
+import { AboutPage } from "../features/about/AboutPage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { useAuth } from "../features/auth/auth-context";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
@@ -71,6 +72,7 @@ export function AppRouter() {
           }
         />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="gioi-thieu" element={<AboutPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
