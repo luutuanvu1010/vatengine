@@ -1,7 +1,9 @@
 // Dựng ứng dụng Hono (U6). Tách khỏi index.ts để test tiêm được `deps.getDb` (PGlite)
 // mà không cần Hyperdrive thật. /health miễn xác thực (security.md); /invoices* gắn JWT
 // trong sub-router (routes/invoices.ts).
+import { maskSensitive } from "@vat/crypto";
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { authRoutes } from "./routes/auth";
 import { exportsRoutes } from "./routes/exports";
 import { invoicesRoutes } from "./routes/invoices";
@@ -33,5 +35,16 @@ export function createApp(deps: AppDeps) {
   app.route("/tax-accounts", taxAccountsRoutes(deps));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
+
+  // H-A.6 — cổng lỗi cuối: lỗi CHƯA BẮT ở handler → 500 {error:'internal'} (hình
+  // dạng JSON nhất quán, KHÔNG lộ message/stack cho client). HTTPException (nếu code
+  // nào chủ động ném) giữ nguyên status/response của nó. Log server-side ĐÃ MASK
+  // (che token/mật khẩu/JWT trong chuỗi lỗi — security.md) để vẫn chẩn đoán được.
+  app.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse();
+    console.error("[vat-api] unhandled", maskSensitive({ name: err.name, message: err.message }));
+    return c.json({ error: "internal" }, 500);
+  });
+
   return app;
 }
