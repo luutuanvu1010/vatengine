@@ -63,6 +63,8 @@ describe("Cài đặt chung (B6)", () => {
           ten: "Công ty TNHH Tour Đảo",
           mst: "4201568932",
           goiDichVu: "Miễn phí",
+          banQuyen: "Mặc định",
+          ghiChu: null,
           role: "ke_toan_truong",
         }),
     });

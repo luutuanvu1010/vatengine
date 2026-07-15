@@ -6,7 +6,14 @@ import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
 const profile = (role: string) => () =>
-  json(200, { ten: "Công ty TNHH Tour Đảo", mst: "4201568932", goiDichVu: "Miễn phí", role });
+  json(200, {
+    ten: "Công ty TNHH Tour Đảo",
+    mst: "4201568932",
+    goiDichVu: "Miễn phí",
+    banQuyen: "Mặc định",
+    ghiChu: null,
+    role,
+  });
 
 async function loginAs(role: string) {
   mockFetch({ login: () => json(200, { token: "jwt" }), me: profile(role) });
@@ -66,6 +73,7 @@ describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
   it("đăng xuất → về màn đăng nhập", async () => {
     await loginAs("quan_tri");
     await screen.findByText("Công ty TNHH Tour Đảo");
+    await userEvent.click(screen.getByRole("button", { name: "Mở hồ sơ" }));
     await userEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Đăng nhập" })).toBeInTheDocument(),

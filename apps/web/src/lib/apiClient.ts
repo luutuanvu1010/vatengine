@@ -172,6 +172,9 @@ export const api = {
   getMe(): Promise<MeResponse> {
     return request("GET", "/me");
   },
+  patchMe(body: { ten?: string; ghiChu?: string | null }): Promise<MeResponse> {
+    return request("PATCH", "/me", { body });
+  },
 
   // A2 — đọc trạng thái tài khoản thuế + S5 (U14).
   listTaxAccounts(): Promise<TaxAccountView[]> {

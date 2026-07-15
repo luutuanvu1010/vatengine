@@ -146,6 +146,8 @@ export interface MeResponse {
   ten: string;
   mst: string;
   goiDichVu: string | null;
+  banQuyen: string;
+  ghiChu: string | null;
   role: Role;
 }
 
