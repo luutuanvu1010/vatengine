@@ -7,7 +7,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate"
   },

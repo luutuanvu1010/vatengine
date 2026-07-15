@@ -27,8 +27,11 @@ jobs:
         run: npx biome check .
       - name: Typecheck
         run: npm run typecheck --workspaces --if-present
-      - name: Test (unit + integration)
-        run: npm run test --workspaces --if-present
+      # H-0.1: `make test` ép ngưỡng coverage ≥80% cho packages/** (mỗi package
+      # chạy `vitest run --coverage`; coverage < 80% → thoát khác 0 → job đỏ →
+      # chặn PR). Apps đo coverage ở job nightly `coverage-apps` bên dưới.
+      - name: Test packages (coverage-gated) + apps
+        run: make test
 
   # Contract test gọi GDT thật + probe egress — chỉ chạy theo lịch, không chặn PR
   # (tránh phụ thuộc mạng ngoài trong CI PR). Xem .claude/rules/gdt-adapter.md.
@@ -43,3 +46,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:contract --workspaces --if-present
+
+  # H-0.1: coverage apps chạy NIGHTLY (không chặn PR để giữ PR nhanh — test api
+  # ~150s). Ngưỡng ≥80% khai báo trong từng apps/*/vitest.config.ts; job này đo
+  # và fail nếu tụt dưới ngưỡng.
+  coverage-apps:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: make test-coverage-apps
