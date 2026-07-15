@@ -14,6 +14,7 @@ import {
   nguoiDung,
   taiKhoanThue,
 } from "../../src/schema";
+import { TRANG_THAI_LAN_DONG_BO } from "../../src/schema/lanDongBo";
 
 /** Bảng nghiệp vụ bắt buộc có cột `tenant_id` NOT NULL (multi-tenant.md). */
 const TENANT_SCOPED = {
@@ -128,6 +129,19 @@ describe("U4 lược đồ — ràng buộc mô hình hóa (unit, offline)", () 
     ]) {
       expect(names, `lan_dong_bo phải có cột ${n}`).toContain(n);
     }
+  });
+
+  it("(7) lan_dong_bo.trang_thai: hằng dùng chung có 'hoan_thanh_mot_phan' + khớp default cột", () => {
+    // Cột `trang_thai` là text (không enum cứng) — TRANG_THAI_LAN_DONG_BO là
+    // nguồn chân lý DÙNG CHUNG cho tập trạng thái hợp lệ (packages/sync + worker).
+    expect(TRANG_THAI_LAN_DONG_BO.HOAN_THANH_MOT_PHAN).toBe("hoan_thanh_mot_phan");
+    // Tập giá trị đầy đủ được tài liệu hoá (migration 0004 gắn COMMENT cùng tập này).
+    expect(new Set(Object.values(TRANG_THAI_LAN_DONG_BO))).toEqual(
+      new Set(["running", "completed", "hoan_thanh_mot_phan", "failed", "can_dang_nhap_lai"]),
+    );
+    // Default cột phải là một giá trị hợp lệ trong tập (running / đang chạy).
+    const col = getTableConfig(lanDongBo).columns.find((c) => c.name === "trang_thai");
+    expect(col?.default).toBe(TRANG_THAI_LAN_DONG_BO.DANG_CHAY);
   });
 
   it("(U8) nguoi_dung có password_hash (nullable), email UNIQUE toàn cục, vai_tro default 'ke_toan'", () => {

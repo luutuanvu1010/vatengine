@@ -1,0 +1,12 @@
+-- ĐV2 — Tài liệu hoá tập trạng thái hợp lệ của `lan_dong_bo.trang_thai`, bổ sung
+-- giá trị MỚI 'hoan_thanh_mot_phan' (hoàn thành một phần: phần thành công đã lưu,
+-- có nhánh lỗi thật cần retry riêng — Quyết định B, docs/GIAI-PHAP-thieu-truong-va-mtt.md).
+--
+-- Cột đang là `text` không ràng buộc CHECK — KHÔNG thêm enum/CHECK cứng (để còn
+-- dung nạp giá trị nghiệp vụ tương lai mà không phải migration khoá cứng, và tránh
+-- gãy các giá trị đang ghi như 'can_dang_nhap_lai'). Chỉ gắn COMMENT tài liệu hoá.
+-- Nguồn chân lý dùng chung ở tầng mã: TRANG_THAI_LAN_DONG_BO (packages/db/src/schema/lanDongBo.ts).
+--
+-- Idempotent: COMMENT ON COLUMN áp lại chỉ ghi đè chú thích, không lỗi. KHÔNG đụng
+-- RLS/policy/khoá ngoại hiện có.
+COMMENT ON COLUMN "lan_dong_bo"."trang_thai" IS 'Trạng thái lần đồng bộ. Tập hợp lệ (nguồn: TRANG_THAI_LAN_DONG_BO): running | completed | hoan_thanh_mot_phan | failed | can_dang_nhap_lai. Cột text không CHECK — không khoá cứng enum.';
