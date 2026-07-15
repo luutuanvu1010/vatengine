@@ -128,6 +128,8 @@ async function queryOne(
       }
       throw new GdtError(
         `Truy vấn ${endpoint} lỗi (HTTP ${res.status})${detail ? ` — GDT: ${detail}` : ""}.`,
+        "HTTP_ERROR",
+        res.status,
       );
     }
 
@@ -178,8 +180,10 @@ function naturalKey(row: Record<string, unknown>): string {
  * tenant_id là việc của tầng đồng bộ (U5), không thuộc adapter.
  *
  * 401 (kể cả giữa phân trang, kể cả nhánh sco) → dừng ngay, ném GdtError hết phiên.
- * Lỗi HTTP khác của nhánh sco được tha thứ (một số tài khoản không có sco); lỗi
- * nhánh normal thì propagate.
+ * Nhánh sco: CHỈ bỏ qua khi HTTP 404 (endpoint máy tính tiền không áp dụng cho
+ * tài khoản này) hoặc 200 + datas rỗng (vốn không ném). Mọi lỗi sco khác
+ * (400/5xx/timeout/lệch contract) propagate — KHÔNG nuốt im lặng. Lỗi nhánh
+ * normal luôn propagate.
  */
 export async function queryInvoices(
   transport: GdtTransport,
@@ -211,13 +215,16 @@ export async function queryInvoices(
       try {
         rows = await queryOne(transport, token, kind.endpoint, search, size, opts);
       } catch (err) {
-        // 401 luôn propagate (kể cả sco). Lỗi HTTP khác của nhánh sco thì bỏ qua
-        // — GIẢ ĐỊNH (suy từ mã Python di sản, CHƯA KIỂM CHỨNG): một số tài khoản
-        // không dùng máy tính tiền nên sco trả lỗi là "bình thường". KHÔNG nuốt im
-        // lặng: ghi cảnh báo để phân biệt với lỗi cấu hình thật (gdt-adapter.md).
-        if (kind.source === "sco" && !(err instanceof GdtError && err.code === "SESSION_EXPIRED")) {
+        // Nhánh sco: CHỈ bỏ qua khi HTTP 404 — endpoint máy tính tiền không áp
+        // dụng cho tài khoản này. Bằng chứng quan sát trực tiếp trên GDT (MST
+        // 4201969169, 2026-07-15): hóa đơn máy tính tiền TỒN TẠI và tra cứu được
+        // bình thường (docs/CHAN-DOAN-thieu-truong-va-mtt.md) — nên một lỗi sco
+        // KHÁC 404 (400/5xx/timeout/lệch contract) là LỖI THẬT có thể làm hóa đơn
+        // máy tính tiền biến mất, PHẢI nổi lên chứ không nuốt im lặng. 401 propagate
+        // (SESSION_EXPIRED). 200 + datas rỗng vốn không ném → tự nhiên đi tiếp.
+        if (kind.source === "sco" && err instanceof GdtError && err.httpStatus === 404) {
           console.warn(
-            `Bỏ qua lỗi nhánh sco (${kind.endpoint}): ${err instanceof Error ? err.message : String(err)}. Giả định tài khoản không có hóa đơn máy tính tiền — CHƯA KIỂM CHỨNG.`,
+            `Nhánh sco (${kind.endpoint}) trả HTTP 404: endpoint hóa đơn máy tính tiền không áp dụng cho tài khoản này — bỏ qua. (Chỉ 404 mới bỏ qua; mọi lỗi sco khác được ném để phân biệt với lỗi cấu hình/lệch contract — gdt-adapter.md.)`,
           );
           continue;
         }
