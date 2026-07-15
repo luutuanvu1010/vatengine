@@ -12,6 +12,29 @@ on:
   workflow_dispatch:
 
 jobs:
+  # H-0.2: quét bí mật toàn bộ lịch sử git bằng gitleaks (chuẩn), thay cho việc
+  # chỉ dựa hook heuristic block-dangerous.sh (vốn chỉ chặn hành động của Claude,
+  # KHÔNG quét commit). Chặn PR/push nếu phát hiện bí mật. Binary ghim phiên bản
+  # (không dùng gitleaks-action để tránh yêu cầu GITLEAKS_LICENSE cho tổ chức).
+  secret-scan:
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks cần TOÀN BỘ lịch sử để quét mọi commit
+      - name: Cài gitleaks (binary ghim v8.28.0 + xác minh checksum)
+        run: |
+          VER=8.28.0
+          SHA256=a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          echo "${SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c - # chống giả mạo binary (chuỗi cung ứng)
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Quét bí mật (gitleaks detect toàn lịch sử)
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --no-banner -v
+
   quality:
     if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest

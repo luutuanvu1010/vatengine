@@ -1,0 +1,27 @@
+# Cấu hình gitleaks — H-0.2 (Gate 0 FORDEX). Quét bí mật trong lịch sử git ở CI.
+# Kế thừa toàn bộ rule mặc định của gitleaks; chỉ bổ sung allowlist cho các
+# false-positive đã kiểm chứng (giá trị ví dụ trong tài liệu, KHÔNG phải bí mật thật).
+title = "VATCrawlbot gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "False-positive đã kiểm chứng (2026-07-15): giá trị ví dụ trong tài liệu, không phải bí mật thật."
+# condition=AND: finding chỉ được bỏ qua khi ĐỒNG THỜI (a) nằm trong đúng file
+# ADR-0001 VÀ (b) khớp mẫu hex ví dụ. Nhờ vậy nếu về sau có chuỗi trùng tiền tố
+# `6a549f...` ở BẤT KỲ file nào khác, gitleaks VẪN bắt (thu hẹp blast radius —
+# defense-in-depth theo khuyến nghị chuẩn gitleaks).
+condition = "AND"
+# Ví dụ minh hoạ trong ADR-0001 §probe GDT: các giá trị `key` là ID lưu trữ hex
+# 24 ký tự (bắt đầu `6a549f`) đi kèm `"content":"<svg ...>"` — dữ liệu mẫu tài
+# liệu, gitleaks nhận nhầm là generic-api-key.
+paths = [
+  '''docs/adr/0001-nen-tang-cloudflare\.md''',
+]
+regexes = [
+  '''6a549f[0-9a-f]{18}''',
+]
+# CHỦ Ý không allowlist các file *.example / .dev.vars.example: chúng chỉ chứa
+# placeholder (baseline scan 2026-07-15 sạch), và vẫn muốn gitleaks quét để bắt
+# trường hợp lỡ tay đưa bí mật thật vào file mẫu.
