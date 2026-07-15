@@ -27,7 +27,9 @@ describe("GET /api/query/invoices/purchase (contract)", () => {
     "trả 200 + phong bì khớp required_keys (datas); token gắn qua Bearer",
     async () => {
       const query = new URLSearchParams({
-        sort: "tdlap:desc,khmshdon:asc,shdon:desc",
+        // GDT chỉ hỗ trợ sắp xếp MỘT trường (KIỂM CHỨNG 2026-07-15: đa trường → HTTP 500
+        // "Không hỗ trợ sắp xếp theo nhiều trường"). Khớp DEFAULT_SORT của adapter.
+        sort: "tdlap:desc",
         size: "10",
         search: buildSearch(FROM, TO),
       });

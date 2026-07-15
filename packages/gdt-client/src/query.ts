@@ -47,7 +47,13 @@ export type InvoiceRow = Record<string, unknown> & {
 };
 
 const DEFAULT_SIZE = 50;
-const DEFAULT_SORT = "tdlap:desc,khmshdon:asc,shdon:desc";
+// GDT CHỈ hỗ trợ sắp xếp MỘT trường. KIỂM CHỨNG 2026-07-15 (probe token production thật):
+// `sort=tdlap:desc,khmshdon:asc,shdon:desc` → HTTP 500 {"message":"Không hỗ trợ sắp xếp
+// theo nhiều trường"}; `sort=tdlap:desc` (một trường) → HTTP 200 + datas (kéo thật 16 HĐ).
+// CHƯA KIỂM CHỨNG: tính ổn định của con trỏ `state` khi CÓ NHIỀU TRANG và NHIỀU HĐ trùng
+// `tdlap` (tdlap phân giải theo NGÀY — Amendment #7). Bằng chứng 2026-07-15 chỉ có 1 trang
+// (16 < size 50). Khi gặp tenant >50 HĐ/ngày: probe xác nhận không mất/trùng giữa các trang.
+const DEFAULT_SORT = "tdlap:desc";
 // Trần số trang để chặn vòng lặp vô hạn nếu server trả `state` không dừng.
 const MAX_PAGES = 2000;
 
@@ -96,7 +102,25 @@ async function queryOne(
       throw new GdtError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", "SESSION_EXPIRED");
     }
     if (!res.ok) {
-      throw new GdtError(`Truy vấn ${endpoint} lỗi (HTTP ${res.status}).`);
+      // KHÔNG nuốt lỗi HTTP im lặng (gdt-adapter.md): trích thông điệp lỗi GDT để chẩn
+      // đoán lệch contract/tham số. Body lỗi GDT dạng JSON {timestamp,message,details,
+      // path,requestId} → CHỈ lấy `message` (mô tả lỗi), KHÔNG dump body thô (giảm bề mặt
+      // rò rỉ — thong_diep_loi chưa qua maskSensitive; review contract-guardian 2026-07-15).
+      let detail = "";
+      try {
+        const raw = await res.text();
+        try {
+          const j = JSON.parse(raw) as { message?: unknown };
+          detail = typeof j.message === "string" ? j.message.slice(0, 200) : "";
+        } catch {
+          detail = raw.replace(/\s+/g, " ").trim().slice(0, 120);
+        }
+      } catch {
+        /* body không đọc được — giữ nguyên chỉ status */
+      }
+      throw new GdtError(
+        `Truy vấn ${endpoint} lỗi (HTTP ${res.status})${detail ? ` — GDT: ${detail}` : ""}.`,
+      );
     }
 
     let data: Record<string, unknown>;
