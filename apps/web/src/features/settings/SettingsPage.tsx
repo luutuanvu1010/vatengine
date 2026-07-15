@@ -48,7 +48,7 @@ export function SettingsPage() {
     setErr(null);
     setSaved(false);
     try {
-      const updated = await api.patchMe({ ten: ten.trim(), ghiChu: ghiChu.trim() ? ghiChu : "" });
+      const updated = await api.patchMe({ ten: ten.trim(), ghiChu: ghiChu.trim() ? ghiChu : null });
       applyMe(updated);
       setSaved(true);
     } catch {
