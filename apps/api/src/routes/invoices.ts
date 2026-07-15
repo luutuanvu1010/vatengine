@@ -4,6 +4,7 @@
 import { withTenant } from "@vat/db";
 import {
   getInvoiceById,
+  getInvoiceLines,
   invoiceFilterSchema,
   listInvoices,
   pageSchema,
@@ -59,7 +60,9 @@ export function invoicesRoutes(deps: AppDeps) {
     }
   });
 
-  // GET /invoices/:id — một hóa đơn header trong phạm vi tenant (CHỐT #2: không dòng hàng).
+  // GET /invoices/:id — một hóa đơn trong phạm vi tenant, KÈM mảng dòng hàng
+  // (dong_hang_hoa) join theo hoadon_id, lọc tenant_id tường minh + RLS. Pipeline U5
+  // nay có lấy dòng hàng 2 pha (ĐV3) nên bảng đã có dữ liệu để trả về.
   r.get("/:id", async (c) => {
     const id = c.req.param("id");
     // id không phải UUID → request sai (tránh lỗi 22P02 ở Postgres).
@@ -68,9 +71,14 @@ export function invoicesRoutes(deps: AppDeps) {
     const tenantId = c.get("tenantId");
     const { db, close } = await deps.getDb(c.env);
     try {
-      const row = await withTenant(db, tenantId, (tx) => getInvoiceById(tx, tenantId, id));
-      if (!row) return c.json({ error: "not_found" }, 404);
-      return c.json(row);
+      const result = await withTenant(db, tenantId, async (tx) => {
+        const row = await getInvoiceById(tx, tenantId, id);
+        if (!row) return null;
+        const dongHangHoa = await getInvoiceLines(tx, tenantId, id);
+        return { ...row, dongHangHoa };
+      });
+      if (!result) return c.json({ error: "not_found" }, 404);
+      return c.json(result);
     } finally {
       await close();
     }

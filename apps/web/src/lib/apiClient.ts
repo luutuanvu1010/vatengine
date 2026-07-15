@@ -7,9 +7,9 @@ import type {
   ConvertResult,
   ExportFormat,
   ExportResult,
+  InvoiceDetailResponse,
   InvoiceFilter,
   InvoiceListResult,
-  InvoiceRow,
   InvoiceSummary,
   MeResponse,
   Page,
@@ -144,7 +144,7 @@ export const api = {
   getSummary(filter: InvoiceFilter): Promise<InvoiceSummary> {
     return request("GET", "/invoices/summary", { query: filterQuery(filter) });
   },
-  getInvoice(id: string): Promise<InvoiceRow> {
+  getInvoice(id: string): Promise<InvoiceDetailResponse> {
     return request("GET", `/invoices/${id}`);
   },
   getReconcile(filter: InvoiceFilter): Promise<ReconcileReport> {
