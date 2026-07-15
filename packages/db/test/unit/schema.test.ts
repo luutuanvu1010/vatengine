@@ -13,6 +13,7 @@ import {
   lanDongBo,
   nguoiDung,
   taiKhoanThue,
+  tenants,
 } from "../../src/schema";
 import { TRANG_THAI_LAN_DONG_BO } from "../../src/schema/lanDongBo";
 
@@ -176,5 +177,17 @@ describe("U4 lược đồ — ràng buộc mô hình hóa (unit, offline)", () 
         expect(expected[localCol], `FK cột ${localCol}`).toBe(getTableName(ref.foreignTable));
       }
     }
+  });
+
+  it("(U-a) tenants có ghi_chu (nullable) + ban_quyen (NOT NULL, default 'Mặc định')", () => {
+    const cols = getTableConfig(tenants).columns;
+    const ghiChu = cols.find((c) => c.name === "ghi_chu");
+    expect(ghiChu, "tenants phải có cột ghi_chu").toBeDefined();
+    expect(ghiChu?.notNull, "ghi_chu phải nullable").toBe(false);
+    const banQuyen = cols.find((c) => c.name === "ban_quyen");
+    expect(banQuyen, "tenants phải có cột ban_quyen").toBeDefined();
+    expect(banQuyen?.notNull, "ban_quyen phải NOT NULL").toBe(true);
+    expect(banQuyen?.hasDefault, "ban_quyen phải có default").toBe(true);
+    expect(banQuyen?.default).toBe("Mặc định");
   });
 });
