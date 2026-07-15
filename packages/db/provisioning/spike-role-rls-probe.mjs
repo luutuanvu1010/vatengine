@@ -1,18 +1,39 @@
 // H-A.1 SPIKE — PROBE role Neon + RLS thật, bản Node (dùng khi không có psql).
-// Portable: đọc DATABASE_URL_APP (+ tuỳ chọn TENANT_REAL) từ ENV — KHÔNG paste chuỗi
-// kết nối vào chat/commit (đặt trong .dev.vars, export ra env trước khi chạy).
-//
-// Chạy:  DATABASE_URL_APP="postgres://vat_app:...@host/db?sslmode=require" \
-//        [TENANT_REAL="<uuid tenant có data>"] \
-//        node packages/db/provisioning/spike-role-rls-probe.mjs
-//
-// Kết nối PHẢI là ROLE APP (vat_app), endpoint DIRECT (không -pooler). Probe chỉ ĐỌC.
-// Chép TOÀN BỘ output (kèm ngày + region) vào docs/adr/0004-neon-role-rls-pitr.md.
+// Cách dùng (đúng quy ước .dev.vars của repo — KHÔNG paste chuỗi kết nối vào chat/commit):
+//   1) Tạo packages/db/.dev.vars (đã .gitignore) với:
+//        DATABASE_URL_APP=postgres://vat_app:<pw>@<host>/<db>?sslmode=require&channel_binding=require
+//        TENANT_REAL=<uuid tenant có data>   # tùy chọn, cho phần POSITIVE/cross-leak
+//   2) node packages/db/provisioning/spike-role-rls-probe.mjs
+// Biến trong ENV sẵn có sẽ ưu tiên hơn .dev.vars. Kết nối PHẢI là ROLE APP (vat_app),
+// endpoint DIRECT (không -pooler). Probe CHỈ ĐỌC. Chép TOÀN BỘ output (kèm ngày +
+// region Neon) vào docs/adr/0004-neon-role-rls-pitr.md.
+import { existsSync, readFileSync } from "node:fs";
 import pg from "pg";
+
+// Nạp .dev.vars (KEY=VALUE) nếu biến chưa có trong ENV. Tách ở dấu '=' ĐẦU TIÊN để
+// không vỡ khi giá trị chứa '=' hay ký tự đặc biệt của connection string (& ? @ :).
+function loadDevVars(path) {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    const eq = t.indexOf("=");
+    if (eq < 0) continue;
+    const k = t.slice(0, eq).trim();
+    let v = t.slice(eq + 1).trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
+    if (!(k in process.env)) process.env[k] = v;
+  }
+}
+loadDevVars(new URL("../.dev.vars", import.meta.url).pathname); // packages/db/.dev.vars
 
 const url = process.env.DATABASE_URL_APP;
 if (!url) {
-  console.error("THIẾU env DATABASE_URL_APP (chuỗi kết nối role app vat_app). Xem ADR-0004.");
+  console.error(
+    "THIẾU DATABASE_URL_APP (chuỗi kết nối role app vat_app). Đặt trong packages/db/.dev.vars hoặc ENV. Xem ADR-0004.",
+  );
   process.exit(2);
 }
 const tenantReal = process.env.TENANT_REAL;
