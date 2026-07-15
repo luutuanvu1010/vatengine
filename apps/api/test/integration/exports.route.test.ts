@@ -101,6 +101,41 @@ describe("REST /exports (integration, PGlite + R2 giả)", () => {
     expect(xlsxDataRowCount(bytes)).toBe(2);
   });
 
+  it("POST /exports?format=xml.zip → 201; tải lại là zip hợp lệ, 1 file .xml/hóa đơn", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await createExport(token, "format=xml.zip");
+    expect(res.status).toBe(201);
+    const { url } = (await res.json()) as { url: string };
+
+    const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
+    expect(dl.status).toBe(200);
+    expect(dl.headers.get("content-type")).toContain("application/zip");
+    const bytes = new Uint8Array(await dl.arrayBuffer());
+    const zip = unzipSync(bytes);
+    expect(Object.keys(zip).length).toBe(2); // 2 hóa đơn của A
+    for (const [name, content] of Object.entries(zip)) {
+      expect(name.endsWith(".xml")).toBe(true);
+      expect(dec.decode(content)).not.toContain("9999999999");
+    }
+  });
+
+  it("POST /exports?format=html.zip → 201; tải lại là zip hợp lệ, 1 file .html/hóa đơn", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await createExport(token, "format=html.zip");
+    expect(res.status).toBe(201);
+    const { url } = (await res.json()) as { url: string };
+
+    const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
+    expect(dl.status).toBe(200);
+    expect(dl.headers.get("content-type")).toContain("application/zip");
+    const zip = unzipSync(new Uint8Array(await dl.arrayBuffer()));
+    expect(Object.keys(zip).length).toBe(2);
+    for (const [name, content] of Object.entries(zip)) {
+      expect(name.endsWith(".html")).toBe(true);
+      expect(dec.decode(content)).toContain("<!doctype html>");
+    }
+  });
+
   it("lọc theo chieu=sold → chỉ 1 bản ghi", async () => {
     const token = await tokenFor(tenantA);
     const res = await createExport(token, "format=csv&chieu=sold");

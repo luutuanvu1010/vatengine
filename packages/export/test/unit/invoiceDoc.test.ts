@@ -1,0 +1,96 @@
+// U22 unit — render một hóa đơn (header EXPORT_COLUMNS + dòng hàng) sang XML/HTML tự
+// dựng để đóng gói xml.zip/html.zip. Escape ký tự đặc biệt (chống phá cấu trúc file khi
+// tên người bán/mua chứa "&", "<", ">" — dữ liệu từ GDT, bên thứ ba, không tin cậy).
+import { describe, expect, it } from "vitest";
+import { invoiceFileStem, invoiceToHtml, invoiceToXml } from "../../src/invoiceDoc";
+import type { ExportRow } from "../../src/rows";
+
+type Line = {
+  stt: number | null;
+  ten: string | null;
+  dvtinh: string | null;
+  sluong: string | null;
+  dgia: string | null;
+  thtien: string | null;
+  ltsuat: string | null;
+  tsuat: string | null;
+  tsuatTien: string | null;
+};
+
+function makeRow(over: Partial<ExportRow> = {}): ExportRow {
+  return {
+    id: "11111111-1111-1111-1111-111111111111",
+    tenantId: "t1",
+    khmshdon: "1",
+    khhdon: "C26TAA",
+    shdon: "1",
+    nbmst: "0100000001",
+    nbten: "Công ty Bán & Con",
+    nmmst: "0100000002",
+    nmten: "Công ty Mua",
+    tdlap: new Date("2026-04-12T09:00:00Z"),
+    tgtcthue: "1000000",
+    tgtthue: "80000",
+    tgtttbso: "1080000",
+    dvtte: "VND",
+    ttxly: 8,
+    tthai: 1,
+    chieu: "purchase",
+    nguon: "normal",
+    rawJson: {},
+    ...over,
+  } as ExportRow;
+}
+
+function makeLine(over: Partial<Line> = {}): Line {
+  return {
+    stt: 1,
+    ten: "Hàng hóa <A>",
+    dvtinh: "cái",
+    sluong: "10",
+    dgia: "100000",
+    thtien: "1000000",
+    ltsuat: "8%",
+    tsuat: "0.08",
+    tsuatTien: "80000",
+    ...over,
+  };
+}
+
+describe("invoiceToXml", () => {
+  it("sinh XML hợp lệ, chứa trường header + dòng hàng, escape ký tự đặc biệt", () => {
+    const xml = invoiceToXml(makeRow(), [makeLine()]);
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    expect(xml).toContain("<HoaDon>");
+    expect(xml).toContain("<shdon>1</shdon>");
+    expect(xml).toContain("Công ty Bán &amp; Con");
+    expect(xml).toContain("<DongHangHoa>");
+    expect(xml).toContain("Hàng hóa &lt;A&gt;");
+    expect(xml).toContain("<thtien>1000000</thtien>");
+  });
+
+  it("hóa đơn không dòng hàng → <DongHangHoa/> rỗng, vẫn hợp lệ", () => {
+    const xml = invoiceToXml(makeRow(), []);
+    expect(xml).toMatch(/<DongHangHoa\s*\/>|<DongHangHoa><\/DongHangHoa>/);
+  });
+});
+
+describe("invoiceToHtml", () => {
+  it("sinh HTML chứa bảng header + bảng dòng hàng, escape ký tự đặc biệt", () => {
+    const html = invoiceToHtml(makeRow(), [makeLine()]);
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain("1080000");
+    expect(html).toContain("Công ty Bán &amp; Con");
+    expect(html).toContain("Hàng hóa &lt;A&gt;");
+  });
+});
+
+describe("invoiceFileStem", () => {
+  it("dựng tên file từ khhdon + shdon", () => {
+    expect(invoiceFileStem(makeRow())).toBe("C26TAA-1");
+  });
+
+  it("loại ký tự không hợp lệ trong tên file (vd '/')", () => {
+    expect(invoiceFileStem(makeRow({ khhdon: "C26/TAA", shdon: "1/2" }))).toBe("C26_TAA-1_2");
+  });
+});
