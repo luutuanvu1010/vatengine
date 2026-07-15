@@ -8,6 +8,7 @@ import { Alert, Button, Card } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { saveBlob } from "../../lib/download";
 import { loadInvoiceFilter } from "../../lib/filterStore";
+import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
 import type { ExportFormat } from "../../types/api";
 
 // Nguồn: packages/export/src/profiles/registry.ts (PENDING_PROFILES). Mirror hiển thị.
@@ -32,6 +33,7 @@ const optionCard = (selected: boolean): React.CSSProperties => ({
 export function ExportsPage() {
   const [format, setFormat] = useState<ExportFormat>("xlsx");
   const [profile, setProfile] = useState<ProfileChoice>("native");
+  const isMobile = useMediaQuery(MOBILE_QUERY);
   const filter = loadInvoiceFilter();
 
   const run = useMutation({
@@ -56,7 +58,8 @@ export function ExportsPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,2fr) minmax(0,1fr)",
+          // Mobile: xếp chồng (cấu hình trên, tóm tắt/tạo file dưới). Desktop: 2 cột.
+          gridTemplateColumns: isMobile ? "1fr" : "minmax(0,2fr) minmax(0,1fr)",
           gap: "var(--sp-4)",
         }}
       >

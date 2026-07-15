@@ -9,6 +9,7 @@ import { api } from "../../lib/apiClient";
 import { formatMoneyShort } from "../../lib/format";
 import { quarterRange } from "../../lib/period";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
+import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
 import type { ChieuSummary, Role } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
 
@@ -90,6 +91,7 @@ function Shortcut({ to, title, desc }: { to: string; title: string; desc: string
 export function DashboardPage() {
   const { me } = useAuth();
   const role: Role = me?.role ?? "ke_toan";
+  const isMobile = useMediaQuery(MOBILE_QUERY);
   const period = quarterRange(new Date());
   const filter = { tuNgay: period.tuNgay, denNgay: period.denNgay };
 
@@ -118,7 +120,14 @@ export function DashboardPage() {
         subtitle="Bức tranh hóa đơn mua vào & bán ra của doanh nghiệp"
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-4)" }}>
+      <div
+        style={{
+          display: "grid",
+          // Mobile: xếp chồng để số tiền không ngắt dòng. Desktop: 2 cột.
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gap: "var(--sp-4)",
+        }}
+      >
         <StatCard title="Hóa đơn mua vào" s={mua} tone="var(--info-600)" />
         <StatCard title="Hóa đơn bán ra" s={ban} tone="var(--success-600)" />
       </div>
@@ -139,7 +148,14 @@ export function DashboardPage() {
             Xem chi tiết →
           </Link>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--sp-3)" }}>
+        <div
+          style={{
+            display: "grid",
+            // Mobile: 2×2 (4 cột quá chật ở 375px). Desktop: 4 cột.
+            gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+            gap: "var(--sp-3)",
+          }}
+        >
           <ReconcileTile n={rs?.lechThue ?? 0} label="Lệch thuế" tone="var(--danger-50)" />
           <ReconcileTile
             n={rs?.thieuSoDauRa ?? 0}

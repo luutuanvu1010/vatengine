@@ -12,6 +12,7 @@ import { api } from "../../lib/apiClient";
 import { loadInvoiceFilter } from "../../lib/filterStore";
 import { formatMoney } from "../../lib/format";
 import { labelTthai, labelTtxly } from "../../lib/statusLabels";
+import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
 import type { Finding, ReconcileReport } from "../../types/api";
 
 function SummaryCard({
@@ -60,6 +61,7 @@ function FindingRow({ children, to }: { children: React.ReactNode; to?: string }
 }
 
 function Report({ report }: { report: ReconcileReport }) {
+  const isMobile = useMediaQuery(MOBILE_QUERY);
   const { summary, findings } = report;
   const byKind = <K extends Finding["kind"]>(k: K) => findings.filter((f) => f.kind === k);
   const lech = byKind("lech_thue");
@@ -76,7 +78,14 @@ function Report({ report }: { report: ReconcileReport }) {
         </Alert>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--sp-3)" }}>
+      <div
+        style={{
+          display: "grid",
+          // Mobile: 2×2 (4 cột quá chật ở 375px). Desktop: 4 cột.
+          gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+          gap: "var(--sp-3)",
+        }}
+      >
         <SummaryCard n={summary.lechThue} label="Lệch thuế" tone="danger" />
         <SummaryCard n={summary.thieuSoDauRa} label="Nghi thiếu đầu ra" tone="warning" />
         <SummaryCard n={summary.huy} label="Hóa đơn hủy" tone="neutral" />
@@ -154,7 +163,13 @@ function Report({ report }: { report: ReconcileReport }) {
         </Card>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-4)" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gap: "var(--sp-4)",
+        }}
+      >
         <Card>
           <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>Hóa đơn hủy</h2>
           {huy.length === 0 ? (
