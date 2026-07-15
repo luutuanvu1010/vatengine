@@ -1,6 +1,6 @@
 # ADR-0004 — Kiểm chứng role Neon + hiệu lực RLS thật + PITR (H-A.1 SPIKE)
 
-- **Trạng thái:** ⬜ CHỜ BẰNG CHỨNG (chờ chủ dự án cấp Neon staging) — CHƯA duyệt.
+- **Trạng thái:** 🟡 E1–E4 (role + RLS) **ĐÃ KIỂM CHỨNG 2026-07-15** trên Neon thật (db `neondb`, role `vat_app`, hướng A — probe read-only trên DB demo). E5 (PITR) **CHỜ** thao tác Neon console. Chờ chủ dự án duyệt.
 - **Ngày mở:** 2026-07-15 · **Đơn vị:** FORDEX H-A.1 (SPIKE, Gate A).
 - **Gating:** mở khoá H-A.2 (health-check role lúc khởi động); chốt DR (Cụm 2).
 
@@ -26,41 +26,73 @@ Cách ly tenant lớp 2 (RLS `ENABLE`+`FORCE`, policy fail-closed) **thiết k�
 
 ## BẰNG CHỨNG (điền khi chạy trên staging — RAW, không tóm tắt)
 
-> Dán nguyên văn output (kèm ngày + region Neon). Che giá trị nhạy cảm nếu có.
+> Nguyên văn output `spike-role-rls-probe.mjs` chạy **2026-07-15** trên Neon `neondb`
+> (kết nối `current_user='vat_app'`). Không có giá trị nhạy cảm (chỉ metadata role/RLS).
 
-### E1 — Thuộc tính role app (`vat_app`)
+### E1 — Thuộc tính role app (`vat_app`) — ✅
 ```
-(chưa chạy — chờ Neon staging)
+current_user='vat_app', db='neondb'
+rolname   | rolsuper | rolbypassrls | rolcanlogin | rolcreatedb | rolcreaterole
+vat_app   | false    | false        | true        | false       | false
+```
+→ `vat_app` NOSUPERUSER + NOBYPASSRLS + không tạo db/role. RLS chi phối được nó.
+
+### E2 — Thuộc tính mọi role (CHỐT: neondb_owner CÓ BYPASSRLS) — ✅
+```
+rolname         | rolsuper | rolbypassrls | rolcanlogin
+cloud_admin     | true     | true         | true
+auth_lookup     | false    | true         | false   (owner hàm SECURITY DEFINER login — có chủ đích)
+neon_service    | false    | true         | true
+neon_superuser  | false    | true         | false
+neondb_owner    | false    | true         | true    ← CÓ BYPASSRLS
+vat_app         | false    | false        | true    ← role app, KHÔNG bypass
+```
+→ **Chốt dấu hỏi treo:** `neondb_owner` **CÓ BYPASSRLS=true**. Xác nhận khẳng định
+cũ trong `app-role.sql` bằng bằng chứng tái lập. ⇒ **TUYỆT ĐỐI không dùng
+`neondb_owner` (hay bất kỳ role bypassrls) cho Hyperdrive** — chỉ `vat_app`.
+
+### E3 — Sở hữu bảng + RLS enabled/forced — ✅
+```
+7/7 bảng (audit_log, dong_hang_hoa, hoa_don, lan_dong_bo, nguoi_dung,
+tai_khoan_thue, tenants): tableowner='neondb_owner', owned_by_app_role=false;
+rls_enabled=true, rls_forced=true.
+```
+→ `vat_app` KHÔNG sở hữu bảng (least-privilege). RLS ENABLE+FORCE trên MỌI bảng.
+
+### E4 — Cách ly (role vat_app) — ✅
+```
+(5) chưa set app.tenant_id  → hoa_don count = 0   (fail-closed)
+(6) tenant ngẫu nhiên       → 0
+(7) POSITIVE (tenant thật)  → 0  *(bảng hoa_don RỖNG — demo chưa có hóa đơn; không
+                                   phải RLS chặn nhầm. Hướng "thấy data tenant mình"
+                                   đã phủ bởi test PGlite cách ly, packages/db test 13)*
+(8) CROSS-LEAK tenant khác  → 0
+(9) auth_lookup_user EXECUTE bằng vat_app = true  (đường login hoạt động)
+```
+→ Fail-closed thật + không rò xuyên tenant, dưới đúng role production `vat_app`.
+
+### E5 — PITR restore thật — ⬜ CHỜ (thao tác Neon console)
+```
+(chưa chạy — chủ dự án tạo branch "Past data" tại timestamp ≤6h trong Neon Console,
+ xác nhận đọc lại được state quá khứ. Free plan history window = 6 giờ.)
 ```
 
-### E2 — Thuộc tính mọi role (chốt câu hỏi neondb_owner BYPASSRLS)
-```
-(chưa chạy)
-```
+## QUYẾT ĐỊNH
 
-### E3 — Sở hữu bảng + RLS enabled/forced
-```
-(chưa chạy)
-```
+- [x] `vat_app` NOSUPERUSER/NOBYPASSRLS/không-own-bảng → **an toàn cho Hyperdrive** (E1, E3, 2026-07-15).
+- [x] `neondb_owner` BYPASSRLS = **true** → **tuyệt đối không dùng** cho Hyperdrive (chỉ migrate/admin) (E2, 2026-07-15).
+- [x] RLS ENABLE+FORCE 7/7 bảng + fail-closed + không rò xuyên tenant dưới `vat_app` trên Neon thật → cách ly lớp 2 **đã kiểm chứng** (E3, E4, 2026-07-15).
+- [ ] **PITR khôi phục được → DR (E5) CHỜ** thao tác Neon console của chủ dự án; ghi runbook rollback.
+- [x] Tiền đề "thuộc tính role Neon + hiệu lực RLS thật" → **đã kiểm chứng 2026-07-15** (FORDEX-PROGRESS.md). Tiền đề DR/PITR vẫn CHỜ (E5).
+- [ ] **Mở khoá H-A.2** — health-check role lúc khởi động dùng ĐÚNG truy vấn đã kiểm chứng ở E1: `select rolsuper, rolbypassrls from pg_roles where rolname=current_user` + kiểm không sở hữu bảng; từ chối khởi động nếu role có bypass/super/owner. **Đủ điều kiện bắt đầu** (E1–E4 xong).
 
-### E4 — Cách ly: fail-closed (0 hàng chưa set) + cross-leak (0 hàng tenant khác)
-```
-(chưa chạy)
-```
+## Lưu ý runtime (cho H-A.2)
 
-### E5 — PITR restore thật
-```
-(chưa chạy — thao tác Neon console/API + kết quả xác nhận khôi phục)
-```
-
-## QUYẾT ĐỊNH (điền sau khi có E1–E5, chủ dự án duyệt)
-
-- [ ] `vat_app` xác nhận NOSUPERUSER/NOBYPASSRLS/không-own-bảng → **an toàn cho Hyperdrive**.
-- [ ] `neondb_owner` BYPASSRLS = (điền) → **tuyệt đối không dùng** cho Hyperdrive (chỉ migrate/admin).
-- [ ] RLS fail-closed + không rò xuyên tenant trên Neon thật → cách ly lớp 2 **đã kiểm chứng**.
-- [ ] PITR khôi phục được → DR **đã kiểm chứng**; ghi runbook rollback.
-- [ ] Cập nhật `docs/audit/FORDEX-PROGRESS.md`: 3 tiền đề CHƯA KIỂM CHỨNG (role Neon, DR/PITR) → "đã kiểm chứng, kèm ngày".
-- [ ] Mở khoá **H-A.2** (health-check role lúc khởi động dùng đúng truy vấn đã kiểm chứng ở E1–E3).
+Probe chứng minh **thuộc tính role `vat_app`** đúng. Nhưng an toàn production còn cần
+**Hyperdrive THỰC SỰ kết nối bằng `vat_app`** (không phải `neondb_owner`). `APP_DATABASE_URL`
+= `vat_app` và production-deploy.md nói Hyperdrive dùng `vat_app` — nhưng đây là bước cấu
+hình thủ công. **H-A.2** chính là cổng máy ép điều này lúc RUNTIME: kiểm role kết nối
+thật lúc bootstrap, từ chối khởi động nếu là role bypass/super/owner.
 
 ## Ràng buộc an toàn khi chạy SPIKE
 
