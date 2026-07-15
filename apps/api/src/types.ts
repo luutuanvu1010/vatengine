@@ -18,6 +18,9 @@ export interface Env {
   // Hàng đợi đồng bộ nền — producer cho "Đồng bộ ngay" (POST /tax-accounts/:id/sync).
   // Optional: chỉ có ở production (binding wrangler); dev/test tiêm qua makeEnv (hoặc bỏ).
   SYNC_QUEUE?: Queue<SyncJobMessage>;
+  // H-A.5a — số vòng PBKDF2 cho hash MỚI (var wrangler, không nhạy cảm). Không đặt →
+  // DEFAULT 100k (an toàn Free). Đặt "600000" khi nâng Paid (H-A.3) để đạt OWASP.
+  PBKDF2_ITERATIONS?: string;
 }
 
 // Trích từ JWT nội bộ (U6/U8): `tenantId` để lọc + RLS; `role` (vai RBAC, U8) để

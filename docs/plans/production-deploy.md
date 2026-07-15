@@ -88,8 +88,8 @@
 
 | Mã | Mục | Xử lý |
 |---|---|---|
-| **O1** | **Onboarding tenant tự phục vụ CHƯA có** — tạo tenant/user bằng SQL tay. Tầm nhìn 100k khách cần luồng đăng ký/admin. | **Hạng mục sản phẩm riêng**, không thuộc deploy. Tạm: seed SQL cho khách đầu. |
-| **O2** | **Trần CPU 10ms (Free)** — sync HĐ nặng có thể vượt. | Nếu Phase 2 DoD sync fail vì CPU → **nâng Workers Paid ($5)** + bỏ comment `limits` ở 2 `wrangler.jsonc` → deploy lại. |
+| **O1** | **Onboarding tenant tự phục vụ CHƯA có** — tạo tenant/user bằng SQL tay. Tầm nhìn 100k khách cần luồng đăng ký/admin. | **Hạng mục sản phẩm riêng**, không thuộc deploy. Tạm: seed SQL cho khách đầu. **⚠️ Khi xây luồng tạo user/đặt mật khẩu (H-A.5a):** PHẢI gọi `hashPassword(pw, resolvePbkdf2Iterations(c.env))` (KHÔNG dùng mặc định) để var `PBKDF2_ITERATIONS` (flip 600k khi Paid) thực sự có tác dụng. |
+| **O2** | **Trần CPU 10ms (Free)** — sync HĐ nặng có thể vượt. | Nếu Phase 2 DoD sync fail vì CPU → **nâng Workers Paid ($5)** + bỏ comment `limits` ở 2 `wrangler.jsonc` → deploy lại. **Kèm khi lên Paid (H-A.5a):** đổi `PBKDF2_ITERATIONS` trong `apps/api/wrangler.jsonc` từ `"100000"` → `"600000"` (OWASP) — 600k ~42ms vượt trần Free 10ms nên chỉ bật sau Paid; hash cũ vẫn verify (định dạng tự mô tả số vòng). |
 | **O3** | A3 remember-me (cookie HttpOnly) + A4 quên-mật-khẩu(email) còn treo (S0 hiện "sắp có"). | Tách unit sau go-live. |
 | **O4** | Test tự động chạy PGlite, KHÔNG đụng Neon thật (bài học migration 0001). | Cân nhắc nhóm test `db-real` trên Neon branch — hạng mục riêng. |
 
