@@ -7,7 +7,10 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist",
-    sourcemap: true,
+    // H-A.6 — KHÔNG phát sourcemap production: Static Assets phục vụ mọi file trong
+    // dist, nên .map công khai sẽ lộ toàn bộ mã nguồn. Dev vẫn debug được (dev server
+    // dùng nguồn gốc, không phụ thuộc build.sourcemap).
+    sourcemap: false,
   },
   server: {
     port: 5173,
