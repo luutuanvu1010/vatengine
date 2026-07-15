@@ -65,7 +65,7 @@
 |---|---|---|
 | `--fs-xs` | 12 | Caption, nhãn nhỏ, mã |
 | `--fs-sm` | 13 | Phụ, meta bảng |
-| `--fs-base` | 14 | Thân mặc định, ô bảng |
+| `--fs-base` | 16 | Thân mặc định, ô bảng |
 | `--fs-md` | 16 | Nhấn, input |
 | `--fs-lg` | 18 | Tiêu đề thẻ |
 | `--fs-xl` | 20 | Tiêu đề mục |
@@ -107,7 +107,7 @@ Line-height: thân `1.5`, tiêu đề `1.25`.
   /* type */
   --font-sans:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --fw-regular:400; --fw-medium:500; --fw-semibold:600; --fw-bold:700; --fw-extrabold:800;
-  --fs-xs:12px; --fs-sm:13px; --fs-base:14px; --fs-md:16px; --fs-lg:18px; --fs-xl:20px; --fs-2xl:24px; --fs-3xl:30px;
+  --fs-xs:12px; --fs-sm:13px; --fs-base:16px; --fs-md:16px; --fs-lg:18px; --fs-xl:20px; --fs-2xl:24px; --fs-3xl:30px;
   --lh-body:1.5; --lh-heading:1.25;
   /* spacing */
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px; --sp-12:48px;
