@@ -13,6 +13,7 @@ interface AuthValue {
   email: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  applyMe: (me: MeResponse) => void;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -57,6 +58,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("anon");
         setMe(null);
         setEmail(null);
+      },
+      applyMe(next: MeResponse) {
+        setMe(next);
       },
     }),
     [status, me, email],

@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
-import { vi } from "../../lib/i18n/vi";
+import { useAuth } from "../../features/auth/auth-context";
 import { labelRole } from "../../lib/rbac";
 import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
 import type { MeResponse } from "../../types/api";
+import { ProfileMenu } from "./ProfileMenu";
 import { Sidebar } from "./Sidebar";
 
 /** Khung sau đăng nhập: sidebar trái + header (tên DN + vai + đăng xuất) + nội dung.
  * Mobile (⩽767px): sidebar ẩn thành drawer trượt, mở bằng hamburger ở header. */
 export function AppLayout({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
-  const initials = me.ten.trim().slice(0, 2).toUpperCase();
+  const { email } = useAuth();
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -132,41 +133,7 @@ export function AppLayout({ me, onLogout }: { me: MeResponse; onLogout: () => vo
                 {labelRole(me.role)}
               </span>
             )}
-            <span
-              aria-hidden="true"
-              style={{
-                width: 32,
-                height: 32,
-                flexShrink: 0,
-                borderRadius: "var(--radius-full)",
-                background: "var(--brand-600)",
-                color: "#fff",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "var(--fs-xs)",
-                fontWeight: "var(--fw-bold)",
-              }}
-            >
-              {initials}
-            </span>
-            <button
-              type="button"
-              onClick={onLogout}
-              style={{
-                flexShrink: 0,
-                whiteSpace: "nowrap",
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-md)",
-                padding: "var(--sp-2) var(--sp-3)",
-                cursor: "pointer",
-                fontSize: "var(--fs-sm)",
-                color: "var(--text-secondary)",
-              }}
-            >
-              {vi.logout}
-            </button>
+            <ProfileMenu me={me} email={email} onLogout={onLogout} />
           </div>
         </header>
         <main
