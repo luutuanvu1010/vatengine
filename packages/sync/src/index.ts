@@ -11,4 +11,7 @@ export {
   type PeriodWindow,
   currentPeriodWindow,
   buildSyncMessages,
+  // U22 — backfill khoảng lọc quá khứ: tách khoảng thành cửa sổ tháng đầy đủ + dựng job.
+  monthlyWindows,
+  buildBackfillMessages,
 } from "./syncJob";
