@@ -82,4 +82,6 @@ export interface AppDeps {
   getTransport: (env: Env) => GdtTransport;
   // H-A.5b — khóa đăng nhập per-account (lockout). key = email chuẩn hóa.
   getLoginLimiter: (env: Env, key: string) => LoginLimiterClient;
+  // U22 — tracker backfill theo backfillId (DO thật ở production; test tiêm giả).
+  getBackfillTracker: (env: Env, backfillId: string) => BackfillTrackerClient;
 }
