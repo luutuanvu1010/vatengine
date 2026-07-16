@@ -1,80 +1,34 @@
-// D — Dashboard tổng quan (màn đầu sau đăng nhập). Nguồn: /invoices/summary (đếm + tổng
-// tiền theo chiều) + /reconcile (4 số). Kỳ mặc định = quý hiện tại. Lối tắt phản chiếu
-// RBAC (ke_toan ẩn Kết xuất + Kết nối thuế).
+// D — Dashboard tổng quan TỐI GIẢN (U23-C): giữ đúng 1 dòng trạng thái kết nối GDT + lối
+// tắt theo RBAC. KHÔNG hiển thị số tiền / số đối chiếu (bỏ /invoices/summary + /reconcile ở
+// màn này). Trạng thái kết nối suy từ GET /tax-accounts (tokenHetHan). Lối tắt phản chiếu
+// RBAC client (ke_toan ẩn Kết xuất + Kết nối thuế) — chỉ là UX, server vẫn là biên tin cậy.
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Card, ErrorState, Loading } from "../../components/ui/primitives";
+import { Card, Loading } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
-import { formatMoneyShort } from "../../lib/format";
-import { quarterRange } from "../../lib/period";
+import { formatDateVN } from "../../lib/format";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
-import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
-import type { ChieuSummary, Role } from "../../types/api";
+import type { Role, TaxAccountView } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
 
-function StatCard({
-  title,
-  s,
-  tone,
-}: { title: string; s: ChieuSummary | undefined; tone: string }) {
-  return (
-    <Card>
-      <div
-        style={{
-          color: "var(--text-tertiary)",
-          fontSize: "var(--fs-sm)",
-          fontWeight: "var(--fw-semibold)",
-        }}
-      >
-        {title}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: "var(--sp-3)",
-          marginTop: "var(--sp-2)",
-        }}
-      >
-        <span
-          style={{ fontSize: "var(--fs-3xl)", fontWeight: "var(--fw-extrabold)" }}
-          className="tabular"
-        >
-          {s?.count ?? 0}
-        </span>
-        <span
-          style={{ fontSize: "var(--fs-xl)", fontWeight: "var(--fw-bold)", color: tone }}
-          className="tabular"
-        >
-          {formatMoneyShort(s?.tongTtbso ?? null) || "0"} đ
-        </span>
-      </div>
-      <div
-        style={{
-          color: "var(--text-tertiary)",
-          fontSize: "var(--fs-sm)",
-          marginTop: "var(--sp-1)",
-        }}
-      >
-        Tổng thanh toán · thuế {formatMoneyShort(s?.tongTthue ?? null) || "0"} đ
-      </div>
-    </Card>
-  );
-}
-
-function ReconcileTile({ n, label, tone }: { n: number; label: string; tone: string }) {
-  return (
-    <div style={{ padding: "var(--sp-3)", background: tone, borderRadius: "var(--radius-md)" }}>
-      <div
-        style={{ fontSize: "var(--fs-2xl)", fontWeight: "var(--fw-extrabold)" }}
-        className="tabular"
-      >
-        {n}
-      </div>
-      <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>{label}</div>
-    </div>
-  );
+/** Trạng thái kết nối GDT suy từ danh sách tài khoản thuế: ĐÃ kết nối nếu có ít nhất một
+ * token còn hạn (tokenHetHan trong tương lai). Trả token hết hạn muộn nhất để hiển thị. */
+export function connectionStatus(
+  accounts: TaxAccountView[],
+  now: Date,
+): { connected: boolean; expiresAt: string | null } {
+  let latest: number | null = null;
+  let latestIso: string | null = null;
+  for (const a of accounts) {
+    if (!a.tokenHetHan) continue;
+    const t = new Date(a.tokenHetHan).getTime();
+    if (t > now.getTime() && (latest === null || t > latest)) {
+      latest = t;
+      latestIso = a.tokenHetHan;
+    }
+  }
+  return { connected: latestIso !== null, expiresAt: latestIso };
 }
 
 function Shortcut({ to, title, desc }: { to: string; title: string; desc: string }) {
@@ -91,79 +45,39 @@ function Shortcut({ to, title, desc }: { to: string; title: string; desc: string
 export function DashboardPage() {
   const { me } = useAuth();
   const role: Role = me?.role ?? "ke_toan";
-  const isMobile = useMediaQuery(MOBILE_QUERY);
-  const period = quarterRange(new Date());
-  const filter = { tuNgay: period.tuNgay, denNgay: period.denNgay };
 
-  const summary = useQuery({
-    queryKey: ["dashboard-summary", filter],
-    queryFn: () => api.getSummary(filter),
-  });
-  const recon = useQuery({
-    queryKey: ["dashboard-reconcile", filter],
-    queryFn: () => api.getReconcile(filter),
+  // Chỉ đọc trạng thái kết nối — KHÔNG gọi summary/reconcile ở màn này (U23-C).
+  const q = useQuery({
+    queryKey: ["tax-accounts"],
+    queryFn: () => api.listTaxAccounts(),
   });
 
-  if (summary.isPending || recon.isPending) return <Loading />;
-  if (summary.isError)
-    return <ErrorState message="Không tải được tổng quan." onRetry={() => summary.refetch()} />;
+  if (q.isPending) return <Loading />;
 
-  const byChieu = summary.data.byChieu ?? [];
-  const mua = byChieu.find((c) => c.chieu === "purchase");
-  const ban = byChieu.find((c) => c.chieu === "sold");
-  const rs = recon.data?.summary;
+  const accounts = q.data ?? [];
+  const conn = connectionStatus(accounts, new Date());
 
   return (
     <div style={{ display: "grid", gap: "var(--sp-5)" }}>
-      <PageHeader
-        title="Tổng quan"
-        subtitle="Bức tranh hóa đơn mua vào & bán ra của doanh nghiệp"
-      />
+      <PageHeader title="Tổng quan" subtitle="Trạng thái kết nối & lối tắt" />
 
-      <div
-        style={{
-          display: "grid",
-          // Mobile: xếp chồng để số tiền không ngắt dòng. Desktop: 2 cột.
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: "var(--sp-4)",
-        }}
-      >
-        <StatCard title="Hóa đơn mua vào" s={mua} tone="var(--info-600)" />
-        <StatCard title="Hóa đơn bán ra" s={ban} tone="var(--success-600)" />
-      </div>
-
+      {/* 1 dòng trạng thái kết nối GDT (không con số tiền). */}
       <Card>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "var(--sp-3)",
-          }}
-        >
-          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>
-            Tình hình đối chiếu
-          </h2>
-          <Link to="/reconcile" style={{ fontSize: "var(--fs-sm)" }}>
-            Xem chi tiết →
-          </Link>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            // Mobile: 2×2 (4 cột quá chật ở 375px). Desktop: 4 cột.
-            gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
-            gap: "var(--sp-3)",
-          }}
-        >
-          <ReconcileTile n={rs?.lechThue ?? 0} label="Lệch thuế" tone="var(--danger-50)" />
-          <ReconcileTile
-            n={rs?.thieuSoDauRa ?? 0}
-            label="Nghi thiếu đầu ra"
-            tone="var(--warning-50)"
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)" }}>
+          <span
+            aria-hidden
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              background: conn.connected ? "var(--success-600)" : "var(--text-tertiary)",
+            }}
           />
-          <ReconcileTile n={rs?.huy ?? 0} label="Hóa đơn hủy" tone="var(--surface-muted)" />
-          <ReconcileTile n={rs?.thayThe ?? 0} label="Bị thay thế" tone="var(--surface-muted)" />
+          <span style={{ fontWeight: "var(--fw-semibold)" }}>
+            {conn.connected
+              ? `Đã kết nối · token còn hạn đến ${formatDateVN(conn.expiresAt, true)}`
+              : "Chưa kết nối"}
+          </span>
         </div>
       </Card>
 
@@ -184,10 +98,9 @@ export function DashboardPage() {
             gap: "var(--sp-3)",
           }}
         >
-          <Shortcut to="/invoices" title="Danh sách hóa đơn" desc="Lọc theo kỳ, chiều, nguồn" />
-          <Shortcut to="/reconcile" title="Đối chiếu thuế" desc="Phát hiện lệch & nghi thiếu" />
+          <Shortcut to="/invoices" title="Xem hóa đơn" desc="Lọc theo kỳ, chiều, nguồn" />
           {canExport(role) ? (
-            <Shortcut to="/exports" title="Kết xuất & Convert" desc="Xuất xlsx/csv theo profile" />
+            <Shortcut to="/exports" title="Kết xuất" desc="Xuất xlsx/csv theo profile" />
           ) : null}
           {canManageTaxAccounts(role) ? (
             <Shortcut

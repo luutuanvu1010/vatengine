@@ -1,53 +1,121 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAuth } from "../../src/features/auth/auth-context";
 import { DashboardPage } from "../../src/features/dashboard/DashboardPage";
 import { clearToken, setToken } from "../../src/lib/apiClient";
 import { AppRouter } from "../../src/routes/AppRouter";
+import type { MeResponse, Role, TaxAccountView } from "../../src/types/api";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
-describe("Dashboard (D)", () => {
+function taxAccount(over: Partial<TaxAccountView> = {}): TaxAccountView {
+  return {
+    id: "a1",
+    username: "4201568932",
+    loai: "chinh",
+    uyQuyenLuc: null,
+    tokenHetHan: null,
+    ngayTao: "2026-01-01T00:00:00.000Z",
+    ...over,
+  };
+}
+
+/** Mock fetch chỉ trả /tax-accounts (Dashboard tối giản chỉ cần trạng thái kết nối). */
+function mockTaxAccounts(accounts: TaxAccountView[]) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes("/tax-accounts")) return json(200, accounts);
+    return json(200, { rows: [], total: 0, limit: 50, offset: 0 });
+  });
+}
+
+/** Render DashboardPage CÔ LẬP (không app-shell nav) với một vai — seed qua applyMe (1 lần).
+ * Prop đặt tên `vaiTro` (không phải `role`) để tránh linter a11y hiểu nhầm là ARIA role. */
+function DashboardAs({ vaiTro }: { vaiTro: Role }) {
+  const { applyMe } = useAuth();
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current) return;
+    done.current = true;
+    const me: MeResponse = {
+      ten: "DN",
+      mst: "4201568932",
+      goiDichVu: null,
+      banQuyen: "Mặc định",
+      ghiChu: null,
+      role: vaiTro,
+    };
+    applyMe(me);
+  }, [applyMe, vaiTro]);
+  return <DashboardPage />;
+}
+
+describe("Dashboard (U23-C) — tối giản: 1 dòng trạng thái kết nối, không số tiền", () => {
   beforeEach(() => setToken("t"));
   afterEach(() => {
     clearToken();
     vi.restoreAllMocks();
   });
 
-  it("thẻ mua/bán + đối chiếu 4 số (rút gọn tr/tỷ)", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes("/invoices/summary")) {
-        return json(200, {
-          byChieu: [
-            {
-              chieu: "purchase",
-              count: 4,
-              tongTcthue: null,
-              tongTthue: "35000000",
-              tongTtbso: "389100000",
-            },
-            {
-              chieu: "sold",
-              count: 2,
-              tongTcthue: null,
-              tongTthue: "177000000",
-              tongTtbso: "2080000000",
-            },
-          ],
-          total: { count: 6, tongTcthue: null, tongTthue: null, tongTtbso: null },
-        });
-      }
-      return json(200, {
-        findings: [],
-        summary: { lechThue: 2, thieuSoDauRa: 1, huy: 1, thayThe: 1 },
-      });
-    });
+  it("(a) không hiển thị số tiền + KHÔNG gọi /invoices/summary hay /reconcile", async () => {
+    const spy = mockTaxAccounts([]);
     renderWithProviders(<DashboardPage />);
-    expect(await screen.findByText("389,1 tr đ")).toBeInTheDocument();
-    expect(screen.getByText("2,08 tỷ đ")).toBeInTheDocument();
-    expect(screen.getByText("Xem chi tiết →")).toBeInTheDocument();
-    // ke_toan (me null → fallback) → KHÔNG có lối tắt kết xuất.
-    expect(screen.queryByText("Kết xuất & Convert")).not.toBeInTheDocument();
+    await screen.findByText(/Chưa kết nối/);
+    const called = spy.mock.calls.map((c) => String(c[0]));
+    expect(called.some((u) => u.includes("/invoices/summary"))).toBe(false);
+    expect(called.some((u) => u.includes("/reconcile"))).toBe(false);
+    // Không còn chuỗi tiền rút gọn (tr/tỷ + " đ").
+    expect(screen.queryByText(/\btr đ\b|\btỷ đ\b/)).not.toBeInTheDocument();
+  });
+
+  it("(b) token còn hạn → 'Đã kết nối' + ngày giờ VN (UTC+7) đúng", async () => {
+    mockTaxAccounts([taxAccount({ tokenHetHan: "2999-06-15T10:30:00.000Z" })]);
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/Đã kết nối/)).toBeInTheDocument();
+    // UTC 10:30 + 7h = 17:30 ngày 15/06/2999.
+    expect(screen.getByText(/15\/06\/2999 17:30/)).toBeInTheDocument();
+  });
+
+  it("(b) không có tài khoản/token → 'Chưa kết nối'", async () => {
+    mockTaxAccounts([]);
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/Chưa kết nối/)).toBeInTheDocument();
+  });
+
+  it("(b) token đã hết hạn → 'Chưa kết nối'", async () => {
+    mockTaxAccounts([taxAccount({ tokenHetHan: "2000-01-01T00:00:00.000Z" })]);
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/Chưa kết nối/)).toBeInTheDocument();
+  });
+
+  it("(b) nhiều tài khoản: chọn token còn hạn MUỘN NHẤT, bỏ qua token hết hạn", async () => {
+    mockTaxAccounts([
+      taxAccount({ id: "expired", tokenHetHan: "2000-01-01T00:00:00.000Z" }),
+      taxAccount({ id: "early", tokenHetHan: "2999-01-10T00:00:00.000Z" }),
+      taxAccount({ id: "late", tokenHetHan: "2999-06-15T10:30:00.000Z" }),
+    ]);
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/Đã kết nối/)).toBeInTheDocument();
+    // Hiển thị mốc MUỘN NHẤT (15/06/2999 17:30), không phải mốc sớm hơn.
+    expect(screen.getByText(/15\/06\/2999 17:30/)).toBeInTheDocument();
+    expect(screen.queryByText(/10\/01\/2999/)).not.toBeInTheDocument();
+  });
+
+  it("(c) vai ke_toan: chỉ 'Xem hóa đơn'; ẩn 'Kết xuất' + 'Kết nối tài khoản thuế'", async () => {
+    mockTaxAccounts([]);
+    renderWithProviders(<DashboardAs vaiTro="ke_toan" />);
+    expect(await screen.findByText("Xem hóa đơn")).toBeInTheDocument();
+    expect(screen.queryByText("Kết xuất")).not.toBeInTheDocument();
+    expect(screen.queryByText("Kết nối tài khoản thuế")).not.toBeInTheDocument();
+  });
+
+  it("(d) vai ke_toan_truong: hiện đủ 3 lối tắt", async () => {
+    mockTaxAccounts([]);
+    renderWithProviders(<DashboardAs vaiTro="ke_toan_truong" />);
+    expect(await screen.findByText("Kết xuất")).toBeInTheDocument();
+    expect(screen.getByText("Xem hóa đơn")).toBeInTheDocument();
+    expect(screen.getByText("Kết nối tài khoản thuế")).toBeInTheDocument();
   });
 });
 

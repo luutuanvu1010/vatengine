@@ -64,7 +64,7 @@
 | `GET /tax-accounts` | — | `200 [{id, username, loai, uyQuyenLuc, tokenHetHan, ngayTao}]` (KHÔNG `tokenHienTai`/`secretRef`) | `ke_toan_truong`,`quan_tri` | `apps/api/src/routes/taxAccounts.ts` |
 | `GET /tax-accounts/:id` | `:id` UUID | `200 {…}` · `404` khác tenant | `ke_toan_truong`,`quan_tri` | như trên |
 
-Bề mặt UI bổ sung (ngoài S0–S5, từ brief §3 + quyết định): **Dashboard** (`/invoices/summary` + `/reconcile`) · **Cài đặt chung** (`/me` — bỏ địa chỉ, hiện MST; B6). S5 dùng A2 để khôi phục stepper + panel token. S0 "Ghi nhớ đăng nhập"/"Quên mật khẩu?" dựng sẵn chỗ, chờ backend A3/A4 (tách unit sau).
+Bề mặt UI bổ sung (ngoài S0–S5, từ brief §3 + quyết định): **Dashboard** (chỉ `GET /tax-accounts` — 1 dòng trạng thái kết nối GDT theo `tokenHetHan`, KHÔNG số tiền/đối chiếu; U23-C) · **Cài đặt chung** (`/me` — bỏ địa chỉ, hiện MST; B6). S5 dùng A2 để khôi phục stepper + panel token. S0 "Ghi nhớ đăng nhập"/"Quên mật khẩu?" dựng sẵn chỗ, chờ backend A3/A4 (tách unit sau).
 
 ## 4. Ánh xạ trường dữ liệu (API → hiển thị)
 
