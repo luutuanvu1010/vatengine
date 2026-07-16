@@ -76,10 +76,8 @@ Mỗi tiêu chí phải có test tự động phủ, toàn bộ xanh; `make lint
 - ✅ **`missingMonths = windows − coveredMonths`** — danh sách cửa sổ tháng cần enqueue (giữ thứ tự đầu vào). Đây chính là đầu vào producer B5.
 
 ### 4C. Theo dõi tiến độ — nơi lưu trạng thái backfill
-Hai phương án, chốt ở bước hiện thực sau khi cân nhắc (KHÔNG chốt mù ở kế hoạch):
-- **PA-A: Durable Object `BackfillTracker`** (một DO / backfillId). Consumer báo "xong kỳ X" về DO; `GET /backfill/:id` đọc DO. Hợp ngăn xếp (ADR-0001: trạng thái phối hợp ở DO), nhanh, không đụng schema Postgres. *Ưu tiên đề xuất.*
-- **PA-B: bảng `backfill` + `backfill_thang` trong Postgres.** Bền vững, xem lại được lịch sử, dễ test SQL — nhưng thêm migration + ghi chéo từ consumer nền. 
-- Dù PA nào: **suy ra tiến độ từ `lan_dong_bo`** là lựa chọn rẻ nhất cho phần "tháng nào đã xong" (consumer đã ghi sẵn) — tracker chỉ cần giữ *danh sách tháng thuộc backfill này* + trạng thái tổng; "xong/chưa" đối chiếu `lan_dong_bo`. Cân nhắc kỹ ở B3.
+- ✅ **CHỐT PA-A: Durable Object `BackfillTracker`** (2026-07-16, chủ dự án chọn — **ADR-0005**). DO chỉ lưu **định nghĩa** backfill (`tenantId, taikhoanId, months[], directions[], createdAtMs`); **tiến độ từng tháng SUY từ `lan_dong_bo`** (B3 `coveredMonths`) ở tầng GET (B6) → **consumer/pipeline U5 KHÔNG bị đụng** (không cần báo "xong kỳ" về DO — sửa lại so với mô tả PA-A cũ, tôn trọng §7). `apps/api/src/backfillTracker.ts` (thuần) + `backfillTrackerDO.ts` (DO wiring), binding `BACKFILL_TRACKER`, migration v4.
+- ~~PA-B: bảng Postgres~~ — KHÔNG chọn (thêm migration + ghi chéo từ consumer nền = đụng §7). Lý do đầy đủ: ADR-0005.
 
 ### 4D. API (tầng `apps/api`, Hono)
 - `POST /tax-accounts/:id/backfill` — producer, khuôn giống `:id/sync` (token check, cách ly tenant, audit), enqueue `missingMonths`, trả `{backfillId, thangCanLay, tongSoThang}`.
@@ -98,7 +96,7 @@ Hai phương án, chốt ở bước hiện thực sau khi cân nhắc (KHÔNG c
 - **B1 — ✅ XONG (2026-07-16).** Kiểm chứng "tháng rỗng có để dấu không" (research + test, KHÔNG code tính năng). Kết quả: tháng rỗng VẪN ghi `lan_dong_bo` 'completed' → **AC2/4B KHÔNG cần bản vá ghi dấu**; `coveredMonths` suy từ `lan_dong_bo`. Bằng chứng: §1 "ĐÃ KIỂM CHỨNG" + test `sync.test.ts` "(U22 B1)". Cổng đóng, B2+ mở.
 - **B2 — `monthlyWindows` + `buildBackfillMessages`** trong `@vat/sync` (AC1). Test thuần, phủ biên tháng/năm/nhuận. Không mạng.
 - **B3 — ✅ XONG (2026-07-16).** `coveredMonths`/`missingMonths` (AC2) trong `packages/sync/src/coverage.ts`. Test integration `backfillCoverage.test.ts` (9 ca, PGlite — KHÔNG `vitest-pool-workers`: pg/PGlite không chạy trong workerd, khớp `sync` vitest.config, không gọi GDT thật). Cách ly tenant/tài khoản/chiều + biên; coverage 100% dòng. dod-auditor + security-reviewer: ĐẠT, không lỗ hổng.
-- **B4 — Cơ chế theo dõi tiến độ** (AC4): chốt PA-A vs PA-B ở đầu lát này (ghi 1 ADR ngắn nếu chọn DO), hiện thực tracker + test.
+- **B4 — ✅ XONG (2026-07-16).** Cơ chế theo dõi tiến độ (AC4, phần primitive): chốt **PA-A Durable Object** (ADR-0005). `BackfillTracker` DO lưu định nghĩa backfill; logic thuần `initDef` (store-once + `conflict` chéo tenant) / `readDef` (phạm vi tenant) trong `apps/api/src/backfillTracker.ts` (6 test, 100% phủ); DO wiring `backfillTrackerDO.ts` (loại coverage); binding + migration v4 (thuần cộng dồn). dod-auditor + security-reviewer: ĐẠT sau khi vá lỗ hổng `/init` echo def chéo tenant. **Wiring vào AppDeps + route để B5 dùng.**
 - **B5 — `POST …/backfill`** (AC3, AC5, AC7): producer enqueue missingMonths, token check, cách ly tenant, audit, idempotent. Test route + cách ly chéo tenant.
 - **B6 — `GET /backfill/:id`** (AC4): đọc tracker, phạm vi tenant. Test.
 - **B7 — Frontend tự kích hoạt + thanh tiến độ theo tháng** (AC6): tích hợp vào màn Danh sách hóa đơn, phân biệt "đang lấy" vs "rỗng thật" vs "token hết hạn". Test component/e2e nhẹ.

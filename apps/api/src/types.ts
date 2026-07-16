@@ -3,6 +3,7 @@ import type { SyncJobMessage } from "@vat/sync";
 // Kiểu dùng chung cho Worker API (U6). Tầng ứng dụng PHI TRẠNG THÁI (mục 11).
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import type { BackfillDef } from "./backfillTracker";
 import type { LockGate, LoginLockEnv } from "./loginLimiter";
 import type { Role } from "./rbac";
 
@@ -26,6 +27,10 @@ export interface Env extends LoginLockEnv {
   // production; test tiêm getLoginLimiter giả. Thiếu → fail-open (login vẫn chạy; WAF
   // per-IP + timing/audit vẫn bảo vệ).
   LOGIN_LIMITER?: DurableObjectNamespace;
+  // U22 — Durable Object theo dõi backfill (1 DO / backfillId). Optional: binding
+  // production; thiếu → producer backfill (B5) trả 503 (không fail-open — không tracker
+  // thì không theo dõi tiến độ được).
+  BACKFILL_TRACKER?: DurableObjectNamespace;
 }
 
 // Trích từ JWT nội bộ (U6/U8): `tenantId` để lọc + RLS; `role` (vai RBAC, U8) để
@@ -58,6 +63,14 @@ export interface LoginLimiterClient {
   check: () => Promise<LockGate>;
   recordFailure: () => Promise<void>;
   recordSuccess: () => Promise<void>;
+}
+
+// U22 — client gọi Durable Object tracker backfill theo backfillId. Production gọi DO
+// thật; test tiêm giả. `init` store-once (idempotent); `get` kiểm phạm vi tenant (def
+// tenant khác → null, như 404). Tiến độ từng tháng suy từ lan_dong_bo ở tầng GET (B6).
+export interface BackfillTrackerClient {
+  init: (def: BackfillDef) => Promise<{ def: BackfillDef; created: boolean }>;
+  get: (tenantId: string) => Promise<BackfillDef | null>;
 }
 
 // Tiêm phụ thuộc để test đi qua route thật với PGlite + R2 giả (không cần binding thật).

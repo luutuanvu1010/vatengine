@@ -10,6 +10,9 @@ import type { Env } from "./types";
 export type { Env };
 // H-A.5b — Durable Object khóa đăng nhập PHẢI export tên từ entry (Workers yêu cầu).
 export { LoginLimiter } from "./loginLimiterDO";
+// U22 — Durable Object tracker backfill (B4). Export tên từ entry (Workers yêu cầu);
+// producer/GET (B5/B6) tiêu thụ qua binding BACKFILL_TRACKER.
+export { BackfillTracker } from "./backfillTrackerDO";
 
 const app = createApp({
   getDb: getDbFromHyperdrive,
