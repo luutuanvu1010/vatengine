@@ -16,10 +16,28 @@
 | **D2** | POST /tax-accounts auto mst + hạn mức | ✅ DONE — `80642e3` |
 | **D3** | POST /tax-accounts/:id/disconnect | ✅ DONE — `df0792e` |
 | **D4** | Rút gọn màn kết nối (apps/web) | ✅ DONE — `e0f22e9` |
-| E1 | U17 — đăng ký + gói dịch vụ (BE) | ⬜ chưa |
-| E2 | U18 — Admin API super-admin (BE) | ⬜ chưa |
-| E3 | U19 — Cổng Admin `/admin` (FE) | ⬜ chưa |
-| E4 | U21 — Dashboard giám sát Admin (FE) | ⬜ chưa |
+| E1 | U17 — đăng ký + gói dịch vụ (BE) | ⬜ CHƯA — **tách phiên riêng** |
+| E2 | U18 — Admin API super-admin (BE) | ⬜ CHƯA — **tách phiên riêng** |
+| E3 | U19 — Cổng Admin `/admin` (FE) | ⬜ CHƯA — **tách phiên riêng** |
+| E4 | U21 — Dashboard giám sát Admin (FE) | ⬜ CHƯA — **tách phiên riêng** |
+
+## Trạng thái điều phối (2026-07-16)
+
+**A→D (4 tinh chỉnh khách hàng) HOÀN TẤT** trên nhánh `claude/u23-unit-execution-59b6aa`
+(commit `53036e8`…`1c16117`). **Admin (E = U17→U18→U19→U21) TÁCH sang phiên chuyên biệt**
+theo quyết định chủ dự án — không chạy tiếp trong phiên này.
+
+### Bàn giao cho phiên Admin (E)
+- **Đọc trước:** `docs/plans/U17-plan.md`, `U18-plan.md`, `U19-plan.md`, `U21-plan.md` (ở MAIN
+  worktree `/Users/tuanbao/Documents/Projects/VATCrawlbot/docs/plans/`, **untracked**) + `U23-plan-4-tinh-chinh.md` §1.
+- **Thứ tự phụ thuộc:** U17 (BE gói dịch vụ + duyệt) → U18 (Admin API super-admin XUYÊN-TENANT,
+  **nhạy cảm bảo mật nhất** — danh tính/đăng nhập/token admin TÁCH khỏi khách, không lộ token
+  thuế/hóa đơn tenant; **bắt buộc security-reviewer**) → U19 (FE cổng `/admin` tách biệt) →
+  U21 (FE dashboard giám sát Admin).
+- **Việc U17 phải làm khi tới:** (1) thay hardcode `getGioiHanTkThue(tenant)` (`apps/api/src/routes/taxAccounts.ts`)
+  bằng nguồn **gói dịch vụ**; (2) xử **nợ TOCTOU hạn mức** (xem mục D bên dưới) khi bật module
+  tài khoản con — task chip đã tạo.
+- **Môi trường:** worktree mới CẦN `npm ci` trước (xem "Điều kiện môi trường").
 
 ## Điều kiện môi trường (bắt buộc để cổng DoD chạy đúng)
 
