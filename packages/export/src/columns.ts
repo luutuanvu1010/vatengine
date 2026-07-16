@@ -2,6 +2,7 @@
 // Nguồn sự thật cho CẢ csv lẫn xlsx (không nhân đôi danh sách cột). ttxly/tthai xuất MÃ số
 // (chốt #3: KHÔNG nhãn tiếng Việt — U6 đã hoãn nhãn, tránh nguồn sự thật thứ hai).
 import type { HoaDonRow } from "@vat/query";
+import type { InvoiceLineLike } from "./invoiceDoc";
 
 export type ColumnKind = "text" | "date" | "money" | "int";
 
@@ -49,10 +50,10 @@ export function formatDate(d: Date): string {
 // "#,##0" cho ô số không) + hàm `cell` sinh ExportCell từ một hóa đơn. Đây là lớp chung cho
 // CẢ mẫu native (U7) LẪN profile ánh xạ kế toán (U11) → một encoder duy nhất, không nhân
 // đôi logic mã hóa (tránh nguồn sự thật thứ hai).
-export interface RenderColumn {
+export interface RenderColumn<T = HoaDonRow> {
   header: string;
   money: boolean;
-  cell: (row: HoaDonRow) => ExportCell;
+  cell: (row: T) => ExportCell;
 }
 
 /** Cột render cho mẫu native (U7): EXPORT_COLUMNS → RenderColumn. Nhãn = label, tiền =
@@ -63,6 +64,37 @@ export function nativeRenderColumns(): RenderColumn[] {
     money: col.kind === "money",
     cell: (row: HoaDonRow) => cellFor(col, row),
   }));
+}
+
+// ------------------------- Dòng hàng chi tiết (U23-B) ------------------------- //
+
+// Một dòng hàng để kết xuất = trường của dong_hang_hoa (InvoiceLineLike) + khóa `shdon`
+// liên kết về hóa đơn. NGUỒN CỘT DUY NHẤT cho cả xlsx (sheet "Chi tiết dòng hàng") lẫn
+// csv (khối cùng tên) — không nhân đôi danh sách cột.
+export type LineDetailRow = InvoiceLineLike & { shdon: string };
+
+/** Tên sheet/khối dòng hàng — dùng chung xlsx (tên sheet 2) + csv (nhãn khối). */
+export const LINE_DETAIL_SECTION = "Chi tiết dòng hàng";
+
+const strCell = (v: string | null | undefined): ExportCell =>
+  v === null || v === undefined ? BLANK : { t: "str", v };
+// Số/tiền giữ CHUỖI nguyên bản (String không ép float) — >2^53 vẫn chính xác (mục 7.1).
+const numCell = (v: string | number | null | undefined): ExportCell =>
+  v === null || v === undefined ? BLANK : { t: "num", v: String(v) };
+
+/** Cột render cho khối/sheet dòng hàng: shdon · stt · ten · dvtinh · sluong · dgia · thtien
+ * · tsuat. `dgia`/`thtien` áp numFmt tiền; `sluong`/`tsuat` là số thô (không #,##0). */
+export function lineDetailRenderColumns(): RenderColumn<LineDetailRow>[] {
+  return [
+    { header: "Số HĐ", money: false, cell: (r) => strCell(r.shdon) },
+    { header: "STT", money: false, cell: (r) => numCell(r.stt) },
+    { header: "Tên hàng hóa/dịch vụ", money: false, cell: (r) => strCell(r.ten) },
+    { header: "ĐVT", money: false, cell: (r) => strCell(r.dvtinh) },
+    { header: "Số lượng", money: false, cell: (r) => numCell(r.sluong) },
+    { header: "Đơn giá", money: true, cell: (r) => numCell(r.dgia) },
+    { header: "Thành tiền", money: true, cell: (r) => numCell(r.thtien) },
+    { header: "Thuế suất", money: false, cell: (r) => numCell(r.tsuat) },
+  ];
 }
 
 /** Chuẩn hóa một ô theo cột + hàng. null/undefined → trống (không giá trị giả). */

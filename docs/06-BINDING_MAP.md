@@ -14,6 +14,7 @@
 |---|---|
 | Bộ lọc + phân trang | `packages/query/src/filters.ts` |
 | Cột bảng hóa đơn | `packages/export/src/columns.ts` (`EXPORT_COLUMNS`) |
+| Cột dòng hàng kết xuất (U23-B) | `packages/export/src/columns.ts` (`lineDetailRenderColumns`) |
 | Tổng hợp | `packages/query/src/summarize.ts` |
 | Vai trò RBAC | `apps/api/src/rbac.ts` (`ROLES`) |
 | Đối chiếu | `packages/reconcile/src/types.ts` |
@@ -29,8 +30,8 @@
 |---|---|---|---|
 | S0 | **Đăng nhập nội bộ** (email + mật khẩu SaaS) | `POST /auth/login` | công khai |
 | S1 | **Danh sách hóa đơn** (lọc kỳ/chiều/nguồn/MST + phân trang) | `GET /invoices`, `GET /invoices/summary` | 3 vai |
-| S2 | **Chi tiết hóa đơn** (CHỈ header — chưa có dòng hàng) | `GET /invoices/:id` | 3 vai |
-| S3 | **Kết xuất & Convert** (xlsx/csv + profile kế toán) → tải file | `POST /exports`, `POST /exports/convert`, `GET /exports/:id` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
+| S2 | **Chi tiết hóa đơn** (header + bảng dòng hàng) | `GET /invoices/:id` | 3 vai |
+| S3 | **Kết xuất & Convert** (xlsx/csv + profile kế toán; xlsx 2 sheet / csv 2 khối: hóa đơn + Chi tiết dòng hàng — U23-B) → tải file | `POST /exports`, `POST /exports/convert`, `GET /exports/:id` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
 | S4 | **Đối chiếu** (4 loại phát hiện + tóm tắt) | `GET /reconcile` | 3 vai |
 | S5 | **Kết nối tài khoản thuế (GDT)** — đăng ký MST → ủy quyền → captcha → đăng nhập lưu token | `POST /tax-accounts`, `/:id/authorize`, `GET /:id/captcha`, `POST /:id/login` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
 
@@ -43,8 +44,8 @@
 | `POST /auth/login` | `{email, password}` | `200 {token}` (JWT HS256, `tenant_id`+`role`, 8h) | `400` sai định dạng · `401` sai thông tin (gộp, không phân biệt email/mật khẩu) | công khai |
 | `GET /invoices` | query: bộ lọc chuẩn + `limit`(≤200,mđ 50) + `offset`(≥0) | `200 {rows[], total, limit, offset}` | `400` | 3 vai |
 | `GET /invoices/summary` | query: bộ lọc chuẩn | `200 {byChieu:[{chieu,count,tongTcthue,tongTthue,tongTtbso}], total:{count,tongTcthue,tongTthue,tongTtbso}}` (tiền = chuỗi/null) | `400` | 3 vai |
-| `GET /invoices/:id` | `:id` UUID | `200 <hàng hóa đơn>` (header) | `400` id sai · `404` | 3 vai |
-| `POST /exports` | query: `format=xlsx\|csv` + bộ lọc | `201 {id, key, url}` | `400` | `ke_toan_truong`,`quan_tri` (`ke_toan`→403) |
+| `GET /invoices/:id` | `:id` UUID | `200 {...header, dongHangHoa: DongHangHoaRow[]}` (dòng hàng sort theo stt; tiền/số = chuỗi) | `400` id sai · `404` | 3 vai |
+| `POST /exports` | query: `format=xlsx\|csv` + bộ lọc | `201 {id, key, url}` — file có thêm sheet/khối "Chi tiết dòng hàng" (khóa `shdon`; U23-B) | `400` | `ke_toan_truong`,`quan_tri` (`ke_toan`→403) |
 | `POST /exports/convert` | query: `profile` + `format` + bộ lọc | `201 {id, key, url, profile}` | `400` profile/format sai | `ke_toan_truong`,`quan_tri` |
 | `GET /exports/:id` | `:id` (mã kết xuất) | `200` file stream (R2, giới hạn tenant) | `400` · `404` | `ke_toan_truong`,`quan_tri` |
 | `GET /reconcile` | query: bộ lọc chuẩn | `200 {findings[], summary}` | `400` | 3 vai |

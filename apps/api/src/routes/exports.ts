@@ -8,7 +8,7 @@ import {
   type ExportFormat,
   accountingCsvStream,
   accountingXlsxFromBatches,
-  csvStream,
+  csvStreamWithLines,
   fetchLinesForInvoices,
   getProfile,
   invoiceToHtml,
@@ -16,7 +16,7 @@ import {
   isExportFormat,
   isProfileId,
   iterateInvoices,
-  toXlsxFromBatches,
+  toXlsxWithLinesFromBatches,
   zipStreamFromBatches,
 } from "@vat/export";
 import { invoiceFilterSchema } from "@vat/query";
@@ -70,13 +70,19 @@ export function exportsRoutes(deps: AppDeps) {
     const { db, close } = await deps.getDb(c.env);
     try {
       await withTenant(db, tenantId, async (tx) => {
-        const batches = iterateInvoices(tx, tenantId, filter.data);
+        // Dòng hàng (dong_hang_hoa) nạp theo lô, LỌC tenant_id tường minh (U23-B, cách ly
+        // tenant — multi-tenant.md). Dùng chung cho csv/xlsx/xml.zip/html.zip.
+        const fetchLines = (ids: string[]) => fetchLinesForInvoices(tx, tenantId, ids);
         // CSV/xml.zip/html.zip: stream thẳng vào R2 (không giữ cả file trong RAM). XLSX:
         // gom (bản chất zip) nhưng tiêu thụ generator lô-by-lô, không nạp cả tập ORM cùng lúc.
         if (format === "csv") {
-          await storage.put(key, csvStream(batches));
+          // Khối hóa đơn + khối "Chi tiết dòng hàng" (U23-B): hai generator độc lập trên CÙNG
+          // bộ lọc — khối 1 duyệt hết trước, khối 2 duyệt lại + fetchLines lô-by-lô.
+          const invoiceBatches = iterateInvoices(tx, tenantId, filter.data);
+          const lineBatches = iterateInvoices(tx, tenantId, filter.data);
+          await storage.put(key, csvStreamWithLines(invoiceBatches, lineBatches, fetchLines));
         } else if (format === "xml.zip" || format === "html.zip") {
-          const fetchLines = (ids: string[]) => fetchLinesForInvoices(tx, tenantId, ids);
+          const batches = iterateInvoices(tx, tenantId, filter.data);
           const render =
             format === "xml.zip"
               ? (
@@ -95,7 +101,9 @@ export function exportsRoutes(deps: AppDeps) {
                 });
           await storage.put(key, zipStreamFromBatches(batches, fetchLines, render));
         } else {
-          await storage.put(key, await toXlsxFromBatches(batches));
+          // XLSX: sheet "HoaDon" + sheet "Chi tiết dòng hàng" (U23-B).
+          const batches = iterateInvoices(tx, tenantId, filter.data);
+          await storage.put(key, await toXlsxWithLinesFromBatches(batches, fetchLines));
         }
         // Audit "xuất dữ liệu" (append). KHÔNG log raw_json/token (security.md). U12:
         // mask chi_tiet — filter tự do (vd nbmst) có thể chứa giá trị nhạy cảm.

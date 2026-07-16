@@ -9,8 +9,22 @@ export {
   type ExportColumn,
 } from "./columns";
 export { type RenderColumn, nativeRenderColumns } from "./columns";
-export { CSV_BOM, csvHeaderLine, csvRowLine, csvStream, guardCsvText, toCsv } from "./csv";
-export { toXlsx, toXlsxFromBatches } from "./xlsx";
+// U23-B — cột dòng hàng (nguồn duy nhất cho sheet/khối "Chi tiết dòng hàng").
+export {
+  LINE_DETAIL_SECTION,
+  type LineDetailRow,
+  lineDetailRenderColumns,
+} from "./columns";
+export {
+  CSV_BOM,
+  csvHeaderLine,
+  csvRowLine,
+  csvStream,
+  csvStreamWithLines,
+  guardCsvText,
+  toCsv,
+} from "./csv";
+export { toXlsx, toXlsxFromBatches, toXlsxWithLinesFromBatches } from "./xlsx";
 export { DEFAULT_PAGE_SIZE, iterateInvoices, type ExportRow } from "./rows";
 export { EXPORT_FORMATS, isExportFormat, type ExportFormat } from "./formats";
 // U22 — kết xuất đa định dạng xml.zip/html.zip: một hóa đơn = một file trong zip.

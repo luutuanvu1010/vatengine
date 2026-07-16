@@ -6,7 +6,13 @@ import { zipSync } from "fflate";
 // vào <v>, không ép float). Chỉ dùng fflate.zipSync (sync, THUẦN JS — không Node builtin) +
 // TextEncoder (chuẩn Web) → chạy cả Node lẫn workerd. Core `*For(columns, sheetName)` chạy
 // trên RenderColumn[] để dùng chung mẫu native (U7) LẪN profile kế toán (U11).
-import { type RenderColumn, nativeRenderColumns } from "./columns";
+import {
+  LINE_DETAIL_SECTION,
+  type RenderColumn,
+  lineDetailRenderColumns,
+  nativeRenderColumns,
+} from "./columns";
+import type { InvoiceLineLike } from "./invoiceDoc";
 
 const NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const enc = new TextEncoder();
@@ -35,14 +41,14 @@ function inlineStrCell(ref: string, text: string, style?: string): string {
   return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${escapeXml(text)}</t></is></c>`;
 }
 
-function headerRowXml(columns: RenderColumn[]): string {
+function headerRowXml<T>(columns: RenderColumn<T>[]): string {
   const cells = columns
     .map((col, j) => inlineStrCell(`${colLetter(j + 1)}1`, col.header, STYLE_HEADER))
     .join("");
   return `<row r="1">${cells}</row>`;
 }
 
-function dataRowXml(columns: RenderColumn[], row: HoaDonRow, rowIndex: number): string {
+function dataRowXml<T>(columns: RenderColumn<T>[], row: T, rowIndex: number): string {
   const cells = columns
     .map((col, j) => {
       const ref = `${colLetter(j + 1)}${rowIndex}`;
@@ -63,15 +69,14 @@ function worksheetXml(rowsBody: string): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>${rowsBody}</sheetData></worksheet>`;
 }
 
-const CONTENT_TYPES =
-  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-  `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-  `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-  `<Default Extension="xml" ContentType="application/xml"/>` +
-  `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
-  `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
-  `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
-  "</Types>";
+// Content_Types cho workbook N sheet: 1 Override cho mỗi worksheet + workbook + styles.
+function contentTypesXml(sheetCount: number): string {
+  let sheets = "";
+  for (let i = 1; i <= sheetCount; i++) {
+    sheets += `<Override PartName="/xl/worksheets/sheet${i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
+  }
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+}
 
 const RELS_ROOT =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -79,30 +84,45 @@ const RELS_ROOT =
   `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>` +
   "</Relationships>";
 
-// Tên sheet do caller quyết (U7 = "HoaDon"; profile kế toán có tên riêng). Escape để tên
-// chứa ký tự đặc biệt không phá XML.
-function workbookXml(sheetName: string): string {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${escapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+// Tên sheet do caller quyết (U7 = "HoaDon"; U23-B thêm "Chi tiết dòng hàng"; profile kế toán
+// có tên riêng). Escape để tên chứa ký tự đặc biệt không phá XML. Mỗi sheet r:id="rId{i}".
+function workbookXml(sheetNames: string[]): string {
+  const sheets = sheetNames
+    .map((name, i) => `<sheet name="${escapeXml(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`)
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets}</sheets></workbook>`;
 }
 
-const WORKBOOK_RELS =
-  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-  `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-  `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>` +
-  `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
-  "</Relationships>";
+// Quan hệ workbook: rId1..rIdN → các worksheet, rId{N+1} → styles (giữ đúng thứ tự cũ cho
+// trường hợp 1 sheet: rId1→sheet1, rId2→styles).
+function workbookRelsXml(sheetCount: number): string {
+  let rels = "";
+  for (let i = 1; i <= sheetCount; i++) {
+    rels += `<Relationship Id="rId${i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i}.xml"/>`;
+  }
+  rels += `<Relationship Id="rId${sheetCount + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`;
+}
 
 const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>`;
 
-function zipXlsx(sheetBody: string, sheetName: string): Uint8Array {
-  return zipSync({
-    "[Content_Types].xml": enc.encode(CONTENT_TYPES),
+// Đóng gói N sheet — NGUỒN OOXML DUY NHẤT (zipXlsx 1-sheet chỉ là trường hợp đặc biệt).
+function zipXlsxMulti(sheets: { name: string; body: string }[]): Uint8Array {
+  const parts: Record<string, Uint8Array> = {
+    "[Content_Types].xml": enc.encode(contentTypesXml(sheets.length)),
     "_rels/.rels": enc.encode(RELS_ROOT),
-    "xl/workbook.xml": enc.encode(workbookXml(sheetName)),
-    "xl/_rels/workbook.xml.rels": enc.encode(WORKBOOK_RELS),
+    "xl/workbook.xml": enc.encode(workbookXml(sheets.map((s) => s.name))),
+    "xl/_rels/workbook.xml.rels": enc.encode(workbookRelsXml(sheets.length)),
     "xl/styles.xml": enc.encode(STYLES),
-    "xl/worksheets/sheet1.xml": enc.encode(worksheetXml(sheetBody)),
+  };
+  sheets.forEach((s, i) => {
+    parts[`xl/worksheets/sheet${i + 1}.xml`] = enc.encode(worksheetXml(s.body));
   });
+  return zipSync(parts);
+}
+
+function zipXlsx(sheetBody: string, sheetName: string): Uint8Array {
+  return zipXlsxMulti([{ name: sheetName, body: sheetBody }]);
 }
 
 // ------------------------- Core tổng quát (RenderColumn[]) ------------------------- //
@@ -139,6 +159,7 @@ export async function toXlsxFromBatchesFor(
 
 const NATIVE = nativeRenderColumns();
 const NATIVE_SHEET = "HoaDon";
+const LINE_COLS = lineDetailRenderColumns();
 
 /** Encode CẢ tập hóa đơn thành bytes xlsx (mẫu native). */
 export function toXlsx(rows: HoaDonRow[]): Uint8Array {
@@ -148,4 +169,34 @@ export function toXlsx(rows: HoaDonRow[]): Uint8Array {
 /** Encode native từ các LÔ (async) — route dùng để tiêu thụ generator keyset lô-by-lô. */
 export function toXlsxFromBatches(batches: AsyncIterable<HoaDonRow[]>): Promise<Uint8Array> {
   return toXlsxFromBatchesFor(NATIVE, batches, NATIVE_SHEET);
+}
+
+/**
+ * Encode native + THÊM sheet "Chi tiết dòng hàng" (U23-B). Một pass qua generator hóa đơn:
+ * sheet 1 = header hóa đơn (như native); sheet 2 = mỗi dòng hàng 1 row, khóa `shdon` liên
+ * kết về hóa đơn. `fetchLines` (tái dùng fetchLinesForInvoices, lọc tenant_id tường minh)
+ * nạp dòng hàng theo lô — cách ly tenant nằm ở đây. Tiền/số lượng nhét thẳng vào <v> (chuỗi,
+ * không ép float). Hóa đơn không có dòng hàng → không sinh row (map.get ?? []).
+ */
+export async function toXlsxWithLinesFromBatches(
+  invoiceBatches: AsyncIterable<HoaDonRow[]>,
+  fetchLines: (ids: string[]) => Promise<Map<string, InvoiceLineLike[]>>,
+): Promise<Uint8Array> {
+  let invBody = headerRowXml(NATIVE);
+  let lineBody = headerRowXml(LINE_COLS);
+  let invR = 2;
+  let lineR = 2;
+  for await (const batch of invoiceBatches) {
+    for (const row of batch) invBody += dataRowXml(NATIVE, row, invR++);
+    const linesByInvoice = await fetchLines(batch.map((r) => r.id));
+    for (const inv of batch) {
+      for (const l of linesByInvoice.get(inv.id) ?? []) {
+        lineBody += dataRowXml(LINE_COLS, { ...l, shdon: inv.shdon }, lineR++);
+      }
+    }
+  }
+  return zipXlsxMulti([
+    { name: NATIVE_SHEET, body: invBody },
+    { name: LINE_DETAIL_SECTION, body: lineBody },
+  ]);
 }
