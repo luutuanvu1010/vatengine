@@ -11,7 +11,7 @@
 |---|---|---|
 | **A** | Dòng hàng ở màn Chi tiết (apps/web) | ✅ DONE — `53036e8` |
 | **B** | Dòng hàng vào xlsx/csv (packages/export) | ✅ DONE — `9fe2fb5` |
-| C | Tổng quan tối giản (apps/web) | ⬜ chưa |
+| **C** | Tổng quan tối giản (apps/web) | ✅ DONE — `b16572e` |
 | D1 | Migration UNIQUE(mst) + UNIQUE(tenant_id,username) | ⬜ chưa |
 | D2 | POST /tax-accounts auto mst + hạn mức | ⬜ chưa |
 | D3 | POST /tax-accounts/:id/disconnect | ⬜ chưa |
@@ -67,3 +67,13 @@
   WASM) — ENOENT coverage tmp / hook timeout. Chạy lại tuần tự → xanh. Không phải lỗi mã.
 - **Nợ nhỏ (không chặn):** `toXlsxFromBatches`/`csvStream` (bản không dòng hàng) route không còn gọi,
   giữ làm public API của `@vat/export` (còn test riêng) — chủ dự án cân nhắc dọn sau nếu muốn.
+
+### C — Tổng quan tối giản — DONE (`b16572e`) — 2026-07-16
+- **Làm:** viết lại `DashboardPage.tsx` — bỏ thẻ số tiền + số đối chiếu, bỏ gọi `getSummary`/`getReconcile`.
+  Giữ đúng 1 dòng trạng thái kết nối GDT từ `GET /tax-accounts` (`connectionStatus()` chọn token còn
+  hạn muộn nhất, bỏ token hết hạn; giờ VN UTC+7). Lối tắt theo RBAC: Xem hóa đơn (3 vai) · Kết xuất +
+  Kết nối tài khoản thuế (ẩn `ke_toan`). Không lộ token thô.
+- **Verify:** `make lint` EXIT=0; `make test` EXIT=0 (apps/web dashboardSettings 8/8; auth/responsiveNav
+  không vỡ — dashboard card khác accessible-name với nav link nên không đụng).
+- **QA:** dod-auditor — **không Critical**. Đã xử Major (cập nhật `06-BINDING_MAP.md:67`: Dashboard
+  chỉ còn `GET /tax-accounts`) + Minor (thêm test đa-tài-khoản chọn mốc muộn nhất).
