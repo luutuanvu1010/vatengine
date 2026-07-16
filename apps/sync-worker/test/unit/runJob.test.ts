@@ -210,19 +210,19 @@ describe("runScheduledSync — điều phối job đồng bộ nền", () => {
     expect(calls.reauthRuntime).toEqual([]);
   });
 
-  it("circuit breaker MỞ → bỏ qua tick, không gọi sync/GDT, ghi breakerSkip", async () => {
+  it("circuit breaker MỞ → backpressure (reenqueue delay, không max_retries), không gọi sync/GDT, ghi breakerSkip", async () => {
     const { deps, calls } = makeDeps({ permit: { allowed: false, reason: "breaker_open" } });
     const out = await runScheduledSync(deps, MSG);
-    expect(out.kind).toBe("skipped_breaker");
+    expect(out).toEqual({ kind: "retry_backpressure", reason: "breaker_open" });
     expect(calls.sync).toBe(0);
     expect(calls.transportFetch).toBe(0);
     expect(calls.breakerSkip).toBe(1);
   });
 
-  it("rate limit (giỏ rỗng) → outcome retry (hoãn), không gọi sync", async () => {
+  it("rate limit (giỏ rỗng) → backpressure (reenqueue delay), không gọi sync", async () => {
     const { deps, calls } = makeDeps({ permit: { allowed: false, reason: "rate_limited" } });
     const out = await runScheduledSync(deps, MSG);
-    expect(out.kind).toBe("retry");
+    expect(out).toEqual({ kind: "retry_backpressure", reason: "rate_limited" });
     expect(calls.sync).toBe(0);
   });
 

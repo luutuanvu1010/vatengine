@@ -32,8 +32,15 @@
       {
         "queue": "vat-sync",
         // Retry lỗi tạm (transient) — chốt chặn: sau max_retries → dead-letter.
+        // (H-B.4: backpressure rate_limited/breaker_open KHÔNG dùng đường này — được
+        // reenqueue message mới có delay ở consumer nên KHÔNG tính vào max_retries.)
         "max_retries": 5,
         "max_batch_size": 10,
+        // H-B.4 — GIỚI HẠN đồng thời consumer: chặn bùng nổ invocation làm cạn pool
+        // Hyperdrive/dồn dập GDT. Giá trị THẬN TRỌNG mặc định; tinh chỉnh trên staging
+        // theo tải thật (H-A.4 tách Hyperdrive + H-B.5 sharding). CHƯA KIỂM CHỨNG số
+        // tối ưu — đây là trần an toàn, không phải cam kết hiệu năng.
+        "max_concurrency": 3,
         "dead_letter_queue": "vat-sync-dlq"
       }
     ]
@@ -60,7 +67,13 @@
     "LIMITER_CAPACITY": "10",
     "LIMITER_REFILL_PER_SEC": "2",
     "LIMITER_FAILURE_THRESHOLD": "5",
-    "LIMITER_COOLDOWN_MS": "60000"
+    "LIMITER_COOLDOWN_MS": "60000",
+    // H-B.4 — fan-out: giãn khởi động tenant trên ~5' (jitter) + hoãn backpressure ~60s
+    // (giỏ token đầy lại / breaker cooldown) + trần 10 lần reenqueue liên tiếp rồi rơi
+    // về dead-letter (chặn vòng lặp vô hạn khi kẹt lâu). Bỏ trống → mặc định fanout.ts.
+    "FANOUT_JITTER_SPREAD_SEC": "300",
+    "FANOUT_BACKPRESSURE_DELAY_SEC": "60",
+    "FANOUT_MAX_BACKPRESSURE": "10"
   }
 
   // JWT_SECRET / bí mật egress nạp qua `wrangler secret put` — security.md.

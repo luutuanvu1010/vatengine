@@ -31,7 +31,7 @@
 | H-B.1 | CODE | Chưa bắt đầu — composite index CONCURRENTLY (cần staging bảng lớn đo EXPLAIN) | — |
 | H-B.2 | CODE | Xong — INSERT thuần → `ON CONFLICT DO UPDATE` (suy ra khóa tự nhiên 6 trường) khử đua 2-sync; test race tất định (proxy che SELECT) + test nhánh ON CONFLICT dưới RLS FORCE/non-superuser; QA2 PASS (dod+security). | (commit đơn vị) |
 | H-B.3 | CODE | Xong (phần P1) — `queryClient.clear()` + `clearInvoiceFilter()` ở 3 ranh giới phiên (logout/401/login); QA2 PASS (dod+security). **Hoãn có chủ đích:** tenantId-in-queryKey (thừa vì clear() bao trùm mọi cache ở mọi ranh giới; client cố ý không có tenant_id — apiClient) và `--text-disabled` (đã định nghĩa sẵn tokens.css:33). Ràng buộc tương lai: mọi luồng đổi phiên/tenant MỚI phải gọi cleanup này (xem `.claude/rules/multi-tenant.md`). | (commit đơn vị) |
-| H-B.4 | CODE | Chưa bắt đầu — fan-out: batch ≤100 + backoff + jitter + tách rate_limited (🟢) | — |
+| H-B.4 | CODE | Xong — fan-out: `chunkForQueue` ≤100/≤256KB + `jitterDelaySeconds` (hash-tenant) + `consumerAction` tách backpressure (rate_limited/breaker_open → reenqueue msg mới có delay, KHÔNG tính max_retries) khỏi lỗi thật; **trần `bpAttempt` (mặc định 10) → rơi dead-letter** chặn vòng lặp vô hạn (fix Major security-review); `max_concurrency:3`. QA2 PASS (dod+security). | (commit đơn vị) |
 | H-B.5 | CODE | Chờ H-B.4 — sharding set-based | — |
 | H-B.6 | CODE | Chờ H-B.4 — DLQ consumer + egress health + quota tổng | — |
 | **GATE C — chặn thương mại hóa** | | | |

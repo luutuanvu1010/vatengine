@@ -30,12 +30,15 @@ export async function runScheduledSync(deps: RunJobDeps, msg: SyncJobMessage): P
   const permit = await deps.limiter.tryAcquire();
   if (!permit.allowed) {
     if (permit.reason === "breaker_open") {
-      // Máy chủ thuế đang lỗi/đã ngắt mạch → bỏ qua tick, KHÔNG gọi GDT.
+      // Máy chủ thuế đang lỗi/đã ngắt mạch → KHÔNG gọi GDT lúc này. H-B.4: reenqueue
+      // có delay (backpressure) thay vì bỏ tick — breaker chỉ mở TẠM, không được làm
+      // mất cả kỳ đồng bộ. KHÔNG tính vào max_retries. Vẫn ghi audit (breakerSkip).
       await deps.recorder.breakerSkip(msg);
-      return { kind: "skipped_breaker" };
+      return { kind: "retry_backpressure", reason: "breaker_open" };
     }
-    // Hết token trong giỏ → hoãn: queue thử lại (không phải lỗi, không ghi vết).
-    return { kind: "retry", reason: "rate_limited" };
+    // Hết token trong giỏ → ĐẨY LÙI: reenqueue có delay (không phải lỗi, không ghi vết,
+    // KHÔNG tính max_retries — H-B.4). Giỏ token tự đầy lại theo thời gian.
+    return { kind: "retry_backpressure", reason: "rate_limited" };
   }
 
   // Gọi dịch vụ đồng bộ idempotent (U5). db đã bound sẵn vào deps.sync.
