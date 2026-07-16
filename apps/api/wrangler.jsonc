@@ -38,7 +38,15 @@
   "durable_objects": {
     "bindings": [{ "name": "LOGIN_LIMITER", "class_name": "LoginLimiter" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LoginLimiter"] }]
+  // KHÔI PHỤC sau sự cố 2026-07-16: một phiên deploy nhầm code cũ (thiếu H-A.5b) rồi áp
+  // delete-class (v2) → DO LoginLimiter đang chạy bị xoá. Worker LIVE đã áp v1+v2. Thêm v3
+  // tạo lại class (SQLite namespace mới, chỉ mất bộ đếm lockout tạm). GIỮ nguyên v1/v2 theo
+  // thứ tự (Cloudflare legacy migrations = lịch sử cộng dồn, không sửa tag cũ).
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["LoginLimiter"] },
+    { "tag": "v2", "deleted_classes": ["LoginLimiter"] },
+    { "tag": "v3", "new_sqlite_classes": ["LoginLimiter"] }
+  ]
 
   // H-A.5b — ngưỡng khóa đăng nhập (KHÔNG nhạy cảm; bỏ trống → mặc định loginLimiter.ts:
   // 10 lần sai / 15' → khóa 15'). Tinh chỉnh theo môi trường.
