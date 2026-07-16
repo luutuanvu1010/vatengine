@@ -70,10 +70,10 @@ describe("apiClient — bề mặt đầy đủ (đúng path/method/body)", () =
     expect(lastCall(m)[0]).toContain("/tax-accounts");
     await api.getTaxAccount("ta-1");
     expect(lastCall(m)[0]).toContain("/tax-accounts/ta-1");
-    await api.registerTaxAccount("0311772540", "chinh");
+    await api.registerTaxAccount({ username: "0311772540", loai: "con" });
     let [url, init] = lastCall(m);
     expect(url).toContain("/tax-accounts");
-    expect(JSON.parse(String(init.body))).toEqual({ username: "0311772540", loai: "chinh" });
+    expect(JSON.parse(String(init.body))).toEqual({ username: "0311772540", loai: "con" });
     await api.authorizeTaxAccount("ta-1");
     expect(lastCall(m)[0]).toContain("/tax-accounts/ta-1/authorize");
     await api.getCaptcha("ta-1");
@@ -82,12 +82,14 @@ describe("apiClient — bề mặt đầy đủ (đúng path/method/body)", () =
     [url, init] = lastCall(m);
     expect(url).toContain("/tax-accounts/ta-1/login");
     expect(JSON.parse(String(init.body))).toEqual({ password: "pw", ckey: "ck", cvalue: "cv" });
+    await api.disconnectTaxAccount("ta-1");
+    expect(lastCall(m)[0]).toContain("/tax-accounts/ta-1/disconnect");
   });
 
-  it("registerTaxAccount không loai → body chỉ username", async () => {
+  it("registerTaxAccount() không tham số → body rỗng (backend auto MST — U23-D2)", async () => {
     const m = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(201, { id: "x" }));
-    await api.registerTaxAccount("0311772540");
-    expect(JSON.parse(String(lastCall(m)[1].body))).toEqual({ username: "0311772540" });
+    await api.registerTaxAccount();
+    expect(JSON.parse(String(lastCall(m)[1].body))).toEqual({});
   });
 
   it("lỗi mạng (fetch reject) → ApiError(0, 'network_error')", async () => {

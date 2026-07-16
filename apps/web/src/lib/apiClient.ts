@@ -183,8 +183,16 @@ export const api = {
   getTaxAccount(id: string): Promise<TaxAccountView> {
     return request("GET", `/tax-accounts/${id}`);
   },
-  registerTaxAccount(username: string, loai?: "chinh" | "con"): Promise<{ id: string }> {
-    return request("POST", "/tax-accounts", { body: { username, ...(loai ? { loai } : {}) } });
+  // U23-D2: tài khoản chính KHÔNG cần username (backend auto = MST gốc). `username` chỉ dùng
+  // cho tài khoản con (khi module bật). Đăng ký chính: gọi không tham số.
+  registerTaxAccount(
+    body: { username?: string; loai?: "chinh" | "con" } = {},
+  ): Promise<{ id: string }> {
+    return request("POST", "/tax-accounts", { body });
+  },
+  // U23-D3: ngắt kết nối — xóa token đã lưu (giữ bản ghi MST).
+  disconnectTaxAccount(id: string): Promise<{ ok: true }> {
+    return request("POST", `/tax-accounts/${id}/disconnect`);
   },
   authorizeTaxAccount(id: string): Promise<{ ok: true }> {
     return request("POST", `/tax-accounts/${id}/authorize`);
