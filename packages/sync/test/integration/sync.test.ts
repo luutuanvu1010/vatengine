@@ -230,6 +230,35 @@ describe("sync — upsert idempotent (integration, PGlite)", () => {
     expect(runs[0]?.ketThuc).toBeInstanceOf(Date);
   });
 
+  it("(U22 B1) tháng RỖNG THẬT (0 hóa đơn) VẪN ghi 1 phiên 'completed' → phân biệt 'đã phủ' vs 'chưa từng'", async () => {
+    // Cổng chặn U22 (docs/plans/U22-plan.md §5 B1): backfill chỉ đúng nếu "đã đồng
+    // bộ nhưng rỗng" để lại DẤU khác với "chưa từng đồng bộ". Nếu tháng rỗng KHÔNG
+    // để dấu, mỗi lần lọc sẽ backfill lại tháng rỗng vô ích. Test này TÁI LẬP hành
+    // vi hiện có làm BẰNG CHỨNG (Hiến pháp §Nguyên tắc bằng chứng) cho quyết định
+    // AC2/4B: `coveredMonths` suy ra từ `lan_dong_bo` là ĐỦ, KHÔNG cần bảng/patch mới.
+    const { transport } = makeTransport(onePage([])); // GDT trả 0 dòng cho kỳ này
+
+    const r = await sync({ db, transport, tenantId, taikhoanId, ...BASE_OPTS });
+
+    expect(r.trangThai).toBe("completed"); // rỗng thật vẫn là "hoàn thành", KHÔNG failed
+    expect(r.soHdMoi).toBe(0);
+    expect(r.soHdCapNhat).toBe(0);
+    expect((await db.select().from(hoaDon)).length).toBe(0); // đúng: không có hóa đơn
+
+    // DẤU tồn tại: đúng 1 bản ghi lan_dong_bo 'completed' cho (tenant,tài khoản,chiều)
+    // phủ khoảng này → truy vấn coveredMonths phân biệt được "đã phủ (rỗng)" với "chưa
+    // từng" (không có bản ghi nào). tu_ngay/den_ngay giữ khoảng đã phủ để đối chiếu tháng.
+    const runs = await db.select().from(lanDongBo).where(eq(lanDongBo.tenantId, tenantId));
+    expect(runs.length).toBe(1);
+    expect(runs[0]).toMatchObject({
+      trangThai: "completed",
+      chieu: "purchase",
+      soHdMoi: 0,
+      soHdCapNhat: 0,
+    });
+    expect(runs[0]?.ketThuc).toBeInstanceOf(Date);
+  });
+
   it("(7) cách ly tenant: sync tenant A không lộ dữ liệu sang tenant B (RLS FORCE, role non-superuser)", async () => {
     const tenantB = await makeTenant(db, "Cty B", "0100000002");
 
