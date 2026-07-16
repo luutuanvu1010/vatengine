@@ -23,11 +23,11 @@
 
 Nguồn: `docs/plans/production-deploy.md` (Phase 1 backend + Phase 2 front-door same-origin). Các bước CHỈ chủ dự án làm: dọn DB test (`delete from tenants where mst='9999999999'`), xoay mật khẩu owner, `wrangler secret put JWT_SECRET/TOKEN_KEK`, custom domain + DNS, ẩn API (`workers_dev:false`), **HSTS + Always-HTTPS zone** (H-A.6), **WAF rate-limit rule `/api/auth/login`** (H-A.5b). Đã bổ sung 2 mục H-A.5b/H-A.6 vào DoD Phase 2 của `production-deploy.md`.
 
-## Việc Claude CÓ THỂ chuẩn bị (không chạm production) — chưa làm, để phiên sau nếu cần
+## Việc Claude CÓ THỂ chuẩn bị (không chạm production) — ✅ ĐÃ LÀM 2026-07-16
 
-- Dry-run build 2 Worker (`wrangler deploy --dry-run`) + SPA (`vite build`) để chắc build sạch.
-- Rà + cập nhật `production-deploy.md`: thêm bước "xác nhận Hyperdrive=vat_app" + "áp DO migration" vào Phase 1, đúng thứ tự an toàn.
-- Soạn chuỗi lệnh `wrangler` copy-paste kèm kiểm chứng từng bước.
+- ✅ **Dry-run build sạch** 2 Worker (`wrangler deploy --dry-run`, EXIT 0) + SPA (`vite build`, EXIT 0) + front-door `vat-web` (`--dry-run`, EXIT 0). Bằng chứng + kích thước + binding: `production-deploy.md` §1 (bảng trạng thái). Xác nhận cả `vat-api`+`vat-sync-worker` bind cùng Hyperdrive `1011ff82…`, `PBKDF2_ITERATIONS="100000"`.
+- ✅ **Cập nhật `production-deploy.md` Phase 1:** thêm PRECHECK "Hyperdrive=vat_app" (bước 1, CHẶN) + lưu ý áp DO migration ở bước Deploy + DoD "roleGuard qua".
+- ✅ **Soạn chuỗi lệnh** copy-paste kèm kiểm chứng từng bước: `production-deploy.md` **Phụ lục A** (chủ dự án chạy).
 
 ## Thứ tự đề xuất (chủ dự án)
 
