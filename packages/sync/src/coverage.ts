@@ -9,7 +9,7 @@
 // an toàn, nên thà backfill lại phần dở còn hơn bỏ sót — ưu tiên đủ dữ liệu.
 import { TRANG_THAI_LAN_DONG_BO, lanDongBo } from "@vat/db";
 import type { InvoiceDirection } from "@vat/gdt-client";
-import { and, eq, gte, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { PeriodWindow } from "./syncJob";
@@ -115,4 +115,141 @@ export async function missingMonths<
 ): Promise<PeriodWindow[]> {
   const covered = await coveredMonths(db, tenantId, taikhoanId, chieu, windows);
   return windows.filter((w) => !covered.has(w.period));
+}
+
+// ── B6: theo dõi tiến độ backfill (AC4) ──────────────────────────────────────────
+
+/** Trạng thái một tháng của backfill (frontend hiển thị). */
+export type BackfillMonthStatus = "cho" | "dang_chay" | "xong" | "loi";
+
+export interface BackfillProgress {
+  thang: { period: string; trangThai: BackfillMonthStatus }[];
+  /** Số tháng đã 'xong' (mọi chiều completed). */
+  soXong: number;
+  tongSoThang: number;
+  /** Tổng: hoan_thanh (tất cả xong) | can_dang_nhap_lai (token chết — ưu tiên báo) |
+   * co_loi (có tháng lỗi khác) | dang_chay (còn đang chạy/chờ). */
+  trangThaiTong: "dang_chay" | "hoan_thanh" | "co_loi" | "can_dang_nhap_lai";
+}
+
+/** Trạng thái tổng hợp cho MỘT (tháng, chiều) từ nhiều bản ghi (có thể lặp do retry).
+ * Ưu tiên: completed thắng (thành công cuối) → reauth → failed → running/partial →
+ * pending (không có bản ghi). */
+type DirState = "covered" | "reauth" | "failed" | "running" | "pending";
+
+function reduceDirState(trangThais: string[]): DirState {
+  if (trangThais.includes(TRANG_THAI_LAN_DONG_BO.HOAN_THANH)) return "covered";
+  if (trangThais.includes(TRANG_THAI_LAN_DONG_BO.CAN_DANG_NHAP_LAI)) return "reauth";
+  if (trangThais.includes(TRANG_THAI_LAN_DONG_BO.THAT_BAI)) return "failed";
+  if (
+    trangThais.includes(TRANG_THAI_LAN_DONG_BO.DANG_CHAY) ||
+    trangThais.includes(TRANG_THAI_LAN_DONG_BO.HOAN_THANH_MOT_PHAN)
+  ) {
+    return "running";
+  }
+  return "pending";
+}
+
+/**
+ * Suy tiến độ backfill (thuần, dễ test): từ các bản ghi `lan_dong_bo` (`{period, chieu,
+ * trangThai}`), tính trạng thái TỪNG THÁNG trong `months` + trạng thái TỔNG (AC4). Một
+ * tháng 'xong' khi MỌI chiều `completed`. Bản ghi ngoài `months` bị bỏ qua.
+ */
+export function deriveBackfillStatus(
+  rows: { period: string; chieu: InvoiceDirection; trangThai: string }[],
+  directions: InvoiceDirection[],
+  months: string[],
+): BackfillProgress {
+  const byKey = new Map<string, string[]>(); // "period|chieu" → danh sách trạng thái
+  for (const r of rows) {
+    const k = `${r.period}|${r.chieu}`;
+    const arr = byKey.get(k);
+    if (arr) arr.push(r.trangThai);
+    else byKey.set(k, [r.trangThai]);
+  }
+
+  let anyReauth = false;
+  let anyLoi = false;
+  const thang = months.map((period) => {
+    const dirStates = directions.map((d) => reduceDirState(byKey.get(`${period}|${d}`) ?? []));
+    let trangThai: BackfillMonthStatus;
+    if (dirStates.length > 0 && dirStates.every((s) => s === "covered")) {
+      trangThai = "xong";
+    } else if (dirStates.some((s) => s === "reauth")) {
+      trangThai = "loi";
+      anyReauth = true;
+      anyLoi = true;
+    } else if (dirStates.some((s) => s === "failed")) {
+      trangThai = "loi";
+      anyLoi = true;
+    } else if (dirStates.some((s) => s === "running" || s === "covered")) {
+      trangThai = "dang_chay"; // đang chạy hoặc một phần chiều đã xong
+    } else {
+      trangThai = "cho";
+    }
+    return { period, trangThai };
+  });
+
+  const soXong = thang.filter((t) => t.trangThai === "xong").length;
+  const tongSoThang = months.length;
+  let trangThaiTong: BackfillProgress["trangThaiTong"];
+  if (anyReauth) trangThaiTong = "can_dang_nhap_lai";
+  else if (anyLoi) trangThaiTong = "co_loi";
+  else if (tongSoThang > 0 && soXong === tongSoThang) trangThaiTong = "hoan_thanh";
+  else trangThaiTong = "dang_chay";
+
+  return { thang, soXong, tongSoThang, trangThaiTong };
+}
+
+/**
+ * Suy tiến độ backfill từ DB: đọc `lan_dong_bo` cho (tenant, tài khoản, các chiều, các
+ * tháng) rồi gọi `deriveBackfillStatus`. Lọc `tenant_id` tường minh (lớp 1) — gọi trong
+ * `withTenant` để RLS (lớp 2). Chỉ đọc cột không nhạy cảm (tu_ngay/chieu/trang_thai).
+ */
+export async function monthlyBackfillStatus<
+  TQuery extends PgQueryResultHKT,
+  TFull extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+>(
+  db: Db<TQuery, TFull, TSchema>,
+  tenantId: string,
+  taikhoanId: string,
+  directions: InvoiceDirection[],
+  months: string[],
+): Promise<BackfillProgress> {
+  if (months.length === 0 || directions.length === 0) {
+    return deriveBackfillStatus([], directions, months);
+  }
+  let lo: Date | null = null;
+  let hi: Date | null = null;
+  for (const m of months) {
+    const s = monthStartUtc(m);
+    const e = nextMonthStartUtc(m);
+    if (lo === null || s.getTime() < lo.getTime()) lo = s;
+    if (hi === null || e.getTime() > hi.getTime()) hi = e;
+  }
+  if (lo === null || hi === null) return deriveBackfillStatus([], directions, months);
+
+  const rows = await db
+    .select({
+      tuNgay: lanDongBo.tuNgay,
+      chieu: lanDongBo.chieu,
+      trangThai: lanDongBo.trangThai,
+    })
+    .from(lanDongBo)
+    .where(
+      and(
+        eq(lanDongBo.tenantId, tenantId),
+        eq(lanDongBo.taikhoanId, taikhoanId),
+        inArray(lanDongBo.chieu, directions),
+        gte(lanDongBo.tuNgay, lo),
+        lt(lanDongBo.tuNgay, hi),
+      ),
+    );
+  const mapped = rows.map((r) => ({
+    period: periodOf(r.tuNgay),
+    chieu: r.chieu as InvoiceDirection,
+    trangThai: r.trangThai,
+  }));
+  return deriveBackfillStatus(mapped, directions, months);
 }

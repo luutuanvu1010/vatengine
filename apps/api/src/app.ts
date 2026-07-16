@@ -5,6 +5,7 @@ import { maskSensitive } from "@vat/crypto";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { authRoutes } from "./routes/auth";
+import { backfillRoutes } from "./routes/backfill";
 import { exportsRoutes } from "./routes/exports";
 import { invoicesRoutes } from "./routes/invoices";
 import { meRoutes } from "./routes/me";
@@ -33,6 +34,8 @@ export function createApp(deps: AppDeps) {
   app.route("/reconcile", reconcileRoutes(deps));
   // U14: quản lý tài khoản thuế (POST /tax-accounts, ...) — sau requireTenant + RBAC.
   app.route("/tax-accounts", taxAccountsRoutes(deps));
+  // U22 B6: theo dõi tiến độ backfill (GET /backfill/:id) — đọc-only, sau requireTenant.
+  app.route("/backfill", backfillRoutes(deps));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
 

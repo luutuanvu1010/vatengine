@@ -8,7 +8,7 @@ import type { InvoiceDirection } from "@vat/gdt-client";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeEach, describe, expect, it } from "vitest";
-import { coveredMonths, missingMonths } from "../../src/coverage";
+import { coveredMonths, missingMonths, monthlyBackfillStatus } from "../../src/coverage";
 import { monthlyWindows } from "../../src/syncJob";
 
 const MIGRATIONS = new URL("../../../db/migrations", import.meta.url).pathname;
@@ -263,5 +263,44 @@ describe("coveredMonths / missingMonths — suy phạm vi đã phủ từ lan_do
     );
     expect([...c]).toEqual([]);
     expect(m).toEqual([]);
+  });
+
+  it("(B6) monthlyBackfillStatus đọc lan_dong_bo thật → suy đúng trạng thái từng tháng + tổng", async () => {
+    // 2026-01 xong cả 2 chiều; 2026-02 purchase đang chạy; 2026-03 chưa có gì.
+    await seedRun(db, {
+      tenantId,
+      taikhoanId,
+      chieu: "purchase",
+      period: "2026-01",
+      trangThai: TRANG_THAI_LAN_DONG_BO.HOAN_THANH,
+    });
+    await seedRun(db, {
+      tenantId,
+      taikhoanId,
+      chieu: "sold",
+      period: "2026-01",
+      trangThai: TRANG_THAI_LAN_DONG_BO.HOAN_THANH,
+    });
+    await seedRun(db, {
+      tenantId,
+      taikhoanId,
+      chieu: "purchase",
+      period: "2026-02",
+      trangThai: TRANG_THAI_LAN_DONG_BO.DANG_CHAY,
+    });
+
+    const p = await withTenant(db, tenantId, (tx) =>
+      monthlyBackfillStatus(
+        tx,
+        tenantId,
+        taikhoanId,
+        ["purchase", "sold"],
+        ["2026-01", "2026-02", "2026-03"],
+      ),
+    );
+    expect(p.thang.map((t) => t.trangThai)).toEqual(["xong", "dang_chay", "cho"]);
+    expect(p.soXong).toBe(1);
+    expect(p.tongSoThang).toBe(3);
+    expect(p.trangThaiTong).toBe("dang_chay");
   });
 });

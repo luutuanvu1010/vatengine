@@ -16,4 +16,12 @@ export {
   buildBackfillMessages,
 } from "./syncJob";
 // U22 B3 — suy phạm vi đã phủ / còn thiếu từ lan_dong_bo (nền cho producer backfill B5).
-export { coveredMonths, missingMonths } from "./coverage";
+// U22 B6 — suy tiến độ backfill từng tháng + tổng (nền cho GET /backfill/:id).
+export {
+  coveredMonths,
+  missingMonths,
+  deriveBackfillStatus,
+  monthlyBackfillStatus,
+  type BackfillMonthStatus,
+  type BackfillProgress,
+} from "./coverage";
