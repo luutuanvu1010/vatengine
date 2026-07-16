@@ -2,7 +2,7 @@
 // requireTenant + requireRole(ke_toan_truong|quan_tri), trong withTenant (RLS lớp 2)
 // + lọc tenant_id tường minh (lớp 1). Gọi GDT CHỈ qua @vat/gdt-client (gdt-adapter.md).
 import { maskSensitive } from "@vat/crypto";
-import { auditLog, storeToken, taiKhoanThue, withTenant } from "@vat/db";
+import { auditLog, storeToken, taiKhoanThue, tenants, withTenant } from "@vat/db";
 import {
   GdtContractDriftError,
   GdtError,
@@ -11,17 +11,36 @@ import {
   getCaptcha,
 } from "@vat/gdt-client";
 import { buildSyncMessages, currentPeriodWindow } from "@vat/sync";
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { isUuid, requireTenant } from "../auth";
 import { requireRole } from "../rbac";
 import type { AppDeps, AppEnv } from "../types";
 
+// U23-D2 — username tài khoản chính auto = MST gốc (không nhận từ body). Body chỉ tùy chọn
+// `loai`; `username` chỉ dùng cho tài khoản CON khi module bật.
 const registerSchema = z.object({
-  username: z.string().min(1),
+  username: z.string().min(1).optional(),
   loai: z.enum(["chinh", "con"]).optional(),
 });
+
+// Hạn mức số tài khoản thuế / tenant. TODO (U17): lấy theo GÓI DỊCH VỤ (tenants.goiDichVu →
+// bảng gói). Tạm hardcode = 1 tại MỘT điểm — không rải magic number khắp handler.
+export function getGioiHanTkThue(_tenant: { goiDichVu: string | null }): number {
+  return 1;
+}
+
+// Cờ module tài khoản con (U23-D — "chỉ dựng nền"). Mặc định TẮT. Bật ⇒ cho tạo loai='con'
+// với username theo nhánh MST. TODO: chuyển sang cấu hình theo gói dịch vụ khi U17 xong.
+export const SUB_ACCOUNT_MODULE_ENABLED = false;
+
+// Username tài khoản CON hợp lệ: là NHÁNH của MST gốc (dài hơn + bắt đầu bằng MST) — chống
+// dùng MST ngoài doanh nghiệp. Vd "abcd-001" hợp lệ với MST "abcd"; "abcd" trơn là tài khoản
+// chính (không phải con); "efgh-001" sai tiền tố.
+export function isValidSubUsername(mst: string, username: string): boolean {
+  return username.length > mst.length && username.startsWith(mst);
+}
 
 const loginSchema = z.object({
   password: z.string().min(1),
@@ -35,7 +54,9 @@ export function taxAccountsRoutes(deps: AppDeps) {
   r.use("*", requireTenant);
   r.use("*", requireRole("ke_toan_truong", "quan_tri"));
 
-  // POST /tax-accounts — đăng ký bản ghi tài khoản thuế (chưa có token).
+  // POST /tax-accounts — đăng ký bản ghi tài khoản thuế (chưa có token). U23-D2: tài khoản
+  // CHÍNH auto username = tenants.mst (không nhận từ body); kiểm hạn mức (getGioiHanTkThue);
+  // tài khoản CON ẩn sau cờ (mặc định TẮT). Mọi truy vấn tenant-scoped (withTenant + RLS).
   r.post("/", async (c) => {
     let body: unknown;
     try {
@@ -46,22 +67,61 @@ export function taxAccountsRoutes(deps: AppDeps) {
     const parsed = registerSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: "bad_request" }, 400);
 
+    const loai = parsed.data.loai ?? "chinh";
+    // Tài khoản con chỉ khả dụng khi module bật (mặc định TẮT — U23-D chỉ dựng nền).
+    if (loai === "con" && !SUB_ACCOUNT_MODULE_ENABLED) {
+      return c.json({ error: "sub_account_disabled" }, 400);
+    }
+
     const tenantId = c.get("tenantId");
     const { db, close } = await deps.getDb(c.env);
     try {
-      const id = await withTenant(db, tenantId, async (tx) => {
-        const rows = await tx
+      const outcome = await withTenant(db, tenantId, async (tx) => {
+        const trows = await tx
+          .select({ mst: tenants.mst, goiDichVu: tenants.goiDichVu })
+          .from(tenants)
+          .where(eq(tenants.id, tenantId));
+        const tenant = trows[0];
+        if (!tenant || !tenant.mst) return { kind: "mst_missing" as const };
+
+        // Username: chính auto = MST gốc; con validate tiền tố (startsWith MST).
+        let username: string;
+        if (loai === "con") {
+          const u = parsed.data.username;
+          if (!u || !isValidSubUsername(tenant.mst, u))
+            return { kind: "sub_prefix_invalid" as const };
+          username = u;
+        } else {
+          username = tenant.mst;
+        }
+
+        // Hạn mức (tạm =1) — đếm tài khoản thuế hiện có của tenant.
+        const cnt = await tx
+          .select({ n: count() })
+          .from(taiKhoanThue)
+          .where(eq(taiKhoanThue.tenantId, tenantId));
+        if (Number(cnt[0]?.n ?? 0) >= getGioiHanTkThue(tenant)) {
+          return { kind: "limit_reached" as const };
+        }
+
+        const ins = await tx
           .insert(taiKhoanThue)
-          .values({
-            tenantId,
-            username: parsed.data.username,
-            ...(parsed.data.loai ? { loai: parsed.data.loai } : {}),
-          })
+          .values({ tenantId, username, loai })
           .returning({ id: taiKhoanThue.id });
-        return rows[0]?.id;
+        return { kind: "ok" as const, id: ins[0]?.id };
       });
-      if (!id) return c.json({ error: "server_error" }, 500);
-      return c.json({ id }, 201);
+
+      switch (outcome.kind) {
+        case "mst_missing":
+          return c.json({ error: "mst_missing", message: "Doanh nghiệp chưa khai MST" }, 400);
+        case "sub_prefix_invalid":
+          return c.json({ error: "sub_prefix_invalid" }, 400);
+        case "limit_reached":
+          return c.json({ error: "limit_reached", message: "Đã đạt hạn mức tài khoản thuế" }, 409);
+        default:
+          if (!outcome.id) return c.json({ error: "server_error" }, 500);
+          return c.json({ id: outcome.id }, 201);
+      }
     } finally {
       await close();
     }
