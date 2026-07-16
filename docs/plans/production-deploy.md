@@ -52,16 +52,18 @@
 
 **Bước:**
 1. **⚠️ PRECHECK Hyperdrive = `vat_app` (CHẶN — bỏ qua có thể SẬP dịch vụ).** Xác nhận cả 2 binding Hyperdrive (`1011ff82e7154531883f0f2e62d344f0`, dùng chung ở `apps/api` **và** `apps/sync-worker`) trỏ chuỗi `postgresql://vat_app:...`, KHÔNG phải `neondb_owner`. **Cách kiểm:** `wrangler hyperdrive get 1011ff82e7154531883f0f2e62d344f0` (hoặc xem trong dashboard). Nếu là owner → tạo lại config trỏ `vat_app` (`packages/db/provisioning/app-role.sql`) trước khi deploy. *(Lý do: H-A.2 `roleGuard.ts` TỪ CHỐI khởi động nếu role có `rolsuper`/`rolbypassrls`/sở-hữu-bảng — kiểm chứng ADR-0004 E1–E2: `neondb_owner` CÓ BYPASSRLS. Sai role ⇒ Worker fail-fast **mọi** request.)*
-2. **Dọn DB:** `delete from tenants where mst='9999999999';` (cascade xoá user/tài khoản thuế/token test).
-3. **Xoay mật khẩu `neondb_owner`** trên Neon console (chủ dự án) → cập nhật `DATABASE_URL` trong `packages/db/.dev.vars`. Chỉ ảnh hưởng credential migrate; Hyperdrive dùng `vat_app` — KHÔNG đổi. *(Không chặn deploy — có thể làm song song.)*
-4. Thêm `"vars": { "ENVIRONMENT": "production" }` vào `apps/api/wrangler.jsonc` (KHÔNG đụng code app — same-origin xử lý ở `vat-web`).
-5. **Deploy** `vat-api` + `vat-sync-worker` (bản đã commit, có A1/A2). **Lưu ý migration Durable Object:** `vat-api` mang DO `LOGIN_LIMITER` (migration `v1`, H-A.5b) và `vat-sync-worker` mang `TENANT_LIMITER`/`EGRESS_HEALTH` — `wrangler deploy` tự áp migration DO; xác nhận log **không lỗi migration**.
+2. **⚠️ PRECHECK migration Drizzle đang chờ (CHẶN — xem `.claude/rules/deploy.md`, sự cố thật 2026-07-16).** `wrangler deploy` KHÔNG tự chạy migration DB. So `packages/db/migrations/meta/_journal.json` với lần `make migrate` gần nhất đã chạy trên production; nếu có migration mới hơn (kể cả migration mang theo từ nhánh khác merge vào) → **chạy `make migrate` TRƯỚC bước 5 (deploy code)**, không phải sau. Mọi migration trong repo cộng dồn/idempotent (`ADD COLUMN IF NOT EXISTS`) nên chạy lại luôn AN TOÀN kể cả khi không chắc đã áp — không suy đoán.
+3. **Dọn DB:** `delete from tenants where mst='9999999999';` (cascade xoá user/tài khoản thuế/token test).
+4. **Xoay mật khẩu `neondb_owner`** trên Neon console (chủ dự án) → cập nhật `DATABASE_URL` trong `packages/db/.dev.vars`. Chỉ ảnh hưởng credential migrate; Hyperdrive dùng `vat_app` — KHÔNG đổi. *(Không chặn deploy — có thể làm song song.)*
+5. Thêm `"vars": { "ENVIRONMENT": "production" }` vào `apps/api/wrangler.jsonc` (KHÔNG đụng code app — same-origin xử lý ở `vat-web`).
+6. **Deploy** `vat-api` + `vat-sync-worker` (bản đã commit, có A1/A2) — **CHỈ sau khi bước 2 đã xong**. **Lưu ý migration Durable Object:** `vat-api` mang DO `LOGIN_LIMITER` (migration `v1`, H-A.5b) và `vat-sync-worker` mang `TENANT_LIMITER`/`EGRESS_HEALTH` — `wrangler deploy` tự áp migration DO; xác nhận log **không lỗi migration**.
 
 **Definition of Done (bằng chứng bắt buộc):**
 - [ ] **roleGuard qua:** Worker khởi động được (không fail-fast) ⇒ Hyperdrive role hợp lệ (`vat_app`). Nếu deploy xong `/health` trả 5xx đồng loạt + log báo role → precheck bước 1 sai.
-- [ ] `curl https://vat-api.<...>.workers.dev/health` → **200** `{"status":"ok","env":"production"}`.
+- [ ] `curl https://vat-api.<...>.workers.dev/health` → **200** `{"status":"ok","env":"production"}`. *(Lưu ý: `/health` KHÔNG đụng schema mới — 200 ở đây KHÔNG chứng minh migration đã áp, xem mục DoD kế tiếp.)*
 - [ ] `POST /auth/login` email giả → **401** (Hyperdrive→Neon thông).
-- [ ] `GET /me` (kèm JWT seed) + `GET /tax-accounts` (A1/A2) trả đúng.
+- [ ] **`GET /me` với session thật ngay sau một lượt đăng nhập thật** (không chỉ JWT seed dựng tay) → 200, không 500. *(Đây là smoke test đụng đúng cột schema mới nhất — JWT seed dựng tay có thể né qua cột mới nếu seed cũ; sự cố 2026-07-16 chỉ lộ ra khi đăng nhập thật.)*
+- [ ] `GET /tax-accounts` (A1/A2) trả đúng.
 - [ ] Query DB: KHÔNG còn tenant `mst=9999999999`.
 
 ---
@@ -126,13 +128,19 @@ wrangler hyperdrive get 1011ff82e7154531883f0f2e62d344f0
 ```
 _Kiểm chứng:_ connection string là `vat_app@...`, KHÔNG `neondb_owner`. Nếu sai → tạo lại config (`packages/db/provisioning/app-role.sql`) rồi lặp lại.
 
+**Bước 1b — ⚠️ PRECHECK + áp migration Drizzle đang chờ (CHẶN — `.claude/rules/deploy.md`):**
+```sh
+DATABASE_URL="$(grep '^DATABASE_URL=' packages/db/.dev.vars | cut -d= -f2-)" npm run migrate -w packages/db
+```
+_Kiểm chứng:_ `[✓] migrations applied successfully!`. **Chạy TRƯỚC Bước 2 mọi lần**, kể cả khi không chắc đã có migration mới — an toàn để chạy lại (idempotent). Bỏ qua bước này là nguyên nhân sự cố "đăng nhập vỡ" 2026-07-16 (`/me` 500 vì cột `ban_quyen`/`ghi_chu` chưa có trên DB dù code đã deploy).
+
 **Bước 2 — Phase 1 backend (sau khi dọn DB + xoay owner theo §PHASE 1):**
 ```sh
 npm run -w apps/api deploy            # áp DO migration LOGIN_LIMITER v1 — xem log KHÔNG lỗi
 npm run -w apps/sync-worker deploy    # DO TENANT_LIMITER / EGRESS_HEALTH
 curl -s https://vat-api.<subdomain>.workers.dev/health   # → 200 {"status":"ok","env":"production"}
 ```
-_Kiểm chứng:_ `/health` 200 ⇒ roleGuard qua (role hợp lệ). 5xx đồng loạt + log role ⇒ Bước 1 sai.
+_Kiểm chứng:_ `/health` 200 ⇒ roleGuard qua (role hợp lệ). 5xx đồng loạt + log role ⇒ Bước 1 sai. **Sau đó đăng nhập thật qua UI → xác nhận `/me` KHÔNG 500** (`/health` không đụng schema, không đủ để kết luận an toàn).
 
 **Bước 3 — Phase 2 front-door + ẩn API (chi tiết §PHASE 2 bước 2–4):**
 ```sh
