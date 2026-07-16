@@ -37,7 +37,7 @@
 | **GATE C — chặn thương mại hóa** | | | |
 | H-C.1 | DECISION+CODE | Chờ H-B.1 — partition/retention/R2 cold-tier (cần duyệt ADR) | — |
 | H-C.2 | CODE | Chờ H-B.4 — XLSX job nền + stream R2 | — |
-| H-C.3 | CODE | Chưa bắt đầu — Analytics Engine (billing) + KV (session) (🟢) | — |
+| H-C.3 | CODE | HOÃN (2026-07-16, chủ dự án quyết) — phần A (Analytics billing per-tenant) rõ ràng làm được; phần B "KV session/cấu hình" **DRIFT**: ADR-0003 chốt JWT giữ TRONG BỘ NHỚ → không còn session server để đưa vào KV, và chưa có cấu hình cụ thể nào cần KV. Cần yêu cầu cụ thể cho KV trước khi làm (không tự bịa nguồn sự thật thứ 2). | — |
 | H-C.4 | CODE+DECISION | Chặn-người (pháp lý NĐ13 — luật sư) | — |
 | H-C.5 | CODE | Chưa bắt đầu — contract test `tdlap` (chạm GDT, lịch thưa) | — |
 | H-C.6 | DECISION | Chặn-người (sản phẩm — vòng đời token/captcha) | — |
