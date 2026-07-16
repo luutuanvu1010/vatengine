@@ -72,8 +72,8 @@ Mỗi tiêu chí phải có test tự động phủ, toàn bộ xanh; `make lint
 - **`buildBackfillMessages(account, windows, directions)`** — tổng quát hoá `buildSyncMessages` cho nhiều cửa sổ. (Có thể chỉ là `windows.flatMap(w => buildSyncMessages([account], w, directions))`.)
 
 ### 4B. Tầng truy vấn phủ (`@vat/query` hoặc `@vat/sync`)
-- **`coveredMonths(tx, tenantId, taikhoanId, chieu, windows)`** — đọc `lan_dong_bo` trả tập `period` đã phủ giao khoảng (AC2). Lọc `trang_thai` = thành công (`completed`/`hoan_thanh_mot_phan`?) — quyết định chốt sau kiểm chứng §5 B1.
-- **`missingMonths = windows − coveredMonths`** — danh sách tháng cần enqueue.
+- ✅ **`coveredMonths(db, tenantId, taikhoanId, chieu, windows)`** (2026-07-16, `packages/sync/src/coverage.ts`) — đọc `lan_dong_bo` trả tập `period` đã phủ giao khoảng (AC2). **CHỐT trạng thái tính "đã phủ" = CHỈ `completed`** (KHÔNG tính `hoan_thanh_mot_phan`/`running`/`failed`/`can_dang_nhap_lai`): đồng bộ lại idempotent (U5) an toàn → thà backfill lại phần dở còn hơn bỏ sót. Lọc `tenant_id`/`taikhoan_id`/`chieu` tường minh (multi-tenant.md lớp 1) + gọi trong `withTenant` (RLS lớp 2); chỉ đọc cột `tu_ngay`.
+- ✅ **`missingMonths = windows − coveredMonths`** — danh sách cửa sổ tháng cần enqueue (giữ thứ tự đầu vào). Đây chính là đầu vào producer B5.
 
 ### 4C. Theo dõi tiến độ — nơi lưu trạng thái backfill
 Hai phương án, chốt ở bước hiện thực sau khi cân nhắc (KHÔNG chốt mù ở kế hoạch):
@@ -97,7 +97,7 @@ Hai phương án, chốt ở bước hiện thực sau khi cân nhắc (KHÔNG c
 
 - **B1 — ✅ XONG (2026-07-16).** Kiểm chứng "tháng rỗng có để dấu không" (research + test, KHÔNG code tính năng). Kết quả: tháng rỗng VẪN ghi `lan_dong_bo` 'completed' → **AC2/4B KHÔNG cần bản vá ghi dấu**; `coveredMonths` suy từ `lan_dong_bo`. Bằng chứng: §1 "ĐÃ KIỂM CHỨNG" + test `sync.test.ts` "(U22 B1)". Cổng đóng, B2+ mở.
 - **B2 — `monthlyWindows` + `buildBackfillMessages`** trong `@vat/sync` (AC1). Test thuần, phủ biên tháng/năm/nhuận. Không mạng.
-- **B3 — `coveredMonths`/`missingMonths`** (AC2). Test integration với `lan_dong_bo` seed sẵn (dùng `vitest-pool-workers`/Miniflare, không gọi GDT thật).
+- **B3 — ✅ XONG (2026-07-16).** `coveredMonths`/`missingMonths` (AC2) trong `packages/sync/src/coverage.ts`. Test integration `backfillCoverage.test.ts` (9 ca, PGlite — KHÔNG `vitest-pool-workers`: pg/PGlite không chạy trong workerd, khớp `sync` vitest.config, không gọi GDT thật). Cách ly tenant/tài khoản/chiều + biên; coverage 100% dòng. dod-auditor + security-reviewer: ĐẠT, không lỗ hổng.
 - **B4 — Cơ chế theo dõi tiến độ** (AC4): chốt PA-A vs PA-B ở đầu lát này (ghi 1 ADR ngắn nếu chọn DO), hiện thực tracker + test.
 - **B5 — `POST …/backfill`** (AC3, AC5, AC7): producer enqueue missingMonths, token check, cách ly tenant, audit, idempotent. Test route + cách ly chéo tenant.
 - **B6 — `GET /backfill/:id`** (AC4): đọc tracker, phạm vi tenant. Test.
