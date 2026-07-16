@@ -7,7 +7,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeEach, describe, expect, it } from "vitest";
-import { dongHangHoa, hoaDon, tenants } from "../../src/schema";
+import { dongHangHoa, hoaDon, taiKhoanThue, tenants } from "../../src/schema";
 import * as schema from "../../src/schema";
 import { withTenant } from "../../src/tenantContext";
 
@@ -231,5 +231,47 @@ describe("U4 ràng buộc DB (integration, PGlite)", () => {
     // "Failed query: …" nên chỉ khẳng định có ném, không so khớp thông điệp gốc.
     await expect(db.execute(sql`select id from auth_lookup_user('admin@b.vn')`)).rejects.toThrow();
     await db.execute(sql`reset role`);
+  });
+});
+
+describe("U23-D (D1) — ràng buộc UNIQUE mst + (tenant_id, username)", () => {
+  let db: Db;
+  beforeEach(async () => {
+    db = await freshDb();
+  });
+
+  it("UNIQUE(mst): 2 tenant cùng MST gốc → lỗi", async () => {
+    await makeTenant(db, "Cty A", "0100000001");
+    await expect(makeTenant(db, "Cty A trùng MST", "0100000001")).rejects.toThrow();
+  });
+
+  it("MST khác nhau → cả hai tenant tạo được", async () => {
+    await makeTenant(db, "Cty A", "0100000001");
+    await expect(makeTenant(db, "Cty B", "0100000002")).resolves.toBeTruthy();
+  });
+
+  it("UNIQUE(tenant_id, username): trùng username trong CÙNG tenant → lỗi", async () => {
+    const t = await makeTenant(db, "Cty A", "0100000001");
+    await db.insert(taiKhoanThue).values({ tenantId: t, username: "0100000001" });
+    await expect(
+      db.insert(taiKhoanThue).values({ tenantId: t, username: "0100000001" }),
+    ).rejects.toThrow();
+  });
+
+  it("cùng username KHÁC tenant → cả hai tạo được (username không unique toàn cục)", async () => {
+    const a = await makeTenant(db, "Cty A", "0100000001");
+    const b = await makeTenant(db, "Cty B", "0100000002");
+    await db.insert(taiKhoanThue).values({ tenantId: a, username: "0100000001" });
+    await expect(
+      db.insert(taiKhoanThue).values({ tenantId: b, username: "0100000001" }),
+    ).resolves.not.toThrow();
+  });
+
+  it("cùng tenant, username khác nhau → cả hai tạo được (chừa nền tài khoản con)", async () => {
+    const t = await makeTenant(db, "Cty A", "0100000001");
+    await db.insert(taiKhoanThue).values({ tenantId: t, username: "0100000001" });
+    await expect(
+      db.insert(taiKhoanThue).values({ tenantId: t, username: "0100000001-001" }),
+    ).resolves.not.toThrow();
   });
 });
