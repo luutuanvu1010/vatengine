@@ -5,6 +5,9 @@ venv/
 .env
 .env.local
 .env.production
+# Ngoại lệ: chỉ chứa path API same-origin (/api), KHÔNG phải secret — cần commit để build
+# production luôn đúng, tránh footgun quên VITE_API_BASE (production-deploy.md §3).
+!apps/web/.env.production
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
