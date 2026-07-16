@@ -29,7 +29,7 @@
 | H-A.6 | CODE | Xong — security header + onError mask + tắt sourcemap production | `08288d8` |
 | **GATE B — chặn quy mô** | | | |
 | H-B.1 | CODE | Chưa bắt đầu — composite index CONCURRENTLY (cần staging bảng lớn đo EXPLAIN) | — |
-| H-B.2 | CODE | Chưa bắt đầu — upsert `ON CONFLICT` + test 2-sync-song-song (🟢 làm ngay được) | — |
+| H-B.2 | CODE | Xong — INSERT thuần → `ON CONFLICT DO UPDATE` (suy ra khóa tự nhiên 6 trường) khử đua 2-sync; test race tất định (proxy che SELECT) + test nhánh ON CONFLICT dưới RLS FORCE/non-superuser; QA2 PASS (dod+security). | (commit đơn vị) |
 | H-B.3 | CODE | Xong (phần P1) — `queryClient.clear()` + `clearInvoiceFilter()` ở 3 ranh giới phiên (logout/401/login); QA2 PASS (dod+security). **Hoãn có chủ đích:** tenantId-in-queryKey (thừa vì clear() bao trùm mọi cache ở mọi ranh giới; client cố ý không có tenant_id — apiClient) và `--text-disabled` (đã định nghĩa sẵn tokens.css:33). Ràng buộc tương lai: mọi luồng đổi phiên/tenant MỚI phải gọi cleanup này (xem `.claude/rules/multi-tenant.md`). | (commit đơn vị) |
 | H-B.4 | CODE | Chưa bắt đầu — fan-out: batch ≤100 + backoff + jitter + tách rate_limited (🟢) | — |
 | H-B.5 | CODE | Chờ H-B.4 — sharding set-based | — |

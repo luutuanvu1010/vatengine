@@ -7,7 +7,7 @@ import type { GdtTransport, InvoiceDirection, InvoiceRow, RetryOptions } from "@
 // nhận `token` qua tham số (KHÔNG tự đăng nhập, KHÔNG persist credential — U12);
 // KHÔNG gọi `fetch()` GDT trực tiếp (chỉ qua adapter). Đồng bộ nền/lịch là U9.
 // Xem CLAUDE.md, .claude/rules/{multi-tenant,gdt-adapter,security}.md, docs/plans/U5-plan.md.
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT, PgTransaction } from "drizzle-orm/pg-core";
 import { mapInvoiceRowToHoaDon } from "./mapInvoice";
@@ -185,7 +185,46 @@ async function upsertBatch<
     }
   }
 
-  if (toInsert.length > 0) await tx.insert(hoaDon).values(toInsert);
+  // Chèn các hàng "mới" (theo ảnh chụp SELECT) bằng UPSERT nguyên tử ở TẦNG DB thay
+  // vì INSERT thuần: nếu một sync SONG SONG cùng (tenant,kỳ,chiều) đã chèn đúng khóa
+  // tự nhiên GIỮA lúc ta SELECT và INSERT, INSERT thuần sẽ vỡ ràng buộc
+  // `hoa_don_natural_key` → cả transaction rollback → ghi `failed` OAN dù dữ liệu đã có
+  // (H-B.2). `ON CONFLICT DO UPDATE` (suy ra đúng ràng buộc khóa tự nhiên 6 trường) khử
+  // đua: hàng của đối thủ được cập nhật giá trị mới nhất, không ném, không nhân đôi.
+  // Cập nhật đúng cột biến đổi từ `excluded` (hàng đang chèn); `updated_at` = thời điểm
+  // hiện tại. Cột bất biến (khóa tự nhiên, chieu/nguon, created_at) giữ nguyên.
+  // Lưu ý (không chặn nghiệm thu): số đếm `soHdMoi/soHdCapNhat` tính từ ảnh chụp SELECT
+  // TRƯỚC khi biết ON CONFLICT sẽ INSERT hay UPDATE. Trong khe đua hiếm, một hàng có thể
+  // bị đếm 'mới' dù DB thực UPDATE và KHÔNG vào `changes`. Chấp nhận được: số đếm/`changes`
+  // là chỉ báo (telemetry/thông báo), không phải chốt tính đúng dữ liệu — dữ liệu vẫn đúng.
+  if (toInsert.length > 0) {
+    await tx
+      .insert(hoaDon)
+      .values(toInsert)
+      .onConflictDoUpdate({
+        target: [
+          hoaDon.tenantId,
+          hoaDon.nbmst,
+          hoaDon.khmshdon,
+          hoaDon.khhdon,
+          hoaDon.shdon,
+          hoaDon.tdlap,
+        ],
+        set: {
+          ttxly: sql`excluded.ttxly`,
+          tthai: sql`excluded.tthai`,
+          ncnhat: sql`excluded.ncnhat`,
+          tgtcthue: sql`excluded.tgtcthue`,
+          tgtthue: sql`excluded.tgtthue`,
+          tgtttbso: sql`excluded.tgtttbso`,
+          ttcktmai: sql`excluded.ttcktmai`,
+          tgia: sql`excluded.tgia`,
+          dvtte: sql`excluded.dvtte`,
+          rawJson: sql`excluded.raw_json`,
+          updatedAt: new Date(),
+        },
+      });
+  }
   return { soHdMoi, soHdCapNhat, changes };
 }
 
