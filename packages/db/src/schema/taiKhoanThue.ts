@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { tenantIsolationPolicy } from "./_rls";
 import { tenants } from "./tenants";
 
@@ -25,5 +25,10 @@ export const taiKhoanThue = pgTable(
     uyQuyenLuc: timestamp("uy_quyen_luc", { withTimezone: true }),
     ngayTao: timestamp("ngay_tao", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [tenantIsolationPolicy("tai_khoan_thue", t.tenantId)],
+  // U23-D: chống trùng tài khoản thuế trong một tenant (khớp migration 0006). Cùng tenant
+  // nhưng username khác (tài khoản con "abcd-001") vẫn hợp lệ.
+  (t) => [
+    tenantIsolationPolicy("tai_khoan_thue", t.tenantId),
+    uniqueIndex("tai_khoan_thue_tenant_username_unique").on(t.tenantId, t.username),
+  ],
 );

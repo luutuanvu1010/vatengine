@@ -16,16 +16,21 @@ export interface XlsxCell {
   numFmt: string; // mã định dạng số của ô ("" nếu mặc định) — dùng kiểm "#,##0"
 }
 
-/** Đọc lại xlsx do toXlsx sinh ra: unzip → parse sheet1 + styles → lưới ô.
- * Chỉ hỗ trợ đúng định dạng encoder này phát ra (inline string + numeric <v> + numFmt). */
-export function readXlsx(bytes: Uint8Array): {
+/** Đọc lại xlsx do toXlsx sinh ra: unzip → parse sheet chỉ định + styles → lưới ô.
+ * `sheetNo` (mặc định 1) chọn `xl/worksheets/sheet{N}.xml` — dùng cho workbook nhiều sheet
+ * (U23-B: sheet 2 = "Chi tiết dòng hàng"). Chỉ hỗ trợ đúng định dạng encoder này phát ra
+ * (inline string + numeric <v> + numFmt). */
+export function readXlsx(
+  bytes: Uint8Array,
+  sheetNo = 1,
+): {
   files: string[];
   rows: XlsxCell[][];
 } {
   const zip = unzipSync(bytes);
   const dec = new TextDecoder();
   const files = Object.keys(zip);
-  const sheet = dec.decode(zip["xl/worksheets/sheet1.xml"]);
+  const sheet = dec.decode(zip[`xl/worksheets/sheet${sheetNo}.xml`]);
   const stylesXml = zip["xl/styles.xml"] ? dec.decode(zip["xl/styles.xml"]) : "";
 
   // numFmts: numFmtId -> formatCode
@@ -63,6 +68,17 @@ export function readXlsx(bytes: Uint8Array): {
     rowsOut.push(cells);
   }
   return { files, rows: rowsOut };
+}
+
+/** Tên các sheet theo thứ tự khai báo trong workbook.xml. */
+export function readXlsxSheetNames(bytes: Uint8Array): string[] {
+  const zip = unzipSync(bytes);
+  const wb = new TextDecoder().decode(zip["xl/workbook.xml"]);
+  const names: string[] = [];
+  for (const m of wb.matchAll(/<sheet\b[^>]*\bname="([^"]*)"/g)) {
+    names.push(unescapeXml(m[1] as string));
+  }
+  return names;
 }
 
 function unescapeXml(s: string): string {

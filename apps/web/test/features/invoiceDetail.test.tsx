@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InvoiceDetailPage } from "../../src/features/invoices/InvoiceDetailPage";
@@ -91,16 +91,81 @@ describe("U15.3 — chi tiết hóa đơn (header)", () => {
     expect(screen.getByText("1.300.000")).toBeInTheDocument();
   });
 
-  it("không có dòng hàng → nêu rõ hóa đơn chưa có dòng hàng chi tiết", async () => {
+  it("không có dòng hàng → thông báo đúng chữ spec (cần đồng bộ chi tiết)", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => json(200, row));
     renderDetail();
     expect(await screen.findByText("0001284")).toBeInTheDocument();
-    expect(screen.getByText(/chưa có dòng hàng/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Chưa có dữ liệu dòng hàng \(cần đồng bộ chi tiết\)/),
+    ).toBeInTheDocument();
   });
 
   it("404 → thông báo không tìm thấy", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => json(404, { error: "not_found" }));
     renderDetail();
     expect(await screen.findByText(/Không tìm thấy hóa đơn/)).toBeInTheDocument();
+  });
+});
+
+describe("U23-A — siết tiêu chí dòng hàng (chi tiết)", () => {
+  beforeEach(() => setToken("t"));
+  afterEach(() => {
+    clearToken();
+    vi.restoreAllMocks();
+  });
+
+  // (a) Đúng số dòng + đúng thứ tự stt (component không đảo thứ tự server trả).
+  it("hiển thị đúng số dòng hàng và giữ đúng thứ tự stt", async () => {
+    const data: InvoiceDetailResponse = {
+      ...row,
+      dongHangHoa: [
+        line({ id: "a", stt: 1, ten: "Mục một" }),
+        line({ id: "b", stt: 2, ten: "Mục hai" }),
+        line({ id: "c", stt: 3, ten: "Mục ba" }),
+      ],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => json(200, data));
+    renderDetail();
+    await screen.findByText("0001284");
+    const table = screen.getByText("Tên hàng hóa, dịch vụ").closest("table");
+    expect(table).not.toBeNull();
+    // Bỏ hàng tiêu đề (thead) → chỉ còn các dòng dữ liệu.
+    // Đủ 7 cột: STT · Tên HH-DV · ĐVT · Số lượng · Đơn giá · Thành tiền · Thuế suất.
+    expect(within(table as HTMLElement).getAllByRole("columnheader")).toHaveLength(7);
+    const dataRows = within(table as HTMLElement)
+      .getAllByRole("row")
+      .slice(1);
+    expect(dataRows).toHaveLength(3);
+    // Mỗi dòng dữ liệu cũng đủ 7 ô.
+    for (const tr of dataRows) {
+      expect(within(tr).getAllByRole("cell")).toHaveLength(7);
+    }
+    const names = dataRows.map((tr) => within(tr).getByText(/^Mục /).textContent);
+    expect(names).toEqual(["Mục một", "Mục hai", "Mục ba"]);
+  });
+
+  // (b)+(d) Giá trị > 2^53 giữ nguyên chuỗi/không ép float (Number() sẽ làm sai số).
+  it("giữ chính xác giá trị > 2^53 (chuỗi), không ép float", async () => {
+    const data: InvoiceDetailResponse = {
+      ...row,
+      dongHangHoa: [
+        line({
+          id: "big",
+          stt: 1,
+          ten: "Mục cực lớn",
+          sluong: "12345678901234567890", // > 2^53: nếu Number() → 12345678901234568000
+          dgia: "1",
+          thtien: "9007199254740993000", // > 2^53: nếu Number() → mất chữ số cuối
+          ltsuat: "10%",
+        }),
+      ],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => json(200, data));
+    renderDetail();
+    await screen.findByText("0001284");
+    // Số lượng giữ nguyên chuỗi (không phân nhóm, không ép float).
+    expect(screen.getByText("12345678901234567890")).toBeInTheDocument();
+    // Thành tiền phân nhóm nghìn chính xác từng chữ số.
+    expect(screen.getByText("9.007.199.254.740.993.000")).toBeInTheDocument();
   });
 });

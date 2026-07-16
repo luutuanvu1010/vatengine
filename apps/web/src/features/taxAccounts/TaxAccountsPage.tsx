@@ -1,7 +1,8 @@
-// S5 — Kết nối tài khoản thuế (GDT). Luồng: Đăng ký MST → Ủy quyền → Nhập captcha →
-// Đăng nhập. A2 (GET /tax-accounts) khôi phục trạng thái (stepper + panel token) khi tải
-// lại. RÀNG BUỘC (BINDING_MAP §5): captcha người TỰ nhập (không tự giải); mật khẩu thuế
-// KHÔNG lưu client, chỉ gửi thẳng bước login; 409 = chưa ủy quyền → chặn login.
+// S5 — Kết nối tài khoản thuế (GDT). Luồng (U23-D): MST CỐ ĐỊNH (auto từ tenant, không nhập
+// tay) → Ủy quyền → Nhập captcha + mật khẩu → Đăng nhập; có Ngắt kết nối (xóa token, giữ MST).
+// A2 (GET /tax-accounts) khôi phục trạng thái (stepper + panel token) khi tải lại. RÀNG BUỘC
+// (BINDING_MAP §5): captcha người TỰ nhập (không tự giải); mật khẩu thuế KHÔNG lưu client, chỉ
+// gửi thẳng bước login; 409 = chưa ủy quyền → chặn login.
 // BẢO MẬT: captcha SVG render qua <img> data-URI (KHÔNG dangerouslySetInnerHTML — chặn
 // script nhúng trong SVG).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,8 +12,14 @@ import { Alert, Button, Card, Loading, TextField } from "../../components/ui/pri
 import { ApiError, api } from "../../lib/apiClient";
 import { formatDateVN } from "../../lib/format";
 import type { TaxAccountView } from "../../types/api";
+import { useAuth } from "../auth/auth-context";
 
-const STEPS = ["Đăng ký MST", "Ủy quyền", "Nhập captcha", "Đăng nhập"];
+// U23-D4 — MST cố định theo doanh nghiệp (không nhập tay); backend auto-gán username=MST.
+const STEPS = ["Mã số thuế", "Ủy quyền", "Nhập captcha + mật khẩu", "Đăng nhập"];
+
+// U23-D — module "Thêm tài khoản con" ẩn sau cờ, MẶC ĐỊNH TẮT (chỉ dựng nền). Bật ⇒ hiện
+// khối thêm tài khoản con (validate tiền tố MST phía client; backend cũng validate ở D2).
+export const SUB_ACCOUNT_UI_ENABLED = false;
 
 function Stepper({ current }: { current: number }) {
   return (
@@ -63,50 +70,70 @@ function maskMst(mst: string): string {
   return mst.slice(0, 4) + "x".repeat(mst.length - 4);
 }
 
-function RegisterForm({ onDone }: { onDone: () => void }) {
-  const [username, setUsername] = useState("");
-  const [loai, setLoai] = useState<"chinh" | "con">("chinh");
+// U23-D4 — MST cố định (read-only, che) từ /me (auth context); KHÔNG ô nhập MST. Tài khoản
+// chính: backend auto-gán username = MST gốc (D2) → đăng ký không gửi username.
+function RegisterForm({ mst, onDone }: { mst: string | null; onDone: () => void }) {
   const m = useMutation({
-    mutationFn: () => api.registerTaxAccount(username, loai),
+    mutationFn: () => api.registerTaxAccount(),
+    onSuccess: onDone,
+  });
+  if (!mst) {
+    return (
+      <Card>
+        <Alert tone="warning">
+          Doanh nghiệp <strong>chưa khai mã số thuế</strong>. Vui lòng cập nhật MST ở{" "}
+          <strong>Cài đặt chung</strong> trước khi kết nối Tổng cục Thuế.
+        </Alert>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>Kết nối mã số thuế</h2>
+      <div style={{ display: "grid", gap: "var(--sp-3)", marginTop: "var(--sp-3)", maxWidth: 360 }}>
+        <div>
+          <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
+            Mã số thuế (cố định theo doanh nghiệp)
+          </div>
+          <div
+            style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}
+            className="tabular"
+          >
+            {maskMst(mst)}
+          </div>
+        </div>
+        <Button onClick={() => m.mutate()} disabled={m.isPending}>
+          {m.isPending ? "Đang kết nối…" : "Kết nối tài khoản thuế"}
+        </Button>
+        {m.isError ? <Alert tone="danger">Không kết nối được. Thử lại sau ít phút.</Alert> : null}
+      </div>
+    </Card>
+  );
+}
+
+// U23-D — Khối "Thêm tài khoản con" (dựng nền, ẩn sau cờ SUB_ACCOUNT_UI_ENABLED). Validate
+// tiền tố MST gốc phía client (backend validate lại ở D2). Chỉ render khi cờ bật.
+export function SubAccountBlock({ mst, onDone }: { mst: string; onDone: () => void }) {
+  const [username, setUsername] = useState("");
+  const valid = username.length > mst.length && username.startsWith(mst);
+  const m = useMutation({
+    mutationFn: () => api.registerTaxAccount({ loai: "con", username }),
     onSuccess: onDone,
   });
   return (
     <Card>
-      <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>Đăng ký mã số thuế</h2>
+      <h3 style={{ fontSize: "var(--fs-md)", fontWeight: "var(--fw-bold)" }}>Thêm tài khoản con</h3>
       <div style={{ display: "grid", gap: "var(--sp-3)", marginTop: "var(--sp-3)", maxWidth: 360 }}>
         <TextField
-          label="Mã số thuế (MST)"
+          label={`Mã số thuế nhánh (bắt đầu bằng ${maskMst(mst)})`}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
         />
-        <label
-          style={{
-            display: "grid",
-            gap: "var(--sp-1)",
-            fontSize: "var(--fs-sm)",
-            color: "var(--text-secondary)",
-            fontWeight: "var(--fw-semibold)",
-          }}
-        >
-          Loại
-          <select
-            value={loai}
-            onChange={(e) => setLoai(e.target.value as "chinh" | "con")}
-            style={{
-              padding: "var(--sp-3)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <option value="chinh">Chính</option>
-            <option value="con">Con</option>
-          </select>
-        </label>
-        <Button onClick={() => m.mutate()} disabled={!username || m.isPending}>
-          {m.isPending ? "Đang đăng ký…" : "Đăng ký"}
+        <Button onClick={() => m.mutate()} disabled={!valid || m.isPending}>
+          {m.isPending ? "Đang thêm…" : "Thêm tài khoản con"}
         </Button>
-        {m.isError ? (
-          <Alert tone="danger">Không đăng ký được. Kiểm tra MST và thử lại.</Alert>
+        {username && !valid ? (
+          <Alert tone="warning">Mã số thuế nhánh phải bắt đầu bằng MST gốc của doanh nghiệp.</Alert>
         ) : null}
       </div>
     </Card>
@@ -240,7 +267,25 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
 // KHÔNG ép lại form captcha (đỡ gây rối); muốn lấy phiên mới thì bấm "Kết nối lại".
 function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: () => void }) {
   const [reauth, setReauth] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const sync = useMutation({ mutationFn: () => api.syncTaxAccount(account.id) });
+  // U23-D4 — Ngắt kết nối (gọi D3): xóa token đã lưu, GIỮ MST. Có bước xác nhận.
+  const disconnect = useMutation({
+    mutationFn: () => api.disconnectTaxAccount(account.id),
+    onSuccess: () => {
+      setConfirmDisconnect(false);
+      onDone();
+    },
+  });
+  const linkBtn: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 0,
+    fontSize: "var(--fs-sm)",
+    textDecoration: "underline",
+    justifySelf: "start",
+  };
   return (
     <>
       <Card>
@@ -293,6 +338,37 @@ function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: 
           >
             {reauth ? "Ẩn kết nối lại" : "Kết nối lại (lấy phiên mới)"}
           </button>
+
+          {confirmDisconnect ? (
+            <div style={{ display: "grid", gap: "var(--sp-2)", justifyItems: "start" }}>
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
+                Ngắt kết nối sẽ xóa phiên đăng nhập Tổng cục Thuế đã lưu (giữ MST). Xác nhận?
+              </span>
+              <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center" }}>
+                <Button onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
+                  {disconnect.isPending ? "Đang ngắt…" : "Xác nhận ngắt kết nối"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDisconnect(false)}
+                  style={{ ...linkBtn, color: "var(--text-secondary)" }}
+                >
+                  Hủy
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmDisconnect(true)}
+              style={{ ...linkBtn, color: "var(--danger-600)" }}
+            >
+              Ngắt kết nối
+            </button>
+          )}
+          {disconnect.isError ? (
+            <Alert tone="danger">Không ngắt kết nối được. Thử lại.</Alert>
+          ) : null}
         </div>
       </Card>
       {reauth && (
@@ -310,6 +386,9 @@ function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: 
 
 export function TaxAccountsPage() {
   const qc = useQueryClient();
+  const { me } = useAuth();
+  // MST cố định của doanh nghiệp từ /me (auth context — không nhập tay). Rỗng → chưa khai MST.
+  const mst = me?.mst ? me.mst : null;
   const list = useQuery({ queryKey: ["tax-accounts"], queryFn: () => api.listTaxAccounts() });
   const refresh = () => qc.invalidateQueries({ queryKey: ["tax-accounts"] });
 
@@ -333,7 +412,7 @@ export function TaxAccountsPage() {
       {list.isPending ? (
         <Loading />
       ) : !account ? (
-        <RegisterForm onDone={refresh} />
+        <RegisterForm mst={mst} onDone={refresh} />
       ) : !account.uyQuyenLuc ? (
         <AuthorizeStep account={account} onDone={refresh} />
       ) : connected ? (
@@ -349,6 +428,11 @@ export function TaxAccountsPage() {
           <LoginStep account={account} onDone={refresh} />
         </>
       )}
+
+      {/* U23-D — Khối "Thêm tài khoản con": dựng nền, ẩn sau cờ (mặc định TẮT). */}
+      {SUB_ACCOUNT_UI_ENABLED && account && mst ? (
+        <SubAccountBlock mst={mst} onDone={refresh} />
+      ) : null}
     </div>
   );
 }

@@ -136,10 +136,7 @@ function Detail({ inv }: { inv: InvoiceDetailResponse }) {
       {inv.dongHangHoa.length > 0 ? (
         <LinesTable lines={inv.dongHangHoa} />
       ) : (
-        <Alert tone="info">
-          Hóa đơn này <strong>chưa có dòng hàng</strong> chi tiết — có thể đang chờ đồng bộ chi tiết
-          (chạy nền sau phần đầu hóa đơn).
-        </Alert>
+        <Alert tone="info">Chưa có dữ liệu dòng hàng (cần đồng bộ chi tiết)</Alert>
       )}
     </div>
   );

@@ -46,6 +46,26 @@ export async function storeToken(
 }
 
 /**
+ * NGẮT KẾT NỐI (U23-D): xóa token đã lưu của một tài khoản (tokenHienTai + tokenHetHan →
+ * null), tenant-scoped. GIỮ bản ghi tài khoản — chỉ ngắt token, KHÔNG xóa MST. Trả `true`
+ * nếu có hàng bị cập nhật (tài khoản tồn tại + thuộc tenant), `false` nếu không (→ 404 ở route).
+ */
+export async function clearToken(
+  db: AnyDb,
+  tenantId: string,
+  taikhoanId: string,
+): Promise<boolean> {
+  return withTenant(db, tenantId, async (tx) => {
+    const updated = await tx
+      .update(taiKhoanThue)
+      .set({ tokenHienTai: null, tokenHetHan: null })
+      .where(and(eq(taiKhoanThue.id, taikhoanId), eq(taiKhoanThue.tenantId, tenantId)))
+      .returning({ id: taiKhoanThue.id });
+    return updated.length > 0;
+  });
+}
+
+/**
  * Đọc + giải mã token của một tài khoản (tenant-scoped). Trả `null` nếu tài khoản
  * không thuộc tenant, không tồn tại, hoặc chưa có token (chưa đăng nhập).
  */

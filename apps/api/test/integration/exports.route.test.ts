@@ -1,7 +1,7 @@
 // U7 integration (PGlite + R2 giả) — REST kết xuất đi qua ĐƯỜNG THẬT: createApp + auth
 // JWT + route + withTenant/RLS + ghi R2 + audit. Bắt buộc (multi-tenant.md): tenant A
 // KHÔNG kết xuất/không tải được dữ liệu tenant B. Offline, không mạng, không GDT.
-import { auditLog, withTenant } from "@vat/db";
+import { auditLog, dongHangHoa, withTenant } from "@vat/db";
 import { unzipSync } from "fflate";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
@@ -32,6 +32,12 @@ function csvLines(bytes: Uint8Array): string[] {
   let s = dec.decode(bytes);
   if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
   return s.trimEnd().split("\r\n");
+}
+
+// Khối hóa đơn = các dòng TRƯỚC dòng trống ngăn cách khối "Chi tiết dòng hàng" (U23-B).
+function invoiceSection(lines: string[]): string[] {
+  const sep = lines.indexOf("");
+  return sep >= 0 ? lines.slice(0, sep) : lines;
 }
 
 describe("REST /exports (integration, PGlite + R2 giả)", () => {
@@ -80,7 +86,9 @@ describe("REST /exports (integration, PGlite + R2 giả)", () => {
     expect(dl.status).toBe(200);
     expect(dl.headers.get("content-type")).toContain("text/csv");
     const lines = csvLines(new Uint8Array(await dl.arrayBuffer()));
-    expect(lines.length).toBe(3); // header + 2 hóa đơn của A
+    expect(invoiceSection(lines).length).toBe(3); // header + 2 hóa đơn của A
+    // Có khối "Chi tiết dòng hàng" (U23-B) — kể cả khi các hóa đơn chưa có dòng hàng.
+    expect(lines).toContain("Chi tiết dòng hàng");
     // KHÔNG lẫn dữ liệu B.
     expect(lines.join("\n")).not.toContain("9999999999");
     expect(lines.join("\n")).not.toContain("999999");
@@ -141,7 +149,52 @@ describe("REST /exports (integration, PGlite + R2 giả)", () => {
     const res = await createExport(token, "format=csv&chieu=sold");
     const { url } = (await res.json()) as { url: string };
     const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
-    expect(csvLines(new Uint8Array(await dl.arrayBuffer())).length).toBe(2); // header + 1
+    expect(invoiceSection(csvLines(new Uint8Array(await dl.arrayBuffer()))).length).toBe(2); // header + 1
+  });
+
+  it("U23-B: xlsx có sheet 'Chi tiết dòng hàng' chứa dòng hàng của A (khóa shdon), KHÔNG lẫn B", async () => {
+    // Seed một hóa đơn A + một hóa đơn B, mỗi cái một dòng hàng.
+    const invA = await seedInvoice(db, tenantA, { shdon: "77" });
+    await db.insert(dongHangHoa).values({
+      hoaDonId: invA,
+      tenantId: tenantA,
+      stt: 1,
+      ten: "Dịch vụ A",
+      dvtinh: "lần",
+      sluong: "1",
+      dgia: "1000",
+      thtien: "1000",
+      ltsuat: "8%",
+      tsuat: "0.08",
+      tsuatTien: "80",
+      rawJson: {},
+    });
+    const invB = await seedInvoice(db, tenantB, { shdon: "88" });
+    await db.insert(dongHangHoa).values({
+      hoaDonId: invB,
+      tenantId: tenantB,
+      stt: 1,
+      ten: "Dịch vụ B bí mật",
+      dvtinh: "lần",
+      sluong: "1",
+      dgia: "1000",
+      thtien: "1000",
+      ltsuat: "8%",
+      tsuat: "0.08",
+      tsuatTien: "80",
+      rawJson: {},
+    });
+
+    const token = await tokenFor(tenantA);
+    const { url } = (await (await createExport(token, "format=xlsx")).json()) as { url: string };
+    const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
+    const zip = unzipSync(new Uint8Array(await dl.arrayBuffer()));
+    expect(dec.decode(zip["xl/workbook.xml"])).toContain("Chi tiết dòng hàng");
+    const sheet2 = dec.decode(zip["xl/worksheets/sheet2.xml"]);
+    expect(sheet2).toContain("Dịch vụ A");
+    expect(sheet2).toContain("77"); // shdon liên kết về hóa đơn
+    // Cách ly tenant: dòng hàng của B KHÔNG lọt vào file của A.
+    expect(sheet2).not.toContain("Dịch vụ B bí mật");
   });
 
   it("CÁCH LY: A không tải được object của B (key mang tiền tố tenant) → 404", async () => {
