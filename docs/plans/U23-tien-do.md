@@ -12,10 +12,10 @@
 | **A** | Dòng hàng ở màn Chi tiết (apps/web) | ✅ DONE — `53036e8` |
 | **B** | Dòng hàng vào xlsx/csv (packages/export) | ✅ DONE — `9fe2fb5` |
 | **C** | Tổng quan tối giản (apps/web) | ✅ DONE — `b16572e` |
-| D1 | Migration UNIQUE(mst) + UNIQUE(tenant_id,username) | ⬜ chưa |
-| D2 | POST /tax-accounts auto mst + hạn mức | ⬜ chưa |
-| D3 | POST /tax-accounts/:id/disconnect | ⬜ chưa |
-| D4 | Rút gọn màn kết nối (apps/web) | ⬜ chưa |
+| **D1** | Migration UNIQUE(mst) + UNIQUE(tenant_id,username) | ✅ DONE — `df8f0a4` |
+| **D2** | POST /tax-accounts auto mst + hạn mức | ✅ DONE — `80642e3` |
+| **D3** | POST /tax-accounts/:id/disconnect | ✅ DONE — `df0792e` |
+| **D4** | Rút gọn màn kết nối (apps/web) | ✅ DONE — `e0f22e9` |
 | E1 | U17 — đăng ký + gói dịch vụ (BE) | ⬜ chưa |
 | E2 | U18 — Admin API super-admin (BE) | ⬜ chưa |
 | E3 | U19 — Cổng Admin `/admin` (FE) | ⬜ chưa |
@@ -77,3 +77,20 @@
   không vỡ — dashboard card khác accessible-name với nav link nên không đụng).
 - **QA:** dod-auditor — **không Critical**. Đã xử Major (cập nhật `06-BINDING_MAP.md:67`: Dashboard
   chỉ còn `GET /tax-accounts`) + Minor (thêm test đa-tài-khoản chọn mốc muộn nhất).
+
+### D — MST auto + hạn mức + ngắt kết nối — DONE (4 lát) — 2026-07-16
+- **D1** `df8f0a4`: migration 0006 UNIQUE(mst) + UNIQUE(tenant_id,username), idempotent; schema Drizzle khớp.
+- **D2** `80642e3`: POST /tax-accounts — chính auto username=tenants.mst (không nhận body); hạn mức
+  `getGioiHanTkThue` (tạm=1, TODO U17, một điểm); con ẩn sau cờ `SUB_ACCOUNT_MODULE_ENABLED` (TẮT) +
+  `isValidSubUsername` (startsWith). MST rỗng→400, hạn mức→409, con-tắt→400.
+- **D3** `df0792e`: seam `clearToken` (@vat/db) + route POST /:id/disconnect (audit `ngat_ket_noi_thue`,
+  cách ly tenant→404, giữ bản ghi MST).
+- **D4** `e0f22e9`: màn kết nối rút gọn — MST read-only che từ /me (không ô nhập), nút Ngắt kết nối
+  (xác nhận), khối tài khoản con ẩn sau cờ `SUB_ACCOUNT_UI_ENABLED` (TẮT), mật khẩu không lưu client.
+- **Verify:** `make lint` EXIT=0; `make test` EXIT=0 (packages/db 44, @vat/api 142, apps/web 119, …).
+- **QA:** dod-auditor **ĐẠT** + security-reviewer **ĐẠT** (không Critical/High). Đã xử 2 Minor (chú thích
+  đầu TaxAccountsPage; commit BINDING_MAP).
+- **Nợ (Low, ghi để nối U17):** TOCTOU đếm-hạn-mức rồi insert — hiện tài khoản CHÍNH được `UNIQUE(tenant_id,
+  username)` chặn (đều dùng mst), nên an toàn. KHI BẬT module tài khoản con (U17) phải khóa đếm
+  (`SELECT … FOR UPDATE` / kiểm lại trong INSERT) vì username con khác nhau → unique không chặn.
+- **06-BINDING_MAP:** cập nhật hợp đồng POST /tax-accounts (auto MST, 409 hạn mức) + route disconnect + luồng S5.

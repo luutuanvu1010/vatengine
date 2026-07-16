@@ -1,7 +1,8 @@
-// S5 — Kết nối tài khoản thuế (GDT). Luồng: Đăng ký MST → Ủy quyền → Nhập captcha →
-// Đăng nhập. A2 (GET /tax-accounts) khôi phục trạng thái (stepper + panel token) khi tải
-// lại. RÀNG BUỘC (BINDING_MAP §5): captcha người TỰ nhập (không tự giải); mật khẩu thuế
-// KHÔNG lưu client, chỉ gửi thẳng bước login; 409 = chưa ủy quyền → chặn login.
+// S5 — Kết nối tài khoản thuế (GDT). Luồng (U23-D): MST CỐ ĐỊNH (auto từ tenant, không nhập
+// tay) → Ủy quyền → Nhập captcha + mật khẩu → Đăng nhập; có Ngắt kết nối (xóa token, giữ MST).
+// A2 (GET /tax-accounts) khôi phục trạng thái (stepper + panel token) khi tải lại. RÀNG BUỘC
+// (BINDING_MAP §5): captcha người TỰ nhập (không tự giải); mật khẩu thuế KHÔNG lưu client, chỉ
+// gửi thẳng bước login; 409 = chưa ủy quyền → chặn login.
 // BẢO MẬT: captcha SVG render qua <img> data-URI (KHÔNG dangerouslySetInnerHTML — chặn
 // script nhúng trong SVG).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

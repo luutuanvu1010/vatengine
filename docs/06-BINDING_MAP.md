@@ -33,7 +33,7 @@
 | S2 | **Chi tiết hóa đơn** (header + bảng dòng hàng) | `GET /invoices/:id` | 3 vai |
 | S3 | **Kết xuất & Convert** (xlsx/csv + profile kế toán; xlsx 2 sheet / csv 2 khối: hóa đơn + Chi tiết dòng hàng — U23-B) → tải file | `POST /exports`, `POST /exports/convert`, `GET /exports/:id` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
 | S4 | **Đối chiếu** (4 loại phát hiện + tóm tắt) | `GET /reconcile` | 3 vai |
-| S5 | **Kết nối tài khoản thuế (GDT)** — đăng ký MST → ủy quyền → captcha → đăng nhập lưu token | `POST /tax-accounts`, `/:id/authorize`, `GET /:id/captcha`, `POST /:id/login` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
+| S5 | **Kết nối tài khoản thuế (GDT)** — MST cố định (auto từ tenant) → ủy quyền → captcha + mật khẩu → đăng nhập lưu token; **ngắt kết nối** (U23-D) | `POST /tax-accounts`, `/:id/authorize`, `GET /:id/captcha`, `POST /:id/login`, `POST /:id/disconnect` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
 
 ## 3. Hợp đồng API đầy đủ (đã kiểm chứng từ mã)
 
@@ -49,10 +49,11 @@
 | `POST /exports/convert` | query: `profile` + `format` + bộ lọc | `201 {id, key, url, profile}` | `400` profile/format sai | `ke_toan_truong`,`quan_tri` |
 | `GET /exports/:id` | `:id` (mã kết xuất) | `200` file stream (R2, giới hạn tenant) | `400` · `404` | `ke_toan_truong`,`quan_tri` |
 | `GET /reconcile` | query: bộ lọc chuẩn | `200 {findings[], summary}` | `400` | 3 vai |
-| **`POST /tax-accounts`** | `{username (MST), loai?: "chinh"\|"con"}` | `201 {id}` | `400` | `ke_toan_truong`,`quan_tri` |
+| **`POST /tax-accounts`** | `{loai?: "chinh"\|"con", username?}` — **chính**: username AUTO = `tenants.mst` (KHÔNG nhận từ body); **con** (sau cờ, mặc định TẮT) validate `startsWith(mst)` | `201 {id}` | `400` MST rỗng / con-tắt / tiền tố sai · **`409` đạt hạn mức** (getGioiHanTkThue, tạm=1; U23-D2) | `ke_toan_truong`,`quan_tri` |
 | **`POST /tax-accounts/:id/authorize`** | `:id` UUID | `200 {ok:true}` (đặt `uy_quyen_luc`, ghi audit) | `400` · `404` (khác tenant) | `ke_toan_truong`,`quan_tri` |
 | **`GET /tax-accounts/:id/captcha`** | `:id` UUID | `200 {key, content}` — `content` = **SVG markup thô** (không base64) | `400` | `ke_toan_truong`,`quan_tri` |
 | **`POST /tax-accounts/:id/login`** | `{password, ckey, cvalue}` | `200 {ok:true, tokenHetHan}` (lưu token GDT mã hoá) | `400` · `401` GDT từ chối (sai captcha/mật khẩu — KHÔNG lưu) · `404` · **`409` chưa ủy quyền** | `ke_toan_truong`,`quan_tri` |
+| **`POST /tax-accounts/:id/disconnect`** | `:id` UUID | `200 {ok:true}` — xóa token đã lưu (`tokenHienTai`+`tokenHetHan`→null), GIỮ bản ghi MST, audit `ngat_ket_noi_thue` (U23-D3) | `400` · `404` (khác tenant) | `ke_toan_truong`,`quan_tri` |
 
 ## 3b. Endpoint bổ sung U15 (A1/A2 — ĐÃ có trong mã, chủ dự án chuẩn thuận 2026-07-15)
 
@@ -101,7 +102,7 @@ Profile khả dụng: **CHỈ `reference`** (đã kiểm chứng). `misa`/`fast`
 
 Trạng thái một `tax-account` và hành vi UI tương ứng:
 
-1. **Đăng ký:** nhập MST (`username`) [+ loại chính/con] → `POST /tax-accounts` → có `id`.
+1. **Kết nối (U23-D):** MST **cố định** theo doanh nghiệp (`/me`, read-only đã che) — KHÔNG nhập tay → `POST /tax-accounts` (không body) → backend auto username = `tenants.mst`, có `id`. Tài khoản con ẩn sau cờ (mặc định TẮT). Hạn mức đạt → `409`.
 2. **Ủy quyền (consent NĐ 13/2023):** người dùng xác nhận ủy quyền → `POST /:id/authorize`. **Chưa ủy quyền thì đăng nhập trả `409`** → UI phải chặn bước login tới khi ủy quyền xong.
 3. **Lấy captcha:** `GET /:id/captcha` → `{key, content}`. `content` là **SVG thô** → render trực tiếp (`<img>`/inline SVG) cho người **tự gõ** (Hiến pháp — KHÔNG tự giải captcha).
 4. **Đăng nhập GDT:** gửi `{password (mật khẩu thuế), ckey=key, cvalue=captcha đã gõ}` → `POST /:id/login`.
@@ -109,6 +110,7 @@ Trạng thái một `tax-account` và hành vi UI tương ứng:
    - `401` → sai captcha/mật khẩu → xin captcha mới, **không** lưu gì.
    - `409` → chưa ủy quyền (quay bước 2).
 5. **Token hết hạn** (`tokenHetHan` < hiện tại): nhắc đăng nhập lại (lặp bước 3–4).
+6. **Ngắt kết nối (U23-D3):** `POST /:id/disconnect` (có bước xác nhận UI) → xóa token đã lưu, GIỮ bản ghi MST; quay về trạng thái chưa đăng nhập.
 
 **Ràng buộc màn này:** KHÔNG log/hiển thị mật khẩu thuế; KHÔNG lưu mật khẩu ở client; captcha do người nhập; mật khẩu thuế chỉ đi thẳng lên `POST /:id/login`, không giữ lại.
 
