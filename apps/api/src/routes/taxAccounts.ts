@@ -2,7 +2,7 @@
 // requireTenant + requireRole(ke_toan_truong|quan_tri), trong withTenant (RLS lớp 2)
 // + lọc tenant_id tường minh (lớp 1). Gọi GDT CHỈ qua @vat/gdt-client (gdt-adapter.md).
 import { maskSensitive } from "@vat/crypto";
-import { auditLog, storeToken, taiKhoanThue, tenants, withTenant } from "@vat/db";
+import { auditLog, clearToken, storeToken, taiKhoanThue, tenants, withTenant } from "@vat/db";
 import {
   GdtContractDriftError,
   GdtError,
@@ -336,6 +336,31 @@ export function taxAccountsRoutes(deps: AppDeps) {
       const msgs = buildSyncMessages([{ tenantId, taikhoanId: id }], window, ["purchase", "sold"]);
       await queue.sendBatch(msgs.map((body) => ({ body })));
       return c.json({ enqueued: msgs.length, period: window.period }, 202);
+    } finally {
+      await close();
+    }
+  });
+
+  // POST /tax-accounts/:id/disconnect — NGẮT KẾT NỐI: xóa token đã lưu (token vault) + reset
+  // trạng thái token, audit (mask). KHÔNG xóa bản ghi MST — chỉ ngắt token. Cách ly tenant:
+  // tài khoản không thuộc tenant → clearToken trả false → 404 (không rò tồn tại chéo tenant).
+  r.post("/:id/disconnect", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const ok = await clearToken(db, tenantId, id);
+      if (!ok) return c.json({ error: "not_found" }, 404);
+      await withTenant(db, tenantId, async (tx) => {
+        await tx.insert(auditLog).values({
+          tenantId,
+          hanhDong: "ngat_ket_noi_thue",
+          doiTuong: id,
+          chiTiet: maskSensitive({ phase: "disconnect" }),
+        });
+      });
+      return c.json({ ok: true });
     } finally {
       await close();
     }

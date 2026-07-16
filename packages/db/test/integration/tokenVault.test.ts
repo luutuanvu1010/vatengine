@@ -10,7 +10,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as schema from "../../src/schema";
 import { taiKhoanThue, tenants } from "../../src/schema";
-import { readToken, storeToken } from "../../src/tokenVault";
+import { clearToken, readToken, storeToken } from "../../src/tokenVault";
 
 const MIGRATIONS = fileURLToPath(new URL("../../migrations", import.meta.url));
 // KEK giả 32 byte — CHỈ test. Sản xuất: Workers Secret (security.md).
@@ -80,5 +80,25 @@ describe("U12 tokenVault (integration, PGlite)", () => {
 
     // Đọc tài khoản A NHƯNG khai tenant B → RLS + lọc tường minh chặn → null.
     expect(await readToken(db, b, accA, KEK_B64)).toBe(null);
+  });
+
+  it("clearToken (U23-D3): xóa token, GIỮ bản ghi tài khoản; trả true", async () => {
+    const t = await makeTenant(db, "Cty A", "0100000001");
+    const acc = await makeAccount(db, t, "0100000001-tc");
+    await storeToken(db, t, acc, "eyJ.jwt.thue", new Date("2026-08-01"), KEK_B64);
+    expect(await clearToken(db, t, acc)).toBe(true);
+    expect(await readToken(db, t, acc, KEK_B64)).toBe(null); // token đã xóa
+    const rows = await db.select().from(taiKhoanThue).where(sql`${taiKhoanThue.id} = ${acc}`);
+    expect(rows).toHaveLength(1); // bản ghi tài khoản CÒN
+    expect(rows[0]?.username).toBe("0100000001-tc");
+  });
+
+  it("clearToken cách ly tenant: tenant B ngắt token A → false, token A còn nguyên", async () => {
+    const a = await makeTenant(db, "Cty A", "0100000001");
+    const b = await makeTenant(db, "Cty B", "0100000002");
+    const accA = await makeAccount(db, a, "0100000001-tc");
+    await storeToken(db, a, accA, "token-cua-A", new Date("2026-08-01"), KEK_B64);
+    expect(await clearToken(db, b, accA)).toBe(false);
+    expect((await readToken(db, a, accA, KEK_B64))?.token).toBe("token-cua-A");
   });
 });
