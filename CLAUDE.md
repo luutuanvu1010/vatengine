@@ -24,6 +24,7 @@ Luật hiện có: `gdt-adapter.md` (cô lập API thuế + hợp đồng), `mul
 - `KHAO_SAT_TINH_NANG_NIBOT.md` — mốc tính năng đối thủ (feature parity).
 - `docs/adr/` — **Nhật ký quyết định kiến trúc (ADR)**. `0001-nen-tang-cloudflare.md` chốt ngăn xếp Cloudflare (nguồn của các thay đổi ở mục "Ngăn xếp công nghệ" bên dưới).
 - `README.md` — cài đặt & chạy. `backend/` (Python) là **khung tham chiếu MVP cũ**, được **thay bằng ngăn xếp Cloudflare/TypeScript** theo ADR-0001; giữ lại làm tài liệu nghiệp vụ (đặc biệt `gdt_client.py`, `gdt_contract_schema.json`) để port sang TS ở U1–U3, không phát triển tiếp trên đó. Mã production mới nằm ở `apps/` + `packages/`.
+- `docs/BACKLOG-y-tuong-va-de-xuat.md` — **giỏ ý tưởng/đề xuất/rủi ro phát hiện được nhưng chưa đến lượt làm** (không phải kế hoạch đã chốt). Ghi vào đây khi phát hiện điều gì đáng lưu nhưng lạc phạm vi đơn vị đang làm; đọc lại khi tìm việc cho thời điểm rảnh hoặc chuẩn bị roadmap mới.
 
 Trước khi bắt đầu một đơn vị công việc, đọc mục liên quan trong hai tài liệu đầu, hoặc gọi skill `/start-unit`.
 

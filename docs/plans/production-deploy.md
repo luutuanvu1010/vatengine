@@ -1,6 +1,10 @@
 # Kế hoạch triển khai Production — `vatengine.tourdao.vn`
 
-> Trạng thái: **⬜ KẾ HOẠCH — CHƯA THỰC THI.** Đưa VATCrawlbot lên production thật trên một domain, same-origin (SPA + API cùng gốc, không CORS). Tối đa **2 phase**.
+> Trạng thái: **🟢 PRODUCTION LIVE — đã deploy U23 (2026-07-16).** Site chạy tại `https://vatengine.tourdao.vn` (same-origin, SPA U23, đủ 4 security header). Còn treo: HSTS+WAF tầng zone (Bước 5), onboarding tenant tự phục vụ (O1), verify đồng bộ HĐ thật (cần token GDT + captcha của chủ dự án).
+>
+> **Nhật ký deploy U23 — 2026-07-16 (đã kiểm chứng):** PR #5 (U23) squash-merge vào trục (`0c0873d`). Thứ tự đúng luật `deploy.md` (migrate TRƯỚC, deploy SAU): (1) `make migrate` áp `0006_unique_mst_username.sql` lên Neon — xác minh DB: migration #7, 2 index UNIQUE `tenants_mst_unique` + `tai_khoan_thue_tenant_username_unique` tồn tại; 0 bản trùng `mst`/`(tenant_id,username)` trước khi áp. (2) Deploy `vat-api` (Version `853b5984`, DO `LoginLimiter` v1→v2→v3 — **KHÔNG** dính `10074`), `sync-worker` (`49d7c992`), `vat-web` (`5b79b880`). (3) SPA phải **build lại** trước deploy (`vite build` không tự chạy trong `wrangler deploy`; `dist/` cũ trước U23) → bundle `index-BptFAtCS.js` đã live. (4) Smoke: `/api/health` 200 `env=production`; `POST /api/auth/login` giả → 401 (Hyperdrive→Neon thông); 4 security header đủ. **Gotcha ghi lại:** sau khi xoay mật khẩu `neondb_owner`, `packages/db/.dev.vars` (`DATABASE_URL`) phải cập nhật mật khẩu mới, nếu không `make migrate` fail `password authentication failed` (Hyperdrive dùng `vat_app` nên site KHÔNG ảnh hưởng, chỉ đường migrate CLI bị chặn).
+>
+> ~~KẾ HOẠCH — CHƯA THỰC THI~~ · Đưa VATCrawlbot lên production thật trên một domain, same-origin (SPA + API cùng gốc, không CORS). Tối đa **2 phase**.
 >
 > Nguồn "làm gì/thế nào": `CLAUDE.md` §Ngăn xếp + §Kiến trúc; ADR-0001 (Cloudflare), ADR-0003 (React+Vite). Luật áp dụng: `security.md`, `multi-tenant.md`. Quyết định hạ tầng: [[vat-quyet-dinh-ha-tang-2026-07-14]].
 
