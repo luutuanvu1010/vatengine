@@ -10,7 +10,7 @@
 | Đơn vị | Mô tả | Trạng thái |
 |---|---|---|
 | **A** | Dòng hàng ở màn Chi tiết (apps/web) | ✅ DONE — `53036e8` |
-| B | Dòng hàng vào xlsx/csv (packages/export) | ⬜ chưa |
+| **B** | Dòng hàng vào xlsx/csv (packages/export) | ✅ DONE — `9fe2fb5` |
 | C | Tổng quan tối giản (apps/web) | ⬜ chưa |
 | D1 | Migration UNIQUE(mst) + UNIQUE(tenant_id,username) | ⬜ chưa |
 | D2 | POST /tax-accounts auto mst + hạn mức | ⬜ chưa |
@@ -48,3 +48,22 @@
   (chỉ chạm apps/web, không token/đa tenant/gdt-client).
 - **Ghi chú vận hành:** luồng sync production có bật `fetchDetail` (`apps/sync-worker/src/deps.ts:71`)
   → dữ liệu dòng hàng thực sự được điền.
+
+### B — Dòng hàng vào xlsx/csv — DONE (`9fe2fb5`) — 2026-07-16
+- **Làm:** kết xuất native (`POST /exports`) nay kèm dòng hàng, khóa `shdon`. xlsx → sheet 2
+  "Chi tiết dòng hàng" (encoder đa-sheet `zipXlsxMulti`); csv → khối 2 cùng file
+  (`csvStreamWithLines`, 2 generator streaming). Cột dòng hàng MỘT NGUỒN: `lineDetailRenderColumns()`
+  (`packages/export/src/columns.ts`), dùng chung xlsx+csv qua `RenderColumn<T>`. Tái dùng
+  `fetchLinesForInvoices` (lọc tenant tường minh).
+- **Bug đã sửa trong lúc làm:** stream CSV pull-based ban đầu bị TREO khi một pull đổi phase mà
+  không enqueue (Web Streams không tự gọi lại pull) → bọc switch trong vòng `for(;;)` để mỗi pull
+  luôn enqueue/close.
+- **Verify:** `make lint` EXIT=0; `make test` EXIT=0 (export 13 test files; +route end-to-end).
+- **QA:** dod-auditor **ĐẠT** (đã xử 2 Minor: xoá import thừa `LineDetailRow`; cập nhật BINDING_MAP);
+  security-reviewer **ĐẠT** (cách ly tenant qua fetchLinesForInvoices, không lộ raw_json/token,
+  guardCsvText cho ô văn bản dòng hàng). Không Critical.
+- **Doc:** cập nhật `docs/06-BINDING_MAP.md` (hình dạng kết xuất; đính chính S2/GET:id đã có dòng hàng).
+- **Lưu ý:** `make test` toàn monorepo có thể FLAKY khi chạy song song nhiều workspace nặng (PGlite
+  WASM) — ENOENT coverage tmp / hook timeout. Chạy lại tuần tự → xanh. Không phải lỗi mã.
+- **Nợ nhỏ (không chặn):** `toXlsxFromBatches`/`csvStream` (bản không dòng hàng) route không còn gọi,
+  giữ làm public API của `@vat/export` (còn test riêng) — chủ dự án cân nhắc dọn sau nếu muốn.
