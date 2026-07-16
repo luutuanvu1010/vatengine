@@ -3,9 +3,10 @@ import type { SyncJobMessage } from "@vat/sync";
 // Kiểu dùng chung cho Worker API (U6). Tầng ứng dụng PHI TRẠNG THÁI (mục 11).
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import type { LockGate, LoginLockEnv } from "./loginLimiter";
 import type { Role } from "./rbac";
 
-export interface Env {
+export interface Env extends LoginLockEnv {
   ENVIRONMENT?: string;
   // Postgres qua Hyperdrive (ADR-0001). `.connectionString` dùng để mở kết nối pg.
   HYPERDRIVE: Hyperdrive;
@@ -18,6 +19,13 @@ export interface Env {
   // Hàng đợi đồng bộ nền — producer cho "Đồng bộ ngay" (POST /tax-accounts/:id/sync).
   // Optional: chỉ có ở production (binding wrangler); dev/test tiêm qua makeEnv (hoặc bỏ).
   SYNC_QUEUE?: Queue<SyncJobMessage>;
+  // H-A.5a — số vòng PBKDF2 cho hash MỚI (var wrangler, không nhạy cảm). Không đặt →
+  // DEFAULT 100k (an toàn Free). Đặt "600000" khi nâng Paid (H-A.3) để đạt OWASP.
+  PBKDF2_ITERATIONS?: string;
+  // H-A.5b — Durable Object khóa đăng nhập per-account (lockout). Optional: binding
+  // production; test tiêm getLoginLimiter giả. Thiếu → fail-open (login vẫn chạy; WAF
+  // per-IP + timing/audit vẫn bảo vệ).
+  LOGIN_LIMITER?: DurableObjectNamespace;
 }
 
 // Trích từ JWT nội bộ (U6/U8): `tenantId` để lọc + RLS; `role` (vai RBAC, U8) để
@@ -44,6 +52,14 @@ export interface StorageHandle {
   get: (key: string) => Promise<Uint8Array | null>;
 }
 
+// H-A.5b — client gọi Durable Object khóa đăng nhập theo key (email chuẩn hóa). Production
+// gọi DO thật; test tiêm giả (in-memory dùng logic thuần). check() TRƯỚC khi làm DB.
+export interface LoginLimiterClient {
+  check: () => Promise<LockGate>;
+  recordFailure: () => Promise<void>;
+  recordSuccess: () => Promise<void>;
+}
+
 // Tiêm phụ thuộc để test đi qua route thật với PGlite + R2 giả (không cần binding thật).
 export interface AppDeps {
   getDb: (env: Env) => Promise<DbHandle>;
@@ -51,4 +67,6 @@ export interface AppDeps {
   // U14 — đường ra GDT (getCaptcha/authenticate). Production = createDirectCfTransport();
   // test tiêm transport giả (không mạng). Cô lập adapter (gdt-adapter.md).
   getTransport: (env: Env) => GdtTransport;
+  // H-A.5b — khóa đăng nhập per-account (lockout). key = email chuẩn hóa.
+  getLoginLimiter: (env: Env, key: string) => LoginLimiterClient;
 }

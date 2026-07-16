@@ -236,7 +236,9 @@ describe("runScheduledSync — end-to-end với sync() + recorder thật (PGlite
     };
 
     const out = await runScheduledSync(deps, msgFor(tenantId, taikhoanId));
-    expect(out.kind).toBe("skipped_breaker");
+    // H-B.4 — breaker mở nay là BACKPRESSURE (reenqueue có delay, không max_retries)
+    // thay vì bỏ tick; vẫn ghi audit breakerSkip.
+    expect(out).toEqual({ kind: "retry_backpressure", reason: "breaker_open" });
     expect(calls()).toBe(0);
     const audits = await db.select().from(auditLog).where(eq(auditLog.tenantId, tenantId));
     expect(audits.some((a) => a.hanhDong === AUDIT_HANH_DONG_BREAKER_SKIP)).toBe(true);

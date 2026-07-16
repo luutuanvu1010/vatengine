@@ -13,8 +13,16 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       // Wiring/kiểu thuần — loại khỏi ngưỡng phủ (testing.md "trừ wiring thuần"):
       // index.ts (compose default), db.ts (pg/Hyperdrive prod, test tiêm PGlite),
-      // storage.ts (R2 prod, test tiêm R2 giả), types.ts (chỉ kiểu).
-      exclude: ["src/index.ts", "src/db.ts", "src/storage.ts", "src/types.ts"],
+      // storage.ts (R2 prod, test tiêm R2 giả), types.ts (chỉ kiểu). H-A.5b:
+      // loginLimiterDO.ts (Durable Object runtime — cần workerd thật; logic THUẦN đã
+      // phủ ở loginLimiter.test.ts, giống tenantLimiter ở sync-worker).
+      exclude: [
+        "src/index.ts",
+        "src/db.ts",
+        "src/storage.ts",
+        "src/types.ts",
+        "src/loginLimiterDO.ts",
+      ],
       thresholds: { lines: 80, statements: 80, branches: 80, functions: 80 },
     },
   },

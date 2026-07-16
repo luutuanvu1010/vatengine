@@ -3,7 +3,11 @@
 // người dùng SaaS, KHÁC mật khẩu tài khoản thuế (security.md chỉ cấm lưu mật khẩu THUẾ
 // thô). Định dạng lưu: `pbkdf2$<iterations>$<salt_b64>$<hash_b64>` — tự mô tả tham số
 // nên đổi số vòng lặp về sau không phá hàng cũ.
-const ITERATIONS = 100_000; // cân bằng CPU Worker (trần 5') vs. chi phí dò mật khẩu.
+// H-A.5a — số vòng PBKDF2 mặc định. GIỮ 100k: an toàn trần CPU Free 10ms (đo 2026-07-15:
+// 100k~7ms, 300k~21ms, 600k~42ms trên V8 → 600k VƯỢT trần Free). OWASP khuyến nghị 600k;
+// bật khi nâng Paid (H-A.3) qua env PBKDF2_ITERATIONS — hash tự mô tả số vòng nên tương
+// thích ngược (hàng cũ verify bằng đúng số vòng đã lưu).
+export const DEFAULT_PBKDF2_ITERATIONS = 100_000;
 const KEYLEN_BYTES = 32; // 256-bit.
 const SALT_BYTES = 16;
 const enc = new TextEncoder();
@@ -41,10 +45,22 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
-export async function hashPassword(password: string): Promise<string> {
+export async function hashPassword(
+  password: string,
+  iterations: number = DEFAULT_PBKDF2_ITERATIONS,
+): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const hash = await derive(password, salt, ITERATIONS);
-  return `pbkdf2$${ITERATIONS}$${toB64(salt)}$${toB64(hash)}`;
+  const hash = await derive(password, salt, iterations);
+  return `pbkdf2$${iterations}$${toB64(salt)}$${toB64(hash)}`;
+}
+
+// H-A.5a — số vòng dùng cho hash MỚI, đọc từ env (Workers var, không nhạy cảm). SÀN =
+// DEFAULT: giá trị env dưới sàn hoặc rác → dùng default (fail-safe, chỉ cho tăng, không
+// cho hạ làm yếu). Nâng 600k = đặt PBKDF2_ITERATIONS=600000 SAU khi Paid (H-A.3).
+export function resolvePbkdf2Iterations(env: { PBKDF2_ITERATIONS?: string }): number {
+  const n = Number(env.PBKDF2_ITERATIONS);
+  if (!Number.isInteger(n) || n < DEFAULT_PBKDF2_ITERATIONS) return DEFAULT_PBKDF2_ITERATIONS;
+  return n;
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {

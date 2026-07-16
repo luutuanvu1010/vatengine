@@ -23,6 +23,10 @@ export interface Env extends LimiterEnv {
   EGRESS_HEALTH: DurableObjectNamespace;
   // U14 — KEK giải mã token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
   TOKEN_KEK: string;
+  // H-B.4 — tinh chỉnh fan-out (giãn tải + backpressure). Bỏ trống → mặc định (fanout.ts).
+  FANOUT_JITTER_SPREAD_SEC?: string;
+  FANOUT_BACKPRESSURE_DELAY_SEC?: string;
+  FANOUT_MAX_BACKPRESSURE?: string;
 }
 
 // Db bất kỳ (pg/Hyperdrive khi chạy; PGlite khi test). sync()/withTenant là generic
@@ -93,10 +97,16 @@ export interface RunJobDeps {
   syncParams?: { includeSco?: boolean; size?: number; statuses?: number[]; retry?: RetryOptions };
 }
 
-// Kết quả xử lý một job — điều khiển ack/retry ở tầng queue handler (index.ts):
-// `retry` → message.retry() (thử lại, có trần max_retries → dead-letter); còn lại → ack.
+// Kết quả xử lý một job — điều khiển ack/retry/reenqueue ở tầng queue handler
+// (index.ts) qua `consumerAction` (fanout.ts). H-B.4 TÁCH hai loại "thử lại":
+//  - `retry` = LỖI THẬT (tạm/bất ngờ/anomaly) → message.retry(), TÍNH vào max_retries
+//    → sau trần → dead-letter cho người xử lý.
+//  - `retry_backpressure` = ĐẨY LÙI (rate_limited/breaker_open, KHÔNG phải lỗi) →
+//    reenqueue message MỚI có delay, KHÔNG tính vào max_retries (không để backpressure
+//    thoáng qua đẩy job vào dead-letter oan). Thay `skipped_breaker` cũ (vốn ack/bỏ tick
+//    → mất cả kỳ đồng bộ khi breaker chỉ mở tạm).
 export type JobOutcome =
   | { kind: "completed"; lanDongBoId: string; soHdMoi: number; soHdCapNhat: number }
   | { kind: "needs_reauth"; reason: string }
-  | { kind: "skipped_breaker" }
+  | { kind: "retry_backpressure"; reason: "rate_limited" | "breaker_open" }
   | { kind: "retry"; reason: string };

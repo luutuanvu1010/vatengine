@@ -15,6 +15,13 @@ export interface SyncJobMessage {
   dateTo: string;
   /** Kỳ "YYYY-MM" (giờ VN) — truy vết + idempotent theo kỳ. */
   period: string;
+  /**
+   * H-B.4 — số lần ĐẨY LÙI (backpressure) liên tiếp đã reenqueue message này. KHÔNG có
+   * ở message do producer tạo (coi = 0); chỉ consumer đặt khi reenqueue. Dùng để CHẶN
+   * vòng lặp vô hạn: vượt trần → chuyển sang retry thật (max_retries → dead-letter),
+   * có điểm dừng + được giám sát thay vì lặp mãi khi rate_limited/breaker kéo dài.
+   */
+  bpAttempt?: number;
 }
 
 export interface PeriodWindow {

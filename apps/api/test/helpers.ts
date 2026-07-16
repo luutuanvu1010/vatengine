@@ -7,8 +7,17 @@ import type { GdtTransport } from "@vat/gdt-client";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sign } from "hono/jwt";
+import {
+  type LoginLockConfig,
+  type LoginLockState,
+  checkLock,
+  initialLockState,
+  recordFailure,
+  recordSuccess,
+  resolveLoginLockConfig,
+} from "../src/loginLimiter";
 import { hashPassword } from "../src/password";
-import type { AnyDb, Env, StorageHandle } from "../src/types";
+import type { AnyDb, Env, LoginLimiterClient, StorageHandle } from "../src/types";
 
 // migrations của @vat/db (áp bằng PGlite) — giải qua URL để không phụ thuộc cwd.
 const MIGRATIONS = new URL("../../../packages/db/migrations", import.meta.url).pathname;
@@ -85,17 +94,37 @@ export function makeTransport(over: Partial<GdtTransport> = {}): GdtTransport {
   };
 }
 
-/** Tiêm db PGlite + R2 giả + transport GDT giả vào createApp (close = noop trong test).
- * storage/transport tùy chọn để test đọc lại object đã ghi / khai hành vi transport riêng. */
+/** H-A.5b — factory limiter GIẢ in-memory (dùng logic thuần + Date.now()) để test route.
+ * Trạng thái giữ theo key trong Map. cfg tùy chỉnh (vd maxFailures nhỏ) để test khóa nhanh.
+ * Không truyền → mặc định (never-lock trong các test không liên quan vì ngưỡng cao). */
+export function makeLoginLimiterFactory(cfg: LoginLockConfig = resolveLoginLockConfig({})) {
+  const states = new Map<string, LoginLockState>();
+  const get = (key: string) => states.get(key) ?? initialLockState();
+  return (_env: Env, key: string): LoginLimiterClient => ({
+    check: async () => checkLock(get(key), Date.now(), cfg),
+    recordFailure: async () => {
+      states.set(key, recordFailure(get(key), Date.now(), cfg));
+    },
+    recordSuccess: async () => {
+      states.set(key, recordSuccess());
+    },
+  });
+}
+
+/** Tiêm db PGlite + R2 giả + transport GDT giả + limiter giả vào createApp (close = noop).
+ * storage/transport tùy chọn; loginLimiter mặc định factory ngưỡng cao (không khóa trong
+ * các test login thường) — test lockout truyền factory riêng ngưỡng thấp. */
 export function injectDb(
   db: Db,
   storage: FakeStorage = makeStorage(),
   transport: GdtTransport = makeTransport(),
+  getLoginLimiter = makeLoginLimiterFactory(),
 ) {
   return {
     getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }),
     getStorage: () => storage,
     getTransport: () => transport,
+    getLoginLimiter,
   };
 }
 

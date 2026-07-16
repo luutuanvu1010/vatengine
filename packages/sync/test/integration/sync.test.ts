@@ -16,6 +16,7 @@ import { sync } from "../../src/sync";
 const MIGRATIONS = new URL("../../../db/migrations", import.meta.url).pathname;
 
 type Db = ReturnType<typeof drizzle>;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 async function freshDb(): Promise<Db> {
   const db = drizzle(new PGlite());
@@ -94,6 +95,36 @@ function onePage(rows: InvoiceRow[]): Reply {
   return () => jsonRes({ datas: rows, state: null });
 }
 
+/**
+ * H-B.2 — mô phỏng TẤT ĐỊNH khe đua "2 sync song song": bọc `db` để mọi `SELECT` bên
+ * trong transaction trả `[]` (giả lập ảnh chụp giao dịch của sync này chạy TRƯỚC khi
+ * sync đối thủ commit hàng cùng khóa tự nhiên). Hàng vẫn tồn tại thật trong DB → bước
+ * `INSERT` của mã đụng đúng ràng buộc `hoa_don_natural_key`. Chỉ chặn `select`; mọi
+ * thao tác khác (insert/update/execute) đi thẳng tx thật. (upsertBatch chỉ SELECT
+ * `hoa_don`; recordFailed không SELECT — nên phạm vi che là an toàn.)
+ */
+function raceBlindSelect(realDb: Db): Db {
+  const blindTx = (tx: Tx): Tx =>
+    new Proxy(tx, {
+      get(t, p, r) {
+        if (p === "select") {
+          return () => ({ from: () => ({ where: () => Promise.resolve([]) }) });
+        }
+        const v = Reflect.get(t, p, r);
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+  return new Proxy(realDb, {
+    get(t, p, r) {
+      if (p === "transaction") {
+        return (fn: (tx: Tx) => Promise<unknown>) => t.transaction((tx) => fn(blindTx(tx)));
+      }
+      const v = Reflect.get(t, p, r);
+      return typeof v === "function" ? v.bind(t) : v;
+    },
+  });
+}
+
 const BASE_OPTS = {
   token: "jwt-token-test",
   direction: "purchase" as const,
@@ -127,6 +158,33 @@ describe("sync — upsert idempotent (integration, PGlite)", () => {
     expect(r2.soHdCapNhat).toBe(0);
     // Idempotent: chạy lại cùng dữ liệu → vẫn 3 bản ghi.
     expect((await db.select().from(hoaDon)).length).toBe(3);
+  });
+
+  it("(H-B.2) 2 sync song song cùng (tenant,kỳ,chiều) → không vỡ transaction, không failed oan, không nhân đôi", async () => {
+    // sync đối thủ chèn xong + commit trước.
+    const t1 = makeTransport(onePage([inv("1", { ttxly: 8, tthai: 1 })]));
+    const r1 = await sync({ db, transport: t1.transport, tenantId, taikhoanId, ...BASE_OPTS });
+    expect(r1.trangThai).toBe("completed");
+    expect((await db.select().from(hoaDon)).length).toBe(1);
+
+    // sync này: SELECT chạy TRƯỚC khi đối thủ commit (không thấy hàng) nhưng INSERT
+    // chạy SAU (khóa tự nhiên đã tồn tại) — tái lập tất định qua raceBlindSelect.
+    const t2 = makeTransport(onePage([inv("1", { ttxly: 6, tthai: 2 })]));
+    const r2 = await sync({
+      db: raceBlindSelect(db),
+      transport: t2.transport,
+      tenantId,
+      taikhoanId,
+      ...BASE_OPTS,
+    });
+
+    expect(r2.trangThai).toBe("completed"); // KHÔNG ghi 'failed' oan
+    const rows = await db.select().from(hoaDon);
+    expect(rows.length).toBe(1); // KHÔNG nhân đôi bản ghi
+    expect(rows[0]?.ttxly).toBe(6); // ON CONFLICT DO UPDATE áp giá trị mới nhất
+    expect(rows[0]?.tthai).toBe(2);
+    const failed = (await db.select().from(lanDongBo)).filter((x) => x.trangThai === "failed");
+    expect(failed.length).toBe(0); // không phiên thất bại oan nào
   });
 
   it("(b) ttxly/tthai đổi giữa 2 lần → CẬP NHẬT cùng bản ghi, không tạo mới + changes ghi cũ→mới", async () => {
@@ -294,6 +352,41 @@ describe("sync — upsert idempotent (integration, PGlite)", () => {
     });
 
     await db.execute(sql`reset role`);
+  });
+
+  it("(H-B.2/RLS) đường ON CONFLICT DO UPDATE bị RLS FORCE chi phối dưới role non-superuser", async () => {
+    // Bằng chứng thực nghiệm trực tiếp: chính nhánh onConflictDoUpdate (không phải
+    // UPDATE-by-id) vẫn chạy đúng dưới role app thật + RLS FORCE (WITH CHECK cùng
+    // tenant). Trước đây chỉ suy luận gián tiếp từ cấu trúc khóa duy nhất.
+    await db.execute(sql`create role app_user nosuperuser`);
+    await db.execute(sql`grant usage on schema public to app_user`);
+    await db.execute(
+      sql`grant select, insert, update, delete on all tables in schema public to app_user`,
+    );
+    await db.execute(sql`set role app_user`);
+
+    // sync đối thủ chèn hàng (dưới app_user).
+    const t1 = makeTransport(onePage([inv("1", { ttxly: 8, tthai: 1 })]));
+    await sync({ db, transport: t1.transport, tenantId, taikhoanId, ...BASE_OPTS });
+
+    // Race: SELECT bị che → đi ĐÚNG nhánh ON CONFLICT DO UPDATE, dưới RLS FORCE.
+    const t2 = makeTransport(onePage([inv("1", { ttxly: 6, tthai: 2 })]));
+    const r2 = await sync({
+      db: raceBlindSelect(db),
+      transport: t2.transport,
+      tenantId,
+      taikhoanId,
+      ...BASE_OPTS,
+    });
+    expect(r2.trangThai).toBe("completed"); // ON CONFLICT có hiệu lực dưới RLS FORCE
+
+    await db.execute(sql`reset role`);
+
+    await withTenant(db, tenantId, async (tx) => {
+      const rows = await tx.select().from(hoaDon);
+      expect(rows.length).toBe(1);
+      expect(rows[0]?.ttxly).toBe(6); // giá trị mới áp qua WITH CHECK cùng tenant
+    });
   });
 
   it("lỗi giữa transaction upsert → rollback nguyên tử: không ghi hóa đơn, ghi 1 phiên failed", async () => {

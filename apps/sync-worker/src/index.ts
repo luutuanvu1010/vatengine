@@ -1,13 +1,24 @@
 // Worker đồng bộ nền (U9) — điểm vào Cloudflare. WIRING thuần (loại khỏi ngưỡng phủ):
-//  - scheduled(): Cron → liệt kê account đến hạn → enqueue một message/(account×chiều);
-//  - queue(): consumer → runScheduledSync mỗi message → outcome "retry" thì message.retry()
-//    (queue thử lại, trần max_retries → dead-letter), còn lại thì ack;
+//  - scheduled(): Cron → liệt kê account đến hạn → CHIA lô (≤100/≤256KB) + jitter
+//    delaySeconds theo tenant → enqueue một message/(account×chiều) (H-B.4);
+//  - queue(): consumer → runScheduledSync mỗi message → `consumerAction` ánh xạ outcome
+//    → hành động: `reenqueue` (backpressure rate_limited/breaker_open: gửi msg mới có
+//    delay + ack, KHÔNG tính max_retries) · `retry` (lỗi thật: message.retry(), trần
+//    max_retries → dead-letter) · `ack` (xong / cần đăng nhập lại) — H-B.4;
 //  - export TenantLimiter: Durable Object rate-limit/circuit-breaker theo tenant/MST.
-// Logic (schedule/runJob/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
+// Logic (schedule/runJob/fanout/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
 import { getDbFromHyperdrive } from "./db";
 import { listActiveTenantIds, makeEgressProbeDeps, makeJobDeps } from "./deps";
 import { EgressHealth } from "./egressHealth";
 import { runEgressProbe } from "./egressProbe";
+import {
+  QUEUE_MAX_BATCH_BYTES,
+  QUEUE_MAX_BATCH_COUNT,
+  chunkForQueue,
+  consumerAction,
+  jitterDelaySeconds,
+  resolveFanoutConfig,
+} from "./fanout";
 import { runScheduledSync } from "./runJob";
 import { buildMessages, currentPeriodWindow, enumerateDueAccounts } from "./schedule";
 import { TenantLimiter } from "./tenantLimiter";
@@ -33,8 +44,18 @@ export default {
       const due = await enumerateDueAccounts(db, nowMs, () => listActiveTenantIds(db));
       const window = currentPeriodWindow(nowMs);
       const msgs = buildMessages(due, window, ["purchase", "sold"]);
+      // H-B.4 — CHIA lô ≤100 msg/≤256KB (vượt → sendBatch lỗi) + JITTER delaySeconds
+      // theo hash-tenant (giãn khởi động, không dồn dập máy chủ thuế — gdt-adapter.md).
       if (msgs.length > 0) {
-        await env.SYNC_QUEUE.sendBatch(msgs.map((body) => ({ body })));
+        const { jitterSpreadSeconds } = resolveFanoutConfig(env);
+        for (const chunk of chunkForQueue(msgs, QUEUE_MAX_BATCH_COUNT, QUEUE_MAX_BATCH_BYTES)) {
+          await env.SYNC_QUEUE.sendBatch(
+            chunk.map((body) => ({
+              body,
+              delaySeconds: jitterDelaySeconds(body.tenantId, jitterSpreadSeconds),
+            })),
+          );
+        }
       }
     } finally {
       await close();
@@ -47,12 +68,31 @@ export default {
     _ctx: ExecutionContext,
   ): Promise<void> {
     const { db, close } = await getDbFromHyperdrive(env);
+    const { backpressureDelaySeconds, maxBackpressure } = resolveFanoutConfig(env);
     try {
       for (const message of batch.messages) {
         const deps = makeJobDeps(env, db, message.body);
         try {
           const outcome = await runScheduledSync(deps, message.body);
-          if (outcome.kind === "retry") {
+          // H-B.4 — TÁCH backpressure (rate_limited/breaker_open) khỏi lỗi thật:
+          //  - reenqueue: gửi message MỚI có delay + ack bản cũ ⇒ KHÔNG tính max_retries
+          //    (backpressure thoáng qua không được đẩy job vào dead-letter oan). Mang
+          //    `bpAttempt` tăng dần; đạt trần → consumerAction trả `retry` (điểm dừng);
+          //  - retry: message.retry() ⇒ tính max_retries → dead-letter khi vượt trần;
+          //  - ack: xong / cần đăng nhập lại.
+          const bpAttempt = message.body.bpAttempt ?? 0;
+          const action = consumerAction(outcome, {
+            backpressureDelaySeconds,
+            bpAttempt,
+            maxBackpressure,
+          });
+          if (action.type === "reenqueue") {
+            await env.SYNC_QUEUE.send(
+              { ...message.body, bpAttempt: action.bpAttempt },
+              { delaySeconds: action.delaySeconds },
+            );
+            message.ack();
+          } else if (action.type === "retry") {
             message.retry();
           } else {
             message.ack();

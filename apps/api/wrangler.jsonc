@@ -24,11 +24,25 @@
   "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }],
 
   // Nhãn môi trường (KHÔNG nhạy cảm) — /health báo env, phân nhánh hành vi nếu cần.
-  "vars": { "ENVIRONMENT": "production" },
+  // H-A.5a — PBKDF2_ITERATIONS: số vòng băm mật khẩu SaaS cho hash MỚI. GIỮ 100000 trên
+  // Free (đo: 600k ~42ms > trần CPU Free 10ms). ĐỔI "600000" (OWASP) SAU khi nâng Paid
+  // (H-A.3). Không nhạy cảm; hash tự mô tả số vòng nên đổi không phá hàng cũ.
+  "vars": { "ENVIRONMENT": "production", "PBKDF2_ITERATIONS": "100000" },
 
   // "Đồng bộ ngay" (POST /tax-accounts/:id/sync) đẩy job vào hàng đợi vat-sync;
   // consumer là apps/sync-worker. API chỉ là PRODUCER (giữ stateless — ADR-0001 §3).
-  "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] }
+  "queues": { "producers": [{ "binding": "SYNC_QUEUE", "queue": "vat-sync" }] },
+
+  // H-A.5b — Durable Object khóa đăng nhập per-account (lockout chống brute-force, lớp
+  // app bổ sung WAF per-IP ở edge). Trạng thái nhỏ theo email → SQLite-backed DO.
+  "durable_objects": {
+    "bindings": [{ "name": "LOGIN_LIMITER", "class_name": "LoginLimiter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LoginLimiter"] }]
+
+  // H-A.5b — ngưỡng khóa đăng nhập (KHÔNG nhạy cảm; bỏ trống → mặc định loginLimiter.ts:
+  // 10 lần sai / 15' → khóa 15'). Tinh chỉnh theo môi trường.
+  // "vars" thêm: LOGIN_MAX_FAILURES / LOGIN_WINDOW_MS / LOGIN_LOCKOUT_MS.
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình
