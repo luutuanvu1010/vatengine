@@ -43,6 +43,27 @@ export interface InvoiceListResult {
   offset: number;
 }
 
+/** Một dòng hàng của hóa đơn (dong_hang_hoa). Qua JSON: numeric → chuỗi. Thuế suất
+ * giữ KÉP: `ltsuat` chuỗi hiển thị ("8%") + `tsuat` số dạng chuỗi. */
+export interface InvoiceLineRow {
+  id: string;
+  hoaDonId: string;
+  tenantId: string;
+  stt: number | null;
+  ten: string | null;
+  dvtinh: string | null;
+  sluong: string | null;
+  dgia: string | null;
+  thtien: string | null;
+  ltsuat: string | null;
+  tsuat: string | null;
+  tsuatTien: string | null;
+  rawJson: unknown;
+}
+
+/** GET /invoices/:id — header + mảng dòng hàng (ĐV4). */
+export type InvoiceDetailResponse = InvoiceRow & { dongHangHoa: InvoiceLineRow[] };
+
 export interface MoneyTotals {
   count: number;
   tongTcthue: string | null;
@@ -125,6 +146,8 @@ export interface MeResponse {
   ten: string;
   mst: string;
   goiDichVu: string | null;
+  banQuyen: string;
+  ghiChu: string | null;
   role: Role;
 }
 

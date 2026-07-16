@@ -5,7 +5,7 @@ import { Alert, Card, EmptyState, ErrorState, Loading } from "../../components/u
 import { ApiError, api } from "../../lib/apiClient";
 import { formatDateVN, formatMoney } from "../../lib/format";
 import { labelChieu, labelNguon } from "../../lib/statusLabels";
-import type { InvoiceRow } from "../../types/api";
+import type { InvoiceDetailResponse, InvoiceLineRow } from "../../types/api";
 import { TthaiChip, TtxlyChip } from "./chips";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -29,7 +29,65 @@ function Money({ v }: { v: string | null }) {
   return <span className="tabular">{formatMoney(v) || "—"}</span>;
 }
 
-function Detail({ inv }: { inv: InvoiceRow }) {
+/** Bảng dòng hàng (dong_hang_hoa) — tên SP, ĐVT, SL, đơn giá, thành tiền, thuế suất. */
+function LinesTable({ lines }: { lines: InvoiceLineRow[] }) {
+  const th: React.CSSProperties = {
+    textAlign: "left",
+    padding: "var(--sp-2)",
+    color: "var(--text-tertiary)",
+    fontSize: "var(--fs-sm)",
+    fontWeight: 600,
+    borderBottom: "1px solid var(--border-subtle)",
+    whiteSpace: "nowrap",
+  };
+  const td: React.CSSProperties = {
+    padding: "var(--sp-2)",
+    borderBottom: "1px solid var(--border-subtle)",
+    verticalAlign: "top",
+  };
+  const num: React.CSSProperties = { ...td, textAlign: "right" };
+  return (
+    <Card>
+      <div style={{ fontWeight: 600, marginBottom: "var(--sp-3)" }}>Dòng hàng</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-sm)" }}>
+          <thead>
+            <tr>
+              <th style={th}>STT</th>
+              <th style={th}>Tên hàng hóa, dịch vụ</th>
+              <th style={th}>ĐVT</th>
+              <th style={{ ...th, textAlign: "right" }}>Số lượng</th>
+              <th style={{ ...th, textAlign: "right" }}>Đơn giá</th>
+              <th style={{ ...th, textAlign: "right" }}>Thành tiền</th>
+              <th style={{ ...th, textAlign: "right" }}>Thuế suất</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((l, i) => (
+              <tr key={l.id}>
+                <td style={num}>{l.stt ?? i + 1}</td>
+                <td style={td}>{l.ten ?? "—"}</td>
+                <td style={td}>{l.dvtinh ?? "—"}</td>
+                <td style={num} className="tabular">
+                  {l.sluong ?? "—"}
+                </td>
+                <td style={num}>
+                  <Money v={l.dgia} />
+                </td>
+                <td style={num}>
+                  <Money v={l.thtien} />
+                </td>
+                <td style={num}>{l.ltsuat ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function Detail({ inv }: { inv: InvoiceDetailResponse }) {
   return (
     <div style={{ display: "grid", gap: "var(--sp-4)" }}>
       <Card>
@@ -75,10 +133,14 @@ function Detail({ inv }: { inv: InvoiceRow }) {
         </dl>
       </Card>
 
-      <Alert tone="info">
-        Chi tiết <strong>dòng hàng</strong> chưa khả dụng — hệ thống hiện chỉ đồng bộ phần đầu hóa
-        đơn (header).
-      </Alert>
+      {inv.dongHangHoa.length > 0 ? (
+        <LinesTable lines={inv.dongHangHoa} />
+      ) : (
+        <Alert tone="info">
+          Hóa đơn này <strong>chưa có dòng hàng</strong> chi tiết — có thể đang chờ đồng bộ chi tiết
+          (chạy nền sau phần đầu hóa đơn).
+        </Alert>
+      )}
     </div>
   );
 }

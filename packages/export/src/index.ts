@@ -13,6 +13,15 @@ export { CSV_BOM, csvHeaderLine, csvRowLine, csvStream, guardCsvText, toCsv } fr
 export { toXlsx, toXlsxFromBatches } from "./xlsx";
 export { DEFAULT_PAGE_SIZE, iterateInvoices, type ExportRow } from "./rows";
 export { EXPORT_FORMATS, isExportFormat, type ExportFormat } from "./formats";
+// U22 — kết xuất đa định dạng xml.zip/html.zip: một hóa đơn = một file trong zip.
+export {
+  invoiceFileStem,
+  invoiceToHtml,
+  invoiceToXml,
+  type InvoiceLineLike,
+} from "./invoiceDoc";
+export { fetchLinesForInvoices } from "./lineRows";
+export { zipStreamFromBatches, type InvoiceRenderer, type FetchLines } from "./zipStream";
 // U11 — ánh xạ/convert sang định dạng phần mềm kế toán theo profile.
 export {
   accountingCsvStream,

@@ -9,7 +9,7 @@ export {
   type InvoiceFilter,
   type Page,
 } from "./filters";
-export { getInvoiceById } from "./getInvoice";
+export { getInvoiceById, getInvoiceLines, type DongHangHoaRow } from "./getInvoice";
 export {
   listInvoices,
   type HoaDonRow,

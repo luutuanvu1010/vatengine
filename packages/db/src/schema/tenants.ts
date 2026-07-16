@@ -11,6 +11,8 @@ export const tenants = pgTable(
     mst: text("mst").notNull(),
     trangThai: text("trang_thai").notNull().default("active"),
     goiDichVu: text("goi_dich_vu"),
+    ghiChu: text("ghi_chu"),
+    banQuyen: text("ban_quyen").notNull().default("Mặc định"),
     ngayTao: timestamp("ngay_tao", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [tenantIsolationPolicy("tenants", t.id)],

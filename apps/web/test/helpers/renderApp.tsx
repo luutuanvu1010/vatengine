@@ -20,6 +20,7 @@ export function renderWithProviders(ui: ReactElement, route = "/") {
 interface MockRoutes {
   login?: (body: unknown) => Response;
   me?: () => Response;
+  patchMe?: (body: unknown) => Response;
 }
 
 /** Mock fetch định tuyến theo path — cho test luồng đăng nhập/phiên không cần mạng. */
@@ -31,6 +32,10 @@ export function mockFetch(routes: MockRoutes): void {
       return routes.login?.(body) ?? new Response("{}", { status: 500 });
     }
     if (url.endsWith("/me")) {
+      if ((init?.method ?? "GET").toUpperCase() === "PATCH") {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        return routes.patchMe?.(body) ?? new Response("{}", { status: 500 });
+      }
       return routes.me?.() ?? new Response("{}", { status: 500 });
     }
     // Shape hợp lệ mặc định để màn tiếp đất (vd Dashboard) không vỡ.

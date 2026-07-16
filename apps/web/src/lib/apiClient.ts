@@ -7,9 +7,9 @@ import type {
   ConvertResult,
   ExportFormat,
   ExportResult,
+  InvoiceDetailResponse,
   InvoiceFilter,
   InvoiceListResult,
-  InvoiceRow,
   InvoiceSummary,
   MeResponse,
   Page,
@@ -144,7 +144,7 @@ export const api = {
   getSummary(filter: InvoiceFilter): Promise<InvoiceSummary> {
     return request("GET", "/invoices/summary", { query: filterQuery(filter) });
   },
-  getInvoice(id: string): Promise<InvoiceRow> {
+  getInvoice(id: string): Promise<InvoiceDetailResponse> {
     return request("GET", `/invoices/${id}`);
   },
   getReconcile(filter: InvoiceFilter): Promise<ReconcileReport> {
@@ -171,6 +171,9 @@ export const api = {
   // A1 — hồ sơ tenant + vai.
   getMe(): Promise<MeResponse> {
     return request("GET", "/me");
+  },
+  patchMe(body: { ten?: string; ghiChu?: string | null }): Promise<MeResponse> {
+    return request("PATCH", "/me", { body });
   },
 
   // A2 — đọc trạng thái tài khoản thuế + S5 (U14).

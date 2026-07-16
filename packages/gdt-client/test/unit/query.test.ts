@@ -219,11 +219,12 @@ describe("queryInvoices — lỗi & biên", () => {
     ).rejects.toMatchObject({ code: "SESSION_EXPIRED" });
   });
 
-  it("sco lỗi được tha thứ (có cảnh báo), vẫn trả kết quả normal", async () => {
+  it("sco trả 404 (endpoint không áp dụng cho tài khoản) được tha thứ có cảnh báo, vẫn trả kết quả normal", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { transport } = makeTransport({
       [INVOICE_ENDPOINTS.purchase]: () => page([inv("1")]),
-      [INVOICE_ENDPOINTS.scoPurchase]: () => new Response("boom", { status: 500 }),
+      // CHỈ 404 mới được coi là "tài khoản không có máy tính tiền" và bỏ qua.
+      [INVOICE_ENDPOINTS.scoPurchase]: () => new Response("not found", { status: 404 }),
     });
 
     const rows = await queryInvoices(
@@ -235,8 +236,24 @@ describe("queryInvoices — lỗi & biên", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?._source).toBe("normal");
-    // Bỏ qua lỗi sco KHÔNG được im lặng — phải ghi cảnh báo.
+    // Bỏ qua nhánh sco 404 KHÔNG được im lặng — phải ghi cảnh báo.
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("sco"));
+  });
+
+  it("sco lỗi thật KHÁC 404 (5xx) → propagate, KHÔNG nuốt", async () => {
+    const { transport } = makeTransport({
+      [INVOICE_ENDPOINTS.purchase]: () => page([inv("1")]),
+      [INVOICE_ENDPOINTS.scoPurchase]: () => new Response("boom", { status: 500 }),
+    });
+
+    await expect(
+      queryInvoices(
+        transport,
+        TOKEN,
+        { direction: "purchase", dateFrom: "01/01/2026", dateTo: "31/01/2026" },
+        { maxAttempts: 1 },
+      ),
+    ).rejects.toBeInstanceOf(GdtError);
   });
 
   it("normal lỗi HTTP → propagate GdtError", async () => {

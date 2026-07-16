@@ -49,10 +49,18 @@ export type InvoiceRow = Record<string, unknown> & {
 const DEFAULT_SIZE = 50;
 // GDT CHỈ hỗ trợ sắp xếp MỘT trường. KIỂM CHỨNG 2026-07-15 (probe token production thật):
 // `sort=tdlap:desc,khmshdon:asc,shdon:desc` → HTTP 500 {"message":"Không hỗ trợ sắp xếp
-// theo nhiều trường"}; `sort=tdlap:desc` (một trường) → HTTP 200 + datas (kéo thật 16 HĐ).
-// CHƯA KIỂM CHỨNG: tính ổn định của con trỏ `state` khi CÓ NHIỀU TRANG và NHIỀU HĐ trùng
-// `tdlap` (tdlap phân giải theo NGÀY — Amendment #7). Bằng chứng 2026-07-15 chỉ có 1 trang
-// (16 < size 50). Khi gặp tenant >50 HĐ/ngày: probe xác nhận không mất/trùng giữa các trang.
+// theo nhiều trường"}; `sort=tdlap:desc` (một trường) → HTTP 200 + datas.
+// ĐÃ KIỂM CHỨNG tính ổn định phân trang con trỏ `state` với sort MỘT trường (2026-07-15,
+// scripts/gdt-paginate-probe.mjs, token production thật, MST 4201969169, endpoint
+// /api/query/invoices/purchase): dù `tdlap` phân giải theo NGÀY (Amendment #7) nên nhiều HĐ
+// trùng `tdlap` và ranh giới trang (ép size=5) rơi GIỮA cụm cùng ngày, con trỏ `state` KHÔNG
+// mất/trùng. Bằng chứng quyết định: kỳ 06/2026 = 53 HĐ / 11 trang → distinct 53 === total 53
+// GDT trả, 0 trùng chéo trang; đối chứng 05/2026 (38 HĐ/4 trang) + 03/2026 (22 HĐ/5 trang)
+// đều distinct === total. ⇒ con trỏ có tie-breaker ẩn đủ tin cậy; khử trùng theo khóa tự
+// nhiên bên dưới là lớp phòng thủ dư, không phải chỗ dựa cho việc mất trang.
+// RÀNG BUỘC GDT phát hiện kèm (cùng probe): mỗi truy vấn khoảng ngày ≤ 1 THÁNG — range >1
+// tháng → HTTP 400 "Khoảng thời gian tìm kiếm không được lớn hơn 1 tháng"; tầng đồng bộ phải
+// chia truy vấn theo tháng. (Probe cũng gặp HTTP 429 khi gọi dồn — GDT rate-limit phía server.)
 const DEFAULT_SORT = "tdlap:desc";
 // Trần số trang để chặn vòng lặp vô hạn nếu server trả `state` không dừng.
 const MAX_PAGES = 2000;
@@ -120,6 +128,8 @@ async function queryOne(
       }
       throw new GdtError(
         `Truy vấn ${endpoint} lỗi (HTTP ${res.status})${detail ? ` — GDT: ${detail}` : ""}.`,
+        "HTTP_ERROR",
+        res.status,
       );
     }
 
@@ -170,8 +180,10 @@ function naturalKey(row: Record<string, unknown>): string {
  * tenant_id là việc của tầng đồng bộ (U5), không thuộc adapter.
  *
  * 401 (kể cả giữa phân trang, kể cả nhánh sco) → dừng ngay, ném GdtError hết phiên.
- * Lỗi HTTP khác của nhánh sco được tha thứ (một số tài khoản không có sco); lỗi
- * nhánh normal thì propagate.
+ * Nhánh sco: CHỈ bỏ qua khi HTTP 404 (endpoint máy tính tiền không áp dụng cho
+ * tài khoản này) hoặc 200 + datas rỗng (vốn không ném). Mọi lỗi sco khác
+ * (400/5xx/timeout/lệch contract) propagate — KHÔNG nuốt im lặng. Lỗi nhánh
+ * normal luôn propagate.
  */
 export async function queryInvoices(
   transport: GdtTransport,
@@ -203,13 +215,16 @@ export async function queryInvoices(
       try {
         rows = await queryOne(transport, token, kind.endpoint, search, size, opts);
       } catch (err) {
-        // 401 luôn propagate (kể cả sco). Lỗi HTTP khác của nhánh sco thì bỏ qua
-        // — GIẢ ĐỊNH (suy từ mã Python di sản, CHƯA KIỂM CHỨNG): một số tài khoản
-        // không dùng máy tính tiền nên sco trả lỗi là "bình thường". KHÔNG nuốt im
-        // lặng: ghi cảnh báo để phân biệt với lỗi cấu hình thật (gdt-adapter.md).
-        if (kind.source === "sco" && !(err instanceof GdtError && err.code === "SESSION_EXPIRED")) {
+        // Nhánh sco: CHỈ bỏ qua khi HTTP 404 — endpoint máy tính tiền không áp
+        // dụng cho tài khoản này. Bằng chứng quan sát trực tiếp trên GDT (MST
+        // 4201969169, 2026-07-15): hóa đơn máy tính tiền TỒN TẠI và tra cứu được
+        // bình thường (docs/CHAN-DOAN-thieu-truong-va-mtt.md) — nên một lỗi sco
+        // KHÁC 404 (400/5xx/timeout/lệch contract) là LỖI THẬT có thể làm hóa đơn
+        // máy tính tiền biến mất, PHẢI nổi lên chứ không nuốt im lặng. 401 propagate
+        // (SESSION_EXPIRED). 200 + datas rỗng vốn không ném → tự nhiên đi tiếp.
+        if (kind.source === "sco" && err instanceof GdtError && err.httpStatus === 404) {
           console.warn(
-            `Bỏ qua lỗi nhánh sco (${kind.endpoint}): ${err instanceof Error ? err.message : String(err)}. Giả định tài khoản không có hóa đơn máy tính tiền — CHƯA KIỂM CHỨNG.`,
+            `Nhánh sco (${kind.endpoint}) trả HTTP 404: endpoint hóa đơn máy tính tiền không áp dụng cho tài khoản này — bỏ qua. (Chỉ 404 mới bỏ qua; mọi lỗi sco khác được ném để phân biệt với lỗi cấu hình/lệch contract — gdt-adapter.md.)`,
           );
           continue;
         }

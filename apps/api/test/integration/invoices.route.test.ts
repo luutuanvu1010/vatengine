@@ -1,3 +1,4 @@
+import { dongHangHoa } from "@vat/db";
 import type { HoaDonRow, InvoiceListResult, InvoiceSummary } from "@vat/query";
 // U6 integration (PGlite) — REST tra cứu đi qua ĐƯỜNG THẬT: createApp + auth JWT +
 // route + withTenant/RLS. Bắt buộc theo multi-tenant.md: tenant A KHÔNG đọc/không
@@ -78,6 +79,39 @@ describe("REST /invoices (integration, PGlite)", () => {
     // idB thuộc tenant B → tenant A KHÔNG được thấy → 404.
     const cross = await app.request(`/invoices/${idB}`, { headers: bearer(token) }, makeEnv());
     expect(cross.status).toBe(404);
+  });
+
+  it("GET /invoices/:id KÈM mảng dòng hàng (dong_hang_hoa) của hóa đơn", async () => {
+    await db.insert(dongHangHoa).values([
+      { tenantId: tenantA, hoaDonId: idA, stt: 2, ten: "Dòng B", rawJson: {} },
+      { tenantId: tenantA, hoaDonId: idA, stt: 1, ten: "Dòng A", dvtinh: "Cái", rawJson: {} },
+    ]);
+    const token = await tokenFor(tenantA);
+    const res = await app.request(`/invoices/${idA}`, { headers: bearer(token) }, makeEnv());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as HoaDonRow & { dongHangHoa: Array<{ ten: string }> };
+    expect(body.id).toBe(idA);
+    expect(body.dongHangHoa.map((l) => l.ten)).toEqual(["Dòng A", "Dòng B"]); // sắp theo stt
+  });
+
+  it("404 chéo tenant KHÔNG kèm dòng hàng của tenant kia (dù B có dòng hàng)", async () => {
+    // Seed dòng hàng cho hóa đơn của tenant B; tenant A hỏi idB → 404, tuyệt đối
+    // không lộ dòng hàng của B ở body.
+    await db
+      .insert(dongHangHoa)
+      .values({ tenantId: tenantB, hoaDonId: idB, stt: 1, ten: "Bí mật của B", rawJson: {} });
+    const token = await tokenFor(tenantA);
+    const res = await app.request(`/invoices/${idB}`, { headers: bearer(token) }, makeEnv());
+    expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain("Bí mật của B");
+  });
+
+  it("GET /invoices/:id không có dòng hàng → dongHangHoa = [] (không thiếu trường)", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await app.request(`/invoices/${idA}`, { headers: bearer(token) }, makeEnv());
+    const body = (await res.json()) as { dongHangHoa: unknown[] };
+    expect(Array.isArray(body.dongHangHoa)).toBe(true);
+    expect(body.dongHangHoa).toEqual([]);
   });
 
   it("thiếu JWT → 401; JWT hỏng → 401", async () => {

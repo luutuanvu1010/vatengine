@@ -9,11 +9,15 @@ import {
   accountingCsvStream,
   accountingXlsxFromBatches,
   csvStream,
+  fetchLinesForInvoices,
   getProfile,
+  invoiceToHtml,
+  invoiceToXml,
   isExportFormat,
   isProfileId,
   iterateInvoices,
   toXlsxFromBatches,
+  zipStreamFromBatches,
 } from "@vat/export";
 import { invoiceFilterSchema } from "@vat/query";
 import { Hono } from "hono";
@@ -21,12 +25,18 @@ import { requireTenant } from "../auth";
 import { requireRole } from "../rbac";
 import type { AppDeps, AppEnv } from "../types";
 
-// id đối tượng kết xuất: "<uuid>.<xlsx|csv>". Dùng để dựng lại key theo tenant khi tải.
-const EXPORT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(xlsx|csv)$/i;
+// id đối tượng kết xuất: "<uuid>.<đuôi định dạng>". Đuôi khớp trực tiếp EXPORT_FORMATS
+// (xml.zip/html.zip chứa dấu chấm) — escape để không hiểu nhầm "." là ký tự bất kỳ.
+const EXPORT_ID_RE = new RegExp(
+  `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(${["xlsx", "csv", "xml\\.zip", "html\\.zip"].join("|")})$`,
+  "i",
+);
 
 const CONTENT_TYPE: Record<ExportFormat, string> = {
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   csv: "text/csv; charset=utf-8",
+  "xml.zip": "application/zip",
+  "html.zip": "application/zip",
 };
 
 // Key luôn mang tiền tố tenant → tải chỉ dựng key từ tenantId của CHÍNH người gọi ⇒
@@ -61,10 +71,29 @@ export function exportsRoutes(deps: AppDeps) {
     try {
       await withTenant(db, tenantId, async (tx) => {
         const batches = iterateInvoices(tx, tenantId, filter.data);
-        // CSV: stream thẳng vào R2 (không giữ cả file trong RAM). XLSX: gom (bản chất zip)
-        // nhưng tiêu thụ generator lô-by-lô, không nạp cả tập ORM cùng lúc.
+        // CSV/xml.zip/html.zip: stream thẳng vào R2 (không giữ cả file trong RAM). XLSX:
+        // gom (bản chất zip) nhưng tiêu thụ generator lô-by-lô, không nạp cả tập ORM cùng lúc.
         if (format === "csv") {
           await storage.put(key, csvStream(batches));
+        } else if (format === "xml.zip" || format === "html.zip") {
+          const fetchLines = (ids: string[]) => fetchLinesForInvoices(tx, tenantId, ids);
+          const render =
+            format === "xml.zip"
+              ? (
+                  row: Parameters<typeof invoiceToXml>[0],
+                  lines: Parameters<typeof invoiceToXml>[1],
+                ) => ({
+                  content: invoiceToXml(row, lines),
+                  ext: "xml",
+                })
+              : (
+                  row: Parameters<typeof invoiceToHtml>[0],
+                  lines: Parameters<typeof invoiceToHtml>[1],
+                ) => ({
+                  content: invoiceToHtml(row, lines),
+                  ext: "html",
+                });
+          await storage.put(key, zipStreamFromBatches(batches, fetchLines, render));
         } else {
           await storage.put(key, await toXlsxFromBatches(batches));
         }
@@ -136,7 +165,14 @@ export function exportsRoutes(deps: AppDeps) {
     const bytes = await deps.getStorage(c.env).get(key);
     if (!bytes) return c.json({ error: "not_found" }, 404);
 
-    const format: ExportFormat = id.endsWith(".xlsx") ? "xlsx" : "csv";
+    // Đuôi dài (xml.zip/html.zip) khớp trước đuôi ngắn (csv) để không cắt nhầm.
+    const format: ExportFormat = id.endsWith(".xml.zip")
+      ? "xml.zip"
+      : id.endsWith(".html.zip")
+        ? "html.zip"
+        : id.endsWith(".xlsx")
+          ? "xlsx"
+          : "csv";
     return new Response(bytes, {
       status: 200,
       headers: {
