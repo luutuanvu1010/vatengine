@@ -136,6 +136,9 @@ function makeDeps(db: Db, transport: GdtTransport): RunJobDeps {
     sync: (o) => sync({ db: anyDb, ...o }),
     transport,
     recorder: dbRecorder(anyDb),
+    // U26 — pha 2 đi queue; test end-to-end này chỉ chốt đường header nên nuốt enqueue
+    // (hành vi enqueue đã chốt riêng ở unit/runJob.test.ts).
+    enqueueDetail: async () => {},
     syncParams: { includeSco: false },
   };
 }

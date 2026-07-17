@@ -34,7 +34,9 @@ export const AUDIT_HANH_DONG_BREAKER_SKIP = "dong_bo_bo_qua_breaker";
  * `kekB64` là secret KEK (Workers Secret, security.md). */
 export async function loadAccountToken(
   db: AnyDb,
-  msg: SyncJobMessage,
+  // U26: chỉ cần định danh tài khoản — message header (SyncJobMessage) lẫn message
+  // chi tiết (DetailSyncMessage) đều thỏa (structural).
+  msg: Pick<SyncJobMessage, "tenantId" | "taikhoanId">,
   kekB64: string,
 ): Promise<AccountToken | null> {
   return withTenant(db, msg.tenantId, async (tx) => {

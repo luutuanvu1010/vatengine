@@ -2,6 +2,7 @@
 // THUẦN LOGIC, phụ thuộc tiêm (loadAccount/limiter/sync/recorder) → test offline.
 // Cô lập adapter: KHÔNG tự fetch GDT, chỉ truyền transport cho sync() (U5). Quyết
 // định RETRY hay không dựa `SyncResult.failureKind` (không dò chuỗi lỗi).
+import { buildDetailMessages } from "@vat/sync";
 import type { JobOutcome, RunJobDeps, SyncJobMessage } from "./types";
 
 function errMsg(err: unknown): string {
@@ -66,6 +67,17 @@ export async function runScheduledSync(deps: RunJobDeps, msg: SyncJobMessage): P
 
   if (result.trangThai === "completed") {
     await deps.limiter.recordResult(true);
+    // U26 (pha 1) — enqueue 1 message chi tiết / hóa đơn cần dòng hàng (mới/đổi/thiếu).
+    // Enqueue lỗi → RETRY cả job (không nuốt im lặng): header idempotent nên chạy lại
+    // vô hại, và vế "đang thiếu dòng hàng" của detailCandidates đảm bảo lượt sau vẫn
+    // enqueue lại đủ (tự lành). KHÔNG tính vào breaker (lỗi queue, không phải GDT).
+    if (result.detailCandidates.length > 0) {
+      try {
+        await deps.enqueueDetail(buildDetailMessages(msg, result.detailCandidates));
+      } catch (err) {
+        return { kind: "retry", reason: `enqueue_detail_that_bai: ${errMsg(err)}` };
+      }
+    }
     return {
       kind: "completed",
       lanDongBoId: result.lanDongBoId,
@@ -89,6 +101,6 @@ export async function runScheduledSync(deps: RunJobDeps, msg: SyncJobMessage): P
     // chủ thuế", CLAUDE.md §Ranh giới đạo đức).
     return { kind: "retry_backpressure", reason: "rate_limited" };
   }
-  // Lỗi tạm khác (mạng/5xx/DB) → retry qua queue.
+  // Lỗi tạm (mạng/5xx/DB) → retry qua queue.
   return { kind: "retry", reason: result.thongDiepLoi ?? "transient" };
 }
