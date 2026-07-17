@@ -133,6 +133,43 @@ describe("persistInvoiceLines — lưu đủ dòng, ánh xạ đúng, idempotent
     const rows = await db.select().from(dongHangHoa).where(eq(dongHangHoa.hoaDonId, hoaDonId));
     expect(rows.length).toBe(0);
   });
+
+  // U26 hardening (finding security-reviewer): FK dong_hang_hoa.hoadon_id KHÔNG kiểm
+  // tenant khớp → một message giả mạo (tenantId A + hoaDonId của tenant B) có thể chèn
+  // dòng tenant A trỏ vào hóa đơn tenant B. persist phải TỪ CHỐI khi hoá đơn không
+  // thuộc tenant (phòng thủ chiều sâu cho producer tương lai — mọi producer hiện tại
+  // đã resolve id tenant-scoped).
+  it("hoaDonId thuộc TENANT KHÁC → ném lỗi, KHÔNG ghi dòng nào (phòng thủ chiều sâu)", async () => {
+    const [tB] = await db
+      .insert(tenants)
+      .values({ ten: "Cty B", mst: "0100000009" })
+      .returning({ id: tenants.id });
+    const tenantB = tB?.id as string;
+    const hoaDonB = await withTenant(db, tenantB, async (tx) => {
+      const [h] = await tx
+        .insert(hoaDon)
+        .values({
+          tenantId: tenantB,
+          nbmst: "0100000009",
+          khmshdon: "1",
+          khhdon: "C26TBB",
+          shdon: "99",
+          tdlap: new Date("2026-06-01T00:00:00Z"),
+          chieu: "purchase",
+          nguon: "normal",
+          rawJson: {},
+        })
+        .returning({ id: hoaDon.id });
+      return h?.id as string;
+    });
+
+    await expect(
+      withTenant(db, tenantId, (tx) => persistInvoiceLines(tx, tenantId, hoaDonB, TWO_LINES)),
+    ).rejects.toThrow();
+
+    const rows = await db.select().from(dongHangHoa);
+    expect(rows.length).toBe(0);
+  });
 });
 
 function inv(shdon: string): InvoiceRow {

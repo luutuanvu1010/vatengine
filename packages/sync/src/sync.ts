@@ -1,4 +1,4 @@
-import { TRANG_THAI_LAN_DONG_BO, hoaDon, lanDongBo, withTenant } from "@vat/db";
+import { TRANG_THAI_LAN_DONG_BO, dongHangHoa, hoaDon, lanDongBo, withTenant } from "@vat/db";
 import { GdtError, pace, queryInvoices, toDetailRef } from "@vat/gdt-client";
 import type {
   GdtTransport,
@@ -66,16 +66,32 @@ export interface SyncOptions<
   size?: number;
   retry?: RetryOptions;
   /**
-   * Pha 2 (tùy chọn) — lấy dòng hàng chi tiết cho mỗi hóa đơn. Điểm INJECT: production
-   * truyền `adapterFetchDetail(transport, token, retry)` (getInvoiceDetail+mapDetailLines);
-   * test truyền bản giả offline. KHÔNG truyền = chỉ đồng bộ header (hành vi U5 gốc).
-   *
-   * LƯU Ý (fallback tạm được §1.1 cho phép): hiện lấy detail ĐỒNG BỘ trong pha 1, tuần
-   * tự (concurrency 1 — "không gọi song song dồn dập"), backoff do adapter. TODO chuyển
-   * sang 2 pha thật qua queue (message `kind:"detail"`) khi mở rộng tới 100k tenant —
-   * primitive `persistInvoiceLines` đã tách sẵn để migrate.
+   * Đường INLINE lấy dòng hàng (tùy chọn) — TEST/công cụ offline dùng; production U26
+   * KHÔNG truyền nữa. KHÔNG truyền = chỉ đồng bộ header + trả `detailCandidates` để
+   * tầng nền enqueue message `kind:"detail"` (queue 2 pha thật — mỗi message 1 hóa
+   * đơn, 1 permit TenantLimiter/request, xem apps/sync-worker/src/runDetailJob.ts).
+   * Lý do bỏ inline ở production: fetch tuần tự ~2000 HĐ trong MỘT lần gọi Worker
+   * vượt trần subrequest Free + đập 429 vào GDT (bằng chứng prod — BACKLOG 2026-07-16).
    */
   fetchDetail?: (ref: InvoiceDetailRef) => Promise<InvoiceLine[]>;
+}
+
+/**
+ * U26 (pha 1) — một ứng viên cần lấy dòng hàng ở pha 2: hóa đơn MỚI hoặc ĐỔI TRẠNG
+ * THÁI trong lượt đồng bộ này. `ref` khớp `InvoiceDetailRef` (4 trường định danh đã
+ * kiểm chứng + nguồn normal|sco); `hoaDonId` để persist xóa-chèn đúng đích. Tầng nền
+ * (sync-worker) enqueue 1 message `kind:"detail"` / candidate — sync() KHÔNG tự đụng
+ * queue (giữ package thuần thư viện, không phụ thuộc binding Cloudflare).
+ */
+export interface DetailCandidate {
+  hoaDonId: string;
+  ref: {
+    nbmst: string;
+    khhdon: string;
+    khmshdon: string;
+    shdon: string;
+    source: "normal" | "sco";
+  };
 }
 
 export interface SyncResult {
@@ -98,6 +114,8 @@ export interface SyncResult {
    */
   failureKind?: "session_expired" | "rate_limited" | "transient";
   changes: InvoiceChange[];
+  /** U26 — hóa đơn cần lấy dòng hàng pha 2 (mới/đổi trạng thái). Rỗng khi failed. */
+  detailCandidates: DetailCandidate[];
 }
 
 /** Khóa tự nhiên trong phạm vi một tenant (5 trường; `tenant_id` cố định theo phiên
@@ -149,14 +167,19 @@ async function upsertBatch<
   tx: Tx<TQuery, TFull, TSchema>,
   tenantId: string,
   rows: InvoiceRow[],
-): Promise<{ soHdMoi: number; soHdCapNhat: number; changes: InvoiceChange[] }> {
+): Promise<{
+  soHdMoi: number;
+  soHdCapNhat: number;
+  changes: InvoiceChange[];
+  detailCandidates: DetailCandidate[];
+}> {
   // Ánh xạ + khử trùng trong lô theo khóa tự nhiên (adapter đã khử 5 trường; phòng hờ).
   const byKey = new Map<string, NewHoaDon>();
   for (const r of rows) {
     const mapped = mapInvoiceRowToHoaDon(r, tenantId);
     byKey.set(naturalKeyOf(mapped), mapped);
   }
-  if (byKey.size === 0) return { soHdMoi: 0, soHdCapNhat: 0, changes: [] };
+  if (byKey.size === 0) return { soHdMoi: 0, soHdCapNhat: 0, changes: [], detailCandidates: [] };
 
   // Lấy bản ghi hiện có: lọc TƯỜNG MINH theo tenant_id (multi-tenant.md) + thu hẹp
   // theo tập `shdon` của lô; khớp chính xác khóa tự nhiên đầy đủ trong bộ nhớ.
@@ -251,7 +274,53 @@ async function upsertBatch<
         },
       });
   }
-  return { soHdMoi, soHdCapNhat, changes };
+
+  // U26 — ứng viên pha 2 = MỚI (toInsert) ∪ ĐỔI TRẠNG THÁI (changes) ∪ ĐANG THIẾU dòng
+  // hàng (trong lô). Vế "đang thiếu" làm pha 1 TỰ LÀNH: enqueue pha 2 lỗi/chưa xử xong
+  // → lượt đồng bộ sau của cùng kỳ tự enqueue lại, không có hóa đơn kẹt 0 dòng vĩnh
+  // viễn (đồng nhất tiêu chí backfill-lines). Resolve `hoa_don.id` NGAY TRONG
+  // transaction (SELECT theo tenant + shdon của lô, khớp khóa tự nhiên đầy đủ — cùng
+  // mẫu persistLinesForBatch) để message pha 2 mang id đích.
+  const priorityKeys = new Set([
+    ...toInsert.map((m) => naturalKeyOf(m)),
+    ...changes.map((c) => c.naturalKey),
+  ]);
+  const persisted = await tx
+    .select()
+    .from(hoaDon)
+    .where(and(eq(hoaDon.tenantId, tenantId), inArray(hoaDon.shdon, shdons)));
+  const idByKey = new Map(persisted.map((e) => [naturalKeyOf(e), e.id]));
+  const batchIds = [...byKey.keys()].flatMap((key) => idByKey.get(key) ?? []);
+  const withLines = new Set(
+    batchIds.length === 0
+      ? []
+      : (
+          await tx
+            .selectDistinct({ hoaDonId: dongHangHoa.hoaDonId })
+            .from(dongHangHoa)
+            .where(and(eq(dongHangHoa.tenantId, tenantId), inArray(dongHangHoa.hoaDonId, batchIds)))
+        ).map((r) => r.hoaDonId),
+  );
+  const detailCandidates: DetailCandidate[] = [...byKey.entries()].flatMap(([key, m]) => {
+    const hoaDonId = idByKey.get(key);
+    // Không thấy id (khe đua hiếm) → bỏ ứng viên này, KHÔNG chặn upsert; lượt đồng
+    // bộ sau hoặc backfill-lines sẽ bù (HĐ vẫn 0 dòng → nằm trong tập thiếu).
+    if (!hoaDonId) return [];
+    if (!priorityKeys.has(key) && withLines.has(hoaDonId)) return []; // không đổi + đã có dòng
+    return [
+      {
+        hoaDonId,
+        ref: {
+          nbmst: m.nbmst,
+          khhdon: m.khhdon,
+          khmshdon: m.khmshdon,
+          shdon: m.shdon,
+          source: m.nguon === "sco" ? ("sco" as const) : ("normal" as const),
+        },
+      },
+    ];
+  });
+  return { soHdMoi, soHdCapNhat, changes, detailCandidates };
 }
 
 interface RunMeta {
@@ -304,6 +373,7 @@ async function recordFailed<
     thongDiepLoi: message,
     failureKind,
     changes: [],
+    detailCandidates: [],
   };
 }
 
@@ -377,17 +447,11 @@ export async function sync<
     return recordFailed(db, tenantId, meta, errMsg(err), classifyFailure(err));
   }
 
-  // Bước 1b (tùy chọn) — lấy dòng hàng chi tiết TRƯỚC khi mở transaction ghi (không
-  // giữ transaction mở khi gọi mạng). Tuần tự (concurrency 1) — "không gọi song song
-  // dồn dập" (gdt-adapter.md). 401 → session_expired (token chết, không retry); 5xx/
-  // timeout → transient. KHÔNG log giá trị dòng hàng (security.md).
-  //
-  // GIỚI HẠN ĐÃ BIẾT (không tuyên bố sai — Nguyên tắc bằng chứng): trong fallback
-  // đồng bộ này, detail KHÔNG đi qua TenantLimiter theo TỪNG request. runJob (U9)
-  // chỉ tiêu 1 permit token-bucket cho cả job, nên rate-respect ở cấp JOB dựa vào:
-  // (1) tuần tự concurrency 1, (2) backoff của adapter khi lỗi. Rate-limit theo từng
-  // request detail là phần của kiến trúc queue 2 pha thật (mỗi message detail tự lấy
-  // permit) — đó là nội dung của TODO chuyển queue ở SyncOptions.fetchDetail.
+  // Bước 1b — đường INLINE (chỉ khi được tiêm fetchDetail: test/công cụ offline; U26
+  // production KHÔNG tiêm — dòng hàng đi pha 2 qua queue, xem SyncOptions.fetchDetail).
+  // Lấy chi tiết TRƯỚC khi mở transaction ghi (không giữ transaction mở khi gọi mạng),
+  // tuần tự (concurrency 1). 401 → session_expired; 429 → rate_limited; 5xx/timeout →
+  // transient. KHÔNG log giá trị dòng hàng (security.md).
   let linesByKey: Map<string, InvoiceLine[]> | undefined;
   if (opts.fetchDetail) {
     linesByKey = new Map();
@@ -412,7 +476,11 @@ export async function sync<
   // chừng → rollback, không có số đếm mà thiếu dữ liệu, không có hóa đơn/dòng ghi dở.
   try {
     return await withTenant(db, tenantId, async (tx) => {
-      const { soHdMoi, soHdCapNhat, changes } = await upsertBatch(tx, tenantId, rows);
+      const { soHdMoi, soHdCapNhat, changes, detailCandidates } = await upsertBatch(
+        tx,
+        tenantId,
+        rows,
+      );
       if (linesByKey) await persistLinesForBatch(tx, tenantId, rows, linesByKey);
       const inserted = await tx
         .insert(lanDongBo)
@@ -437,6 +505,7 @@ export async function sync<
         soHdCapNhat,
         trangThai: TRANG_THAI_LAN_DONG_BO.HOAN_THANH,
         changes,
+        detailCandidates,
       };
     });
   } catch (err) {

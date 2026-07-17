@@ -1,15 +1,17 @@
 // Wiring production: dựng RunJobDeps thật (db qua Hyperdrive bound vào sync/recorder,
 // transport egress T0, limiter theo tenant) + đọc sổ đăng ký tenant để lập lịch.
 // KHÔNG test-cover (test tiêm fake/PGlite trực tiếp vào runJob/enumerate).
-import { tenants } from "@vat/db";
+import { tenants, withTenant } from "@vat/db";
 import { createDirectCfTransport } from "@vat/gdt-client";
-import { adapterFetchDetail, sync } from "@vat/sync";
+import { adapterFetchDetail, persistInvoiceLines, sync } from "@vat/sync";
 import { eq } from "drizzle-orm";
 import { egressHealthClient } from "./egressHealth";
 import type { EgressProbeDeps } from "./egressProbe";
+import { QUEUE_MAX_BATCH_BYTES, QUEUE_MAX_BATCH_COUNT, chunkForQueue } from "./fanout";
 import { dbRecorder, loadAccountToken } from "./recorder";
+import type { RunDetailJobDeps } from "./runDetailJob";
 import { tenantLimiterClient } from "./tenantLimiter";
-import type { AnyDb, Env, RunJobDeps, SyncJobMessage } from "./types";
+import type { AnyDb, DetailSyncMessage, Env, RunJobDeps, SyncJobMessage } from "./types";
 
 // Egress T0 (direct-cf) — điểm gọi GDT DUY NHẤT đi qua adapter (gdt-adapter.md).
 const transport = createDirectCfTransport();
@@ -63,14 +65,38 @@ export function makeJobDeps(env: Env, db: AnyDb, msg: SyncJobMessage): RunJobDep
     now: () => Date.now(),
     loadAccount: (m) => loadAccountToken(db, m, env.TOKEN_KEK),
     limiter: tenantLimiterClient(env.TENANT_LIMITER, msg.tenantId),
-    // Pha 2 (dòng hàng): tiêm fetchDetail lấy chi tiết qua adapter trên transport
-    // egress T0 (getInvoiceDetail+mapDetailLines). sync() gọi TUẦN TỰ (concurrency 1)
-    // — không dồn dập. GIỚI HẠN: job này đã tiêu 1 permit TenantLimiter ở runJob;
-    // detail trong fallback đồng bộ KHÔNG lấy permit theo từng request (rate-limit
-    // per-request là kiến trúc queue 2 pha — TODO, xem SyncOptions.fetchDetail).
-    sync: (o) => sync({ db, ...o, fetchDetail: adapterFetchDetail(o.transport, o.token, o.retry) }),
+    // U26 — job header CHỈ đồng bộ header (KHÔNG tiêm fetchDetail nữa): fetch detail
+    // inline tuần tự cho ~2000 HĐ trong MỘT lần gọi Worker là nguyên nhân 170/188 lần
+    // sync FAILED trên prod (GDT 429 + "Too many subrequests" — BACKLOG 2026-07-16).
+    // Dòng hàng đi pha 2: sync() trả detailCandidates → enqueueDetail bên dưới.
+    sync: (o) => sync({ db, ...o }),
     transport,
     recorder: dbRecorder(db),
+    // Pha 2: 1 message / hóa đơn vào CÙNG queue vat-sync, chia lô ≤100 msg/≤256KB.
+    // KHÔNG jitter delay: message detail đã tự điều tốc bằng permit-per-request +
+    // backpressure ở consumer (runDetailJob).
+    enqueueDetail: async (msgs) => {
+      for (const chunk of chunkForQueue(msgs, QUEUE_MAX_BATCH_COUNT, QUEUE_MAX_BATCH_BYTES)) {
+        await env.SYNC_QUEUE.sendBatch(chunk.map((body) => ({ body })));
+      }
+    },
     syncParams: { includeSco: true },
+  };
+}
+
+/** U26 (pha 2) — deps cho MỘT message chi tiết: limiter bound theo tenant (1 permit /
+ * request GDT), fetch qua adapter (cô lập gdt-client), persist idempotent trong
+ * withTenant. `maxAttempts: 2` — adapter chỉ thử lại 1 lần cho blip 5xx/timeout;
+ * QUEUE là tầng retry chính (max_retries → DLQ), tránh khuếch đại retry 2 tầng. */
+export function makeDetailJobDeps(env: Env, db: AnyDb, msg: DetailSyncMessage): RunDetailJobDeps {
+  return {
+    now: () => Date.now(),
+    loadAccount: (m) => loadAccountToken(db, m, env.TOKEN_KEK),
+    limiter: tenantLimiterClient(env.TENANT_LIMITER, msg.tenantId),
+    fetchLines: (token, ref) => adapterFetchDetail(transport, token, { maxAttempts: 2 })(ref),
+    persistLines: (tenantId, hoaDonId, lines) =>
+      withTenant(db, tenantId, (tx) => persistInvoiceLines(tx, tenantId, hoaDonId, lines)),
+    markTokenDead: (m, reason) =>
+      dbRecorder(db).reauthRuntime({ tenantId: m.tenantId, taikhoanId: m.taikhoanId }, reason),
   };
 }

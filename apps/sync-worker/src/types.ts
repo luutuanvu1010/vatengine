@@ -2,7 +2,7 @@
 // nặng chạy nền qua Cron → Queues → consumer; trạng thái phối hợp (rate limit,
 // circuit breaker) đặt trong Durable Object (ADR-0001 §3, §5).
 import type { GdtTransport, InvoiceDirection, RetryOptions } from "@vat/gdt-client";
-import type { SyncJobMessage, SyncResult } from "@vat/sync";
+import type { DetailSyncMessage, SyncJobMessage, SyncResult, VatSyncQueueMessage } from "@vat/sync";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { LimiterEnv } from "./rateLimiter";
@@ -13,8 +13,9 @@ export interface Env extends LimiterEnv {
   ENVIRONMENT?: string;
   // Postgres qua Hyperdrive (ADR-0001). `.connectionString` để mở kết nối pg.
   HYPERDRIVE: Hyperdrive;
-  // Hàng đợi job đồng bộ nền: scheduled() enqueue, queue() consume.
-  SYNC_QUEUE: Queue<SyncJobMessage>;
+  // Hàng đợi job đồng bộ nền: scheduled() enqueue, queue() consume. U26: chở CẢ
+  // message header (không `kind`) lẫn message chi tiết (`kind:"detail"`).
+  SYNC_QUEUE: Queue<VatSyncQueueMessage>;
   // Durable Object: token-bucket rate limit + circuit breaker theo tenant/MST.
   TENANT_LIMITER: DurableObjectNamespace;
   // GIÁM SÁT (mục C): Durable Object singleton giữ health-state probe egress
@@ -42,7 +43,7 @@ export interface DbHandle {
 // DUY NHẤT ở @vat/sync (tránh nhân đôi giữa cron scheduled() và endpoint "Đồng bộ ngay"
 // của vat-api). Import ở trên (dùng nội bộ) + re-export để mọi `import ... from "./types"`
 // sẵn có giữ nguyên.
-export type { SyncJobMessage };
+export type { SyncJobMessage, DetailSyncMessage, VatSyncQueueMessage };
 
 // Token của một tài khoản thuế (đủ để pre-flight; KHÔNG lộ/không dùng secret thô).
 export interface AccountToken {
@@ -64,7 +65,11 @@ export interface JobRecorder {
   // lan_dong_bo trạng thái "cần đăng nhập lại" + audit. KHÔNG tự đăng nhập/không captcha.
   reauthPreflight(msg: SyncJobMessage, reason: string): Promise<void>;
   // Runtime 401: sync() đã ghi lan_dong_bo(failed) → chỉ đánh dấu token chết + audit.
-  reauthRuntime(msg: SyncJobMessage, reason: string): Promise<void>;
+  // U26: nhận cả message chi tiết (period tùy chọn) — chỉ cần định danh tài khoản.
+  reauthRuntime(
+    msg: { tenantId: string; taikhoanId: string; period?: string },
+    reason: string,
+  ): Promise<void>;
   // Circuit breaker mở: bỏ qua tick, không gọi GDT → audit.
   breakerSkip(msg: SyncJobMessage): Promise<void>;
 }
@@ -94,6 +99,9 @@ export interface RunJobDeps {
   sync: SyncFn;
   transport: GdtTransport;
   recorder: JobRecorder;
+  /** U26 (pha 1) — gửi message chi tiết vào queue vat-sync sau khi header xong.
+   * Production = chunkForQueue + SYNC_QUEUE.sendBatch (deps.ts); test tiêm fake. */
+  enqueueDetail(msgs: DetailSyncMessage[]): Promise<void>;
   syncParams?: { includeSco?: boolean; size?: number; statuses?: number[]; retry?: RetryOptions };
 }
 

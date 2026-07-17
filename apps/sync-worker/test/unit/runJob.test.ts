@@ -5,7 +5,7 @@
 //  - token hết hạn (pre-flight) → KHÔNG gọi GDT/sync, KHÔNG captcha, ghi cần đăng nhập lại;
 //  - circuit breaker mở → bỏ qua, không gọi GDT.
 import type { GdtTransport } from "@vat/gdt-client";
-import type { SyncResult } from "@vat/sync";
+import type { DetailSyncMessage, SyncResult } from "@vat/sync";
 import { describe, expect, it } from "vitest";
 import { runScheduledSync } from "../../src/runJob";
 import type {
@@ -36,15 +36,41 @@ interface Calls {
   reauthPreflight: string[];
   reauthRuntime: string[];
   breakerSkip: number;
+  enqueueDetail: DetailSyncMessage[][];
 }
 
-function completed(): SyncResult {
+// U26 — ứng viên pha 2 mẫu (sync() trả về khi có HĐ mới/đổi/thiếu dòng hàng).
+const CANDIDATES = [
+  {
+    hoaDonId: "hd-1",
+    ref: {
+      nbmst: "0100000001",
+      khhdon: "C26TAA",
+      khmshdon: "1",
+      shdon: "42",
+      source: "normal" as const,
+    },
+  },
+  {
+    hoaDonId: "hd-2",
+    ref: {
+      nbmst: "0100000001",
+      khhdon: "C26MYY",
+      khmshdon: "1",
+      shdon: "7048",
+      source: "sco" as const,
+    },
+  },
+];
+
+function completed(withCandidates = false): SyncResult {
   return {
     lanDongBoId: "ldb-1",
     soHdMoi: 3,
     soHdCapNhat: 1,
     trangThai: "completed",
     changes: [],
+    detailCandidates: withCandidates ? CANDIDATES : [],
   };
 }
 
@@ -57,6 +83,7 @@ function failed(kind: "session_expired" | "rate_limited" | "transient"): SyncRes
     thongDiepLoi: "loi mo phong",
     failureKind: kind,
     changes: [],
+    detailCandidates: [],
   };
 }
 
@@ -64,6 +91,7 @@ interface DepOverrides {
   account?: AccountToken | null;
   permit?: { allowed: boolean; reason?: "rate_limited" | "breaker_open" };
   sync?: SyncFn;
+  enqueueDetail?: (msgs: DetailSyncMessage[]) => Promise<void>;
 }
 
 function makeDeps(over: DepOverrides = {}): { deps: RunJobDeps; calls: Calls } {
@@ -75,6 +103,7 @@ function makeDeps(over: DepOverrides = {}): { deps: RunJobDeps; calls: Calls } {
     reauthPreflight: [],
     reauthRuntime: [],
     breakerSkip: 0,
+    enqueueDetail: [],
   };
 
   const account =
@@ -131,6 +160,10 @@ function makeDeps(over: DepOverrides = {}): { deps: RunJobDeps; calls: Calls } {
     sync,
     transport,
     recorder,
+    enqueueDetail: async (msgs) => {
+      calls.enqueueDetail.push(msgs);
+      if (over.enqueueDetail) await over.enqueueDetail(msgs);
+    },
   };
   return { deps, calls };
 }
@@ -243,5 +276,45 @@ describe("runScheduledSync — điều phối job đồng bộ nền", () => {
     const out = await runScheduledSync(deps, MSG);
     expect(out.kind).toBe("retry");
     expect(calls.recordResult).toEqual([false]);
+  });
+
+  // ── U26 (pha 1) — enqueue message chi tiết sau job header ───────────────────
+  it("completed + detailCandidates → enqueueDetail nhận đúng message kind:'detail' (tenant/taikhoan từ message gốc)", async () => {
+    const { deps, calls } = makeDeps({ sync: async () => completed(true) });
+    const out = await runScheduledSync(deps, MSG);
+    expect(out.kind).toBe("completed");
+    expect(calls.enqueueDetail).toHaveLength(1);
+    const msgs = calls.enqueueDetail[0] ?? [];
+    expect(msgs).toHaveLength(2);
+    for (const m of msgs) {
+      expect(m.kind).toBe("detail");
+      expect(m.tenantId).toBe(MSG.tenantId);
+      expect(m.taikhoanId).toBe(MSG.taikhoanId);
+    }
+    expect(msgs.map((m) => m.hoaDonId)).toEqual(["hd-1", "hd-2"]);
+    expect(msgs[1]?.ref.source).toBe("sco");
+  });
+
+  it("completed KHÔNG có candidates → không gọi enqueueDetail", async () => {
+    const { deps, calls } = makeDeps({ sync: async () => completed(false) });
+    await runScheduledSync(deps, MSG);
+    expect(calls.enqueueDetail).toHaveLength(0);
+  });
+
+  it("sync failed → không gọi enqueueDetail", async () => {
+    const { deps, calls } = makeDeps({ sync: async () => failed("transient") });
+    await runScheduledSync(deps, MSG);
+    expect(calls.enqueueDetail).toHaveLength(0);
+  });
+
+  it("enqueueDetail ném lỗi → outcome retry (KHÔNG mất pha 2 im lặng; header idempotent nên chạy lại vô hại)", async () => {
+    const { deps } = makeDeps({
+      sync: async () => completed(true),
+      enqueueDetail: async () => {
+        throw new Error("queue hong");
+      },
+    });
+    const out = await runScheduledSync(deps, MSG);
+    expect(out.kind).toBe("retry");
   });
 });

@@ -24,6 +24,59 @@ export interface SyncJobMessage {
   bpAttempt?: number;
 }
 
+/**
+ * U26 — Payload MỘT message pha 2 (dòng hàng): một hóa đơn / message, đi CÙNG queue
+ * `vat-sync` với job header. Phân biệt bằng `kind:"detail"`; message header cũ KHÔNG
+ * có `kind` (đang bay trong queue + producer đã deploy) → consumer phải hiểu là header
+ * (tương thích lùi, kiểm bằng `isDetailMessage`). `tenantId` TƯỜNG MINH (multi-tenant.md).
+ * `ref` = 4 trường định danh detail đã kiểm chứng (2026-07-13, KHÔNG tdlap) + nguồn
+ * normal|sco để chọn đúng endpoint — khớp `InvoiceDetailRef` của @vat/gdt-client.
+ */
+export interface DetailSyncMessage {
+  kind: "detail";
+  tenantId: string;
+  taikhoanId: string;
+  /** `hoa_don.id` đích — persistInvoiceLines xóa-chèn theo (hoadon_id, tenant_id). */
+  hoaDonId: string;
+  ref: {
+    nbmst: string;
+    khhdon: string;
+    khmshdon: string;
+    shdon: string;
+    source: "normal" | "sco";
+  };
+  /** Đẩy lùi (backpressure) — cùng ngữ nghĩa SyncJobMessage.bpAttempt. */
+  bpAttempt?: number;
+}
+
+/** Mọi hình dạng message hợp lệ trên queue vat-sync (header U5/U22 + detail U26). */
+export type VatSyncQueueMessage = SyncJobMessage | DetailSyncMessage;
+
+/** Phân nhánh consumer: chỉ tin `kind === "detail"`; mọi thứ khác coi là header. */
+export function isDetailMessage(body: unknown): body is DetailSyncMessage {
+  return (
+    typeof body === "object" && body !== null && (body as { kind?: unknown }).kind === "detail"
+  );
+}
+
+/**
+ * U26 — dựng message pha 2 từ danh sách ứng viên (DetailCandidate của sync() hoặc tập
+ * thiếu-dòng-hàng của backfill-lines). Dùng CHUNG cho mọi producer (sync-worker sau
+ * job header; vat-api trigger backfill) để một nguồn sự thật về hình dạng message.
+ */
+export function buildDetailMessages(
+  account: { tenantId: string; taikhoanId: string },
+  candidates: Array<{ hoaDonId: string; ref: DetailSyncMessage["ref"] }>,
+): DetailSyncMessage[] {
+  return candidates.map((c) => ({
+    kind: "detail",
+    tenantId: account.tenantId,
+    taikhoanId: account.taikhoanId,
+    hoaDonId: c.hoaDonId,
+    ref: c.ref,
+  }));
+}
+
 export interface PeriodWindow {
   /** "YYYY-MM" theo giờ VN. */
   period: string;
