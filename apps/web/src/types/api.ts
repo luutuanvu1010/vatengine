@@ -36,8 +36,18 @@ export interface InvoiceRow {
   updatedAt: string;
 }
 
+/** Hàng DANH SÁCH (GET /invoices) = header + tóm tắt dòng hàng (2026-07-17, thay
+ * U23-A). GET /invoices/:id KHÔNG có 3 trường này (chi tiết trả mảng dongHangHoa). */
+export interface InvoiceListRow extends InvoiceRow {
+  /** Tên hàng dòng đầu (stt nhỏ nhất); null khi chưa đồng bộ chi tiết. */
+  tenHangDau: string | null;
+  soDongHang: number;
+  /** Tổng số lượng (numeric → chuỗi qua JSON); null khi chưa có dòng hàng. */
+  tongSoLuong: string | null;
+}
+
 export interface InvoiceListResult {
-  rows: InvoiceRow[];
+  rows: InvoiceListRow[];
   total: number;
   limit: number;
   offset: number;

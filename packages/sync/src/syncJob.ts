@@ -103,6 +103,82 @@ export function currentPeriodWindow(nowMs: number): PeriodWindow {
   };
 }
 
+/** Cửa sổ THÁNG ĐẦY ĐỦ (01→cuối tháng) cho `(year, month0)` — month0 0-based, giờ VN.
+ * Mirror công thức biên tháng của `currentPeriodWindow` (ngày cuối qua `Date.UTC(y,
+ * m+1, 0)`), giữ ĐỘC LẬP để KHÔNG sửa `currentPeriodWindow` (U22-plan §7: cron +
+ * "Đồng bộ ngay" phụ thuộc hành vi nó — không tái cấu trúc ngoài phạm vi). */
+function monthWindow(year: number, month0: number): PeriodWindow {
+  const lastDay = new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate();
+  const mm = String(month0 + 1).padStart(2, "0");
+  return {
+    period: `${year}-${mm}`,
+    dateFrom: `01/${mm}/${year}`,
+    dateTo: `${String(lastDay).padStart(2, "0")}/${mm}/${year}`,
+  };
+}
+
+/** Parse ngày lọc `YYYY-MM-DD` (lịch VN) fail-loud: sai định dạng / ngày phi thực tế
+ * (2026-02-30) đều ném thay vì cuộn âm thầm sang tháng khác. Trả `{y, m0}` + mốc thứ
+ * tự `ord` (UTC ms) để so sánh khoảng. Tinh thần khớp `filters.ts:dayBoundaryUtc`. */
+function parseIsoYmd(iso: string): { y: number; m0: number; ord: number } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) throw new Error(`Ngày lọc phải định dạng YYYY-MM-DD: ${iso}`);
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const day = Number(m[3]);
+  const d = new Date(Date.UTC(y, mo - 1, day));
+  // `Date.UTC` CUỘN ngày tràn (2026-02-30 → 2026-03-02) → đối chiếu Y-M-D để fail-loud.
+  if (d.getUTCFullYear() !== y || d.getUTCMonth() + 1 !== mo || d.getUTCDate() !== day) {
+    throw new Error(`Ngày lọc không có thật (tràn số ngày của tháng): ${iso}`);
+  }
+  return { y, m0: mo - 1, ord: d.getTime() };
+}
+
+/**
+ * Tách khoảng lọc `[dateFromIso, dateToIso]` (mỗi cái `YYYY-MM-DD`, lịch VN) thành danh
+ * sách cửa sổ THÁNG ĐẦY ĐỦ theo thứ tự tăng dần, MỖI THÁNG MỘT phần tử (U22 AC1).
+ *
+ * Vì sao tháng đầy đủ (KHÔNG cắt theo ngày lọc của người dùng)? `lan_dong_bo` + đồng bộ
+ * idempotent (U5) làm việc theo ĐƠN VỊ THÁNG (`currentPeriodWindow` luôn 01→cuối tháng).
+ * Backfill theo tháng đầy đủ để "đã phủ" khớp granularity đó (cổng B1) — lần lọc sau
+ * trong cùng tháng KHÔNG kích hoạt backfill lại; upsert vẫn idempotent nên phủ dư ngày
+ * ngoài khoảng lọc là an toàn. `dateFrom`/`dateTo` là dd/mm/yyyy (khớp adapter GDT).
+ *
+ * Fail-loud (không đoán): sai định dạng / ngày phi thực tế / khoảng đảo ngược đều ném.
+ */
+export function monthlyWindows(dateFromIso: string, dateToIso: string): PeriodWindow[] {
+  const from = parseIsoYmd(dateFromIso);
+  const to = parseIsoYmd(dateToIso);
+  if (from.ord > to.ord) {
+    throw new Error(`Khoảng lọc không hợp lệ: tuNgay (${dateFromIso}) sau denNgay (${dateToIso})`);
+  }
+  const windows: PeriodWindow[] = [];
+  let y = from.y;
+  let m0 = from.m0;
+  // Lặp bao gồm cả tháng của `from` lẫn `to`; carry năm khi qua tháng 12.
+  while (y < to.y || (y === to.y && m0 <= to.m0)) {
+    windows.push(monthWindow(y, m0));
+    m0 += 1;
+    if (m0 > 11) {
+      m0 = 0;
+      y += 1;
+    }
+  }
+  return windows;
+}
+
+/** Dựng message backfill cho MỘT tài khoản qua NHIỀU cửa sổ tháng × nhiều chiều — tổng
+ * quát hoá `buildSyncMessages` cho backfill (U22 §4A). tenant_id/taikhoan_id đi tường
+ * minh trong mọi payload (multi-tenant.md); message trùng dạng `SyncJobMessage` nên
+ * consumer nền (U9) xử lý được ngay, KHÔNG đổi consumer. */
+export function buildBackfillMessages(
+  account: { tenantId: string; taikhoanId: string },
+  windows: PeriodWindow[],
+  directions: InvoiceDirection[],
+): SyncJobMessage[] {
+  return windows.flatMap((w) => buildSyncMessages([account], w, directions));
+}
+
 /** Dựng một message / (tài khoản × chiều). tenant_id đi tường minh trong payload. */
 export function buildSyncMessages(
   accounts: { tenantId: string; taikhoanId: string }[],

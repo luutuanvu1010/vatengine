@@ -212,4 +212,17 @@ export const api = {
   syncTaxAccount(id: string): Promise<{ enqueued: number; period: string }> {
     return request("POST", `/tax-accounts/${id}/sync`);
   },
+  // U22 — đồng bộ theo KHOẢNG đã chọn: enqueue các THÁNG còn thiếu trong khoảng.
+  backfillTaxAccount(
+    id: string,
+    range: { tuNgay: string; denNgay: string },
+  ): Promise<{ backfillId: string | null; thangCanLay: string[]; tongSoThang: number }> {
+    return request("POST", `/tax-accounts/${id}/backfill`, { body: range });
+  },
+  // U26 — đổ dòng hàng cho hóa đơn ĐANG THIẾU (chạy nền; conLai>0 → gọi lại).
+  backfillInvoiceLines(
+    id: string,
+  ): Promise<{ soHoaDonThieu: number; soDaXepHang: number; conLai: number }> {
+    return request("POST", `/tax-accounts/${id}/backfill-lines`);
+  },
 };

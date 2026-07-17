@@ -23,4 +23,17 @@ export {
   buildSyncMessages,
   buildDetailMessages,
   isDetailMessage,
+  // U22 — backfill khoảng lọc quá khứ: tách khoảng thành cửa sổ tháng đầy đủ + dựng job.
+  monthlyWindows,
+  buildBackfillMessages,
 } from "./syncJob";
+// U22 B3 — suy phạm vi đã phủ / còn thiếu từ lan_dong_bo (nền cho producer backfill B5).
+// U22 B6 — suy tiến độ backfill từng tháng + tổng (nền cho GET /backfill/:id).
+export {
+  coveredMonths,
+  missingMonths,
+  deriveBackfillStatus,
+  monthlyBackfillStatus,
+  type BackfillMonthStatus,
+  type BackfillProgress,
+} from "./coverage";

@@ -7,6 +7,7 @@ import type { GdtTransport } from "@vat/gdt-client";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sign } from "hono/jwt";
+import { type BackfillDef, initDef, readDef } from "../src/backfillTracker";
 import {
   type LoginLockConfig,
   type LoginLockState,
@@ -17,7 +18,13 @@ import {
   resolveLoginLockConfig,
 } from "../src/loginLimiter";
 import { hashPassword } from "../src/password";
-import type { AnyDb, Env, LoginLimiterClient, StorageHandle } from "../src/types";
+import type {
+  AnyDb,
+  BackfillTrackerClient,
+  Env,
+  LoginLimiterClient,
+  StorageHandle,
+} from "../src/types";
 
 // migrations của @vat/db (áp bằng PGlite) — giải qua URL để không phụ thuộc cwd.
 const MIGRATIONS = new URL("../../../packages/db/migrations", import.meta.url).pathname;
@@ -111,20 +118,37 @@ export function makeLoginLimiterFactory(cfg: LoginLockConfig = resolveLoginLockC
   });
 }
 
-/** Tiêm db PGlite + R2 giả + transport GDT giả + limiter giả vào createApp (close = noop).
- * storage/transport tùy chọn; loginLimiter mặc định factory ngưỡng cao (không khóa trong
- * các test login thường) — test lockout truyền factory riêng ngưỡng thấp. */
+/** U22 — factory tracker backfill GIẢ in-memory dùng ĐÚNG logic thuần initDef/readDef
+ * (như DO thật): store-once idempotent + cách ly tenant. Trạng thái theo backfillId. */
+export function makeBackfillTrackerFactory() {
+  const store = new Map<string, BackfillDef>();
+  return (_env: Env, backfillId: string): BackfillTrackerClient => ({
+    init: async (def) => {
+      const r = initDef(store.get(backfillId), def);
+      if (r.status === "conflict") throw new Error("backfill init conflict");
+      if (r.status === "created") store.set(backfillId, r.def);
+      return { def: r.def, created: r.status === "created" };
+    },
+    get: async (tenantId) => readDef(store.get(backfillId), tenantId),
+  });
+}
+
+/** Tiêm db PGlite + R2 giả + transport GDT giả + limiter giả + tracker giả vào createApp
+ * (close = noop). storage/transport/loginLimiter/backfillTracker tùy chọn; mặc định
+ * factory giả — test cần đối chiếu trạng thái truyền factory riêng phơi store. */
 export function injectDb(
   db: Db,
   storage: FakeStorage = makeStorage(),
   transport: GdtTransport = makeTransport(),
   getLoginLimiter = makeLoginLimiterFactory(),
+  getBackfillTracker = makeBackfillTrackerFactory(),
 ) {
   return {
     getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }),
     getStorage: () => storage,
     getTransport: () => transport,
     getLoginLimiter,
+    getBackfillTracker,
   };
 }
 

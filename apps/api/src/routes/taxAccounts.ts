@@ -11,10 +11,15 @@ import {
   getCaptcha,
 } from "@vat/gdt-client";
 import {
+  type PeriodWindow,
+  type SyncJobMessage,
+  buildBackfillMessages,
   buildDetailMessages,
   buildSyncMessages,
   currentPeriodWindow,
   listInvoicesMissingLines,
+  missingMonths,
+  monthlyWindows,
 } from "@vat/sync";
 import { and, count, eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -55,6 +60,13 @@ const loginSchema = z.object({
   password: z.string().min(1),
   ckey: z.string().min(1),
   cvalue: z.string().min(1),
+});
+
+// U22 — body backfill: khoảng lọc YYYY-MM-DD (chỉ kiểm ĐỊNH DẠNG ở đây; monthlyWindows
+// fail-loud với khoảng đảo ngược / ngày phi thực tế → 400).
+const backfillSchema = z.object({
+  tuNgay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "tuNgay phải YYYY-MM-DD"),
+  denNgay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "denNgay phải YYYY-MM-DD"),
 });
 
 export function taxAccountsRoutes(deps: AppDeps) {
@@ -409,6 +421,99 @@ export function taxAccountsRoutes(deps: AppDeps) {
           soDaXepHang: candidates.length,
           conLai: tongThieu - candidates.length,
         },
+        202,
+      );
+    } finally {
+      await close();
+    }
+  });
+
+  // POST /tax-accounts/:id/backfill — U22: backfill ngầm khoảng lọc quá khứ. Tính các
+  // THÁNG CÒN THIẾU (mỗi chiều) trong khoảng (missingMonths, dựa lan_dong_bo — B3), enqueue
+  // job dạng SyncJobMessage cho các tháng đó (buildBackfillMessages — B2), tạo BackfillTracker
+  // DO (B4) để GET /backfill/:id theo dõi. API chỉ PRODUCER (stateless). Token phải CÒN HẠN
+  // (409 — job nền KHÔNG tự đăng nhập). Cách ly tenant (404). Audit (AC7). Idempotent (AC5):
+  // khoảng đã phủ hết → 0 job, backfillId=null (upsert U5 + coveredMonths bảo đảm an toàn).
+  r.post("/:id/backfill", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    const queue = c.env.SYNC_QUEUE;
+    if (!queue) return c.json({ error: "sync_unavailable" }, 503);
+    if (!c.env.BACKFILL_TRACKER) return c.json({ error: "backfill_unavailable" }, 503);
+
+    const parsed = backfillSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "bad_request" }, 400);
+    let windows: PeriodWindow[];
+    try {
+      windows = monthlyWindows(parsed.data.tuNgay, parsed.data.denNgay);
+    } catch (_e) {
+      return c.json({ error: "bad_request" }, 400); // khoảng đảo ngược / ngày phi thực tế
+    }
+
+    const tenantId = c.get("tenantId");
+    const directions = ["purchase", "sold"] as const;
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      // Nạp tài khoản + kiểm token + tính tháng thiếu trong MỘT withTenant (cách ly tenant
+      // lớp 1 tường minh + RLS lớp 2). KHÔNG giữ transaction mở khi enqueue/gọi DO sau đó.
+      const outcome = await withTenant(db, tenantId, async (tx) => {
+        const rows = await tx
+          .select({ tokenHetHan: taiKhoanThue.tokenHetHan })
+          .from(taiKhoanThue)
+          .where(and(eq(taiKhoanThue.id, id), eq(taiKhoanThue.tenantId, tenantId)));
+        const acc = rows[0];
+        if (!acc) return { kind: "not_found" as const };
+        if (!acc.tokenHetHan || acc.tokenHetHan.getTime() <= Date.now()) {
+          return { kind: "token_het_han" as const };
+        }
+        const msgs: SyncJobMessage[] = [];
+        const monthsNeeded = new Set<string>();
+        for (const dir of directions) {
+          const missing = await missingMonths(tx, tenantId, id, dir, windows);
+          for (const w of missing) monthsNeeded.add(w.period);
+          msgs.push(...buildBackfillMessages({ tenantId, taikhoanId: id }, missing, [dir]));
+        }
+        return { kind: "ok" as const, msgs, months: [...monthsNeeded].sort() };
+      });
+
+      if (outcome.kind === "not_found") return c.json({ error: "not_found" }, 404);
+      if (outcome.kind === "token_het_han") return c.json({ error: "token_het_han" }, 409);
+
+      // Không tháng nào thiếu → KHÔNG tạo backfill, KHÔNG enqueue (idempotent an toàn AC5).
+      if (outcome.months.length === 0) {
+        return c.json({ backfillId: null, thangCanLay: [], tongSoThang: 0 }, 202);
+      }
+
+      const backfillId = crypto.randomUUID();
+      // Thứ tự: ENQUEUE trước → INIT tracker sau. Lấy dữ liệu (job vào hàng đợi) là mục
+      // tiêu chính của backfill; tracker chỉ tạo SAU khi job đã an toàn trong hàng đợi →
+      // KHÔNG để lại tracker "mồ côi không có job" nếu enqueue lỗi (khi đó route ném → 500,
+      // client không nhận backfillId nên không poll). Không có bù trừ 2 pha giữa queue↔DO;
+      // thứ tự này chọn hệ quả an toàn nhất khi một trong hai lỗi.
+      await queue.sendBatch(outcome.msgs.map((body) => ({ body })));
+      await deps.getBackfillTracker(c.env, backfillId).init({
+        tenantId,
+        taikhoanId: id,
+        months: outcome.months,
+        directions: [...directions],
+        createdAtMs: Date.now(),
+      });
+      // Audit khởi tạo backfill (AC7 — như hành động đồng bộ). KHÔNG đưa token vào chi tiết.
+      await withTenant(db, tenantId, async (tx) => {
+        await tx.insert(auditLog).values({
+          tenantId,
+          hanhDong: "backfill_khoi_tao",
+          doiTuong: id,
+          chiTiet: maskSensitive({
+            backfillId,
+            tongSoThang: outcome.months.length,
+            tuNgay: parsed.data.tuNgay,
+            denNgay: parsed.data.denNgay,
+          }),
+        });
+      });
+      return c.json(
+        { backfillId, thangCanLay: outcome.months, tongSoThang: outcome.months.length },
         202,
       );
     } finally {

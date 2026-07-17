@@ -13,6 +13,7 @@ export { getInvoiceById, getInvoiceLines, type DongHangHoaRow } from "./getInvoi
 export {
   listInvoices,
   type HoaDonRow,
+  type InvoiceListRow,
   type InvoiceListResult,
 } from "./listInvoices";
 export {

@@ -1,9 +1,12 @@
-// Bảng hóa đơn = EXPORT_COLUMNS (packages/export/src/columns.ts) — KHÔNG bịa cột. Tiền
+// Bảng hóa đơn = EXPORT_COLUMNS (packages/export/src/columns.ts) — KHÔNG bịa cột,
+// NGOẠI LỆ (quyết định chủ dự án 2026-07-17, thay U23-A): 2 cột tóm tắt dòng hàng
+// "Hàng hóa, dịch vụ" + "Số lượng" (tenHangDau/soDongHang/tongSoLuong từ listInvoices)
+// chỉ có trên UI, chưa vào file xuất (xuất đã có khối "Chi tiết dòng hàng" riêng). Tiền
 // định dạng chuỗi (không float), căn phải, tabular. Ngày giờ VN. ttxly & tthai TÁCH riêng
 // (mã), chip trung tính khi chưa kiểm chứng (B1). Gồm dvtte (Tiền tệ) + nguon (M1).
 import { Link } from "react-router-dom";
 import { formatDateVN, formatMoney } from "../../lib/format";
-import type { InvoiceRow } from "../../types/api";
+import type { InvoiceListRow } from "../../types/api";
 import { ChieuChip, NguonLabel, TthaiChip, TtxlyChip } from "./chips";
 
 const th: React.CSSProperties = {
@@ -32,7 +35,7 @@ const tdMoney: React.CSSProperties = {
 };
 const sub: React.CSSProperties = { color: "var(--text-tertiary)", fontSize: "var(--fs-xs)" };
 
-export function InvoiceTable({ rows }: { rows: InvoiceRow[] }) {
+export function InvoiceTable({ rows }: { rows: InvoiceListRow[] }) {
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
@@ -42,6 +45,8 @@ export function InvoiceTable({ rows }: { rows: InvoiceRow[] }) {
             <th style={th}>Ký hiệu · Số HĐ</th>
             <th style={th}>Người bán</th>
             <th style={th}>Người mua</th>
+            <th style={th}>Hàng hóa, dịch vụ</th>
+            <th style={thRight}>Số lượng</th>
             <th style={thRight}>Chưa thuế</th>
             <th style={thRight}>Tiền thuế</th>
             <th style={thRight}>Tổng TT</th>
@@ -75,6 +80,19 @@ export function InvoiceTable({ rows }: { rows: InvoiceRow[] }) {
               <td style={td}>
                 <div>{r.nmten ?? "—"}</div>
                 <div style={sub}>{r.nmmst ?? "—"}</div>
+              </td>
+              <td style={td}>
+                {r.tenHangDau ? (
+                  <>
+                    <div>{r.tenHangDau}</div>
+                    {r.soDongHang > 1 && <div style={sub}>+{r.soDongHang - 1} dòng khác</div>}
+                  </>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td style={tdMoney} className="tabular">
+                {r.tongSoLuong ?? "—"}
               </td>
               <td style={tdMoney} className="tabular">
                 {formatMoney(r.tgtcthue)}

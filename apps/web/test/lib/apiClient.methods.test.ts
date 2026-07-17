@@ -104,3 +104,30 @@ describe("apiClient — bề mặt đầy đủ (đúng path/method/body)", () =
     await expect(api.getMe()).rejects.toMatchObject({ status: 500, code: undefined });
   });
 });
+
+// 2026-07-17 — bảng điều khiển: đồng bộ theo khoảng (U22 backfill header) + đổ dòng
+// hàng còn thiếu (U26 backfill-lines).
+describe("apiClient — đồng bộ theo khoảng + backfill dòng hàng", () => {
+  beforeEach(() => {
+    clearToken();
+    setToken("t");
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("backfillTaxAccount → POST /tax-accounts/:id/backfill với body {tuNgay, denNgay}", async () => {
+    const m = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse(202, {}));
+    await api.backfillTaxAccount("acc-1", { tuNgay: "2026-04-01", denNgay: "2026-06-30" });
+    const [url, init] = lastCall(m);
+    expect(url).toContain("/tax-accounts/acc-1/backfill");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ tuNgay: "2026-04-01", denNgay: "2026-06-30" });
+  });
+
+  it("backfillInvoiceLines → POST /tax-accounts/:id/backfill-lines (không body)", async () => {
+    const m = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse(202, {}));
+    await api.backfillInvoiceLines("acc-1");
+    const [url, init] = lastCall(m);
+    expect(url).toContain("/tax-accounts/acc-1/backfill-lines");
+    expect(init.method).toBe("POST");
+  });
+});
