@@ -10,6 +10,7 @@ import type { InvoiceFilter } from "../../types/api";
 import { FilterBar } from "./FilterBar";
 import { InvoiceTable } from "./InvoiceTable";
 import { RangeSyncPanel } from "./RangeSyncPanel";
+import { useRangeBackfill } from "./useRangeBackfill";
 
 const LIMIT = 50;
 
@@ -35,6 +36,16 @@ export function InvoicesPage() {
   const rows = list.data?.rows ?? [];
   const total = list.data?.total ?? 0;
   const tongTtbso = summary.data?.total.tongTtbso ?? null;
+  const listEmpty = !list.isPending && !list.isError && rows.length === 0;
+
+  // U22 B7 — MỘT instance hook (tránh backfill trùng): nút "Đồng bộ khoảng này" + tự chạy
+  // khi kỳ đã lọc RỖNG (không để màn rỗng gây hiểu nhầm). Hook tự lo trường hợp thiếu khoảng.
+  const backfill = useRangeBackfill({
+    tuNgay: filter.tuNgay,
+    denNgay: filter.denNgay,
+    auto: listEmpty,
+  });
+  const backfillRunning = backfill.state.kind === "dang_lay";
 
   return (
     <div>
@@ -46,7 +57,7 @@ export function InvoicesPage() {
       <Card style={{ marginBottom: "var(--sp-4)" }}>
         <FilterBar value={filter} onApply={applyFilter} />
         {filter.tuNgay && filter.denNgay && (
-          <RangeSyncPanel tuNgay={filter.tuNgay} denNgay={filter.denNgay} />
+          <RangeSyncPanel tuNgay={filter.tuNgay} denNgay={filter.denNgay} backfill={backfill} />
         )}
         <div
           style={{
@@ -82,7 +93,13 @@ export function InvoicesPage() {
         ) : list.isError ? (
           <ErrorState message="Không tải được danh sách hóa đơn." onRetry={() => list.refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState message="Không có hóa đơn khớp bộ lọc. Thử mở rộng kỳ hoặc bỏ bớt điều kiện." />
+          <EmptyState
+            message={
+              backfillRunning
+                ? "Đang đồng bộ khoảng đã lọc từ Tổng cục Thuế — dữ liệu sẽ hiện khi lấy xong (xem tiến độ ở khung lọc phía trên)."
+                : "Không có hóa đơn khớp bộ lọc. Thử mở rộng kỳ hoặc bỏ bớt điều kiện."
+            }
+          />
         ) : (
           <>
             <InvoiceTable rows={rows} />

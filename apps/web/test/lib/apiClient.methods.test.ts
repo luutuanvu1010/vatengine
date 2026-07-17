@@ -130,4 +130,18 @@ describe("apiClient — đồng bộ theo khoảng + backfill dòng hàng", () =
     expect(url).toContain("/tax-accounts/acc-1/backfill-lines");
     expect(init.method).toBe("POST");
   });
+
+  it("getBackfill → GET /backfill/:id (poll tiến độ — U22 B7)", async () => {
+    const m = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(200, {
+        backfillId: "b1",
+        thang: [],
+        soXong: 0,
+        tongSoThang: 1,
+        trangThaiTong: "dang_chay",
+      }),
+    );
+    await api.getBackfill("b1");
+    expect(lastCall(m)[0]).toContain("/backfill/b1");
+  });
 });
