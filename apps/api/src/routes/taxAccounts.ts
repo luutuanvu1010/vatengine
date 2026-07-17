@@ -10,7 +10,12 @@ import {
   deriveTokenExpiry,
   getCaptcha,
 } from "@vat/gdt-client";
-import { buildSyncMessages, currentPeriodWindow } from "@vat/sync";
+import {
+  buildDetailMessages,
+  buildSyncMessages,
+  currentPeriodWindow,
+  listInvoicesMissingLines,
+} from "@vat/sync";
 import { and, count, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -24,6 +29,10 @@ const registerSchema = z.object({
   username: z.string().min(1).optional(),
   loai: z.enum(["chinh", "con"]).optional(),
 });
+
+// U26 — trần message backfill dòng hàng / một lần gọi trigger: 4000 msg = 40 sendBatch
+// (≤100 msg/batch) — vừa ngân sách 50 subrequest/lần gọi Workers Free, có lề cho DB.
+export const MAX_BACKFILL_LINES_MOI_LAN = 4000;
 
 // Hạn mức số tài khoản thuế / tenant. TODO (U17): lấy theo GÓI DỊCH VỤ (tenants.goiDichVu →
 // bảng gói). Tạm hardcode = 1 tại MỘT điểm — không rải magic number khắp handler.
@@ -336,6 +345,72 @@ export function taxAccountsRoutes(deps: AppDeps) {
       const msgs = buildSyncMessages([{ tenantId, taikhoanId: id }], window, ["purchase", "sold"]);
       await queue.sendBatch(msgs.map((body) => ({ body })));
       return c.json({ enqueued: msgs.length, period: window.period }, 202);
+    } finally {
+      await close();
+    }
+  });
+
+  // POST /tax-accounts/:id/backfill-lines — U26: enqueue 1 message chi tiết
+  // (`kind:"detail"`) / hóa đơn ĐANG THIẾU dòng hàng của tài khoản (mua→nmmst,
+  // bán→nbmst = username tài khoản; hoa_don không có taikhoan_id). Consumer pha 2
+  // (vat-sync-worker) xử lý idempotent → gọi lại trigger an toàn. API chỉ PRODUCER.
+  // Trần 4000 msg/lần gọi (ngân sách subrequest Workers Free: ≤40 sendBatch + lề);
+  // `conLai > 0` → gọi lại tới khi 0. Token phải CÒN HẠN (pha 2 dùng token này).
+  r.post("/:id/backfill-lines", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    const queue = c.env.SYNC_QUEUE;
+    if (!queue) return c.json({ error: "sync_unavailable" }, 503);
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const ketQua = await withTenant(db, tenantId, async (tx) => {
+        const rows = await tx
+          .select({ username: taiKhoanThue.username, tokenHetHan: taiKhoanThue.tokenHetHan })
+          .from(taiKhoanThue)
+          .where(and(eq(taiKhoanThue.id, id), eq(taiKhoanThue.tenantId, tenantId)));
+        const acc = rows[0];
+        if (!acc) return { loi: 404 as const };
+        if (!acc.tokenHetHan || acc.tokenHetHan.getTime() <= Date.now()) {
+          return { loi: 409 as const };
+        }
+        // GIỚI HẠN ĐÃ BIẾT (tài khoản `loai='con'`): username có thể không phải MST
+        // trần (CHƯA KIỂM CHỨNG định dạng) → HĐ không khớp sẽ nằm ngoài phạm vi, hiện
+        // trong `soHoaDonThieu` của tài khoản chính. Không âm thầm: U26-plan §6.
+        const thieu = await listInvoicesMissingLines(tx, tenantId, {
+          ownMst: acc.username,
+          limit: MAX_BACKFILL_LINES_MOI_LAN,
+        });
+        return { thieu };
+      });
+      if ("loi" in ketQua) {
+        return c.json({ error: ketQua.loi === 404 ? "not_found" : "token_het_han" }, ketQua.loi);
+      }
+      const { candidates, tongThieu } = ketQua.thieu;
+      if (candidates.length > 0) {
+        // Chia lô ≤100 msg (giới hạn sendBatch Cloudflare Queues) — enqueue TRƯỚC,
+        // audit SAU (mirror thứ tự B5: không audit cho việc chưa xảy ra).
+        const msgs = buildDetailMessages({ tenantId, taikhoanId: id }, candidates);
+        for (let i = 0; i < msgs.length; i += 100) {
+          await queue.sendBatch(msgs.slice(i, i + 100).map((body) => ({ body })));
+        }
+        await withTenant(db, tenantId, async (tx) => {
+          await tx.insert(auditLog).values({
+            tenantId,
+            hanhDong: "backfill_dong_hang",
+            doiTuong: id,
+            chiTiet: maskSensitive({ soHoaDonThieu: tongThieu, soDaXepHang: msgs.length }),
+          });
+        });
+      }
+      return c.json(
+        {
+          soHoaDonThieu: tongThieu,
+          soDaXepHang: candidates.length,
+          conLai: tongThieu - candidates.length,
+        },
+        202,
+      );
     } finally {
       await close();
     }

@@ -1,5 +1,5 @@
 import type { GdtTransport } from "@vat/gdt-client";
-import type { SyncJobMessage } from "@vat/sync";
+import type { VatSyncQueueMessage } from "@vat/sync";
 // Kiểu dùng chung cho Worker API (U6). Tầng ứng dụng PHI TRẠNG THÁI (mục 11).
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
@@ -16,9 +16,10 @@ export interface Env extends LoginLockEnv {
   RAW: R2Bucket;
   // U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
   TOKEN_KEK: string;
-  // Hàng đợi đồng bộ nền — producer cho "Đồng bộ ngay" (POST /tax-accounts/:id/sync).
-  // Optional: chỉ có ở production (binding wrangler); dev/test tiêm qua makeEnv (hoặc bỏ).
-  SYNC_QUEUE?: Queue<SyncJobMessage>;
+  // Hàng đợi đồng bộ nền — producer cho "Đồng bộ ngay" (POST /tax-accounts/:id/sync)
+  // và backfill dòng hàng U26 (POST /tax-accounts/:id/backfill-lines, message
+  // `kind:"detail"`). Optional: chỉ có ở production; dev/test tiêm qua makeEnv.
+  SYNC_QUEUE?: Queue<VatSyncQueueMessage>;
   // H-A.5a — số vòng PBKDF2 cho hash MỚI (var wrangler, không nhạy cảm). Không đặt →
   // DEFAULT 100k (an toàn Free). Đặt "600000" khi nâng Paid (H-A.3) để đạt OWASP.
   PBKDF2_ITERATIONS?: string;
