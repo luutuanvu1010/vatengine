@@ -521,7 +521,6 @@ export function taxAccountsRoutes(deps: AppDeps) {
     }
   });
 
-
   // POST /tax-accounts/:id/disconnect — NGẮT KẾT NỐI: xóa token đã lưu (token vault) + reset
   // trạng thái token, audit (mask). KHÔNG xóa bản ghi MST — chỉ ngắt token. Cách ly tenant:
   // tài khoản không thuộc tenant → clearToken trả false → 404 (không rò tồn tại chéo tenant).
