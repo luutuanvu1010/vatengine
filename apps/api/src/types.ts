@@ -21,6 +21,10 @@ export interface Env extends LoginLockEnv {
   // và backfill dòng hàng U26 (POST /tax-accounts/:id/backfill-lines, message
   // `kind:"detail"`). Optional: chỉ có ở production; dev/test tiêm qua makeEnv.
   SYNC_QUEUE?: Queue<VatSyncQueueMessage>;
+  // Sự cố Queue 429 (2026-07-17) — nhịp giãn (ms) GIỮA các lô sendBatch khi backfill
+  // dòng hàng enqueue hàng loạt, giữ tốc độ ghi dưới trần 5.000 msg/giây/queue. Var
+  // wrangler (KHÔNG nhạy cảm); bỏ trống → mặc định queueEnqueue.ts. "0" → tắt (test).
+  BACKFILL_LINES_PACE_MS?: string;
   // H-A.5a — số vòng PBKDF2 cho hash MỚI (var wrangler, không nhạy cảm). Không đặt →
   // DEFAULT 100k (an toàn Free). Đặt "600000" khi nâng Paid (H-A.3) để đạt OWASP.
   PBKDF2_ITERATIONS?: string;

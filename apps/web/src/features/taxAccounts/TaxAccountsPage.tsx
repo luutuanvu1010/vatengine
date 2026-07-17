@@ -263,6 +263,20 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
   );
 }
 
+// Lỗi "Đồng bộ ngay" → thông báo theo status. 503 `sync_busy` (Queue 429 — hệ thống
+// quá tải do enqueue đồng thời nhiều tenant, sự cố 2026-07-17) KHÁC lỗi chung: báo rõ
+// đang quá tải + mốc thử lại, tránh người dùng tưởng hỏng vĩnh viễn.
+function syncErrorStatus(err: unknown): number | undefined {
+  return err instanceof ApiError ? err.status : undefined;
+}
+function syncErrorMessage(err: unknown): string {
+  const status = syncErrorStatus(err);
+  if (status === 409) return "Phiên đã hết hạn — vui lòng kết nối lại.";
+  if (status === 503)
+    return "Hệ thống đang quá tải do yêu cầu đồng thời từ nhiều doanh nghiệp, vui lòng thử lại sau 10 phút.";
+  return "Không gửi được yêu cầu đồng bộ. Thử lại sau ít phút.";
+}
+
 // Trạng thái ĐÃ KẾT NỐI (token còn hạn): báo thành công rõ ràng + CTA Đồng bộ ngay.
 // KHÔNG ép lại form captcha (đỡ gây rối); muốn lấy phiên mới thì bấm "Kết nối lại".
 function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: () => void }) {
@@ -316,10 +330,8 @@ function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: 
             </Alert>
           )}
           {sync.isError && (
-            <Alert tone="danger">
-              {sync.error instanceof ApiError && sync.error.status === 409
-                ? "Phiên đã hết hạn — vui lòng kết nối lại."
-                : "Không gửi được yêu cầu đồng bộ. Thử lại sau ít phút."}
+            <Alert tone={syncErrorStatus(sync.error) === 503 ? "warning" : "danger"}>
+              {syncErrorMessage(sync.error)}
             </Alert>
           )}
           <button

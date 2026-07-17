@@ -26,6 +26,12 @@ Trong app **Claude Desktop** → bấm tab **Code** → mở thư mục `VATCraw
 - `/permissions` — cho phép sẵn `make lint`, `make test` để đỡ bị hỏi vặt.
 - `/code-review` — nhờ một sub-agent mới soi lại thay đổi (soát chéo).
 
+## Nếu nút "Đồng bộ ngay" báo "Hệ thống đang quá tải…"
+Đây là thông báo **có kiểm soát** (không phải hỏng): hàng đợi đồng bộ đang bận vì nhiều
+doanh nghiệp gửi yêu cầu cùng lúc (giới hạn 5.000 tin/giây/hàng đợi của Cloudflare). Chờ
+**~10 phút rồi bấm lại** — dữ liệu không mất, không cần thao tác gì thêm. (Chi tiết kỹ
+thuật + cách chẩn đoán hàng đợi: xem nhật ký sự cố 2026-07-17 trong bộ nhớ dự án.)
+
 ## Khi gặp mơ hồ
 Nếu Claude định **đoán cấu trúc API thuế** hay yêu cầu chưa rõ → theo Hiến pháp, nó phải **DỪNG và hỏi**. Bạn trả lời hoặc bảo nó đề xuất phương án + viết contract test.
 

@@ -25,8 +25,16 @@ import { and, count, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { isUuid, requireTenant } from "../auth";
+import { isQueueRateLimited, resolveBackfillLinesPaceMs, sendBatchesPaced } from "../queueEnqueue";
 import { requireRole } from "../rbac";
 import type { AppDeps, AppEnv } from "../types";
+
+// Sự cố Queue 429 (2026-07-17): mọi producer bọc enqueue để 429 (vượt 5.000 msg/giây
+// /queue) → 503 `sync_busy` CÓ KIỂM SOÁT, KHÔNG để thành 500 trần trụi (hồi quy nút
+// "Đồng bộ ngay"). Log CRITICAL (đã mask) để giám sát phát hiện sớm, không đợi người báo.
+function logQueueBusy(route: string, tenantId: string): void {
+  console.error(`[vat-api] CRITICAL queue 429 (sync_busy) route=${route} tenant=${tenantId}`);
+}
 
 // U23-D2 — username tài khoản chính auto = MST gốc (không nhận từ body). Body chỉ tùy chọn
 // `loai`; `username` chỉ dùng cho tài khoản CON khi module bật.
@@ -355,7 +363,15 @@ export function taxAccountsRoutes(deps: AppDeps) {
       }
       const window = currentPeriodWindow(Date.now());
       const msgs = buildSyncMessages([{ tenantId, taikhoanId: id }], window, ["purchase", "sold"]);
-      await queue.sendBatch(msgs.map((body) => ({ body })));
+      try {
+        await queue.sendBatch(msgs.map((body) => ({ body })));
+      } catch (err) {
+        if (isQueueRateLimited(err)) {
+          logQueueBusy("sync", tenantId);
+          return c.json({ error: "sync_busy" }, 503);
+        }
+        throw err;
+      }
       return c.json({ enqueued: msgs.length, period: window.period }, 202);
     } finally {
       await close();
@@ -400,11 +416,22 @@ export function taxAccountsRoutes(deps: AppDeps) {
       }
       const { candidates, tongThieu } = ketQua.thieu;
       if (candidates.length > 0) {
-        // Chia lô ≤100 msg (giới hạn sendBatch Cloudflare Queues) — enqueue TRƯỚC,
-        // audit SAU (mirror thứ tự B5: không audit cho việc chưa xảy ra).
+        // Chia lô ≤100 msg (giới hạn sendBatch Cloudflare Queues) + GIÃN NHỊP giữa các
+        // lô để burst không tự chạm trần 5.000 msg/giây/queue (sự cố 429 2026-07-17) —
+        // enqueue TRƯỚC, audit SAU (mirror thứ tự B5: không audit cho việc chưa xảy ra).
         const msgs = buildDetailMessages({ tenantId, taikhoanId: id }, candidates);
-        for (let i = 0; i < msgs.length; i += 100) {
-          await queue.sendBatch(msgs.slice(i, i + 100).map((body) => ({ body })));
+        try {
+          await sendBatchesPaced(
+            (batch) => queue.sendBatch(batch),
+            msgs,
+            resolveBackfillLinesPaceMs(c.env),
+          );
+        } catch (err) {
+          if (isQueueRateLimited(err)) {
+            logQueueBusy("backfill-lines", tenantId);
+            return c.json({ error: "sync_busy" }, 503);
+          }
+          throw err;
         }
         await withTenant(db, tenantId, async (tx) => {
           await tx.insert(auditLog).values({
@@ -490,7 +517,17 @@ export function taxAccountsRoutes(deps: AppDeps) {
       // KHÔNG để lại tracker "mồ côi không có job" nếu enqueue lỗi (khi đó route ném → 500,
       // client không nhận backfillId nên không poll). Không có bù trừ 2 pha giữa queue↔DO;
       // thứ tự này chọn hệ quả an toàn nhất khi một trong hai lỗi.
-      await queue.sendBatch(outcome.msgs.map((body) => ({ body })));
+      try {
+        await queue.sendBatch(outcome.msgs.map((body) => ({ body })));
+      } catch (err) {
+        // Queue 429 (2026-07-17): enqueue lỗi TRƯỚC init → không để tracker mồ côi;
+        // 503 sync_busy CÓ KIỂM SOÁT thay vì 500 (client thử lại sau).
+        if (isQueueRateLimited(err)) {
+          logQueueBusy("backfill", tenantId);
+          return c.json({ error: "sync_busy" }, 503);
+        }
+        throw err;
+      }
       await deps.getBackfillTracker(c.env, backfillId).init({
         tenantId,
         taikhoanId: id,
