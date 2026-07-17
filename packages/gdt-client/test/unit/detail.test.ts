@@ -157,13 +157,13 @@ describe("getInvoiceDetail — lỗi & biên", () => {
     });
   });
 
-  it("HTTP 5xx (sau hết retry) → GdtError", async () => {
+  it("HTTP 5xx (sau hết retry) → GdtError mang httpStatus (U26: consumer phân loại lỗi)", async () => {
     const { transport } = makeTransport({
       [DETAIL_ENDPOINTS.normal]: () => new Response("boom", { status: 500 }),
     });
-    await expect(
-      getInvoiceDetail(transport, TOKEN, REF, { maxAttempts: 1 }),
-    ).rejects.toBeInstanceOf(GdtError);
+    await expect(getInvoiceDetail(transport, TOKEN, REF, { maxAttempts: 1 })).rejects.toMatchObject(
+      { code: "HTTP_ERROR", httpStatus: 500 },
+    );
   });
 
   it("429 (sau hết retry) → GdtError mang httpStatus=429 (U25 AC4)", async () => {

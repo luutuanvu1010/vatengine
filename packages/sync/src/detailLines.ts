@@ -6,7 +6,7 @@
 // dòng. Lọc `tenant_id` TƯỜNG MINH (ngoài RLS) theo multi-tenant.md. Thuế suất giữ KÉP
 // (ltsuat chuỗi + tsuat số), tiền dòng lưu chuỗi cho cột numeric (tránh sai số float).
 // KHÔNG log giá trị dòng hàng (security.md).
-import { dongHangHoa } from "@vat/db";
+import { dongHangHoa, hoaDon } from "@vat/db";
 import {
   type InvoiceDetailRef,
   type InvoiceLine,
@@ -69,6 +69,17 @@ export async function persistInvoiceLines<
   hoaDonId: string,
   lines: InvoiceLine[],
 ): Promise<void> {
+  // U26 hardening (phòng thủ chiều sâu — multi-tenant.md): FK dong_hang_hoa.hoadon_id
+  // KHÔNG kiểm tenant khớp, nên phải xác minh hóa đơn THUỘC tenant trước khi ghi —
+  // chặn message/producer lỗi ghi dòng tenant A trỏ vào hóa đơn tenant B. Mọi producer
+  // hiện tại đã resolve id tenant-scoped; kiểm tra này bắt lỗi cấu hình tương lai.
+  const owned = await tx
+    .select({ id: hoaDon.id })
+    .from(hoaDon)
+    .where(and(eq(hoaDon.id, hoaDonId), eq(hoaDon.tenantId, tenantId)));
+  if (owned.length === 0) {
+    throw new Error(`persistInvoiceLines: hoa_don ${hoaDonId} không thuộc tenant hiện tại.`);
+  }
   // Xóa TƯỜNG MINH theo cả hoadon_id lẫn tenant_id (multi-tenant.md — không chỉ dựa RLS).
   await tx
     .delete(dongHangHoa)
