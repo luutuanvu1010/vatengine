@@ -32,6 +32,16 @@ function fakeQueue() {
   return { queue: queue as unknown as Queue<SyncJobMessage>, batches };
 }
 
+// Queue 429: producer chạm trần 5000 msg/giây/queue (bão backfill dồn dập).
+function rateLimitedQueue() {
+  return {
+    send: async () => {},
+    sendBatch: async () => {
+      throw new Error("Queue sendBatch failed: Too Many Requests");
+    },
+  } as unknown as Queue<SyncJobMessage>;
+}
+
 /** Tracker giả in-memory dùng ĐÚNG logic thuần initDef/readDef (như DO thật); phơi
  * `store` để test đối chiếu def đã lưu. */
 function fakeTracker() {
@@ -102,6 +112,22 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
   let db: Db;
   beforeEach(async () => {
     db = await freshDb();
+  });
+
+  it("queue 429 (Too Many Requests) → 503 sync_busy, KHÔNG 500, KHÔNG tạo tracker", async () => {
+    const t = await makeTenant(db, "DN A", "0100000001");
+    const acc = await seedTaxAccount(db, t, { username: "0311772540", ...VALID_TOKEN });
+    const { factory, store } = fakeTracker();
+    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const res = await post(
+      app,
+      acc,
+      t,
+      makeEnv({ SYNC_QUEUE: rateLimitedQueue(), BACKFILL_TRACKER: {} as DurableObjectNamespace }),
+    );
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "sync_busy" });
+    expect(store.size).toBe(0); // enqueue lỗi trước init → không để tracker mồ côi
   });
 
   it("chưa phủ tháng nào → enqueue N tháng × 2 chiều, tạo backfillId, lưu def tracker, 202", async () => {

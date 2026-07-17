@@ -106,6 +106,21 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
     expect(screen.queryByAltText(/captcha/i)).toBeNull();
   });
 
+  it("đã kết nối → Đồng bộ ngay gặp 503 sync_busy → báo QUÁ TẢI (khác lỗi chung)", async () => {
+    calls = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      calls.push({ url, method: init?.method ?? "GET" });
+      if (url.includes("/sync")) return json(503, { error: "sync_busy" });
+      return json(200, [authorized]);
+    });
+    renderWithProviders(<TaxAccountsPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Đồng bộ ngay" }));
+    expect(await screen.findByText(/quá tải/i)).toBeInTheDocument();
+    // KHÔNG hiện thông báo lỗi chung chung khi là 503 sync_busy.
+    expect(screen.queryByText(/Không gửi được yêu cầu đồng bộ/)).toBeNull();
+  });
+
   it("(b) đã kết nối → Ngắt kết nối CÓ XÁC NHẬN → POST /disconnect", async () => {
     mock([authorized]);
     renderWithProviders(<TaxAccountsPage />);

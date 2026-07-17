@@ -32,6 +32,16 @@ function fakeQueue() {
   return { queue: queue as unknown as Queue<DetailSyncMessage>, batches };
 }
 
+// Queue 429: producer chạm trần 5000 msg/giây/queue khi enqueue hàng loạt (bão backfill).
+function rateLimitedQueue() {
+  return {
+    send: async () => {},
+    sendBatch: async () => {
+      throw new Error("Queue sendBatch failed: Too Many Requests");
+    },
+  } as unknown as Queue<DetailSyncMessage>;
+}
+
 async function seedAccount(db: Db, tenantId: string, tokenOk = true): Promise<string> {
   return seedTaxAccount(db, tenantId, {
     username: MST,
@@ -133,6 +143,20 @@ describe("POST /tax-accounts/:id/backfill-lines — backfill dòng hàng (U26)",
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "token_het_han" });
     expect(batches).toHaveLength(0);
+  });
+
+  it("queue 429 (Too Many Requests) → 503 sync_busy, KHÔNG 500", async () => {
+    const t = await makeTenant(db, "DN A", "0100000001");
+    const acc = await seedAccount(db, t);
+    await seedInvoice(db, t, { shdon: "1", chieu: "purchase", nmmst: MST });
+    const app = createApp(injectDb(db));
+    const res = await app.request(
+      `/tax-accounts/${acc}/backfill-lines`,
+      { method: "POST", headers: bearer(await tokenFor(t, { role: "quan_tri" })) },
+      makeEnv({ SYNC_QUEUE: rateLimitedQueue(), BACKFILL_LINES_PACE_MS: "0" }),
+    );
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "sync_busy" });
   });
 
   it("thiếu binding SYNC_QUEUE → 503; vai ke_toan → 403 (RBAC như các route tax-account)", async () => {

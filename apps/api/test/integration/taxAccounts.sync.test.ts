@@ -26,6 +26,16 @@ function fakeQueue() {
   return { queue: queue as unknown as Queue<SyncJobMessage>, batches };
 }
 
+// Queue 429: Cloudflare Queues ném khi vượt 5000 msg/giây/queue (sự cố bão backfill).
+function rateLimitedQueue() {
+  return {
+    send: async () => {},
+    sendBatch: async () => {
+      throw new Error("Queue sendBatch failed: Too Many Requests");
+    },
+  } as unknown as Queue<SyncJobMessage>;
+}
+
 describe("POST /tax-accounts/:id/sync — Đồng bộ ngay", () => {
   let db: Db;
   beforeEach(async () => {
@@ -97,6 +107,23 @@ describe("POST /tax-accounts/:id/sync — Đồng bộ ngay", () => {
     expect(res.status).toBe(409);
     expect((await res.json()) as Record<string, unknown>).toEqual({ error: "token_het_han" });
     expect(batches).toHaveLength(0);
+  });
+
+  it("queue 429 (Too Many Requests) → 503 sync_busy, KHÔNG 500", async () => {
+    const t = await makeTenant(db, "DN A", "0100000001");
+    const acc = await seedTaxAccount(db, t, {
+      username: "0311772540",
+      tokenHetHan: new Date(Date.now() + 3_600_000),
+      tokenHienTai: "v1$aesgcm$secret",
+    });
+    const app = createApp(injectDb(db));
+    const res = await app.request(
+      `/tax-accounts/${acc}/sync`,
+      { method: "POST", headers: bearer(await tokenFor(t, { role: "quan_tri" })) },
+      makeEnv({ SYNC_QUEUE: rateLimitedQueue() }),
+    );
+    expect(res.status).toBe(503);
+    expect((await res.json()) as Record<string, unknown>).toEqual({ error: "sync_busy" });
   });
 
   it("thiếu binding SYNC_QUEUE (dev/chưa cấu hình) → 503", async () => {
