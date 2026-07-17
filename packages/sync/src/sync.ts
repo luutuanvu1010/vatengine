@@ -1,5 +1,5 @@
 import { TRANG_THAI_LAN_DONG_BO, hoaDon, lanDongBo, withTenant } from "@vat/db";
-import { GdtError, queryInvoices, toDetailRef } from "@vat/gdt-client";
+import { GdtError, pace, queryInvoices, toDetailRef } from "@vat/gdt-client";
 import type {
   GdtTransport,
   InvoiceDetailRef,
@@ -88,11 +88,15 @@ export interface SyncResult {
    * Phân loại lỗi (chỉ khi `trangThai === "failed"`) để tầng điều phối nền (U9)
    * quyết định RETRY hay không mà KHÔNG phải dò chuỗi `thongDiepLoi` (mong manh):
    * - `session_expired`: 401/hết phiên — token đã chết, KHÔNG retry (báo đăng nhập lại).
-   * - `transient`: lỗi tạm (mạng/5xx/DB) — nên retry qua hàng đợi.
-   * `sync()` đã tự retry cấp adapter (5xx/timeout) trước khi trả về; nhãn này dành
+   * - `rate_limited`: 429 kiệt lượt retry cấp adapter (U25) — GDT đang giới hạn tốc độ;
+   *   tầng job (U9) phải ĐẨY LÙI (backpressure, reenqueue có delay), KHÔNG retry thật
+   *   tính `max_retries` (đập lại GDT đúng lúc đang bị chặn — vi phạm "tôn trọng máy
+   *   chủ thuế").
+   * - `transient`: lỗi tạm khác (mạng/5xx/DB) — nên retry qua hàng đợi.
+   * `sync()` đã tự retry cấp adapter (5xx/429/timeout) trước khi trả về; nhãn này dành
    * cho vòng retry cấp job (Queue) của U9.
    */
-  failureKind?: "session_expired" | "transient";
+  failureKind?: "session_expired" | "rate_limited" | "transient";
   changes: InvoiceChange[];
 }
 
@@ -123,13 +127,16 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Phân loại lỗi cho `SyncResult.failureKind`. Chỉ 401/hết phiên là `session_expired`
- * (token chết, không retry); mọi lỗi còn lại coi là `transient` (mạng/5xx/DB — retry
- * cấp job an toàn, có trần lần thử của hàng đợi làm chốt chặn). */
-function classifyFailure(err: unknown): "session_expired" | "transient" {
-  return err instanceof GdtError && err.code === "SESSION_EXPIRED"
-    ? "session_expired"
-    : "transient";
+/** Phân loại lỗi cho `SyncResult.failureKind` (U25 mở rộng `rate_limited`):
+ * - 401/hết phiên → `session_expired` (token chết, không retry).
+ * - 429 kiệt lượt retry adapter (`GdtError.httpStatus === 429`) → `rate_limited`
+ *   (tầng job phải backpressure, KHÔNG retry thật — xem doc `SyncResult.failureKind`).
+ * - mọi lỗi còn lại → `transient` (mạng/5xx khác/DB — retry cấp job an toàn, có trần
+ *   lần thử của hàng đợi làm chốt chặn). */
+function classifyFailure(err: unknown): "session_expired" | "rate_limited" | "transient" {
+  if (err instanceof GdtError && err.code === "SESSION_EXPIRED") return "session_expired";
+  if (err instanceof GdtError && err.httpStatus === 429) return "rate_limited";
+  return "transient";
 }
 
 /** Upsert idempotent một lô hóa đơn cho một tenant, trong transaction đã đặt ngữ
@@ -266,7 +273,7 @@ async function recordFailed<
   tenantId: string,
   meta: RunMeta,
   message: string,
-  failureKind: "session_expired" | "transient",
+  failureKind: "session_expired" | "rate_limited" | "transient",
 ): Promise<SyncResult> {
   const id = await withTenant(db, tenantId, async (tx) => {
     const inserted = await tx
@@ -385,7 +392,14 @@ export async function sync<
   if (opts.fetchDetail) {
     linesByKey = new Map();
     try {
+      let first = true;
       for (const row of rows) {
+        // Giãn nhịp giữa các lần lấy detail TRỪ lần đầu (U25 AC3 — cùng cơ chế `pace`
+        // với phân trang header). `retry.minIntervalMs` không đặt/0 → không chờ.
+        if (!first) {
+          await pace(opts.retry?.minIntervalMs, opts.retry?.sleepFn);
+        }
+        first = false;
         const lines = await opts.fetchDetail(toDetailRef(row));
         linesByKey.set(naturalKeyOf(mapInvoiceRowToHoaDon(row, tenantId)), lines);
       }

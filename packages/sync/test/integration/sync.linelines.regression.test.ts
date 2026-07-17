@@ -173,4 +173,21 @@ describe("sync — LƯU DÒNG HÀNG + TÊN SẢN PHẨM (regression lỗi #1)", 
     // 1 hóa đơn × 1 dòng = 1; chạy 2 lần vẫn 1 (không nhân đôi).
     expect(lines.length).toBe(1);
   });
+
+  it("(U25 AC3) giãn nhịp (retry.minIntervalMs) giữa các lần lấy detail, KHÔNG chờ trước lần đầu", async () => {
+    const transport = makeTransport([inv("1"), inv("2"), inv("3")]);
+    const waits: number[] = [];
+    const r = await sync({
+      db,
+      transport,
+      tenantId,
+      taikhoanId,
+      // biome-ignore lint/suspicious/noExplicitAny: fetchDetail là điểm inject chưa có trên type.
+      ...(BASE_OPTS as any),
+      retry: { minIntervalMs: 150, sleepFn: async (ms: number) => waits.push(ms) },
+    });
+    expect(r.trangThai).toBe("completed");
+    // 3 hóa đơn → 2 khoảng nghỉ giữa các lần fetchDetail (không chờ trước lần đầu).
+    expect(waits).toEqual([150, 150]);
+  });
 });

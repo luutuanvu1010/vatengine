@@ -48,7 +48,7 @@ function completed(): SyncResult {
   };
 }
 
-function failed(kind: "session_expired" | "transient"): SyncResult {
+function failed(kind: "session_expired" | "rate_limited" | "transient"): SyncResult {
   return {
     lanDongBoId: "ldb-1",
     soHdMoi: 0,
@@ -152,6 +152,14 @@ describe("runScheduledSync — điều phối job đồng bộ nền", () => {
     expect(out.kind).toBe("retry");
     expect(calls.recordResult).toEqual([false]);
     // KHÔNG đánh dấu cần đăng nhập lại cho lỗi tạm.
+    expect(calls.reauthRuntime).toEqual([]);
+  });
+
+  it("(U25 AC5) 429/rate_limited từ sync() → outcome retry_backpressure (KHÔNG retry thật, KHÔNG cần đăng nhập lại); vẫn ghi thất bại vào limiter", async () => {
+    const { deps, calls } = makeDeps({ sync: async () => failed("rate_limited") });
+    const out = await runScheduledSync(deps, MSG);
+    expect(out).toEqual({ kind: "retry_backpressure", reason: "rate_limited" });
+    expect(calls.recordResult).toEqual([false]);
     expect(calls.reauthRuntime).toEqual([]);
   });
 

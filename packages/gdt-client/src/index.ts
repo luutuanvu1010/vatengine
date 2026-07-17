@@ -23,7 +23,7 @@ export {
   PUBLIC_PROBE_PATH,
 } from "./endpoints";
 export { GdtContractDriftError, GdtError } from "./errors";
-export { type RetryOptions, fetchWithRetry } from "./http";
+export { type RetryOptions, fetchWithRetry, pace, retryAfterMs } from "./http";
 export {
   buildSearch,
   queryInvoices,

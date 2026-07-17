@@ -111,7 +111,13 @@ export async function getInvoiceDetail(
     throw new GdtError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", "SESSION_EXPIRED");
   }
   if (!res.ok) {
-    throw new GdtError(`Lấy chi tiết hóa đơn ${endpoint} lỗi (HTTP ${res.status}).`);
+    // Mang `res.status` (U25 AC4) — đồng nhất với query.ts: để 429 ở nhánh detail
+    // phân loại được bằng `err.httpStatus` thay vì dò chuỗi thông điệp.
+    throw new GdtError(
+      `Lấy chi tiết hóa đơn ${endpoint} lỗi (HTTP ${res.status}).`,
+      "HTTP_ERROR",
+      res.status,
+    );
   }
 
   let data: InvoiceDetail;

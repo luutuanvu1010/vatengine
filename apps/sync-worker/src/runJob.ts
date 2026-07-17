@@ -82,6 +82,13 @@ export async function runScheduledSync(deps: RunJobDeps, msg: SyncJobMessage): P
     await deps.recorder.reauthRuntime(msg, "session_expired");
     return { kind: "needs_reauth", reason: "session_expired" };
   }
-  // Lỗi tạm (mạng/5xx/DB) → retry qua queue.
+  if (result.failureKind === "rate_limited") {
+    // 429 kiệt lượt retry adapter (U25): GDT đang giới hạn tốc độ → ĐẨY LÙI qua đường
+    // backpressure đã có (fanout.ts) — reenqueue có delay, KHÔNG tính max_retries.
+    // Retry thật ở đây sẽ đập lại GDT đúng lúc đang bị chặn (vi phạm "tôn trọng máy
+    // chủ thuế", CLAUDE.md §Ranh giới đạo đức).
+    return { kind: "retry_backpressure", reason: "rate_limited" };
+  }
+  // Lỗi tạm khác (mạng/5xx/DB) → retry qua queue.
   return { kind: "retry", reason: result.thongDiepLoi ?? "transient" };
 }

@@ -297,6 +297,21 @@ describe("sync — upsert idempotent (integration, PGlite)", () => {
     expect(r.failureKind).toBe("transient");
   });
 
+  it("(U25 AC5) 429 kiệt lượt retry adapter → failureKind='rate_limited' (backpressure, không retry thật)", async () => {
+    const { transport } = makeTransport(() => new Response("{}", { status: 429 }));
+    // maxAttempts:1 → không retry cấp adapter (test nhanh, không chờ thật).
+    const r = await sync({
+      db,
+      transport,
+      tenantId,
+      taikhoanId,
+      ...BASE_OPTS,
+      retry: { maxAttempts: 1, backoffMs: 0 },
+    });
+    expect(r.trangThai).toBe("failed");
+    expect(r.failureKind).toBe("rate_limited");
+  });
+
   it("(U9) đồng bộ thành công → không gắn failureKind", async () => {
     const { transport } = makeTransport(onePage([inv("1")]));
     const r = await sync({ db, transport, tenantId, taikhoanId, ...BASE_OPTS });

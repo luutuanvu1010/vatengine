@@ -11,14 +11,72 @@ export interface RetryOptions {
   maxAttempts?: number;
   /** Backoff cơ bản (ms), nhân đôi mỗi lần thử lại. Mặc định 300ms. */
   backoffMs?: number;
+  /**
+   * Coi HTTP 429 (Too Many Requests) là lỗi tạm — chờ rồi retry, giống 5xx.
+   * Mặc định `true` (U25 — tôn trọng rate-limit của GDT thay vì ném lỗi ngay).
+   */
+  retryOn429?: boolean;
+  /**
+   * Trần thời gian chờ một lần (ms), áp cho CẢ `Retry-After` lẫn backoff mũ — chặn
+   * chờ dài vô ích/treo Worker khi GDT trả `Retry-After` bất thường lớn. Mặc định 30s.
+   */
+  maxBackoffMs?: number;
+  /**
+   * Hàm chờ có thể tiêm (test dùng để không chờ thật). Mặc định `setTimeout` thật.
+   */
+  sleepFn?: (ms: number) => Promise<void>;
+  /**
+   * Khoảng nghỉ tối thiểu (ms) giữa các lần gọi liên tiếp (giãn nhịp phân trang/detail
+   * — U25 AC3). `0`/không đặt = tắt (hành vi cũ). Bản thân `fetchWithRetry` KHÔNG tự
+   * áp giá trị này — caller (vòng lặp phân trang/detail) gọi `pace()` giữa hai request.
+   */
+  minIntervalMs?: number;
+}
+
+/**
+ * Nghỉ `minIntervalMs` ms nếu > 0 (giãn nhịp giữa hai request liên tiếp — U25 AC3).
+ * `minIntervalMs` không đặt/`<= 0` → không chờ, giữ hành vi cũ (test khác chạy nhanh).
+ * `sleepFn` cho phép tiêm hàm chờ giả trong test.
+ */
+export async function pace(
+  minIntervalMs: number | undefined,
+  sleepFn: (ms: number) => Promise<void> = sleep,
+): Promise<void> {
+  if (!minIntervalMs || minIntervalMs <= 0) return;
+  await sleepFn(minIntervalMs);
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 300;
+const DEFAULT_MAX_BACKOFF_MS = 30_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Đọc header `Retry-After` của một 429/503 và quy ra số ms cần chờ.
+ * CHƯA KIỂM CHỨNG định dạng thật GDT trả khi 429 (§1 U25-plan.md) — hỗ trợ cả hai
+ * dạng chuẩn HTTP: số giây nguyên, hoặc HTTP-date. Không parse được/không có header
+ * → `undefined` (caller fallback backoff mũ). Thuần, không side effect.
+ */
+export function retryAfterMs(res: Response): number | undefined {
+  const raw = res.headers.get("retry-after");
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed) * 1000;
+  }
+
+  const dateMs = Date.parse(trimmed);
+  if (!Number.isNaN(dateMs)) {
+    const diff = dateMs - Date.now();
+    return diff > 0 ? diff : 0;
+  }
+
+  return undefined;
 }
 
 /**
@@ -37,6 +95,9 @@ export async function fetchWithRetry(
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   const backoffMs = opts.backoffMs ?? DEFAULT_BACKOFF_MS;
+  const retryOn429 = opts.retryOn429 ?? true;
+  const maxBackoffMs = opts.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS;
+  const wait = opts.sleepFn ?? sleep;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const ctrl = new AbortController();
@@ -46,8 +107,14 @@ export async function fetchWithRetry(
       clearTimeout(timer);
 
       if (res.status === 401) return res;
+      const isRateLimited = retryOn429 && (res.status === 429 || res.status === 503);
+      if (isRateLimited && attempt < maxAttempts) {
+        const ms = Math.min(retryAfterMs(res) ?? backoffMs * 2 ** (attempt - 1), maxBackoffMs);
+        await wait(ms);
+        continue;
+      }
       if (res.status >= 500 && attempt < maxAttempts) {
-        await sleep(backoffMs * 2 ** (attempt - 1));
+        await wait(backoffMs * 2 ** (attempt - 1));
         continue;
       }
       return res;

@@ -82,6 +82,96 @@ describe("fetchWithRetry", () => {
     expect(callCount()).toBe(2);
   });
 
+  it("chờ theo Retry-After (giây) rồi retry khi 429, trả 200 sau đó", async () => {
+    const { transport, callCount } = mockTransport([
+      () => new Response(JSON.stringify({}), { status: 429, headers: { "Retry-After": "1" } }),
+      () => jsonResponse(200, { ok: true }),
+    ]);
+    const waits: number[] = [];
+
+    const res = await fetchWithRetry(
+      transport,
+      "https://example.test/x",
+      {},
+      {
+        maxAttempts: 3,
+        backoffMs: 5,
+        sleepFn: async (ms) => {
+          waits.push(ms);
+        },
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect(callCount()).toBe(2);
+    expect(waits).toEqual([1000]);
+  });
+
+  it("coi 503 giống 429: chờ rồi retry (không có Retry-After thì dùng backoff mũ)", async () => {
+    const { transport, callCount } = mockTransport([
+      () => jsonResponse(503),
+      () => jsonResponse(200, { ok: true }),
+    ]);
+    const waits: number[] = [];
+
+    const res = await fetchWithRetry(
+      transport,
+      "https://example.test/x",
+      {},
+      {
+        maxAttempts: 3,
+        backoffMs: 300,
+        sleepFn: async (ms) => {
+          waits.push(ms);
+        },
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect(callCount()).toBe(2);
+    expect(waits).toEqual([300]);
+  });
+
+  it("429 hết lượt thử vẫn trả response 429 (không throw), để caller ném GdtError kèm httpStatus", async () => {
+    const { transport, callCount } = mockTransport([
+      () => new Response(JSON.stringify({}), { status: 429 }),
+    ]);
+
+    const res = await fetchWithRetry(
+      transport,
+      "https://example.test/x",
+      {},
+      { maxAttempts: 2, backoffMs: 5, sleepFn: async () => {} },
+    );
+
+    expect(res.status).toBe(429);
+    expect(callCount()).toBe(2);
+  });
+
+  it("Retry-After khổng lồ bị cap bởi maxBackoffMs (không treo Worker)", async () => {
+    const { transport } = mockTransport([
+      () => new Response(JSON.stringify({}), { status: 429, headers: { "Retry-After": "3600" } }),
+      () => jsonResponse(200, {}),
+    ]);
+    const waits: number[] = [];
+
+    await fetchWithRetry(
+      transport,
+      "https://example.test/x",
+      {},
+      {
+        maxAttempts: 2,
+        backoffMs: 5,
+        maxBackoffMs: 2000,
+        sleepFn: async (ms) => {
+          waits.push(ms);
+        },
+      },
+    );
+
+    expect(waits).toEqual([2000]);
+  });
+
   it("timeout qua AbortController rồi throw sau khi hết lượt thử", async () => {
     const transport: GdtTransport = {
       name: "hang",

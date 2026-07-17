@@ -104,6 +104,68 @@ describe("queryInvoices — phân trang", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("giãn nhịp (minIntervalMs) giữa các trang, KHÔNG chờ trước trang đầu", async () => {
+    const { transport } = makeTransport({
+      [INVOICE_ENDPOINTS.purchase]: (p) => {
+        const state = p.get("state");
+        if (!state) return page([inv("1"), inv("2")], "s1");
+        return page([inv("3")]); // len 1 < size 2 → dừng
+      },
+    });
+    const waits: number[] = [];
+
+    const rows = await queryInvoices(
+      transport,
+      TOKEN,
+      {
+        direction: "purchase",
+        dateFrom: "01/01/2026",
+        dateTo: "31/01/2026",
+        includeSco: false,
+        size: 2,
+      },
+      {
+        minIntervalMs: 250,
+        sleepFn: async (ms) => {
+          waits.push(ms);
+        },
+      },
+    );
+
+    expect(rows).toHaveLength(3);
+    expect(waits).toEqual([250]); // 2 trang → 1 khoảng nghỉ giữa chúng
+  });
+
+  it("minIntervalMs = 0 (mặc định) → không chờ giữa các trang", async () => {
+    const { transport } = makeTransport({
+      [INVOICE_ENDPOINTS.purchase]: (p) => {
+        const state = p.get("state");
+        if (!state) return page([inv("1"), inv("2")], "s1");
+        return page([inv("3")]);
+      },
+    });
+    const waits: number[] = [];
+
+    await queryInvoices(
+      transport,
+      TOKEN,
+      {
+        direction: "purchase",
+        dateFrom: "01/01/2026",
+        dateTo: "31/01/2026",
+        includeSco: false,
+        size: 2,
+      },
+      {
+        sleepFn: async (ms) => {
+          waits.push(ms);
+        },
+      },
+    );
+
+    expect(waits).toEqual([]);
+  });
+
   it("chặn vòng lặp vô hạn khi server trả state mãi + cảnh báo cắt cụt", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     let n = 0;

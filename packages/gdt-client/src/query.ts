@@ -16,7 +16,7 @@
 import { missingContractKeys } from "./contract";
 import { BASE, INVOICE_ENDPOINTS } from "./endpoints";
 import { GdtError } from "./errors";
-import { type RetryOptions, fetchWithRetry } from "./http";
+import { type RetryOptions, fetchWithRetry, pace } from "./http";
 import type { GdtTransport } from "./transport";
 
 export type InvoiceDirection = "purchase" | "sold";
@@ -93,6 +93,11 @@ async function queryOne(
     if (pages >= MAX_PAGES) {
       truncated = true;
       break;
+    }
+    // Giãn nhịp trước mỗi trang TRỪ trang đầu (U25 AC3 — không gọi dồn dập giữa các
+    // trang). `minIntervalMs` không đặt/0 → không chờ (hành vi cũ).
+    if (pages > 0) {
+      await pace(opts?.minIntervalMs, opts?.sleepFn);
     }
     pages += 1;
 

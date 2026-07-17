@@ -166,6 +166,15 @@ describe("getInvoiceDetail — lỗi & biên", () => {
     ).rejects.toBeInstanceOf(GdtError);
   });
 
+  it("429 (sau hết retry) → GdtError mang httpStatus=429 (U25 AC4)", async () => {
+    const { transport } = makeTransport({
+      [DETAIL_ENDPOINTS.normal]: () => new Response("{}", { status: 429 }),
+    });
+    await expect(getInvoiceDetail(transport, TOKEN, REF, { maxAttempts: 1 })).rejects.toMatchObject(
+      { httpStatus: 429 },
+    );
+  });
+
   it("body không phải JSON → GdtError", async () => {
     const { transport } = makeTransport({
       [DETAIL_ENDPOINTS.normal]: () => new Response("<html>", { status: 200 }),
