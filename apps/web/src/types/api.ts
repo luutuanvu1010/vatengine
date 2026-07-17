@@ -180,3 +180,13 @@ export interface TaxLoginResult {
   ok: true;
   tokenHetHan: string;
 }
+
+// U22 B7 — theo dõi tiến độ backfill header theo tháng (mirror apps/api GET /backfill/:id).
+export type BackfillMonthStatus = "cho" | "dang_chay" | "xong" | "loi";
+export interface BackfillProgress {
+  backfillId: string;
+  thang: { period: string; trangThai: BackfillMonthStatus }[];
+  soXong: number;
+  tongSoThang: number;
+  trangThaiTong: "dang_chay" | "hoan_thanh" | "co_loi" | "can_dang_nhap_lai";
+}

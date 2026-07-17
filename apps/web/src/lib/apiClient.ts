@@ -3,6 +3,7 @@
 // 401 (hết hạn) → onUnauthorized (về đăng nhập); 403 (sai vai) / 400 / 404 → ApiError
 // mang status để UI xử. KHÔNG log token. tenant_id KHÔNG bao giờ gửi từ client (từ token).
 import type {
+  BackfillProgress,
   CaptchaResponse,
   ConvertResult,
   ExportFormat,
@@ -224,5 +225,9 @@ export const api = {
     id: string,
   ): Promise<{ soHoaDonThieu: number; soDaXepHang: number; conLai: number }> {
     return request("POST", `/tax-accounts/${id}/backfill-lines`);
+  },
+  // U22 B7 — theo dõi tiến độ backfill header theo tháng (poll).
+  getBackfill(backfillId: string): Promise<BackfillProgress> {
+    return request("GET", `/backfill/${backfillId}`);
   },
 };

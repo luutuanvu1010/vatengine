@@ -13,7 +13,14 @@ export default defineConfig({
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/**/*.ts", "src/features/**/*.tsx", "src/components/**/*.tsx"],
+      include: [
+        "src/lib/**/*.ts",
+        "src/features/**/*.tsx",
+        // U22 B7 — hook/logic thuần .ts dưới features/ (vd useRangeBackfill) cũng phải vào
+        // ngưỡng phủ, không chỉ .tsx (nếu không cổng coverage MÙ với logic nghiệp vụ).
+        "src/features/**/*.ts",
+        "src/components/**/*.tsx",
+      ],
       exclude: ["src/main.tsx", "src/**/*.css", "src/vite-env.d.ts"],
       thresholds: { lines: 80, statements: 80, branches: 80, functions: 80 },
     },
