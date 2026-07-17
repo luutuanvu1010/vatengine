@@ -9,6 +9,7 @@ import { formatMoney } from "../../lib/format";
 import type { InvoiceFilter } from "../../types/api";
 import { FilterBar } from "./FilterBar";
 import { InvoiceTable } from "./InvoiceTable";
+import { RangeSyncPanel } from "./RangeSyncPanel";
 
 const LIMIT = 50;
 
@@ -44,6 +45,9 @@ export function InvoicesPage() {
 
       <Card style={{ marginBottom: "var(--sp-4)" }}>
         <FilterBar value={filter} onApply={applyFilter} />
+        {filter.tuNgay && filter.denNgay && (
+          <RangeSyncPanel tuNgay={filter.tuNgay} denNgay={filter.denNgay} />
+        )}
         <div
           style={{
             marginTop: "var(--sp-3)",

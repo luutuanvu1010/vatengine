@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InvoicesPage } from "../../src/features/invoices/InvoicesPage";
 import { clearToken, setToken } from "../../src/lib/apiClient";
-import type { InvoiceRow } from "../../src/types/api";
+import type { InvoiceListRow } from "../../src/types/api";
 import { renderWithProviders } from "../helpers/renderApp";
 
-const bigRow: InvoiceRow = {
+const bigRow: InvoiceListRow = {
   id: "r1",
   tenantId: "t",
   nbmst: "0311772540",
@@ -31,11 +31,14 @@ const bigRow: InvoiceRow = {
   rawJson: {},
   createdAt: "2026-04-03T00:00:00.000Z",
   updatedAt: "2026-04-03T00:00:00.000Z",
+  tenHangDau: null,
+  soDongHang: 0,
+  tongSoLuong: null,
 };
 
 let fetchMock: { mock: { calls: unknown[][] } };
 
-function mockList(rows: InvoiceRow[], total: number) {
+function mockList(rows: InvoiceListRow[], total: number) {
   fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     if (url.includes("/invoices/summary")) {
