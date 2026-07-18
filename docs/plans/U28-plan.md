@@ -3,7 +3,10 @@
 > **Mục tiêu cao nhất của đơn vị này:** người dùng chọn **một khoảng thời gian bất kỳ**
 > và hệ thống **đồng bộ được đầy đủ hoá đơn của khoảng đó**.
 >
-> Trạng thái: ⬜ KẾ HOẠCH — chưa hiện thực. Lập theo `.claude/skills/plan-unit`.
+> Trạng thái: ✅ ĐÃ HIỆN THỰC 2026-07-18 (cổng code: 11 test decorator + 1 ca runJob,
+> mutation test ×2 có răng, make lint/test xanh, review chéo dod-auditor +
+> contract-guardian đã xử lý findings — xem §7 dòng "khuếch đại retry 2 tầng").
+> Cổng production (§5) chờ deploy + quan sát. Lập theo `.claude/skills/plan-unit`.
 > Ngày lập: 2026-07-18. Nền: trunk `7f5ceae` (sau U27 + 4 commit vá sự cố 2026-07-18).
 
 ## 0. Vì sao cần U28 (bằng chứng đo được, không suy đoán)
@@ -160,6 +163,7 @@ khe thiết kế sẵn cho việc này.
 | 2 req/s vẫn còn bị 429 | Trung bình | Sau U28, `LIMITER_REFILL_PER_SEC` **mới thật sự có hiệu lực** (hiện gần như vô tác dụng với pha 1) ⇒ hạ dần theo số liệu, **không đoán trước**. |
 | `max_concurrency: 3` × job dài ⇒ thông lượng thấp khi nhiều tenant | Thấp (hiện 1 tenant) | Hạn mức GDT là **theo MST**, nên mở rộng ngang theo tenant vẫn đúng. Xem lại khi nhiều tenant thật. |
 | Token GDT hết hạn giữa backfill dài nhiều tháng | Trung bình | Job nền **không** tự đăng nhập (ranh giới Hiến pháp). Pre-flight đã trả `needs_reauth`; UI đã có banner. Khoảng rất dài nên chia đợt. |
+| **Khuếch đại retry 2 tầng** (phát hiện ở review chéo 2026-07-18): `fetchWithRetry` (adapter) bắt MỌI exception — kể cả `GdtError` kìm nhịp chủ đích của decorator — và retry tới `maxAttempts=3` | Trung bình | **Chấp nhận có trần, đã test**: mỗi lượt retry KHÔNG gọi GDT thật (permit chưa cấp), tổng `tryAcquire` ≤ `maxAttempts × (1 + maxWaitMs/retryDelayMs)`; lỗi cuối vẫn `GdtError 429` → `retry_backpressure`. Hai chốt chặn đã hiện thực: (1) trần chờ mặc định 8s < timeout 10s của `fetchWithRetry` — nhánh "quá trần" ném lỗi CÓ KIỂU trước khi timer adapter abort; (2) decorator đọc `init.signal` — signal đã abort thì bail bằng `GdtError 429`, KHÔNG gọi GDT bằng signal chết (chặn "The operation was aborted" → transient → tính oan breaker, nợ backlog n=43). Test tổ hợp với `fetchWithRetry` THẬT: 2 ca trong `throttledTransport.test.ts`. Nếu muốn triệt tận gốc: hạ `maxAttempts` pha 1 xuống 2 như tiền lệ pha 2 (`deps.ts` makeDetailJobDeps) — để chủ dự án quyết sau khi có số liệu production (§8.2). |
 | Backfill dòng hàng (pha 2) và header (pha 1) giành cùng hạn ngạch | Trung bình | Sau U28 cả hai đều xin permit/request nên **chia sẻ công bằng** qua cùng một giỏ — đây là hệ quả TỐT, không phải rủi ro mới. |
 
 ## 8. Điểm cần chủ dự án quyết (KHÔNG chặn U28)
