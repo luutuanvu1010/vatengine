@@ -88,12 +88,23 @@
     "LIMITER_REFILL_PER_SEC": "2",
     "LIMITER_FAILURE_THRESHOLD": "5",
     "LIMITER_COOLDOWN_MS": "60000",
-    // H-B.4 — fan-out: giãn khởi động tenant trên ~5' (jitter) + hoãn backpressure ~60s
-    // (giỏ token đầy lại / breaker cooldown) + trần 10 lần reenqueue liên tiếp rồi rơi
-    // về dead-letter (chặn vòng lặp vô hạn khi kẹt lâu). Bỏ trống → mặc định fanout.ts.
+    // H-B.4 — fan-out: giãn khởi động tenant trên ~5' (jitter) + trần 10 lần reenqueue
+    // liên tiếp rồi rơi về dead-letter (chặn vòng lặp vô hạn khi kẹt lâu). Bỏ trống →
+    // mặc định fanout.ts.
     "FANOUT_JITTER_SPREAD_SEC": "300",
-    "FANOUT_BACKPRESSURE_DELAY_SEC": "60",
-    "FANOUT_MAX_BACKPRESSURE": "10"
+    // SỰ CỐ 2026-07-18 — nâng 60 → 300: cửa sổ phạt 429 của GDT quan sát được kéo dài
+    // NHIỀU GIỜ (lan_dong_bo: 05:29→09:10Z toàn 429), trong khi hoãn 60s làm mỗi job
+    // đập lại GDT mỗi phút — mỗi lần đập là CẢ chuỗi phân trang normal chạy lại từ đầu
+    // (429 thường rơi ở nhánh sco cuối chuỗi) → tự nuôi cửa sổ phạt. 300s × trần 10 =
+    // ~50' kiên nhẫn trước khi rơi về đường max_retries. Đánh đổi: khi GDT hồi sớm,
+    // job chờ tối đa 5' mới thử lại — chấp nhận (tôn trọng máy chủ thuế > tốc độ).
+    "FANOUT_BACKPRESSURE_DELAY_SEC": "300",
+    "FANOUT_MAX_BACKPRESSURE": "10",
+    // U25 AC3 (đóng drift 2026-07-18): giãn nhịp giữa hai request GDT trong một job
+    // header + backoff 429 khi thiếu Retry-After. Mặc định trong syncRetryConfig.ts;
+    // "0" = tắt tường minh. CHƯA KIỂM CHỨNG ngưỡng thật của GDT — chỉnh khi có số đo.
+    "SYNC_PAGE_MIN_INTERVAL_MS": "500",
+    "SYNC_RETRY_BACKOFF_MS": "3000"
   }
 
   // JWT_SECRET / bí mật egress nạp qua `wrangler secret put` — security.md.

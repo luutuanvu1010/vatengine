@@ -207,3 +207,36 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 **Ưu tiên đề xuất:** Trung bình.
 
 **Nguồn phát hiện:** review chéo `dod-auditor` (Finding 3), phiên 2026-07-18.
+
+## [2026-07-18] Sau U28: hợp nhất hai cơ chế kìm nhịp pha 1 + dedupe job backfill trùng
+
+**Ngày phát hiện:** 2026-07-18 (phiên chẩn đoán "1 tháng chưa kéo được dữ liệu").
+
+> **ĐÍNH CHÍNH cùng ngày:** bản đầu của mục này đề xuất "sco-429 → persist normal +
+> `hoan_thanh_mot_phan`, ưu tiên Cao" — **RÚT LẠI**. Phiên song song cùng ngày đã bác
+> tiền đề (xem `docs/plans/U28-plan.md` §0b, nhánh `claude/fix-subrequest-breaker`):
+> toàn bộ hoá đơn bán ra của tenant hiện tại là `sco` (normal = 0), nên "dữ liệu normal
+> bị vứt" gần như không tồn tại; tỷ lệ 429 nghiêng về sco chỉ là **phân bố khối lượng
+> request** (normal đứng trước, sco lãnh 429 ở cuối chuỗi). Gốc thật (xác thực 3 lớp):
+> pha 1 lấy **1 permit rồi bắn tới 42 request** — U28 (permit-per-request qua decorator
+> `GdtTransport`) là lời giải đã được duyệt kế hoạch. Ghép all-or-nothing normal+sco
+> chỉ còn đáng bàn khi có tenant TRỘN thật sự hai họ — chưa quan sát được.
+
+**Còn lại đáng làm (sau khi U28 hiện thực):**
+
+1. **Hợp nhất kìm nhịp:** PR #11 (vá nóng cùng ngày) wire `SYNC_PAGE_MIN_INTERVAL_MS=500`
+   (giãn nhịp bằng sleep — U25 AC3) vào pha 1. Khi U28 (permit-per-request) hoạt động,
+   hai cơ chế CHỒNG nhau → mỗi trang chờ ~2×500ms. Không sai nhưng lãng phí wall-time:
+   sau khi nghiệm thu U28 trên production, cân nhắc hạ `SYNC_PAGE_MIN_INTERVAL_MS`
+   → `"0"` (tắt tường minh, permit làm chủ nhịp) — chỉ đổi vars, không đổi code.
+2. **Dedupe job backfill trùng:** POST /backfill tính "tháng thiếu" từ `lan_dong_bo`,
+   nên tháng đang failed/đang backpressure vẫn bị enqueue LẠI mỗi lần người dùng bấm
+   (quan sát production: 2 run cùng tháng cùng phút, nhiều lần trong 07:38–09:10Z).
+   Dưới cửa sổ phạt 429, mỗi cú bấm nhân thêm tải đúng lúc tệ nhất. Hướng: tracker DO
+   đã có sẵn — kiểm "backfill đang sống cho (tài khoản, tháng, chiều)" trước khi enqueue.
+
+**Ưu tiên đề xuất:** Trung bình (cả hai đều là dọn-sau-U28; U28 mới là việc chính).
+
+**Nguồn phát hiện:** phiên chẩn đoán 2026-07-18 (bằng chứng `lan_dong_bo` production),
+đối chiếu `docs/plans/U28-plan.md` (phiên song song cùng ngày, nhánh
+`claude/fix-subrequest-breaker`).

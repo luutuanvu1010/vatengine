@@ -10,6 +10,7 @@ import type { EgressProbeDeps } from "./egressProbe";
 import { QUEUE_MAX_BATCH_BYTES, QUEUE_MAX_BATCH_COUNT, chunkForQueue } from "./fanout";
 import { dbRecorder, loadAccountToken } from "./recorder";
 import type { RunDetailJobDeps } from "./runDetailJob";
+import { resolveSyncRetryConfig } from "./syncRetryConfig";
 import { tenantLimiterClient } from "./tenantLimiter";
 import type { AnyDb, DetailSyncMessage, Env, RunJobDeps, SyncJobMessage } from "./types";
 
@@ -80,7 +81,10 @@ export function makeJobDeps(env: Env, db: AnyDb, msg: SyncJobMessage): RunJobDep
         await env.SYNC_QUEUE.sendBatch(chunk.map((body) => ({ body })));
       }
     },
-    syncParams: { includeSco: true },
+    // SỰ CỐ 2026-07-18: trước đây KHÔNG truyền `retry` → phân trang header bắn GDT
+    // không nghỉ (drift so với U25 AC3 "mặc định > 0") → 429 kéo dài giết run ở nhánh
+    // sco. Giãn nhịp + backoff 429 lấy từ vars (syncRetryConfig.ts).
+    syncParams: { includeSco: true, retry: resolveSyncRetryConfig(env) },
   };
 }
 
