@@ -191,11 +191,11 @@ một cách ẩu**.
 
 **Ngày phát hiện:** 2026-07-18 (cùng phiên trên).
 
-**Mô tả:** đã hạ `max_batch_size` 10 → 1 để mỗi job có trọn ngân sách 50
-subrequest/invocation (gói Free). Nhưng **CHƯA KIỂM CHỨNG** rằng 50 luôn đủ cho MỘT
-job: `queryInvoices` phân trang **2 nguồn** (normal + sco), mỗi trang 1 subrequest,
-cộng ghi DB + gọi Durable Object limiter. Một tenant nhiều hóa đơn/tháng/chiều vẫn có
-thể tự vượt 50 dù batch = 1.
+**Mô tả:** đã hạ `max_batch_size` 10 → **5** (ban đầu định 1, nhưng cùng ngày chủ dự án
+nâng **Workers Paid** ⇒ trần thành 1000 subrequest/invocation, gấp 20×, nên 1 là quá dè
+dặt). **CHƯA KIỂM CHỨNG** số subrequest thực tế của MỘT job nặng nhất: `queryInvoices`
+phân trang **2 nguồn** (normal + sco), mỗi trang 1 subrequest, cộng ghi DB + gọi Durable
+Object limiter. Chưa đo phân bố hóa đơn/tenant thật nên chưa khẳng định được biên an toàn.
 
 **Rủi ro nếu bỏ qua:** tenant lớn tiếp tục fail `"Too many subrequests"`, kỳ quá khứ
 không đồng bộ được — đúng triệu chứng gốc.

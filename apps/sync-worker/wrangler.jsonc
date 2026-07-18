@@ -8,10 +8,13 @@
 
   // Job đồng bộ nền có thể chạy dài (phân trang nhiều kỳ) — nâng trần CPU.
   // Cron wall-time 15' / CPU 15' nếu chu kỳ ≥ 1h (ADR-0001 §3).
-  // TẮT trên Free (2026-07-14): Workers Free KHÔNG hỗ trợ đặt `limits` (deploy lỗi 100328).
-  // Chạy với trần CPU mặc định Free 10ms/lần (I/O không tính) — job nặng có thể vượt →
-  // đây là chỗ smoke test sẽ lộ. KHÔI PHỤC cpu_ms khi nâng Paid.
-  // "limits": { "cpu_ms": 300000 },
+  // BẬT LẠI 2026-07-18: chủ dự án đã nâng **Workers Paid**, đúng điều kiện mà ghi chú
+  // cũ đặt ra ("KHÔI PHỤC cpu_ms khi nâng Paid"). Trước đó TẮT vì Free không hỗ trợ
+  // đặt `limits` (deploy lỗi 100328) và chạy với trần mặc định 10ms/lần.
+  // GIẢ THUYẾT (chưa kiểm chứng): trần CPU mặc định của Free là nguồn của
+  // "The operation was aborted" (n=43) trong sự cố 2026-07-18 — theo dõi sau deploy.
+  // Nếu deploy trả lỗi 100328 ⇒ gói Paid CHƯA hiệu lực, revert dòng này.
+  "limits": { "cpu_ms": 300000 },
 
   // Cron:
   //  - "0 3 * * *" (03:00 UTC = 10:00 VN): phát tán job đồng bộ — liệt kê account
@@ -35,23 +38,24 @@
         // (H-B.4: backpressure rate_limited/breaker_open KHÔNG dùng đường này — được
         // reenqueue message mới có delay ở consumer nên KHÔNG tính vào max_retries.)
         "max_retries": 5,
-        // SỰ CỐ 2026-07-18 — hạ 10 → 1. Ngân sách subrequest của Workers tính theo
+        // SỰ CỐ 2026-07-18 — hạ 10 → 5. Ngân sách subrequest của Workers tính theo
         // INVOCATION, không theo message: một lô 10 message header (mỗi message phân
-        // trang GDT + ghi DB + gọi DO limiter) vượt xa trần **50 subrequest/invocation
-        // của gói Free** → `lan_dong_bo` ghi n=61 lỗi "Too many subrequests by single
-        // Worker invocation" (bằng chứng: production, 05:30–06:15Z 2026-07-18), kéo
-        // theo mở circuit breaker và chặn toàn bộ đồng bộ.
-        // 1 message/invocation ⇒ mỗi job có TRỌN ngân sách 50 subrequest thay vì chia
-        // cho 10 job. Đánh đổi: thông lượng thấp hơn (bù bằng `max_concurrency`).
-        // NÂNG LẠI khi lên Workers Paid (1000/invocation) — lúc đó 10 là an toàn.
+        // trang GDT + ghi DB + gọi DO limiter) vượt trần 50/invocation của gói Free →
+        // `lan_dong_bo` ghi n=61 "Too many subrequests by single Worker invocation"
+        // (bằng chứng: production 05:30–06:15Z 2026-07-18), kéo theo mở circuit
+        // breaker và chặn toàn bộ đồng bộ.
         //
-        // CHƯA KIỂM CHỨNG: rằng 50 subrequest LUÔN đủ cho MỘT job. `queryInvoices`
-        // phân trang 2 nguồn (normal + sco), mỗi trang 1 subrequest, cộng ghi DB +
-        // gọi DO limiter — một tenant nhiều hóa đơn/tháng vẫn có thể tự vượt 50 dù
-        // batch=1. Chưa có số liệu phân bố hóa đơn/tenant thật để khẳng định. Nếu sau
-        // deploy vẫn còn "Too many subrequests", phải chia nhỏ theo TRANG (chunk kỳ)
-        // chứ không chỉ theo message — xem BACKLOG 2026-07-18.
-        "max_batch_size": 1,
+        // Chủ dự án đã nâng **Workers Paid** (2026-07-18) ⇒ trần thành 1000/invocation
+        // (gấp 20×), nên nguyên nhân cấp tính đã được gỡ ở tầng gói. Vẫn KHÔNG quay
+        // lại 10 ngay: vừa có sự cố thật, chọn 5 để còn biên an toàn ~2.5× cho tenant
+        // nhiều hóa đơn, đồng thời giữ thông lượng cao hơn hẳn mức 1. Có thể nâng lại
+        // 10 sau khi quan sát vài chu kỳ sạch.
+        //
+        // CHƯA KIỂM CHỨNG: số subrequest thực tế của MỘT job nặng nhất (phụ thuộc số
+        // trang × 2 nguồn normal+sco của tenant lớn nhất) — chưa đo phân bố hóa đơn
+        // thật. Nếu sau deploy vẫn còn "Too many subrequests", phải chia nhỏ theo
+        // TRANG (chunk kỳ) chứ không chỉ theo message — xem BACKLOG 2026-07-18.
+        "max_batch_size": 5,
         // H-B.4 — GIỚI HẠN đồng thời consumer: chặn bùng nổ invocation làm cạn pool
         // Hyperdrive/dồn dập GDT. Giá trị THẬN TRỌNG mặc định; tinh chỉnh trên staging
         // theo tải thật (H-A.4 tách Hyperdrive + H-B.5 sharding). CHƯA KIỂM CHỨNG số
