@@ -96,8 +96,11 @@ export interface FanoutEnv {
 }
 // Cron đồng bộ chạy 1 lần/ngày: giãn khởi động các tenant trên ~5' để không dồn dập.
 export const DEFAULT_JITTER_SPREAD_SEC = 300;
-// Backpressure: giỏ token tự đầy lại + breaker cooldown mặc định 60s → hoãn ~60s.
-export const DEFAULT_BACKPRESSURE_DELAY_SEC = 60;
+// Backpressure: SỰ CỐ 2026-07-18 — 60s là quá sát khi GDT phạt 429 theo cửa sổ NHIỀU
+// GIỜ (mỗi lần thử lại chạy lại cả chuỗi phân trang → tự nuôi cửa sổ phạt). Fallback
+// phải cùng giá trị an toàn với vars wrangler.jsonc (300s), để env nào quên set var
+// không âm thầm rơi lại đúng giá trị từng gây sự cố.
+export const DEFAULT_BACKPRESSURE_DELAY_SEC = 300;
 // Trần reenqueue backpressure liên tiếp trước khi rơi về dead-letter (~10×60s ≈ 10').
 // Tenant kẹt lâu hơn thế là bất thường → cần người/giám sát, không lặp mãi.
 export const DEFAULT_MAX_BACKPRESSURE = 10;
