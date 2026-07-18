@@ -33,6 +33,8 @@ Ba khẳng định trong bản đầu của plan này **đã bị bác bỏ bằ
 2. **`UPDATE`/`DELETE` dưới RLS KHÔNG ném lỗi** — chúng chạy bình thường và ảnh hưởng **0 hàng**. Chỉ `INSERT` ném `new row violates row-level security policy`. ⇒ Test khẳng định `rejects.toThrow()` cho UPDATE sẽ **đỏ**; phải khẳng định *dữ liệu không đổi* thay vì trông chờ exception. Mã ứng dụng nào trông chờ exception khi ghi sẽ "thành công" im lặng — U18 phải biết điều này.
 3. **Test kiểu "cấp mỗi USAGE rồi khẳng định lệnh ghi ném lỗi" LUÔN XANH.** Postgres kiểm quyền `GRANT` **trước** RLS, nên lỗi đến từ tầng GRANT. Mutation test ở Task 2 chứng minh: tiêm `CREATE POLICY ... FOR ALL USING(true) WITH CHECK(true)` mà test cũ vẫn xanh. ⇒ Muốn gác tầng RLS phải **(a)** khẳng định trực tiếp trên `pg_policies`, và **(b)** cấp **đủ** quyền ghi cho role test trước khi khẳng định RLS chặn — đó mới là cấu hình production (`app-role.sql:28` cấp `INSERT/UPDATE/DELETE ON ALL TABLES`).
 
+4. **`GRANT SELECT, INSERT ON audit_log_admin TO PUBLIC` là lỗ hổng bảo mật — đã vá.** Đo được ở Task 3: một role chỉ có `GRANT USAGE ON SCHEMA` đọc được **toàn bộ** nhật ký quản trị xuyên-tenant kể cả cột `chi_tiet`, và chèn được bản ghi **mạo danh**, trong khi cùng role đó bị chặn ở `audit_log` của khách và ở `hoa_don`. Nguyên nhân: câu `GRANT … TO PUBLIC` được chép từ `goi_dich_vu` sang mà **không chép theo tiền đề biện minh nó** — *"bảng không chứa dữ liệu tenant"*. Tiền đề đó đúng với bảng gói, **sai** với nhật ký *xuyên-tenant*. Chủ dự án chốt mô hình **chỉ-ghi**: RLS chặn đọc, giữ `INSERT`.
+
 Lý do biện minh `GRANT SELECT ... TO PUBLIC` trong bản đầu ("an toàn vì đường ghi đã bị RLS chặn") cũng **không đứng vững** — an toàn của đường ghi không biện minh cho việc mở đường đọc. Lý do đúng: **bảng không chứa dữ liệu tenant nào**, nên không có bề mặt rò rỉ chéo giữa doanh nghiệp khách hàng.
 
 ## ⚠️ Hai cạm bẫy đã biết — đọc trước khi viết migration
@@ -736,9 +738,22 @@ CREATE TRIGGER audit_log_admin_no_truncate
 BEFORE TRUNCATE ON "audit_log_admin"
 FOR EACH STATEMENT
 EXECUTE FUNCTION audit_log_admin_no_mutate();--> statement-breakpoint
+-- audit_log_admin chứa hành động XUYÊN-TENANT ⇒ KHÔNG mở đọc cho PUBLIC như
+-- goi_dich_vu/cau_hinh_he_thong (hai bảng đó không có dữ liệu tenant; bảng này thì có).
+-- Hai lớp như phần còn lại của lược đồ: GRANT hẹp + RLS fail-closed.
 REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log_admin" FROM PUBLIC;--> statement-breakpoint
-GRANT SELECT, INSERT ON "audit_log_admin" TO PUBLIC;
+ALTER TABLE "audit_log_admin" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "audit_log_admin" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+DROP POLICY IF EXISTS "audit_log_admin_chi_ghi" ON "audit_log_admin";--> statement-breakpoint
+-- CHỈ policy INSERT: append được (U18 ghi), KHÔNG đọc được. Đường đọc mở ở U18 bằng
+-- policy FOR SELECT TO <role_admin> — không mở sẵn khi chưa có consumer (YAGNI).
+CREATE POLICY "audit_log_admin_chi_ghi" ON "audit_log_admin" FOR INSERT WITH CHECK (true);--> statement-breakpoint
+GRANT INSERT ON "audit_log_admin" TO PUBLIC;
 ```
+
+> **⚠️ Cho U18 — hai điều bảng này KHÔNG bảo đảm:**
+> 1. **Không xác thực danh tính.** `WITH CHECK (true)` là no-op và `nguoi_thuc_hien` là `text` tự do không FK. Đo được: mọi role có `INSERT` đều chèn được bản ghi mạo danh bất kỳ admin nào. Trigger giữ *tính bất biến*, **không** giữ *tính xác thực* — U18 phải tự bảo đảm điều đó ở tầng ứng dụng.
+> 2. **Không đọc được.** Cố ý. U18 muốn hiển thị nhật ký thì phải thêm `CREATE POLICY … FOR SELECT TO <role_admin>` — và role đó phải **khác** role app phục vụ khách hàng.
 
 - [ ] **Step 5: Chạy test, xác nhận XANH**
 
