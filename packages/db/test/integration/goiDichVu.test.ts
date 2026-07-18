@@ -210,4 +210,46 @@ describe("U17a — audit_log_admin (integration, PGlite)", () => {
   it("append-only: TRUNCATE cũng bị chặn (trigger statement-level)", async () => {
     await expect(db.execute(sql`truncate audit_log_admin`)).rejects.toThrow();
   });
+
+  it("role app CÓ đủ GRANT SELECT vẫn đọc ra 0 hàng (RLS gác, không phải GRANT gác)", async () => {
+    // Ghi một hàng bằng owner (superuser bypass RLS) trước để có dữ liệu thật mà đọc.
+    await db.execute(
+      sql`insert into audit_log_admin (hanh_dong, nguoi_thuc_hien) values ('x', 'admin@vd.vn')`,
+    );
+
+    await db.execute(sql`create role app_user nosuperuser`);
+    await db.execute(sql`grant usage on schema public to app_user`);
+    // Cấp ĐỦ quyền SELECT — nếu chỉ cấp USAGE schema rồi khẳng định lỗi thì test LUÔN
+    // XANH vì Postgres kiểm GRANT trước RLS (đây chính là bẫy review đã chỉ ra).
+    await db.execute(sql`grant select on audit_log_admin to app_user`);
+    await db.execute(sql`set role app_user`);
+
+    const res = (await db.execute(sql`select id from audit_log_admin`)) as {
+      rows: Array<{ id: string }>;
+    };
+    expect(res.rows).toHaveLength(0);
+
+    await db.execute(sql`reset role`);
+  });
+
+  it("role app vẫn INSERT được (đường ghi cho U18 còn nguyên sau khi bật RLS)", async () => {
+    await db.execute(sql`create role app_user nosuperuser`);
+    await db.execute(sql`grant usage on schema public to app_user`);
+    await db.execute(sql`grant insert on audit_log_admin to app_user`);
+    await db.execute(sql`set role app_user`);
+
+    await expect(
+      db.execute(
+        sql`insert into audit_log_admin (hanh_dong, nguoi_thuc_hien) values ('doi_nguong', 'admin@vd.vn')`,
+      ),
+    ).resolves.not.toThrow();
+
+    await db.execute(sql`reset role`);
+
+    // Xác nhận bằng owner (app_user không đọc lại được — đã kiểm ở test trên).
+    const res = (await db.execute(
+      sql`select hanh_dong from audit_log_admin where hanh_dong = 'doi_nguong'`,
+    )) as { rows: Array<{ hanh_dong: string }> };
+    expect(res.rows).toHaveLength(1);
+  });
 });

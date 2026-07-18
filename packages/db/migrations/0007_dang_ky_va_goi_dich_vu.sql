@@ -121,5 +121,14 @@ CREATE TRIGGER audit_log_admin_no_truncate
 BEFORE TRUNCATE ON "audit_log_admin"
 FOR EACH STATEMENT
 EXECUTE FUNCTION audit_log_admin_no_mutate();--> statement-breakpoint
+-- audit_log_admin chứa hành động XUYÊN-TENANT ⇒ KHÔNG mở đọc cho PUBLIC như
+-- goi_dich_vu/cau_hinh_he_thong (hai bảng đó không có dữ liệu tenant; bảng này thì có).
+-- Hai lớp như phần còn lại của lược đồ: GRANT hẹp + RLS fail-closed.
 REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log_admin" FROM PUBLIC;--> statement-breakpoint
-GRANT SELECT, INSERT ON "audit_log_admin" TO PUBLIC;
+ALTER TABLE "audit_log_admin" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "audit_log_admin" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+DROP POLICY IF EXISTS "audit_log_admin_chi_ghi" ON "audit_log_admin";--> statement-breakpoint
+-- CHỈ policy INSERT: append được (U18 ghi), KHÔNG đọc được. Đường đọc mở ở U18 bằng
+-- policy FOR SELECT TO <role_admin> — không mở sẵn khi chưa có consumer (YAGNI).
+CREATE POLICY "audit_log_admin_chi_ghi" ON "audit_log_admin" FOR INSERT WITH CHECK (true);--> statement-breakpoint
+GRANT INSERT ON "audit_log_admin" TO PUBLIC;

@@ -10,6 +10,16 @@ import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 // production là rủi ro hồi quy; tách bảng cũng hợp ranh giới bảo mật U18.
 //
 // U17a chỉ TẠO bảng. Đường ghi vào nó là U18.
+//
+// BẢO VỆ (sửa sau review Task 3 — bản đầu chỉ GRANT SELECT,INSERT TO PUBLIC không RLS,
+// bị đo được là cho phép MỌI role đọc + chèn giả mạo, kể cả role không có quyền bảng nào):
+// bảng chỉ-ghi. RLS ENABLE+FORCE với ĐÚNG MỘT policy FOR INSERT WITH CHECK(true) — không
+// có policy SELECT/UPDATE/DELETE nào ⇒ mọi role không phải owner/BYPASSRLS đọc ra 0 hàng
+// dù có GRANT SELECT. GRANT thu hẹp còn đúng INSERT (REVOKE UPDATE/DELETE/TRUNCATE giữ
+// nguyên từ trước). Trigger append-only (bên dưới) vẫn giữ vai trò cũ: chặn owner/BYPASSRLS
+// sửa/xoá — RLS không chi phối các role đó. Đường ĐỌC hợp lệ (super-admin xem log) sẽ mở ở
+// U18 bằng policy FOR SELECT TO <role_admin> khi có consumer thật (YAGNI, xem migration
+// 0007 khối audit_log_admin).
 export const auditLogAdmin = pgTable("audit_log_admin", {
   id: uuid("id").primaryKey().defaultRandom(),
   hanhDong: text("hanh_dong").notNull(),
