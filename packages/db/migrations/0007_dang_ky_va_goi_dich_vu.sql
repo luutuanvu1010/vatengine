@@ -131,4 +131,33 @@ DROP POLICY IF EXISTS "audit_log_admin_chi_ghi" ON "audit_log_admin";--> stateme
 -- CHỈ policy INSERT: append được (U18 ghi), KHÔNG đọc được. Đường đọc mở ở U18 bằng
 -- policy FOR SELECT TO <role_admin> — không mở sẵn khi chưa có consumer (YAGNI).
 CREATE POLICY "audit_log_admin_chi_ghi" ON "audit_log_admin" FOR INSERT WITH CHECK (true);--> statement-breakpoint
-GRANT INSERT ON "audit_log_admin" TO PUBLIC;
+GRANT INSERT ON "audit_log_admin" TO PUBLIC;--> statement-breakpoint
+
+-- ── Backfill + FK tenants.goi_dich_vu (QĐ-7) ───────────────────────────────────
+-- Cột này đang chứa NHÃN, không phải mã: bằng chứng me.route.test.ts:38 dùng
+-- goiDichVu: "Miễn phí". Thêm FK mà không backfill trước sẽ vỡ trên dữ liệu thật.
+--
+-- ⚠️ CẢNH BÁO VẬN HÀNH: tenants bật FORCE RLS (0000:128) với policy
+--    id = nullif(current_setting('app.tenant_id', true), '')::uuid
+-- Lúc chạy migration, GUC `app.tenant_id` KHÔNG được đặt → id = NULL → 0 hàng khớp →
+-- câu UPDATE dưới đây đổi 0 hàng mà KHÔNG báo lỗi. Nó chỉ chạy được vì role migrate có
+-- BYPASSRLS (Neon `neondb_owner` — xem chú thích 0001) hoặc là superuser.
+-- ⇒ SAU KHI `make migrate` TRÊN PRODUCTION, PHẢI KIỂM BẰNG TAY:
+--      SELECT count(*) FROM tenants WHERE goi_dich_vu NOT IN (SELECT ma FROM goi_dich_vu);
+--    Kết quả phải = 0. Khác 0 nghĩa là backfill bị RLS nuốt — DỪNG, không deploy apps/api.
+UPDATE "tenants" SET "goi_dich_vu" = 'free'
+WHERE "goi_dich_vu" IS NULL
+   OR "goi_dich_vu" NOT IN (SELECT "ma" FROM "goi_dich_vu");--> statement-breakpoint
+
+ALTER TABLE "tenants" ALTER COLUMN "goi_dich_vu" SET DEFAULT 'free';--> statement-breakpoint
+ALTER TABLE "tenants" ALTER COLUMN "goi_dich_vu" SET NOT NULL;--> statement-breakpoint
+
+-- ON DELETE RESTRICT: không cho xóa gói khi còn tenant đang dùng.
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT FROM pg_constraint WHERE conname = 'tenants_goi_dich_vu_fk'
+  ) THEN
+    ALTER TABLE "tenants" ADD CONSTRAINT "tenants_goi_dich_vu_fk"
+      FOREIGN KEY ("goi_dich_vu") REFERENCES "goi_dich_vu"("ma") ON DELETE RESTRICT;
+  END IF;
+END $$;

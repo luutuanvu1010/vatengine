@@ -3,6 +3,8 @@
 // drizzle KHÔNG phát ENABLE RLS cho bảng không khai báo policy (bằng chứng 0000 chỉ bật
 // cho 7 bảng có tenantIsolationPolicy), và bảng mới KHÔNG thừa hưởng GRANT cũ
 // (app-role.sql:28 là GRANT ON ALL TABLES chạy một lần; ALTER DEFAULT PRIVILEGES = 0).
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
@@ -251,5 +253,85 @@ describe("U17a — audit_log_admin (integration, PGlite)", () => {
       sql`select hanh_dong from audit_log_admin where hanh_dong = 'doi_nguong'`,
     )) as { rows: Array<{ hanh_dong: string }> };
     expect(res.rows).toHaveLength(1);
+  });
+});
+
+describe("U17a — backfill tenants.goi_dich_vu (QĐ-7)", () => {
+  it("KHẲNG ĐỊNH migration 0007 thật sự backfill hàng cũ, không âm thầm 0 hàng", async () => {
+    // CẠM BẪY: tenants bật FORCE RLS (0000:128) với policy id = current_setting
+    // ('app.tenant_id'). Lúc migrate, GUC đó KHÔNG được đặt → id = NULL → 0 hàng khớp →
+    // UPDATE không đổi gì mà KHÔNG báo lỗi. Nó chỉ chạy được nhờ role migrate tình cờ có
+    // BYPASSRLS (Neon neondb_owner) hoặc superuser (PGlite) — giả định phụ thuộc môi
+    // trường. Test này tồn tại để nó không lọt im lặng.
+    //
+    // PHẢI áp từng migration THEO THỨ TỰ: 0000→0006, chèn tenant mang NHÃN cũ, RỒI mới áp
+    // 0007. Gọi migrate() một lần (áp cả 0007) rồi chạy lại câu UPDATE bằng tay sẽ chứng
+    // minh SAI THỨ: nó chỉ cho thấy "một câu tương đương chạy được", không cho thấy câu
+    // TRONG 0007 đã đổi hàng thật.
+    const client = new PGlite();
+    const db = drizzle(client, { schema });
+
+    const thuMuc = MIGRATIONS;
+    const cacFile = (await readdir(thuMuc)).filter((f) => f.endsWith(".sql")).sort(); // 0000_… → 0007_… theo thứ tự tên file
+
+    async function apFile(ten: string): Promise<void> {
+      const noiDung = await readFile(join(thuMuc, ten), "utf8");
+      // drizzle phân tách câu bằng dấu mốc này; áp từng câu để giữ đúng thứ tự.
+      for (const cau of noiDung.split("--> statement-breakpoint")) {
+        const s = cau.trim();
+        if (s) await db.execute(sql.raw(s));
+      }
+    }
+
+    const truoc0007 = cacFile.filter((f) => !f.startsWith("0007"));
+    const file0007 = cacFile.find((f) => f.startsWith("0007"));
+    if (!file0007) throw new Error("không tìm thấy migration 0007");
+
+    for (const f of truoc0007) await apFile(f);
+
+    // Dữ liệu CŨ đúng như production: cột giữ NHÃN, chưa có bảng gói nên chưa có FK.
+    await db.execute(
+      sql`insert into tenants (ten, mst, goi_dich_vu) values ('Cty Cũ', '0100000099', 'Miễn phí')`,
+    );
+
+    // Áp 0007 — chính nó phải backfill.
+    await apFile(file0007);
+
+    // Không còn hàng nào mang nhãn cũ, và hàng đó nay trỏ đúng mã 'free'.
+    const conNhan = (await db.execute(
+      sql`select count(*)::int as n from tenants where goi_dich_vu = 'Miễn phí'`,
+    )) as { rows: Array<{ n: number }> };
+    expect(conNhan.rows[0]?.n).toBe(0);
+
+    const hang = (await db.execute(
+      sql`select goi_dich_vu from tenants where mst = '0100000099'`,
+    )) as { rows: Array<{ goi_dich_vu: string }> };
+    expect(hang.rows[0]?.goi_dich_vu).toBe("free");
+
+    // Bất biến tổng: không tenant nào trỏ tới gói không tồn tại (chính là lệnh kiểm tay
+    // bắt buộc sau `make migrate` trên production).
+    const mocoi = (await db.execute(
+      sql`select count(*)::int as n from tenants
+          where goi_dich_vu not in (select ma from goi_dich_vu)`,
+    )) as { rows: Array<{ n: number }> };
+    expect(mocoi.rows[0]?.n).toBe(0);
+  });
+
+  it("FK chặn gán gói không tồn tại", async () => {
+    const db = await freshDb();
+    await expect(
+      db.execute(
+        sql`insert into tenants (ten, mst, goi_dich_vu) values ('Cty B', '0100000098', 'khong_co')`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("tenant tạo mới không khai gói → mặc định 'free'", async () => {
+    const db = await freshDb();
+    await db.execute(sql`insert into tenants (ten, mst) values ('Cty C', '0100000097')`);
+    const res = (await db.execute(
+      sql`select goi_dich_vu from tenants where mst = '0100000097'`,
+    )) as { rows: Array<{ goi_dich_vu: string }> };
+    expect(res.rows[0]?.goi_dich_vu).toBe("free");
   });
 });

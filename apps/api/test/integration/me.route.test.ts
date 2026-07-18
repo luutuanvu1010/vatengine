@@ -27,7 +27,9 @@ describe("GET /me — hồ sơ tenant + vai", () => {
   });
 
   it("trả ten/mst/goiDichVu + role từ token", async () => {
-    const tid = await seedTenantFull(db, "Công ty TNHH Tour Đảo", "4201568932", "Miễn phí");
+    // U17a-4: cột goiDichVu nay chứa MÃ (FK → goi_dich_vu.ma), không còn nhãn tiếng Việt
+    // "Miễn phí" — nhãn sẽ quay lại ở Task 7 qua join bảng gói.
+    const tid = await seedTenantFull(db, "Công ty TNHH Tour Đảo", "4201568932", "free");
     const app = createApp(injectDb(db));
     const token = await tokenFor(tid, { role: "ke_toan_truong" });
     const res = await app.request("/me", { headers: bearer(token) }, makeEnv());
@@ -35,19 +37,19 @@ describe("GET /me — hồ sơ tenant + vai", () => {
     expect(await res.json()).toEqual({
       ten: "Công ty TNHH Tour Đảo",
       mst: "4201568932",
-      goiDichVu: "Miễn phí",
+      goiDichVu: "free",
       banQuyen: "Mặc định",
       ghiChu: null,
       role: "ke_toan_truong",
     });
   });
 
-  it("goiDichVu null khi chưa đặt gói", async () => {
+  it("goiDichVu mặc định 'free' khi chưa đặt gói (U17a-4: cột nay NOT NULL DEFAULT 'free')", async () => {
     const tid = await seedTenantFull(db, "DN X", "0100000009", null);
     const app = createApp(injectDb(db));
     const res = await app.request("/me", { headers: bearer(await tokenFor(tid)) }, makeEnv());
     expect(res.status).toBe(200);
-    expect((await res.json<{ goiDichVu: string | null }>()).goiDichVu).toBeNull();
+    expect((await res.json<{ goiDichVu: string | null }>()).goiDichVu).toBe("free");
   });
 
   it("cả 3 vai đều gọi được (kế toán)", async () => {
@@ -65,8 +67,10 @@ describe("GET /me — hồ sơ tenant + vai", () => {
   });
 
   it("cách ly: token tenant A không lộ tenant B (chỉ trả tenant của token)", async () => {
-    const a = await seedTenantFull(db, "Tenant A", "0100000011", "Miễn phí");
-    await seedTenantFull(db, "Tenant B", "0100000012", "Trả phí");
+    // U17a-4: cả hai đều dùng mã 'free' — chỉ có gói này được seed ở migration 0007;
+    // gói trả phí thật sẽ thêm ở Task 7.
+    const a = await seedTenantFull(db, "Tenant A", "0100000011", "free");
+    await seedTenantFull(db, "Tenant B", "0100000012", "free");
     const app = createApp(injectDb(db));
     const res = await app.request("/me", { headers: bearer(await tokenFor(a)) }, makeEnv());
     expect((await res.json<{ ten: string }>()).ten).toBe("Tenant A");
