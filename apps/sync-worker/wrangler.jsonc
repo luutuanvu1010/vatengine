@@ -35,7 +35,16 @@
         // (H-B.4: backpressure rate_limited/breaker_open KHÔNG dùng đường này — được
         // reenqueue message mới có delay ở consumer nên KHÔNG tính vào max_retries.)
         "max_retries": 5,
-        "max_batch_size": 10,
+        // SỰ CỐ 2026-07-18 — hạ 10 → 1. Ngân sách subrequest của Workers tính theo
+        // INVOCATION, không theo message: một lô 10 message header (mỗi message phân
+        // trang GDT + ghi DB + gọi DO limiter) vượt xa trần **50 subrequest/invocation
+        // của gói Free** → `lan_dong_bo` ghi n=61 lỗi "Too many subrequests by single
+        // Worker invocation" (bằng chứng: production, 05:30–06:15Z 2026-07-18), kéo
+        // theo mở circuit breaker và chặn toàn bộ đồng bộ.
+        // 1 message/invocation ⇒ mỗi job có trọn 50 subrequest. Đánh đổi: thông lượng
+        // thấp hơn (bù bằng `max_concurrency`). NÂNG LẠI khi lên Workers Paid
+        // (1000 subrequest/invocation) — lúc đó 10 là an toàn.
+        "max_batch_size": 1,
         // H-B.4 — GIỚI HẠN đồng thời consumer: chặn bùng nổ invocation làm cạn pool
         // Hyperdrive/dồn dập GDT. Giá trị THẬN TRỌNG mặc định; tinh chỉnh trên staging
         // theo tải thật (H-A.4 tách Hyperdrive + H-B.5 sharding). CHƯA KIỂM CHỨNG số
