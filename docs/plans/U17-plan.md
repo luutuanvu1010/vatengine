@@ -222,7 +222,19 @@ UI đăng ký (U20) · Admin API/duyệt (U18) · gửi email (U18) · 2FA (sau,
 
 `make lint` sạch · `make test` xanh · coverage không tụt · không log bí mật/mật khẩu · audit `dang_ky` + `login_fail_chua_duyet` đủ · `make migrate` chạy sạch · **review chéo `security-reviewer`** (chạm cách ly + cổng công khai + sửa hàm SECURITY DEFINER) · commit nhỏ.
 
-## 7. Vận hành
+## 7. Tách đơn vị giao hàng (QĐ-10, 2026-07-18)
+
+Sau khi tích hợp QĐ-5..9, U17 nặng ~3 đơn vị — vi phạm kỷ luật *"mỗi lần chỉ một đơn vị"* của Hiến pháp và tạo khối review quá lớn cho `security-reviewer` (cổng công khai mới + hàm bỏ-qua-RLS sửa đổi + 3 bảng RLS tay + middleware chặn được toàn bộ khách, cùng lúc). **Giữ nguyên spec này**, chia làm ba lần giao:
+
+| Đơn vị | Nội dung | Phụ thuộc |
+|---|---|---|
+| **U17a** | §3.1 migration `0007` (3 bảng mới, backfill+FK, RLS/GRANT tay) · `clampInt`/`clampNumber` · phân giải config DB→env→`DEFAULT_*` · §3.5 `getGioiHanTkThue` theo gói · nhãn gói ở `GET /me` + `SettingsPage` | — |
+| **U17b** | §3.2 `POST /dang-ky` · `SignupLimiter` + wrangler `v5` · §3.4 `validateEmailDangKy` · §3.3 cổng trạng thái login + sửa `auth_lookup_user` | U17a |
+| **U17c** | §3.6 middleware rate-limit `/invoices` `/exports` `/reconcile`, ngưỡng đọc từ gói | U17a |
+
+Mỗi đơn vị: một nhánh, một PR, qua `make lint` + `make test` + review chéo trước khi sang đơn vị kế. **U17a xong là nền cho "Admin sửa ngưỡng" đã đủ** (đường ghi vẫn thuộc U18).
+
+## 8. Vận hành
 
 - Worktree: `/Users/tuanbao/Documents/Projects/vat-u17`, nhánh `feat/u17-dang-ky-goi-dich-vu`, cắt từ **`origin/feat/cloudflare-stack-u0` (`7f5ceae`)** — bản local của trunk đang **chậm 11 commit**, không dùng.
 - Worktree mới **cần `npm ci`** trước khi tin `make lint`/`make test` (đã chạy, exit 0).
