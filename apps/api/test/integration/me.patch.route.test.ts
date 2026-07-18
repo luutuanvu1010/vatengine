@@ -44,6 +44,19 @@ describe("PATCH /me — sửa hồ sơ tenant (chỉ quan_tri)", () => {
     expect((await get.json<{ ten: string }>()).ten).toBe("Tên mới");
   });
 
+  it("U17a-7 fix: PATCH /me trả kèm goiDichVuTen (nhãn tiếng Việt), khớp GET /me", async () => {
+    // Bug đã kiểm chứng: PATCH .returning() không join bảng gói nên thiếu goiDichVuTen,
+    // khiến FE rơi về mã thô "free" ngay sau khi Lưu (SettingsPage: goiDichVuTen ?? goiDichVu).
+    const tid = await seedTenant(db, "Tên cũ", "0100000199");
+    const app = createApp(injectDb(db));
+    const token = await tokenFor(tid, { role: "quan_tri" });
+    const res = await app.request("/me", patchReq(token, { ten: "Tên mới" }), makeEnv());
+    expect(res.status).toBe(200);
+    const json = await res.json<{ goiDichVu: string; goiDichVuTen: string }>();
+    expect(json.goiDichVu).toBe("free");
+    expect(json.goiDichVuTen).toBe("Miễn phí");
+  });
+
   it("vai ke_toan → 403, KHÔNG ghi", async () => {
     const tid = await seedTenant(db, "Tên cũ", "0100000101");
     const app = createApp(injectDb(db));

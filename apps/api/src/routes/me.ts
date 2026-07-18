@@ -7,6 +7,9 @@
 // goi_dich_vu; `goiDichVu` giữ nguyên là MÃ. Không thêm trường nhạy cảm nào khác.
 // U-b — PATCH /me: chỉ quan_tri sửa ten/ghiChu; RBAC 403; cách ly tenant; strict body;
 // ghi 1 audit_log "cap_nhat_cau_hinh" (không lộ giá trị, chỉ tên trường).
+// U17a-7 (bugfix hiển thị) — PATCH cũng trả `goiDichVuTen` như GET /me (đọc lại kèm
+// leftJoin trong cùng transaction sau UPDATE). Trước sửa: PATCH chỉ `.returning()` cột
+// tenants nên thiếu goiDichVuTen → FE rơi về mã thô "free" ngay sau khi Lưu.
 import { auditLog, goiDichVu, tenants, withTenant } from "@vat/db";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -85,17 +88,7 @@ export function meRoutes(deps: AppDeps) {
         const set: { ten?: string; ghiChu?: string | null } = {};
         if (parsed.data.ten !== undefined) set.ten = parsed.data.ten;
         if (parsed.data.ghiChu !== undefined) set.ghiChu = parsed.data.ghiChu;
-        const updated = await tx
-          .update(tenants)
-          .set(set)
-          .where(eq(tenants.id, tenantId))
-          .returning({
-            ten: tenants.ten,
-            mst: tenants.mst,
-            goiDichVu: tenants.goiDichVu,
-            banQuyen: tenants.banQuyen,
-            ghiChu: tenants.ghiChu,
-          });
+        await tx.update(tenants).set(set).where(eq(tenants.id, tenantId));
         // Audit "đổi cấu hình tenant" (append). chi_tiet chỉ TÊN trường, không giá trị.
         await tx.insert(auditLog).values({
           tenantId,
@@ -103,10 +96,36 @@ export function meRoutes(deps: AppDeps) {
           doiTuong: "tenant",
           chiTiet: { fields: Object.keys(set) },
         });
-        return updated[0] ?? null;
+        // U17a-7 fix — bug đã xác nhận: `.returning()` của Drizzle không join được nên
+        // response PATCH thiếu `goiDichVuTen`, khiến FE (SettingsPage) rơi về mã thô
+        // "free" ngay sau khi Lưu. Đọc lại kèm nhãn gói (leftJoin, giống GET /me) trong
+        // CÙNG transaction sau UPDATE để bảo đảm nhất quán và không tách rời hai bước ghi.
+        const rows = await tx
+          .select({
+            ten: tenants.ten,
+            mst: tenants.mst,
+            goiDichVu: tenants.goiDichVu,
+            goiDichVuTen: goiDichVu.ten,
+            banQuyen: tenants.banQuyen,
+            ghiChu: tenants.ghiChu,
+          })
+          .from(tenants)
+          .leftJoin(goiDichVu, eq(tenants.goiDichVu, goiDichVu.ma))
+          .where(eq(tenants.id, tenantId));
+        return rows[0] ?? null;
       });
       if (!row) return c.json({ error: "not_found" }, 404);
-      return c.json({ ...row, role });
+      return c.json({
+        ten: row.ten,
+        mst: row.mst,
+        goiDichVu: row.goiDichVu,
+        // Fallback về mã khi không khớp bảng gói (gói bị xóa) — PATCH không được vỡ vì
+        // thiếu hàng gói, giống GET /me.
+        goiDichVuTen: row.goiDichVuTen ?? row.goiDichVu,
+        banQuyen: row.banQuyen,
+        ghiChu: row.ghiChu,
+        role,
+      });
     } finally {
       await close();
     }
