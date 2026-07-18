@@ -6,7 +6,9 @@ import { Card, EmptyState, ErrorState, Loading } from "../../components/ui/primi
 import { api } from "../../lib/apiClient";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
 import { formatMoney } from "../../lib/format";
+import { canManageTaxAccounts } from "../../lib/rbac";
 import type { InvoiceFilter } from "../../types/api";
+import { useAuth } from "../auth/auth-context";
 import { FilterBar } from "./FilterBar";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { InvoiceTable } from "./InvoiceTable";
@@ -16,6 +18,9 @@ import { useRangeBackfill } from "./useRangeBackfill";
 const LIMIT = 50;
 
 export function InvoicesPage() {
+  const { me } = useAuth();
+  // U27-B3: chỉ vai quản lý tài khoản thuế mới đồng bộ được (khớp RBAC server /tax-accounts).
+  const canSync = canManageTaxAccounts(me?.role ?? "ke_toan");
   const [filter, setFilter] = useState<InvoiceFilter>(() => loadInvoiceFilter());
   const [offset, setOffset] = useState(0);
 
@@ -41,10 +46,11 @@ export function InvoicesPage() {
 
   // U22 B7 — MỘT instance hook (tránh backfill trùng): nút "Đồng bộ khoảng này" + tự chạy
   // khi kỳ đã lọc RỖNG (không để màn rỗng gây hiểu nhầm). Hook tự lo trường hợp thiếu khoảng.
+  // Gate cả auto-backfill lẫn panel để ke_toan không tự kích hoạt gọi API rồi 403.
   const backfill = useRangeBackfill({
     tuNgay: filter.tuNgay,
     denNgay: filter.denNgay,
-    auto: listEmpty,
+    auto: listEmpty && canSync,
   });
   const backfillRunning = backfill.state.kind === "dang_lay";
 
@@ -57,7 +63,7 @@ export function InvoicesPage() {
 
       <Card style={{ marginBottom: "var(--sp-4)" }}>
         <FilterBar value={filter} onApply={applyFilter} />
-        {filter.tuNgay && filter.denNgay && (
+        {canSync && filter.tuNgay && filter.denNgay && (
           <RangeSyncPanel tuNgay={filter.tuNgay} denNgay={filter.denNgay} backfill={backfill} />
         )}
         <div
