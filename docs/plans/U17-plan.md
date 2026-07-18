@@ -228,11 +228,36 @@ Sau khi tích hợp QĐ-5..9, U17 nặng ~3 đơn vị — vi phạm kỷ luật
 
 | Đơn vị | Nội dung | Phụ thuộc |
 |---|---|---|
-| **U17a** | §3.1 migration `0007` (3 bảng mới, backfill+FK, RLS/GRANT tay) · `clampInt`/`clampNumber` · phân giải config DB→env→`DEFAULT_*` · §3.5 `getGioiHanTkThue` theo gói · nhãn gói ở `GET /me` + `SettingsPage` | — |
+| **U17a** ✅ **XONG 2026-07-19** | §3.1 migration `0007` (3 bảng mới, backfill+FK, RLS/GRANT tay) · `clampInt`/`clampNumber` · phân giải config DB→env→`DEFAULT_*` · §3.5 `getGioiHanTkThue` theo gói · nhãn gói ở `GET /me` + `SettingsPage` | — |
 | **U17b** | §3.2 `POST /dang-ky` · `SignupLimiter` + wrangler `v5` · §3.4 `validateEmailDangKy` · §3.3 cổng trạng thái login + sửa `auth_lookup_user` | U17a |
 | **U17c** | §3.6 middleware rate-limit `/invoices` `/exports` `/reconcile`, ngưỡng đọc từ gói | U17a |
 
 Mỗi đơn vị: một nhánh, một PR, qua `make lint` + `make test` + review chéo trước khi sang đơn vị kế. **U17a xong là nền cho "Admin sửa ngưỡng" đã đủ** (đường ghi vẫn thuộc U18).
+
+## 7b. U17a — kết quả kiểm chứng thật (2026-07-19)
+
+Nhánh `feat/u17-dang-ky-goi-dich-vu`, 20 commit. `make lint` sạch · `make test` **exit 0, 131 file test / 850 test xanh**. Review chéo `security-reviewer`: **ĐẠT**, không Critical.
+
+**Bốn khẳng định của plan bị đo đạc BÁC BỎ** (đã sửa tại chỗ, xem §ERRATA của `U17a-plan-thuc-thi.md`):
+
+1. *"FORCE RLS chặn cả owner"* — **SAI**. Không chi phối role có `BYPASSRLS`/superuser. PGlite chạy `postgres` (super+bypass); Neon `neondb_owner` cũng có BYPASSRLS (ADR-0004 §E2, đo trên Neon thật 2026-07-15).
+2. *`UPDATE`/`DELETE` dưới RLS ném lỗi* — **SAI**. Chúng chạy bình thường, ảnh hưởng **0 hàng**. Chỉ `INSERT` ném lỗi. ⇒ đường ghi admin (U18) phải kiểm `rowCount`, không trông chờ exception.
+3. *Test "cấp USAGE rồi khẳng định ghi ném lỗi" là đủ* — **SAI, luôn xanh**. Postgres kiểm GRANT **trước** RLS. Mutation test chứng minh: tiêm `POLICY ... FOR ALL USING(true)` mà test cũ vẫn xanh. Phải khẳng định trực tiếp trên `pg_policies` **và** cấp đủ quyền ghi cho role test.
+4. *Backfill hỏng sẽ "âm thầm bỏ sót"* — **SAI**. Chỉ câu `UPDATE` im lặng; `SET NOT NULL` + FK ngay sau đó làm migration **vỡ và rollback trọn vẹn** (drizzle bọc một transaction). ⇒ lệnh kiểm tay sau `make migrate` là **hằng đúng**, vô dụng. Rủi ro thật ngược lại: `make migrate` **thất bại** nếu role migrate thiếu BYPASSRLS.
+
+**Một lỗ hổng bảo mật đã vá trong nhánh:** `audit_log_admin` bản đầu cấp `GRANT SELECT, INSERT TO PUBLIC` không RLS ⇒ role app phục vụ **khách hàng** đọc được nhật ký xuyên-tenant và **chèn được bản ghi mạo danh**. Nay là mô hình **chỉ-ghi** (RLS chỉ policy INSERT).
+
+**⛔ CHẶN DEPLOY — chưa gỡ:** backfill ép **mọi** tenant có nhãn không khớp mã về `'free'`, mà migration chỉ seed đúng gói `free`. Tenant đang mang nhãn trả phí sẽ bị **hạ về hạn mức free (1 MST, tắt tài khoản con)** và nhãn gốc **mất vĩnh viễn, không hoàn tác**. **Bắt buộc chạy trước khi migrate:**
+```sql
+SELECT goi_dich_vu, count(*) FROM tenants GROUP BY 1;
+```
+Có nhãn nào ngoài `free` ⇒ **DỪNG**, quyết định ánh xạ gói trước, không để backfill quyết hộ.
+
+**Nợ bàn giao U18 (bảo mật):**
+1. Siết `audit_log_admin` **cùng commit** với đường ghi đầu tiên: `REVOKE INSERT FROM PUBLIC`, policy INSERT theo role admin, `nguoi_thuc_hien` gắn danh tính Cloudflare Access chứ không nhận từ payload.
+2. Mở đọc bằng `FOR SELECT TO <role_admin>` riêng — tuyệt đối không phải role phục vụ khách.
+3. `cau_hinh_he_thong` **PUBLIC-readable, không mã hoá — cấm chứa bí mật**. Nên thành một dòng luật trong `.claude/rules/security.md`.
+4. **Núm chưa nối dây:** `gh_*` và `dangky_max_moi_ip_gio` chưa có consumer production nào. Nếu U18 hiện chúng lên bảng điều khiển trước khi nối dây, admin sẽ tin mình đã siết chống-lạm-dụng trong khi không đổi gì — **bảo đảm an toàn giả**.
 
 ## 8. Vận hành
 
