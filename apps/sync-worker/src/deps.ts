@@ -12,6 +12,7 @@ import { dbRecorder, loadAccountToken } from "./recorder";
 import type { RunDetailJobDeps } from "./runDetailJob";
 import { resolveSyncRetryConfig } from "./syncRetryConfig";
 import { tenantLimiterClient } from "./tenantLimiter";
+import { throttledTransport } from "./throttledTransport";
 import type { AnyDb, DetailSyncMessage, Env, RunJobDeps, SyncJobMessage } from "./types";
 
 // Egress T0 (direct-cf) — điểm gọi GDT DUY NHẤT đi qua adapter (gdt-adapter.md).
@@ -62,16 +63,21 @@ export async function listActiveTenantIds(db: AnyDb): Promise<string[]> {
 /** Dựng deps cho MỘT message: limiter bound theo tenant/MST (giỏ token + breaker
  * riêng, "không gọi dồn dập"); db bound vào sync()/loadAccount/recorder. */
 export function makeJobDeps(env: Env, db: AnyDb, msg: SyncJobMessage): RunJobDeps {
+  const limiter = tenantLimiterClient(env.TENANT_LIMITER, msg.tenantId);
   return {
     now: () => Date.now(),
     loadAccount: (m) => loadAccountToken(db, m, env.TOKEN_KEK),
-    limiter: tenantLimiterClient(env.TENANT_LIMITER, msg.tenantId),
+    limiter,
     // U26 — job header CHỈ đồng bộ header (KHÔNG tiêm fetchDetail nữa): fetch detail
     // inline tuần tự cho ~2000 HĐ trong MỘT lần gọi Worker là nguyên nhân 170/188 lần
     // sync FAILED trên prod (GDT 429 + "Too many subrequests" — BACKLOG 2026-07-16).
     // Dòng hàng đi pha 2: sync() trả detailCandidates → enqueueDetail bên dưới.
     sync: (o) => sync({ db, ...o }),
-    transport,
+    // U28 — permit-per-request pha 1: MỌI fetch ra GDT của job header xin permit từ
+    // CÙNG limiter (trước đây 1 permit/cả job → 42 request/permit → 429 hàng loạt
+    // 2026-07-18). Kế toán: runJob vẫn giữ tryAcquire đầu job (fail-fast + audit
+    // breakerSkip) nên một job tiêu 1+N permit — lệch 1, thiên về thận trọng.
+    transport: throttledTransport(transport, limiter),
     recorder: dbRecorder(db),
     // Pha 2: 1 message / hóa đơn vào CÙNG queue vat-sync, chia lô ≤100 msg/≤256KB.
     // KHÔNG jitter delay: message detail đã tự điều tốc bằng permit-per-request +
