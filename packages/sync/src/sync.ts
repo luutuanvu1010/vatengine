@@ -109,10 +109,13 @@ export interface SyncResult {
    *   tính `max_retries` (đập lại GDT đúng lúc đang bị chặn — vi phạm "tôn trọng máy
    *   chủ thuế").
    * - `transient`: lỗi tạm khác (mạng/5xx/DB) — nên retry qua hàng đợi.
+   * - `local_limit`: chạm TRẦN NỀN TẢNG của gói Workers (vd 50 subrequest/invocation
+   *   trên Free) — retry được, nhưng **KHÔNG nói lên sức khỏe GDT** (có thể xảy ra
+   *   trước cả khi chạm GDT) ⇒ tầng job KHÔNG được tính vào circuit breaker.
    * `sync()` đã tự retry cấp adapter (5xx/429/timeout) trước khi trả về; nhãn này dành
    * cho vòng retry cấp job (Queue) của U9.
    */
-  failureKind?: "session_expired" | "rate_limited" | "transient";
+  failureKind?: "session_expired" | "rate_limited" | "transient" | "local_limit";
   changes: InvoiceChange[];
   /** U26 — hóa đơn cần lấy dòng hàng pha 2 (mới/đổi trạng thái). Rỗng khi failed. */
   detailCandidates: DetailCandidate[];
@@ -145,15 +148,37 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Trần NỀN TẢNG của gói Workers (không phải lỗi GDT).
+ *
+ * ĐÃ KIỂM CHỨNG (2026-07-18, `lan_dong_bo` production, n=61): khi pha 1 vượt trần
+ * 50 subrequest/invocation của gói **Free**, Workers ném Error với thông điệp
+ * `"Too many subrequests by single Worker invocation. To configure this limit, refer
+ * to https://…"`. Đây là lỗi cục bộ — request có thể chưa hề rời biên Cloudflare.
+ *
+ * CHƯA KIỂM CHỨNG: thông điệp của trần CPU/thời gian — **không đoán, không match ở
+ * đây**. Bổ sung khi quan sát được chuỗi thật (nguyên tắc bằng chứng, CLAUDE.md).
+ *
+ * Đây là chỗ DUY NHẤT được dò chuỗi lỗi: dò một lần tại biên rồi phát ra nhãn có
+ * kiểu, để tầng điều phối (U9) quyết định mà không phải dò chuỗi (mong manh).
+ */
+export function laTranNenTangCucBo(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("Too many subrequests");
+}
+
 /** Phân loại lỗi cho `SyncResult.failureKind` (U25 mở rộng `rate_limited`):
  * - 401/hết phiên → `session_expired` (token chết, không retry).
  * - 429 kiệt lượt retry adapter (`GdtError.httpStatus === 429`) → `rate_limited`
  *   (tầng job phải backpressure, KHÔNG retry thật — xem doc `SyncResult.failureKind`).
+ * - trần nền tảng Workers → `local_limit` (retry được, KHÔNG tính vào breaker GDT).
  * - mọi lỗi còn lại → `transient` (mạng/5xx khác/DB — retry cấp job an toàn, có trần
  *   lần thử của hàng đợi làm chốt chặn). */
-function classifyFailure(err: unknown): "session_expired" | "rate_limited" | "transient" {
+function classifyFailure(
+  err: unknown,
+): "session_expired" | "rate_limited" | "transient" | "local_limit" {
   if (err instanceof GdtError && err.code === "SESSION_EXPIRED") return "session_expired";
   if (err instanceof GdtError && err.httpStatus === 429) return "rate_limited";
+  if (laTranNenTangCucBo(err)) return "local_limit";
   return "transient";
 }
 
@@ -342,7 +367,7 @@ async function recordFailed<
   tenantId: string,
   meta: RunMeta,
   message: string,
-  failureKind: "session_expired" | "rate_limited" | "transient",
+  failureKind: "session_expired" | "rate_limited" | "transient" | "local_limit",
 ): Promise<SyncResult> {
   const id = await withTenant(db, tenantId, async (tx) => {
     const inserted = await tx

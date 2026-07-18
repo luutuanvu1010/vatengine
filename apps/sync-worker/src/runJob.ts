@@ -2,7 +2,7 @@
 // THUẦN LOGIC, phụ thuộc tiêm (loadAccount/limiter/sync/recorder) → test offline.
 // Cô lập adapter: KHÔNG tự fetch GDT, chỉ truyền transport cho sync() (U5). Quyết
 // định RETRY hay không dựa `SyncResult.failureKind` (không dò chuỗi lỗi).
-import { buildDetailMessages } from "@vat/sync";
+import { buildDetailMessages, laTranNenTangCucBo } from "@vat/sync";
 import type { JobOutcome, RunJobDeps, SyncJobMessage } from "./types";
 
 function errMsg(err: unknown): string {
@@ -60,8 +60,9 @@ export async function runScheduledSync(deps: RunJobDeps, msg: SyncJobMessage): P
     });
   } catch (err) {
     // sync() thường TỰ nuốt lỗi → "failed"; ném ra đây là bất ngờ (vd cấu hình sai).
-    // Coi là tạm thời có trần queue làm chốt chặn.
-    await deps.limiter.recordResult(false);
+    // Coi là tạm thời có trần queue làm chốt chặn. SỰ CỐ 2026-07-18: trần nền tảng
+    // Workers (subrequest) KHÔNG nói lên sức khỏe GDT ⇒ không tính vào breaker.
+    if (!laTranNenTangCucBo(err)) await deps.limiter.recordResult(false);
     return { kind: "retry", reason: errMsg(err) };
   }
 
@@ -86,8 +87,22 @@ export async function runScheduledSync(deps: RunJobDeps, msg: SyncJobMessage): P
     };
   }
 
-  // Thất bại: cập nhật breaker rồi phân loại theo failureKind.
-  await deps.limiter.recordResult(false);
+  // Thất bại: CHỈ tính vào breaker những lỗi NÓI LÊN SỨC KHỎE ĐƯỜNG RA GDT.
+  //
+  // SỰ CỐ PRODUCTION 2026-07-18 (bằng chứng: 945/945 log `breaker_open`, 208 audit
+  // `dong_bo_bo_qua_breaker`, `lan_dong_bo` n=61 "Too many subrequests"): trước đây
+  // ghi `false` cho MỌI thất bại, nên hai loại lỗi KHÔNG liên quan GDT cũng mở
+  // breaker rồi chặn sạch mọi tenant/chiều — và tệ hơn, CHE mất lỗi thật vì từ đó
+  // mọi job chỉ còn trả `breaker_open`:
+  //   - `session_expired` (401): GDT ĐÃ trả lời ⇒ đường ra lành, token TA hỏng.
+  //   - `local_limit`: trần gói Workers (50 subrequest/invocation trên Free), có thể
+  //     xảy ra trước cả khi chạm GDT.
+  // Cả hai vẫn được xử lý đúng ở nhánh riêng bên dưới (reauth / retry), chỉ là không
+  // bị quy kết cho GDT.
+  const laTinHieuSucKhoeGdt =
+    result.failureKind !== "session_expired" && result.failureKind !== "local_limit";
+  if (laTinHieuSucKhoeGdt) await deps.limiter.recordResult(false);
+
   if (result.failureKind === "session_expired") {
     // 401 runtime: token chết → KHÔNG retry (retry token chết là vô ích + thiếu tôn
     // trọng máy chủ thuế). Đánh dấu cần đăng nhập lại; người dùng đăng nhập lại (U1/captcha).

@@ -3,6 +3,9 @@
 export { mapInvoiceRowToHoaDon } from "./mapInvoice";
 export {
   sync,
+  // Nhận diện trần nền tảng Workers (subrequest) — tầng job dùng để KHÔNG tính lỗi
+  // cục bộ vào circuit breaker GDT (sự cố 2026-07-18).
+  laTranNenTangCucBo,
   type DetailCandidate,
   type InvoiceChange,
   type SyncOptions,

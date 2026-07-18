@@ -74,7 +74,9 @@ function completed(withCandidates = false): SyncResult {
   };
 }
 
-function failed(kind: "session_expired" | "rate_limited" | "transient"): SyncResult {
+function failed(
+  kind: "session_expired" | "rate_limited" | "transient" | "local_limit",
+): SyncResult {
   return {
     lanDongBoId: "ldb-1",
     soHdMoi: 0,
@@ -203,7 +205,21 @@ describe("runScheduledSync — điều phối job đồng bộ nền", () => {
     expect(calls.sync).toBe(1); // đã thử gọi (token còn hạn theo đồng hồ) rồi mới nhận 401
     expect(calls.reauthRuntime).toHaveLength(1);
     expect(calls.reauthPreflight).toEqual([]);
-    expect(calls.recordResult).toEqual([false]);
+    // SỰ CỐ 2026-07-18: trước đây ghi `false` ở đây → 401 (token TA hỏng) bị tính là
+    // "GDT ốm" và mở circuit breaker oan, chặn sạch mọi tenant/chiều rồi CHE luôn lỗi
+    // thật (mọi thứ trả `breaker_open` thay vì "cần đăng nhập lại"). GDT đã trả lời
+    // 401 tức đường ra LÀNH ⇒ KHÔNG được tính vào sức khỏe GDT.
+    expect(calls.recordResult).toEqual([]);
+  });
+
+  it("[SỰ CỐ 2026-07-18] lỗi TRẦN NỀN TẢNG Workers (local_limit) → retry nhưng KHÔNG tính vào breaker GDT", async () => {
+    const { deps, calls } = makeDeps({ sync: async () => failed("local_limit") });
+    const out = await runScheduledSync(deps, MSG);
+    expect(out.kind).toBe("retry");
+    // "Too many subrequests by single Worker invocation" là trần của GÓI Workers, có
+    // thể xảy ra trước cả khi chạm GDT ⇒ không nói lên điều gì về sức khỏe GDT.
+    expect(calls.recordResult).toEqual([]);
+    expect(calls.reauthRuntime).toEqual([]);
   });
 
   it("token HẾT HẠN (pre-flight) → KHÔNG gọi sync/GDT (không captcha), ghi cần đăng nhập lại", async () => {
