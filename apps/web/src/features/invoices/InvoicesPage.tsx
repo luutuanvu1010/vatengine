@@ -8,6 +8,7 @@ import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
 import { formatMoney } from "../../lib/format";
 import type { InvoiceFilter } from "../../types/api";
 import { FilterBar } from "./FilterBar";
+import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { InvoiceTable } from "./InvoiceTable";
 import { RangeSyncPanel } from "./RangeSyncPanel";
 import { useRangeBackfill } from "./useRangeBackfill";
@@ -74,17 +75,24 @@ export function InvoicesPage() {
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "baseline",
+          alignItems: "center",
           marginBottom: "var(--sp-2)",
           gap: "var(--sp-3)",
+          flexWrap: "wrap",
         }}
       >
         <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
           Hiển thị <strong>{total}</strong> hóa đơn
         </span>
-        <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
-          Tổng thanh toán <strong className="tabular">{formatMoney(tongTtbso) || "—"}</strong> đ
-        </span>
+        <div
+          style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", flexWrap: "wrap" }}
+        >
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
+            Tổng thanh toán <strong className="tabular">{formatMoney(tongTtbso) || "—"}</strong> đ
+          </span>
+          {/* B2 (U27) — kết xuất toàn bộ kết quả theo bộ lọc; tự ẩn với vai không có quyền. */}
+          <InvoiceExportButtons filter={filter} />
+        </div>
       </div>
 
       <Card style={{ padding: 0 }}>
