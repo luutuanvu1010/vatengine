@@ -31,6 +31,21 @@ export function FilterBar({
     onApply(next);
   };
 
+  // B1 (U27) — CHIỀU quyết định ô MST nào liên quan: mua vào chỉ lọc theo người bán,
+  // bán ra chỉ lọc theo người mua. Ẩn ô còn lại VÀ dọn giá trị của nó để không lọc
+  // ngầm bằng trường đã ẩn.
+  const setChieu = (raw: string) => {
+    const chieu = (raw || undefined) as Chieu | undefined;
+    setDraft((d) => ({
+      ...d,
+      chieu,
+      nmmst: chieu === "purchase" ? undefined : d.nmmst,
+      nbmst: chieu === "sold" ? undefined : d.nbmst,
+    }));
+  };
+  const showNbmst = draft.chieu !== "sold";
+  const showNmmst = draft.chieu !== "purchase";
+
   return (
     <div style={{ display: "grid", gap: "var(--sp-3)" }}>
       <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "center" }}>
@@ -77,7 +92,7 @@ export function FilterBar({
           aria-label="Chiều"
           style={selectStyle}
           value={draft.chieu ?? ""}
-          onChange={(e) => set({ chieu: (e.target.value || undefined) as Chieu | undefined })}
+          onChange={(e) => setChieu(e.target.value)}
         >
           <option value="">Tất cả chiều</option>
           <option value="purchase">Mua vào</option>
@@ -93,20 +108,24 @@ export function FilterBar({
           <option value="normal">HĐĐT thường</option>
           <option value="sco">Máy tính tiền</option>
         </select>
-        <input
-          aria-label="MST người bán"
-          placeholder="MST người bán"
-          style={inputStyle}
-          value={draft.nbmst ?? ""}
-          onChange={(e) => set({ nbmst: e.target.value || undefined })}
-        />
-        <input
-          aria-label="MST người mua"
-          placeholder="MST người mua"
-          style={inputStyle}
-          value={draft.nmmst ?? ""}
-          onChange={(e) => set({ nmmst: e.target.value || undefined })}
-        />
+        {showNbmst ? (
+          <input
+            aria-label="MST người bán"
+            placeholder="MST người bán"
+            style={inputStyle}
+            value={draft.nbmst ?? ""}
+            onChange={(e) => set({ nbmst: e.target.value || undefined })}
+          />
+        ) : null}
+        {showNmmst ? (
+          <input
+            aria-label="MST người mua"
+            placeholder="MST người mua"
+            style={inputStyle}
+            value={draft.nmmst ?? ""}
+            onChange={(e) => set({ nmmst: e.target.value || undefined })}
+          />
+        ) : null}
         <Button onClick={() => onApply(draft)}>Áp dụng</Button>
       </div>
     </div>
