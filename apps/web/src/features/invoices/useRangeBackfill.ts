@@ -17,7 +17,17 @@ export type RangeBackfillState =
   | { kind: "phien_het_han" } // token thuế hết hạn → cần kết nối lại
   | { kind: "dang_lay"; soXong: number; tong: number; thangHienTai?: string }
   | { kind: "xong" }
-  | { kind: "co_loi" };
+  /** KHÔNG gửi được request lên API (mạng/5xx) — người dùng bấm lại có ý nghĩa. */
+  | { kind: "loi_gui" }
+  /**
+   * Request ĐÃ được nhận (202) nhưng JOB NỀN hỏng ở một số tháng.
+   *
+   * TÁCH khỏi `loi_gui` ngày 2026-07-18: trước đó hai ca này gộp làm một nên UI báo
+   * "Không gửi được yêu cầu đồng bộ" trong khi `POST /backfill` trả **202** và 17/17
+   * sự kiện `vat-api` đều `ok` — lỗi thật nằm ở job nền (GDT trả 429). Thông báo sai
+   * bản chất khiến người dùng bấm lại vô ích vì tưởng lỗi mạng.
+   */
+  | { kind: "loi_dong_bo"; soThangLoi: number };
 
 /** "YYYY-MM" → "MM/YYYY" (giờ VN). */
 export function formatPeriod(period: string): string {
@@ -41,13 +51,18 @@ export function deriveRangeBackfillState(x: {
   progress: BackfillProgress | undefined;
 }): RangeBackfillState {
   if (x.sessionExpired) return { kind: "phien_het_han" };
-  if (x.otherError) return { kind: "co_loi" };
+  if (x.otherError) return { kind: "loi_gui" };
   if (x.progress) {
     switch (x.progress.trangThaiTong) {
       case "can_dang_nhap_lai":
         return { kind: "phien_het_han" };
       case "co_loi":
-        return { kind: "co_loi" };
+        // Job nền hỏng — KHÁC hẳn "không gửi được request". Đếm tháng lỗi để nói cụ
+        // thể thay vì một câu chung chung.
+        return {
+          kind: "loi_dong_bo",
+          soThangLoi: x.progress.thang.filter((t) => t.trangThai === "loi").length,
+        };
       case "hoan_thanh":
         return { kind: "xong" };
       default: {

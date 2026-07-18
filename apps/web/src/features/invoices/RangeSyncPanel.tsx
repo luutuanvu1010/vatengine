@@ -89,8 +89,15 @@ export function RangeSyncPanel({
           <strong>Tài khoản thuế</strong> rồi bấm lại.
         </Alert>
       )}
-      {state.kind === "co_loi" && (
+      {state.kind === "loi_gui" && (
         <Alert tone="danger">Không gửi được yêu cầu đồng bộ. Thử lại sau ít phút.</Alert>
+      )}
+      {state.kind === "loi_dong_bo" && (
+        <Alert tone="warning">
+          Yêu cầu đồng bộ <strong>đã nhận</strong>, nhưng {state.soThangLoi} tháng chưa kéo được dữ
+          liệu — thường do máy chủ Tổng cục Thuế đang giới hạn tốc độ. Hệ thống sẽ tự giãn nhịp và
+          thử lại; bạn có thể bấm lại sau ít phút. Bấm liên tục không làm nhanh hơn.
+        </Alert>
       )}
       {state.kind === "xong" && (
         <Alert tone="info">

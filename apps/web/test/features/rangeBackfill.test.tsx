@@ -28,8 +28,10 @@ describe("deriveRangeBackfillState — máy trạng thái thuần", () => {
       kind: "phien_het_han",
     });
   });
-  it("lỗi khác → co_loi", () => {
-    expect(deriveRangeBackfillState({ ...BASE, otherError: true })).toEqual({ kind: "co_loi" });
+  // 2026-07-18: TÁCH hai loại lỗi vốn bị gộp làm một. Gộp lại khiến job nền hỏng bị
+  // báo là "không gửi được yêu cầu" — sai bản chất, người dùng bấm lại vô ích.
+  it("KHÔNG gửi được request (otherError) → loi_gui", () => {
+    expect(deriveRangeBackfillState({ ...BASE, otherError: true })).toEqual({ kind: "loi_gui" });
   });
   it("đang POST/tải tài khoản → dang_lay 0/0", () => {
     expect(deriveRangeBackfillState({ ...BASE, preparing: true })).toEqual({
@@ -66,7 +68,7 @@ describe("deriveRangeBackfillState — máy trạng thái thuần", () => {
       thangHienTai: "2026-02",
     });
   });
-  it("tiến độ hoan_thanh → xong; can_dang_nhap_lai → phien_het_han; co_loi → co_loi", () => {
+  it("tiến độ hoan_thanh → xong; can_dang_nhap_lai → phien_het_han", () => {
     const b = { backfillId: "b", thang: [], soXong: 0, tongSoThang: 1 };
     expect(
       deriveRangeBackfillState({ ...BASE, progress: { ...b, trangThaiTong: "hoan_thanh" } }).kind,
@@ -75,9 +77,27 @@ describe("deriveRangeBackfillState — máy trạng thái thuần", () => {
       deriveRangeBackfillState({ ...BASE, progress: { ...b, trangThaiTong: "can_dang_nhap_lai" } })
         .kind,
     ).toBe("phien_het_han");
-    expect(
-      deriveRangeBackfillState({ ...BASE, progress: { ...b, trangThaiTong: "co_loi" } }).kind,
-    ).toBe("co_loi");
+  });
+
+  // BẰNG CHỨNG 2026-07-18: POST /backfill trả 202 (17/17 sự kiện vat-api `ok`) nhưng
+  // UI vẫn báo "Không gửi được yêu cầu đồng bộ" — vì `trangThaiTong: "co_loi"` (job NỀN
+  // hỏng, thật ra do GDT 429) bị gộp chung state với lỗi gửi request. Phải TÁCH.
+  it("job NỀN hỏng (trangThaiTong co_loi) → loi_dong_bo kèm số tháng lỗi, KHÔNG phải loi_gui", () => {
+    const progress = {
+      backfillId: "b",
+      thang: [
+        { period: "2026-05", trangThai: "loi" as const },
+        { period: "2026-06", trangThai: "loi" as const },
+        { period: "2026-07", trangThai: "xong" as const },
+      ],
+      soXong: 1,
+      tongSoThang: 3,
+      trangThaiTong: "co_loi" as const,
+    };
+    expect(deriveRangeBackfillState({ ...BASE, progress })).toEqual({
+      kind: "loi_dong_bo",
+      soThangLoi: 2,
+    });
   });
 });
 
@@ -113,9 +133,17 @@ describe("RangeSyncPanel — render từng trạng thái + nút", () => {
     panel({ kind: "phien_het_han" });
     expect(screen.getByText(/kết nối lại/i)).toBeInTheDocument();
   });
-  it("co_loi → thông báo lỗi", () => {
-    panel({ kind: "co_loi" });
+  it("loi_gui (request KHÔNG gửi được) → nói đúng là không gửi được", () => {
+    panel({ kind: "loi_gui" });
     expect(screen.getByText(/Không gửi được/)).toBeInTheDocument();
+  });
+
+  it("loi_dong_bo (job nền hỏng) → KHÔNG được nói 'không gửi được'; phải nói yêu cầu đã nhận + nêu số tháng lỗi", () => {
+    panel({ kind: "loi_dong_bo", soThangLoi: 2 });
+    // Chống hồi quy chính xác lỗi 2026-07-18: request ĐÃ gửi thành công (202).
+    expect(screen.queryByText(/Không gửi được/)).not.toBeInTheDocument();
+    expect(screen.getByText(/đã nhận/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 tháng/)).toBeInTheDocument();
   });
   it("xong → đã đồng bộ xong", () => {
     panel({ kind: "xong" });
