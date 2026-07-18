@@ -117,7 +117,9 @@ export function resolveFanoutConfig(env: FanoutEnv): {
   };
 }
 
-function parseNonNegInt(s: string | undefined, dflt: number): number {
+/** Parse int không âm từ var env; thiếu/hỏng → mặc định. Dùng chung cho các resolver
+ * cấu hình (fanout, syncRetryConfig). */
+export function parseNonNegInt(s: string | undefined, dflt: number): number {
   if (s === undefined) return dflt;
   const n = Number.parseInt(s, 10);
   return Number.isFinite(n) && n >= 0 ? n : dflt;

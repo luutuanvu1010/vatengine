@@ -207,3 +207,34 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 **Ưu tiên đề xuất:** Trung bình.
 
 **Nguồn phát hiện:** review chéo `dod-auditor` (Finding 3), phiên 2026-07-18.
+
+## [2026-07-18] Ghép all-or-nothing normal+sco trong MỘT run: 429 nhánh sco vứt bỏ dữ liệu normal đã lấy được
+
+**Ngày phát hiện:** 2026-07-18 (phiên chẩn đoán "1 tháng chưa kéo được dữ liệu").
+
+**Mô tả:** `queryInvoices` gộp 2 họ endpoint (normal + sco) trong một lượt lấy; `sync()`
+chỉ persist khi TOÀN BỘ thành công. Bằng chứng production (`lan_dong_bo` 24h,
+2026-07-18): 68 lần failed HTTP 429 thì ~90% rơi ở nhánh `sco-query` — nhánh đứng CUỐI
+chuỗi gọi — nghĩa là các trang normal ĐÃ lấy xong rồi bị vứt. Mỗi lần backpressure thử
+lại chạy lại CẢ chuỗi phân trang normal từ đầu → đốt thêm quota rate-limit của GDT đúng
+lúc đang bị phạt → tự nuôi cửa sổ phạt (2026-07 purchase: 84 run failed/48h, 0 completed).
+Trạng thái `hoan_thanh_mot_phan` ĐÃ có trong schema (`lan_dong_bo.ts` mô tả "phần thành
+công đã lưu") + coverage đã đọc nó, nhưng CHƯA có code nào GHI nó — khái niệm thiết kế
+rồi bỏ dở.
+
+**Rủi ro nếu bỏ qua:** dưới cửa sổ phạt 429 kéo dài (quan sát ≥3.5h), tháng nào đụng
+sco-429 sẽ kẹt "loi" vô hạn dù dữ liệu normal đã trong tay; người dùng không thấy gì.
+
+**Đề xuất hướng xử lý (cần chủ dự án duyệt — đổi ngữ nghĩa coverage, có thể cần cột
+mới):** một trong hai: (a) sco-429 sau khi normal xong → persist normal + ghi
+`hoan_thanh_mot_phan` (coverage hiện coi mot_phan = chưa phủ nên tháng vẫn được thử
+lại — dữ liệu hiện ra trước, sco bù sau); (b) tách message theo HỌ endpoint
+(normal/sco riêng) — cần coverage phân biệt họ (thêm cột `nguon` vào `lan_dong_bo`
++ migration). Kèm theo: dedupe job trùng (POST /backfill lặp khi tháng đang có job
+chạy/backpressure — quan sát 2 run cùng phút nhiều lần), và cân nhắc permit-per-page
+qua TenantLimiter cho job header (hiện 1 permit/job nhưng job bắn N request).
+
+**Ưu tiên đề xuất:** Cao (đây là khuếch đại chính của sự cố 429, sau khi đã vá pacing).
+
+**Nguồn phát hiện:** phiên chẩn đoán 2026-07-18, bằng chứng `lan_dong_bo` production +
+đọc `packages/gdt-client/src/query.ts` / `packages/sync/src/sync.ts`.

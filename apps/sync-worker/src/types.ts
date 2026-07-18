@@ -6,10 +6,11 @@ import type { DetailSyncMessage, SyncJobMessage, SyncResult, VatSyncQueueMessage
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { LimiterEnv } from "./rateLimiter";
+import type { SyncRetryEnv } from "./syncRetryConfig";
 
 // U12: kế thừa LimiterEnv → ngưỡng rate-limit tinh chỉnh qua env (vars wrangler),
-// không hardcode trong Durable Object.
-export interface Env extends LimiterEnv {
+// không hardcode trong Durable Object. SyncRetryEnv: giãn nhịp/backoff header (U25 AC3).
+export interface Env extends LimiterEnv, SyncRetryEnv {
   ENVIRONMENT?: string;
   // Postgres qua Hyperdrive (ADR-0001). `.connectionString` để mở kết nối pg.
   HYPERDRIVE: Hyperdrive;
