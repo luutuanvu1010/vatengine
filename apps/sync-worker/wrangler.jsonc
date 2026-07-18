@@ -51,11 +51,13 @@
         // nhiều hóa đơn, đồng thời giữ thông lượng cao hơn hẳn mức 1. Có thể nâng lại
         // 10 sau khi quan sát vài chu kỳ sạch.
         //
-        // CHƯA KIỂM CHỨNG: số subrequest thực tế của MỘT job nặng nhất (phụ thuộc số
-        // trang × 2 nguồn normal+sco của tenant lớn nhất) — chưa đo phân bố hóa đơn
-        // thật. Nếu sau deploy vẫn còn "Too many subrequests", phải chia nhỏ theo
-        // TRANG (chunk kỳ) chứ không chỉ theo message — xem BACKLOG 2026-07-18.
-        "max_batch_size": 5,
+        // ĐÃ KIỂM CHỨNG tiên lượng trên: 2026-07-18 14:05–14:11Z (SAU khi lên Paid),
+        // batch 5 lại ra "Too many subrequests" ×4 trong `lan_dong_bo` — job tháng lớn
+        // (~100+ trang × retry 429 lên tới 3 lượt/trang + DB + DO) cộng dồn theo
+        // INVOCATION. Hạ 5 → 1: một job/invocation, tối đa ~200–400 subrequest, dưới
+        // trần Paid. Đánh đổi thông lượng chấp nhận được (max_concurrency vẫn 3).
+        // Fix bền: chia job theo TRANG (chunk kỳ) — BACKLOG 2026-07-18.
+        "max_batch_size": 1,
         // H-B.4 — GIỚI HẠN đồng thời consumer: chặn bùng nổ invocation làm cạn pool
         // Hyperdrive/dồn dập GDT. Giá trị THẬN TRỌNG mặc định; tinh chỉnh trên staging
         // theo tải thật (H-A.4 tách Hyperdrive + H-B.5 sharding). CHƯA KIỂM CHỨNG số

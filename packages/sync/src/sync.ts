@@ -144,8 +144,48 @@ function parseDdmmyyyy(s: string): Date {
   return d;
 }
 
-function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+/**
+ * Số hàng hoa_don tối đa cho MỘT câu INSERT (chia lô — sự cố 2026-07-18). 200 hàng ×
+ * 21 tham số = 4.200 tham số/câu, xa trần 65.535 của giao thức Postgres; đồng thời ghìm
+ * kích thước câu lệnh (raw_json vài KB/hóa đơn). Con số là TRẦN AN TOÀN chọn theo suy
+ * luận, CHƯA đo ngưỡng thật của Hyperdrive/Neon — chỉnh khi có số đo.
+ */
+export const INSERT_CHUNK_SIZE = 200;
+
+// Trần mỗi PHẦN message + trần TOÀN chuỗi khi tóm tắt lỗi (tomTatLoi).
+const LOI_MAX_PHAN = 400;
+const LOI_MAX_TONG = 2000;
+
+/**
+ * Tóm tắt lỗi để ghi `thong_diep_loi` — SỰ CỐ 2026-07-18: Drizzle ném DrizzleQueryError
+ * với `message` = TOÀN BỘ SQL + tham số (kể cả `raw_json`) — production đã lưu một
+ * thông điệp 11.476.737 ký tự vào `lan_dong_bo`, còn nguyên nhân PG thật (trong
+ * `cause`) thì mất. Quy tắc: cắt TỪNG PHẦN (không cắt đuôi cả chuỗi — nguyên nhân gốc
+ * nằm CUỐI chain), nối tối đa 3 tầng cause, chặn trần tổng. Cũng là chốt security.md:
+ * không dump `raw_json` vào bảng vết.
+ */
+export function tomTatLoi(err: unknown): string {
+  const phan: string[] = [];
+  let cur: unknown = err;
+  const daGap = new Set<unknown>();
+  while (cur instanceof Error && phan.length < 3 && !daGap.has(cur)) {
+    daGap.add(cur);
+    // Review chéo 2026-07-18 (dod-auditor Finding 1): DrizzleQueryError có dạng
+    // "Failed query: <sql>\nparams: <tham số — CHỨA raw_json>". Với SQL NGẮN
+    // (< LOI_MAX_PHAN, vd UPDATE từng hàng) thì cắt mù theo offset vẫn tràn vào
+    // params → rò raw_json. Phải CHE params theo mốc thật TRƯỚC, rồi mới cắt độ dài.
+    const mocParams = cur.message.indexOf("\nparams:");
+    const sach =
+      mocParams >= 0 ? `${cur.message.slice(0, mocParams)} [params đã che]` : cur.message;
+    phan.push(
+      sach.length > LOI_MAX_PHAN
+        ? `${sach.slice(0, LOI_MAX_PHAN)}… [cắt bớt từ ${cur.message.length} ký tự]`
+        : sach,
+    );
+    cur = cur.cause;
+  }
+  const noi = phan.length > 0 ? phan.join(" ⇐ nguyên nhân: ") : String(err);
+  return noi.length > LOI_MAX_TONG ? `${noi.slice(0, LOI_MAX_TONG)}…` : noi;
 }
 
 /**
@@ -271,10 +311,16 @@ async function upsertBatch<
   // TRƯỚC khi biết ON CONFLICT sẽ INSERT hay UPDATE. Trong khe đua hiếm, một hàng có thể
   // bị đếm 'mới' dù DB thực UPDATE và KHÔNG vào `changes`. Chấp nhận được: số đếm/`changes`
   // là chỉ báo (telemetry/thông báo), không phải chốt tính đúng dữ liệu — dữ liệu vẫn đúng.
-  if (toInsert.length > 0) {
+  // SỰ CỐ 2026-07-18 (kỳ 2026-07 purchase, production): INSERT TẤT CẢ trong MỘT câu
+  // lệnh chết với tháng hàng nghìn hóa đơn ("Failed query: insert into hoa_don…" —
+  // 21 tham số/hàng, ~3.100 hàng vượt trần 65.535 tham số của giao thức Postgres;
+  // CHƯA KIỂM CHỨNG con số chính xác vì cause không được lưu). Chia lô INSERT_CHUNK_SIZE
+  // hàng/câu lệnh — vẫn trong CÙNG transaction nên tính nguyên tử của run giữ nguyên.
+  for (let i = 0; i < toInsert.length; i += INSERT_CHUNK_SIZE) {
+    const lo = toInsert.slice(i, i + INSERT_CHUNK_SIZE);
     await tx
       .insert(hoaDon)
-      .values(toInsert)
+      .values(lo)
       .onConflictDoUpdate({
         target: [
           hoaDon.tenantId,
@@ -469,7 +515,7 @@ export async function sync<
       opts.retry,
     );
   } catch (err) {
-    return recordFailed(db, tenantId, meta, errMsg(err), classifyFailure(err));
+    return recordFailed(db, tenantId, meta, tomTatLoi(err), classifyFailure(err));
   }
 
   // Bước 1b — đường INLINE (chỉ khi được tiêm fetchDetail: test/công cụ offline; U26
@@ -493,7 +539,7 @@ export async function sync<
         linesByKey.set(naturalKeyOf(mapInvoiceRowToHoaDon(row, tenantId)), lines);
       }
     } catch (err) {
-      return recordFailed(db, tenantId, meta, errMsg(err), classifyFailure(err));
+      return recordFailed(db, tenantId, meta, tomTatLoi(err), classifyFailure(err));
     }
   }
 
@@ -534,6 +580,6 @@ export async function sync<
       };
     });
   } catch (err) {
-    return recordFailed(db, tenantId, meta, errMsg(err), classifyFailure(err));
+    return recordFailed(db, tenantId, meta, tomTatLoi(err), classifyFailure(err));
   }
 }

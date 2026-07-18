@@ -28,8 +28,26 @@ export function backfillRoutes(deps: AppDeps) {
 
     const { db, close } = await deps.getDb(c.env);
     try {
+      // `def.createdAtMs` (SỰ CỐ 2026-07-18): bỏ qua bản ghi THẤT BẠI CŨ hơn thời điểm
+      // tạo backfill — không để lỗi của các lần chạy trước làm banner báo "loi" NGAY
+      // khi bấm trong khi job mới còn chưa chạy.
+      //
+      // Trừ RANH_DUA_ENQUEUE_MS (review chéo Finding 2): producer B5 ENQUEUE TRƯỚC rồi
+      // mới init tracker (thứ tự cố ý — taxAccounts.ts), nên job đầu của CHÍNH backfill
+      // này có thể có `bat_dau` sớm hơn `createdAtMs` vài ms–giây (2 đồng hồ Worker khác
+      // nhau + round-trip DO). Không có biên, lỗi THẬT của job đó bị lọc oan → banner im
+      // lặng che lỗi thật. 5s là biên suy luận (CHƯA đo skew thật) — thừa cho round-trip
+      // ms, đủ hẹp để lỗi cũ (phút/giờ trước) vẫn bị loại.
+      const RANH_DUA_ENQUEUE_MS = 5000;
       const progress = await withTenant(db, tenantId, (tx) =>
-        monthlyBackfillStatus(tx, tenantId, def.taikhoanId, def.directions, def.months),
+        monthlyBackfillStatus(
+          tx,
+          tenantId,
+          def.taikhoanId,
+          def.directions,
+          def.months,
+          def.createdAtMs - RANH_DUA_ENQUEUE_MS,
+        ),
       );
       return c.json({ backfillId: id, ...progress });
     } finally {

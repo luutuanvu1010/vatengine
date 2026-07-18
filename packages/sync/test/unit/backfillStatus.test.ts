@@ -95,3 +95,55 @@ describe("deriveBackfillStatus — suy tiến độ backfill từng tháng + t�
     expect(statuses(p)).toEqual(["cho", "cho", "cho"]); // 2025-12 không thuộc backfill
   });
 });
+
+// SỰ CỐ 2026-07-18 (banner "loi" hiện NGAY khi bấm): bản ghi THAT_BAI/CAN_DANG_NHAP_LAI
+// CŨ (trước khi backfill này được tạo) làm GET /backfill/:id trả co_loi tức thì — UI
+// ngừng poll trong khi job MỚI còn chưa chạy. Với `sinceMs` (= def.createdAtMs), lỗi
+// CŨ bị bỏ qua; completed thì tính MỌI THỜI ĐIỂM (tháng đã phủ từ trước vẫn là "xong").
+describe("deriveBackfillStatus — sinceMs bỏ qua lỗi CŨ trước khi backfill được tạo", () => {
+  const SINCE = 1_000_000;
+  const rowAt = (period: string, chieu: InvoiceDirection, trangThai: string, batDauMs: number) => ({
+    period,
+    chieu,
+    trangThai,
+    batDauMs,
+  });
+
+  it("failed CŨ (batDauMs < sinceMs), chưa có run mới → tháng 'cho', tổng 'dang_chay' (KHÔNG 'loi')", () => {
+    const rows = [rowAt("2026-01", "purchase", S.THAT_BAI, SINCE - 1)];
+    const p = deriveBackfillStatus(rows, DIRS, ["2026-01"], SINCE);
+    expect(p.thang[0]?.trangThai).toBe("cho");
+    expect(p.trangThaiTong).toBe("dang_chay");
+  });
+
+  it("failed MỚI (batDauMs >= sinceMs) → vẫn 'loi' (lỗi thật của backfill này)", () => {
+    const rows = [rowAt("2026-01", "purchase", S.THAT_BAI, SINCE)];
+    const p = deriveBackfillStatus(rows, DIRS, ["2026-01"], SINCE);
+    expect(p.thang[0]?.trangThai).toBe("loi");
+    expect(p.trangThaiTong).toBe("co_loi");
+  });
+
+  it("completed CŨ vẫn tính 'xong' (khoảng đã phủ từ trước không bị bắt chạy lại)", () => {
+    const rows = DIRS.map((d) => rowAt("2026-01", d, S.HOAN_THANH, SINCE - 1));
+    const p = deriveBackfillStatus(rows, DIRS, ["2026-01"], SINCE);
+    expect(p.thang[0]?.trangThai).toBe("xong");
+    expect(p.trangThaiTong).toBe("hoan_thanh");
+  });
+
+  it("can_dang_nhap_lai CŨ bị bỏ qua; failed cũ + completed mới → 'xong'", () => {
+    const rows = [
+      rowAt("2026-01", "purchase", S.CAN_DANG_NHAP_LAI, SINCE - 5),
+      rowAt("2026-01", "purchase", S.THAT_BAI, SINCE - 3),
+      ...DIRS.map((d) => rowAt("2026-01", d, S.HOAN_THANH, SINCE + 10)),
+    ];
+    const p = deriveBackfillStatus(rows, DIRS, ["2026-01"], SINCE);
+    expect(p.thang[0]?.trangThai).toBe("xong");
+    expect(p.trangThaiTong).toBe("hoan_thanh");
+  });
+
+  it("KHÔNG truyền sinceMs → hành vi cũ giữ nguyên (failed cũ vẫn 'loi' — tương thích lùi)", () => {
+    const rows = [rowAt("2026-01", "purchase", S.THAT_BAI, 123)];
+    const p = deriveBackfillStatus(rows, DIRS, ["2026-01"]);
+    expect(p.thang[0]?.trangThai).toBe("loi");
+  });
+});
