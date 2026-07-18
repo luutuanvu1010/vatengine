@@ -30,6 +30,22 @@ describe("tomTatLoi — tóm tắt lỗi có cause, chặn trần độ dài", (
     expect(s).toContain("cắt bớt");
   });
 
+  it("SQL NGẮN + params chứa raw_json (dạng UPDATE từng hàng của Drizzle) → params bị CHE, dữ liệu nhạy cảm KHÔNG lọt", () => {
+    // Review chéo 2026-07-18: SQL của UPDATE 1 hàng chỉ ~255 ký tự (< trần cắt phần
+    // 400) nên cắt mù theo offset sẽ tràn vào "\nparams: [...raw_json...]" → rò tên
+    // đối tác/dữ liệu hóa đơn vào lan_dong_bo. Mô phỏng đúng hình dạng message Drizzle.
+    const sqlNgan = 'update "hoa_don" set "ttxly" = $1, "raw_json" = $2 where "id" = $3';
+    const err = new Error(
+      `Failed query: ${sqlNgan}\nparams: 8,{"nbten":"Công ty TNHH Bán Hàng Bí Mật ABC","tgtttbso":108},abc-123`,
+      { cause: new Error("connection terminated unexpectedly") },
+    );
+    const s = tomTatLoi(err);
+    expect(s).not.toContain("Bí Mật");
+    expect(s).toContain("params đã che");
+    expect(s).toContain("connection terminated unexpectedly");
+    expect(s).toContain("Failed query");
+  });
+
   it("không phải Error → String(err), không ném", () => {
     expect(tomTatLoi("chuỗi thô")).toBe("chuỗi thô");
     expect(tomTatLoi(undefined)).toBe("undefined");

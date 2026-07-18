@@ -170,10 +170,17 @@ export function tomTatLoi(err: unknown): string {
   const daGap = new Set<unknown>();
   while (cur instanceof Error && phan.length < 3 && !daGap.has(cur)) {
     daGap.add(cur);
+    // Review chéo 2026-07-18 (dod-auditor Finding 1): DrizzleQueryError có dạng
+    // "Failed query: <sql>\nparams: <tham số — CHỨA raw_json>". Với SQL NGẮN
+    // (< LOI_MAX_PHAN, vd UPDATE từng hàng) thì cắt mù theo offset vẫn tràn vào
+    // params → rò raw_json. Phải CHE params theo mốc thật TRƯỚC, rồi mới cắt độ dài.
+    const mocParams = cur.message.indexOf("\nparams:");
+    const sach =
+      mocParams >= 0 ? `${cur.message.slice(0, mocParams)} [params đã che]` : cur.message;
     phan.push(
-      cur.message.length > LOI_MAX_PHAN
-        ? `${cur.message.slice(0, LOI_MAX_PHAN)}… [cắt bớt từ ${cur.message.length} ký tự]`
-        : cur.message,
+      sach.length > LOI_MAX_PHAN
+        ? `${sach.slice(0, LOI_MAX_PHAN)}… [cắt bớt từ ${cur.message.length} ký tự]`
+        : sach,
     );
     cur = cur.cause;
   }
