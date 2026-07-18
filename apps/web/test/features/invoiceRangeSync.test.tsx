@@ -3,13 +3,17 @@
 // "Đồng bộ khoảng này" (bấm tay khi có dữ liệu) HOẶC tự chạy (khi rỗng) → gọi CẢ HAI
 // POST /backfill {tuNgay,denNgay} (U22) + POST /backfill-lines (U26), poll GET /backfill/:id
 // hiện tiến độ; xong → tự làm mới danh sách. Hết phiên → nhắc kết nối lại, KHÔNG gọi.
+// U27-B3: đồng bộ khoảng (nút + auto) CHỈ dành cho vai quản lý tài khoản thuế
+// (canManageTaxAccounts) — seed vai qua applyMe; vai ke_toan → không panel, không auto.
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAuth } from "../../src/features/auth/auth-context";
 import { InvoicesPage } from "../../src/features/invoices/InvoicesPage";
 import { clearToken, setToken } from "../../src/lib/apiClient";
 import { saveInvoiceFilter } from "../../src/lib/filterStore";
-import type { InvoiceListRow, TaxAccountView } from "../../src/types/api";
+import type { InvoiceListRow, MeResponse, Role, TaxAccountView } from "../../src/types/api";
 import { renderWithProviders } from "../helpers/renderApp";
 
 const ACC: TaxAccountView = {
@@ -30,6 +34,26 @@ function j(status: number, body: unknown): Response {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+/** Render InvoicesPage với vai đã seed (mặc định quan_tri — có quyền quản lý tài khoản thuế). */
+function InvoicesPageAs({ vaiTro = "quan_tri" }: { vaiTro?: Role }) {
+  const { applyMe } = useAuth();
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current) return;
+    done.current = true;
+    const me: MeResponse = {
+      ten: "DN",
+      mst: "0311772540",
+      goiDichVu: null,
+      banQuyen: "Mặc định",
+      ghiChu: null,
+      role: vaiTro,
+    };
+    applyMe(me);
+  }, [applyMe, vaiTro]);
+  return <InvoicesPage />;
 }
 
 const ROW: InvoiceListRow = {
@@ -111,7 +135,7 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
 
   it("kỳ rỗng + còn phiên → TỰ gọi backfill (khoảng)+backfill-lines, hiện thanh tiến độ", async () => {
     const { posts } = mockApi({ accounts: [ACC] });
-    renderWithProviders(<InvoicesPage />);
+    renderWithProviders(<InvoicesPageAs />);
     expect(await screen.findByRole("progressbar")).toBeInTheDocument();
     expect(await screen.findByText(/2029/)).toBeInTheDocument();
     expect(posts).toContain("backfill");
@@ -120,7 +144,7 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
 
   it("danh sách CÓ dữ liệu → bấm nút 'Đồng bộ khoảng này' → gọi backfill+backfill-lines (thủ công)", async () => {
     const { posts } = mockApi({ accounts: [ACC], rows: [ROW] });
-    renderWithProviders(<InvoicesPage />);
+    renderWithProviders(<InvoicesPageAs />);
     // list không rỗng → KHÔNG tự chạy; chờ bảng hiện rồi bấm nút.
     await screen.findByText("VND");
     expect(posts).toHaveLength(0); // chưa bấm → chưa gọi
@@ -132,7 +156,7 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
 
   it("backfill hoàn thành → TỰ làm mới danh sách hóa đơn (invalidate)", async () => {
     const api = mockApi({ accounts: [ACC], progressTong: "hoan_thanh" });
-    renderWithProviders(<InvoicesPage />);
+    renderWithProviders(<InvoicesPageAs />);
     // Poll trả 'hoan_thanh' → banner "đã đồng bộ xong" + invalidate → /invoices gọi lại (>1).
     expect(await screen.findByText(/Đã đồng bộ xong/)).toBeInTheDocument();
     await vi.waitFor(() => expect(api.invoiceCalls()).toBeGreaterThan(1));
@@ -142,7 +166,7 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     const { posts } = mockApi({
       accounts: [{ ...ACC, tokenHetHan: new Date(Date.now() - 1000).toISOString() }],
     });
-    renderWithProviders(<InvoicesPage />);
+    renderWithProviders(<InvoicesPageAs />);
     expect(await screen.findByText(/kết nối lại/i)).toBeInTheDocument();
     expect(posts).toHaveLength(0);
   });
@@ -150,8 +174,18 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
   it("thiếu khoảng ngày → KHÔNG hiện panel đồng bộ khoảng", async () => {
     saveInvoiceFilter({ tuNgay: "2026-03-01" }); // thiếu denNgay
     mockApi({ accounts: [ACC] });
-    renderWithProviders(<InvoicesPage />);
+    renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("Danh sách hóa đơn");
     expect(screen.queryByRole("button", { name: /Đồng bộ khoảng này/ })).toBeNull();
+  });
+
+  it("vai ke_toan → KHÔNG hiện panel VÀ không tự gọi backfill (U27-B3 AC6)", async () => {
+    const { posts } = mockApi({ accounts: [ACC] }); // kỳ rỗng
+    renderWithProviders(<InvoicesPageAs vaiTro="ke_toan" />);
+    // Kỳ rỗng + vai không đủ quyền → auto KHÔNG chạy → hiện ô rỗng thường (không thanh tiến độ).
+    expect(await screen.findByText(/Không có hóa đơn khớp bộ lọc/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Đồng bộ khoảng này/ })).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(posts).toHaveLength(0);
   });
 });
