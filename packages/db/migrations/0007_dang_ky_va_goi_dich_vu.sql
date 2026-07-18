@@ -65,3 +65,61 @@ CREATE POLICY "goi_dich_vu_doc_moi_nguoi" ON "goi_dich_vu" FOR SELECT USING (tru
 -- hàng khi mở đọc rộng. (Đây KHÔNG suy ra từ việc đường ghi bị RLS chặn — an toàn của
 -- đường GHI không biện minh cho việc mở đường ĐỌC; lý do đứng độc lập như trên.)
 GRANT SELECT ON "goi_dich_vu" TO PUBLIC;
+--> statement-breakpoint
+
+-- ── cau_hinh_he_thong (QĐ-5 hạng B) ────────────────────────────────────────────
+-- Cùng thứ tự có chủ ý: CREATE → seed → ENABLE → FORCE → POLICY → GRANT.
+CREATE TABLE IF NOT EXISTS "cau_hinh_he_thong" (
+  "khoa" text PRIMARY KEY,
+  "gia_tri" text NOT NULL,
+  "mo_ta" text,
+  "cap_nhat_luc" timestamp with time zone NOT NULL DEFAULT now()
+);--> statement-breakpoint
+
+-- Ngưỡng đăng ký/IP: sửa được từ bảng điều khiển nhưng KẸP BIÊN 1..50/giờ trong mã
+-- (configClamp.ts) — đây là cơ chế chống spam, không phải hạn mức thương mại.
+INSERT INTO "cau_hinh_he_thong" ("khoa", "gia_tri", "mo_ta")
+VALUES ('dangky_max_moi_ip_gio', '5', 'Số lượt đăng ký tối đa mỗi IP mỗi giờ (kẹp 1..50)')
+ON CONFLICT ("khoa") DO NOTHING;--> statement-breakpoint
+
+ALTER TABLE "cau_hinh_he_thong" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "cau_hinh_he_thong" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+DROP POLICY IF EXISTS "cau_hinh_doc_moi_nguoi" ON "cau_hinh_he_thong";--> statement-breakpoint
+CREATE POLICY "cau_hinh_doc_moi_nguoi" ON "cau_hinh_he_thong" FOR SELECT USING (true);--> statement-breakpoint
+GRANT SELECT ON "cau_hinh_he_thong" TO PUBLIC;--> statement-breakpoint
+
+-- ── audit_log_admin (QĐ-6) ─────────────────────────────────────────────────────
+-- KHÔNG bật RLS chặn ghi ở đây: khác hai bảng trên, bảng này PHẢI ghi được (U18 ghi vào).
+-- Bất biến bảo đảm bằng TRIGGER append-only — đúng mẫu 0002, vốn chọn trigger thay REVOKE
+-- vì REVOKE phụ thuộc tên role provider-specific và KHÔNG chi phối table owner.
+CREATE TABLE IF NOT EXISTS "audit_log_admin" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "hanh_dong" text NOT NULL,
+  "doi_tuong" text,
+  "nguoi_thuc_hien" text NOT NULL,
+  "chi_tiet" jsonb,
+  "tao_luc" timestamp with time zone NOT NULL DEFAULT now()
+);--> statement-breakpoint
+
+CREATE OR REPLACE FUNCTION audit_log_admin_no_mutate()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'audit_log_admin là append-only: không được % (security.md)', TG_OP;
+END;
+$$;--> statement-breakpoint
+DROP TRIGGER IF EXISTS audit_log_admin_immutable ON "audit_log_admin";--> statement-breakpoint
+CREATE TRIGGER audit_log_admin_immutable
+BEFORE UPDATE OR DELETE ON "audit_log_admin"
+FOR EACH ROW
+EXECUTE FUNCTION audit_log_admin_no_mutate();--> statement-breakpoint
+-- TRUNCATE là lệnh CẤP CÂU LỆNH → trigger row-level ở trên KHÔNG kích hoạt (bài học
+-- security-reviewer 2026-07-14 ở 0002).
+DROP TRIGGER IF EXISTS audit_log_admin_no_truncate ON "audit_log_admin";--> statement-breakpoint
+CREATE TRIGGER audit_log_admin_no_truncate
+BEFORE TRUNCATE ON "audit_log_admin"
+FOR EACH STATEMENT
+EXECUTE FUNCTION audit_log_admin_no_mutate();--> statement-breakpoint
+REVOKE UPDATE, DELETE, TRUNCATE ON "audit_log_admin" FROM PUBLIC;--> statement-breakpoint
+GRANT SELECT, INSERT ON "audit_log_admin" TO PUBLIC;

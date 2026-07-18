@@ -107,3 +107,107 @@ describe("U17a — goi_dich_vu (integration, PGlite)", () => {
     expect(after.rows[0]?.so_mst_toi_da).toBe(1);
   });
 });
+
+describe("U17a — cau_hinh_he_thong (integration, PGlite)", () => {
+  let db: Db;
+  beforeEach(async () => {
+    db = await freshDb();
+  });
+
+  it("seed ngưỡng đăng ký/IP = 5 (hạng B, QĐ-5), lưu dạng text", async () => {
+    const res = (await db.execute(
+      sql`select gia_tri from cau_hinh_he_thong where khoa = 'dangky_max_moi_ip_gio'`,
+    )) as { rows: Array<{ gia_tri: string }> };
+    // text CÓ CHỦ Ý: mọi resolveXxxConfig hiện nhận Record<string, string|undefined>,
+    // giữ text cho phép tái dùng NGUYÊN các hàm thuần đã test, chỉ đổi nguồn nạp.
+    expect(res.rows[0]?.gia_tri).toBe("5");
+  });
+
+  it("RLS bật + FORCE", async () => {
+    const rls = (await db.execute(
+      sql`select relrowsecurity, relforcerowsecurity from pg_class where relname = 'cau_hinh_he_thong'`,
+    )) as { rows: Array<{ relrowsecurity: boolean; relforcerowsecurity: boolean }> };
+    expect(rls.rows[0]?.relrowsecurity).toBe(true);
+    expect(rls.rows[0]?.relforcerowsecurity).toBe(true);
+  });
+
+  it("KHÔNG có policy ghi nào (gác đúng tầng RLS, không phải tầng GRANT)", async () => {
+    // Khẳng định TRỰC TIẾP trên catalog. Suy ra từ "lệnh ghi ném lỗi" là gác nhầm tầng:
+    // Postgres kiểm quyền GRANT TRƯỚC RLS, nên một role thiếu GRANT sẽ ném lỗi kể cả khi
+    // policy mở toang đường ghi ⇒ test kiểu đó LUÔN XANH. (Đã kiểm chứng bằng mutation
+    // test ở Task 2: tiêm policy FOR ALL USING(true) mà test cũ vẫn xanh.)
+    const res = (await db.execute(
+      sql`select cmd from pg_policies where tablename = 'cau_hinh_he_thong'`,
+    )) as { rows: Array<{ cmd: string }> };
+    expect(res.rows.map((r) => r.cmd)).toEqual(["SELECT"]);
+  });
+
+  it("role app CÓ ĐỦ QUYỀN GHI vẫn bị RLS chặn (cấu hình giống production)", async () => {
+    await db.execute(sql`create role app_user nosuperuser`);
+    await db.execute(sql`grant usage on schema public to app_user`);
+    // Cấp ĐỦ quyền ghi — đây mới là cấu hình production thật: app-role.sql:28 chạy
+    // `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES`. Không cấp thì test gác nhầm tầng.
+    await db.execute(sql`grant select, insert, update, delete on cau_hinh_he_thong to app_user`);
+    await db.execute(sql`set role app_user`);
+
+    const doc = (await db.execute(
+      sql`select khoa from cau_hinh_he_thong where khoa = 'dangky_max_moi_ip_gio'`,
+    )) as { rows: Array<{ khoa: string }> };
+    expect(doc.rows).toHaveLength(1);
+
+    // INSERT ném lỗi RLS ("new row violates row-level security policy").
+    await expect(
+      db.execute(sql`insert into cau_hinh_he_thong (khoa, gia_tri) values ('hack', '1')`),
+    ).rejects.toThrow();
+
+    // ⚠️ UPDATE/DELETE dưới RLS KHÔNG ném lỗi — chỉ ảnh hưởng 0 hàng (đo được ở Task 2).
+    // Vì vậy phải khẳng định DỮ LIỆU KHÔNG ĐỔI, không được dùng rejects.toThrow().
+    await expect(
+      db.execute(
+        sql`update cau_hinh_he_thong set gia_tri = '9999' where khoa = 'dangky_max_moi_ip_gio'`,
+      ),
+    ).resolves.not.toThrow();
+    await db.execute(sql`reset role`);
+
+    const sau = (await db.execute(
+      sql`select gia_tri from cau_hinh_he_thong where khoa = 'dangky_max_moi_ip_gio'`,
+    )) as { rows: Array<{ gia_tri: string }> };
+    expect(sau.rows[0]?.gia_tri).toBe("5");
+  });
+});
+
+describe("U17a — audit_log_admin (integration, PGlite)", () => {
+  let db: Db;
+  beforeEach(async () => {
+    db = await freshDb();
+  });
+
+  it("ghi được nhật ký toàn cục KHÔNG cần tenant_id (gỡ hard stop QĐ-6)", async () => {
+    // audit_log của khách có tenant_id NOT NULL + FK cascade + RLS for:all + trigger
+    // append-only ⇒ thay đổi cấu hình TOÀN CỤC không có chỗ ghi hợp lệ. Bảng này là chỗ đó.
+    await db.execute(
+      sql`insert into audit_log_admin (hanh_dong, doi_tuong, nguoi_thuc_hien, chi_tiet)
+          values ('doi_nguong', 'goi_dich_vu:free', 'admin@vd.vn',
+                  '{"truoc": 120, "sau": 200}'::jsonb)`,
+    );
+    const res = (await db.execute(
+      sql`select hanh_dong, nguoi_thuc_hien, chi_tiet from audit_log_admin`,
+    )) as { rows: Array<Record<string, unknown>> };
+    expect(res.rows).toHaveLength(1);
+    // Ghi CŨ → MỚI, không chỉ tên trường như tiền lệ me.ts:89 — thiếu giá trị cũ thì
+    // audit vô dụng khi điều tra sự cố (QĐ-6).
+    expect(res.rows[0]?.chi_tiet).toMatchObject({ truoc: 120, sau: 200 });
+  });
+
+  it("append-only: UPDATE và DELETE bị trigger chặn kể cả owner", async () => {
+    await db.execute(
+      sql`insert into audit_log_admin (hanh_dong, nguoi_thuc_hien) values ('x', 'admin@vd.vn')`,
+    );
+    await expect(db.execute(sql`update audit_log_admin set hanh_dong = 'y'`)).rejects.toThrow();
+    await expect(db.execute(sql`delete from audit_log_admin`)).rejects.toThrow();
+  });
+
+  it("append-only: TRUNCATE cũng bị chặn (trigger statement-level)", async () => {
+    await expect(db.execute(sql`truncate audit_log_admin`)).rejects.toThrow();
+  });
+});
