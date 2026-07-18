@@ -208,33 +208,35 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 
 **Nguồn phát hiện:** review chéo `dod-auditor` (Finding 3), phiên 2026-07-18.
 
-## [2026-07-18] Ghép all-or-nothing normal+sco trong MỘT run: 429 nhánh sco vứt bỏ dữ liệu normal đã lấy được
+## [2026-07-18] Sau U28: hợp nhất hai cơ chế kìm nhịp pha 1 + dedupe job backfill trùng
 
 **Ngày phát hiện:** 2026-07-18 (phiên chẩn đoán "1 tháng chưa kéo được dữ liệu").
 
-**Mô tả:** `queryInvoices` gộp 2 họ endpoint (normal + sco) trong một lượt lấy; `sync()`
-chỉ persist khi TOÀN BỘ thành công. Bằng chứng production (`lan_dong_bo` 24h,
-2026-07-18): 68 lần failed HTTP 429 thì ~90% rơi ở nhánh `sco-query` — nhánh đứng CUỐI
-chuỗi gọi — nghĩa là các trang normal ĐÃ lấy xong rồi bị vứt. Mỗi lần backpressure thử
-lại chạy lại CẢ chuỗi phân trang normal từ đầu → đốt thêm quota rate-limit của GDT đúng
-lúc đang bị phạt → tự nuôi cửa sổ phạt (2026-07 purchase: 84 run failed/48h, 0 completed).
-Trạng thái `hoan_thanh_mot_phan` ĐÃ có trong schema (`lan_dong_bo.ts` mô tả "phần thành
-công đã lưu") + coverage đã đọc nó, nhưng CHƯA có code nào GHI nó — khái niệm thiết kế
-rồi bỏ dở.
+> **ĐÍNH CHÍNH cùng ngày:** bản đầu của mục này đề xuất "sco-429 → persist normal +
+> `hoan_thanh_mot_phan`, ưu tiên Cao" — **RÚT LẠI**. Phiên song song cùng ngày đã bác
+> tiền đề (xem `docs/plans/U28-plan.md` §0b, nhánh `claude/fix-subrequest-breaker`):
+> toàn bộ hoá đơn bán ra của tenant hiện tại là `sco` (normal = 0), nên "dữ liệu normal
+> bị vứt" gần như không tồn tại; tỷ lệ 429 nghiêng về sco chỉ là **phân bố khối lượng
+> request** (normal đứng trước, sco lãnh 429 ở cuối chuỗi). Gốc thật (xác thực 3 lớp):
+> pha 1 lấy **1 permit rồi bắn tới 42 request** — U28 (permit-per-request qua decorator
+> `GdtTransport`) là lời giải đã được duyệt kế hoạch. Ghép all-or-nothing normal+sco
+> chỉ còn đáng bàn khi có tenant TRỘN thật sự hai họ — chưa quan sát được.
 
-**Rủi ro nếu bỏ qua:** dưới cửa sổ phạt 429 kéo dài (quan sát ≥3.5h), tháng nào đụng
-sco-429 sẽ kẹt "loi" vô hạn dù dữ liệu normal đã trong tay; người dùng không thấy gì.
+**Còn lại đáng làm (sau khi U28 hiện thực):**
 
-**Đề xuất hướng xử lý (cần chủ dự án duyệt — đổi ngữ nghĩa coverage, có thể cần cột
-mới):** một trong hai: (a) sco-429 sau khi normal xong → persist normal + ghi
-`hoan_thanh_mot_phan` (coverage hiện coi mot_phan = chưa phủ nên tháng vẫn được thử
-lại — dữ liệu hiện ra trước, sco bù sau); (b) tách message theo HỌ endpoint
-(normal/sco riêng) — cần coverage phân biệt họ (thêm cột `nguon` vào `lan_dong_bo`
-+ migration). Kèm theo: dedupe job trùng (POST /backfill lặp khi tháng đang có job
-chạy/backpressure — quan sát 2 run cùng phút nhiều lần), và cân nhắc permit-per-page
-qua TenantLimiter cho job header (hiện 1 permit/job nhưng job bắn N request).
+1. **Hợp nhất kìm nhịp:** PR #11 (vá nóng cùng ngày) wire `SYNC_PAGE_MIN_INTERVAL_MS=500`
+   (giãn nhịp bằng sleep — U25 AC3) vào pha 1. Khi U28 (permit-per-request) hoạt động,
+   hai cơ chế CHỒNG nhau → mỗi trang chờ ~2×500ms. Không sai nhưng lãng phí wall-time:
+   sau khi nghiệm thu U28 trên production, cân nhắc hạ `SYNC_PAGE_MIN_INTERVAL_MS`
+   → `"0"` (tắt tường minh, permit làm chủ nhịp) — chỉ đổi vars, không đổi code.
+2. **Dedupe job backfill trùng:** POST /backfill tính "tháng thiếu" từ `lan_dong_bo`,
+   nên tháng đang failed/đang backpressure vẫn bị enqueue LẠI mỗi lần người dùng bấm
+   (quan sát production: 2 run cùng tháng cùng phút, nhiều lần trong 07:38–09:10Z).
+   Dưới cửa sổ phạt 429, mỗi cú bấm nhân thêm tải đúng lúc tệ nhất. Hướng: tracker DO
+   đã có sẵn — kiểm "backfill đang sống cho (tài khoản, tháng, chiều)" trước khi enqueue.
 
-**Ưu tiên đề xuất:** Cao (đây là khuếch đại chính của sự cố 429, sau khi đã vá pacing).
+**Ưu tiên đề xuất:** Trung bình (cả hai đều là dọn-sau-U28; U28 mới là việc chính).
 
-**Nguồn phát hiện:** phiên chẩn đoán 2026-07-18, bằng chứng `lan_dong_bo` production +
-đọc `packages/gdt-client/src/query.ts` / `packages/sync/src/sync.ts`.
+**Nguồn phát hiện:** phiên chẩn đoán 2026-07-18 (bằng chứng `lan_dong_bo` production),
+đối chiếu `docs/plans/U28-plan.md` (phiên song song cùng ngày, nhánh
+`claude/fix-subrequest-breaker`).
