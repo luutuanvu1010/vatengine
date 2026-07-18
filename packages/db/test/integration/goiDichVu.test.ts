@@ -72,16 +72,38 @@ describe("U17a — goi_dich_vu (integration, PGlite)", () => {
     await db.execute(sql`reset role`);
   });
 
-  it("role app KHÔNG-superuser: GHI bị chặn (đường ghi là U18, không phải role khách)", async () => {
+  it("KHÔNG có policy ghi nào trên goi_dich_vu (gác đúng tầng RLS, không phải tầng GRANT)", async () => {
+    const res = (await db.execute(
+      sql`select cmd from pg_policies where tablename = 'goi_dich_vu'`,
+    )) as { rows: Array<{ cmd: string }> };
+    expect(res.rows.map((r) => r.cmd)).toEqual(["SELECT"]);
+  });
+
+  it("role app KHÔNG-superuser CÓ đủ quyền GRANT ghi: RLS vẫn chặn (đường ghi thật là U18)", async () => {
     await db.execute(sql`create role app_user nosuperuser`);
     await db.execute(sql`grant usage on schema public to app_user`);
+    // Cấp ĐỦ quyền ghi (giống production, xem app-role.sql:28) để chắc chắn lỗi phía dưới
+    // đến từ tầng RLS, không phải bị chặn sớm hơn ở tầng GRANT.
+    await db.execute(sql`grant select, insert, update, delete on goi_dich_vu to app_user`);
     await db.execute(sql`set role app_user`);
+
+    // INSERT: RLS chặn bằng NÉM LỖI (đo được — không suy đoán).
     await expect(
       db.execute(sql`insert into goi_dich_vu (ma, ten, so_mst_toi_da) values ('hack', 'x', 999)`),
     ).rejects.toThrow();
+
+    // UPDATE dưới RLS: ĐO ĐƯỢC là KHÔNG ném lỗi — chỉ ảnh hưởng 0 hàng (không có policy
+    // nào cho app_user nhìn thấy hàng để sửa). Không được viết rejects.toThrow() ở đây.
     await expect(
       db.execute(sql`update goi_dich_vu set so_mst_toi_da = 999 where ma = 'free'`),
-    ).rejects.toThrow();
+    ).resolves.not.toThrow();
+
     await db.execute(sql`reset role`);
+
+    // Xác nhận dữ liệu THẬT SỰ không đổi (UPDATE "chạy" nhưng vô hại).
+    const after = (await db.execute(
+      sql`select so_mst_toi_da from goi_dich_vu where ma = 'free'`,
+    )) as { rows: Array<{ so_mst_toi_da: number }> };
+    expect(after.rows[0]?.so_mst_toi_da).toBe(1);
   });
 });

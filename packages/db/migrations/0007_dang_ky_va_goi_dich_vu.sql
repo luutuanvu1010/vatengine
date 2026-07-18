@@ -36,10 +36,21 @@ ON CONFLICT ("ma") DO NOTHING;--> statement-breakpoint
 ALTER TABLE "goi_dich_vu" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "goi_dich_vu" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
--- CHỈ policy SELECT. Cố ý KHÔNG tạo policy INSERT/UPDATE/DELETE ⇒ mọi đường ghi bị chặn
--- ở tầng RLS, kể cả owner. Đường ghi của Admin (U18) sẽ đi qua hàm SECURITY DEFINER do
--- một role BYPASSRLS sở hữu — đúng mẫu auth_lookup_user (0001). LƯU Ý cho U18: hàm
--- SECURITY DEFINER do role KHÔNG-BYPASSRLS sở hữu VẪN bị FORCE chặn (0001:4-8 ghi rõ).
+-- CHỈ policy SELECT. Cố ý KHÔNG tạo policy INSERT/UPDATE/DELETE. ĐÃ ĐO THẬT (không suy
+-- đoán — xem goiDichVu.test.ts) hành vi với role có GRANT ghi nhưng KHÔNG có BYPASSRLS
+-- (vd. role app kết nối Hyperdrive, xem app-role.sql):
+--   * INSERT bị RLS chặn và NÉM LỖI "new row violates row-level security policy".
+--   * UPDATE/DELETE KHÔNG ném lỗi — chạy "thành công" nhưng ảnh hưởng 0 HÀNG (WHERE không
+--     khớp hàng nào vì không có policy nào cho phép nhìn thấy hàng để sửa/xoá). Code nào
+--     trông chờ exception cho hai lệnh này sẽ bị lừa: phải kiểm rowCount, không phải
+--     try/catch. U18 (đường ghi Admin) PHẢI biết điều này khi viết code ghi + kiểm kết quả.
+--   * "Chặn cả owner" là SAI ở MỌI môi trường hiện có: FORCE ROW LEVEL SECURITY không chi
+--     phối role có BYPASSRLS/superuser. PGlite (test) chạy dưới role `postgres` (superuser
+--     → tự bypass); trên Neon, `neondb_owner` CÓ BYPASSRLS (xem app-role.sql:9) — cả hai
+--     nơi INSERT/UPDATE bằng owner đều THÀNH CÔNG và đổi được dữ liệu thật.
+--   Vì vậy đường ghi hợp lệ của Admin (U18) sẽ đi qua hàm SECURITY DEFINER do một role
+--   BYPASSRLS sở hữu — đúng mẫu auth_lookup_user (0001). LƯU Ý cho U18: hàm SECURITY
+--   DEFINER do role KHÔNG-BYPASSRLS sở hữu VẪN bị FORCE chặn (0001:4-8 ghi rõ).
 DROP POLICY IF EXISTS "goi_dich_vu_doc_moi_nguoi" ON "goi_dich_vu";--> statement-breakpoint
 CREATE POLICY "goi_dich_vu_doc_moi_nguoi" ON "goi_dich_vu" FOR SELECT USING (true);--> statement-breakpoint
 
@@ -47,4 +58,10 @@ CREATE POLICY "goi_dich_vu_doc_moi_nguoi" ON "goi_dich_vu" FOR SELECT USING (tru
 -- chạy MỘT LẦN và toàn repo KHÔNG có `ALTER DEFAULT PRIVILEGES` (đã grep, = 0). Bảng tạo
 -- ở migration này KHÔNG thừa hưởng quyền nào ⇒ quên GRANT thì API lỗi `permission denied`
 -- và lỗi chỉ lộ ra SAU khi deploy production.
+--
+-- Vì sao TO PUBLIC (mở đọc cho mọi role, không riêng role app): bảng này KHÔNG chứa dữ
+-- liệu của bất kỳ tenant nào — chỉ là định nghĩa gói dịch vụ toàn cục (tên gói, hạn mức).
+-- Không có trục tenant ⇒ không có bề mặt rò rỉ dữ liệu chéo giữa các doanh nghiệp khách
+-- hàng khi mở đọc rộng. (Đây KHÔNG suy ra từ việc đường ghi bị RLS chặn — an toàn của
+-- đường GHI không biện minh cho việc mở đường ĐỌC; lý do đứng độc lập như trên.)
 GRANT SELECT ON "goi_dich_vu" TO PUBLIC;
