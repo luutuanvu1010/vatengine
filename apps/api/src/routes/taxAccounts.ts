@@ -25,6 +25,7 @@ import { and, count, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { isUuid, requireTenant } from "../auth";
+import { type HanMucGoi, docHanMucGoi } from "../goiDichVuConfig";
 import { isQueueRateLimited, resolveBackfillLinesPaceMs, sendBatchesPaced } from "../queueEnqueue";
 import { requireRole } from "../rbac";
 import type { AppDeps, AppEnv } from "../types";
@@ -47,15 +48,17 @@ const registerSchema = z.object({
 // (≤100 msg/batch) — vừa ngân sách 50 subrequest/lần gọi Workers Free, có lề cho DB.
 export const MAX_BACKFILL_LINES_MOI_LAN = 4000;
 
-// Hạn mức số tài khoản thuế / tenant. TODO (U17): lấy theo GÓI DỊCH VỤ (tenants.goiDichVu →
-// bảng gói). Tạm hardcode = 1 tại MỘT điểm — không rải magic number khắp handler.
-export function getGioiHanTkThue(_tenant: { goiDichVu: string | null }): number {
-  return 1;
+// U17a — Hạn mức số tài khoản thuế / tenant, ĐỌC THEO GÓI DỊCH VỤ (thay hardcode cũ).
+// Giữ nguyên CHỮ KÝ đồng bộ để không vỡ call-site; hạn mức đã được `docHanMucGoi` đọc
+// và kẹp biên từ trước, hàm này chỉ lấy ra.
+export function getGioiHanTkThue(hanMuc: HanMucGoi): number {
+  return hanMuc.soMstToiDa;
 }
 
-// Cờ module tài khoản con (U23-D — "chỉ dựng nền"). Mặc định TẮT. Bật ⇒ cho tạo loai='con'
-// với username theo nhánh MST. TODO: chuyển sang cấu hình theo gói dịch vụ khi U17 xong.
-export const SUB_ACCOUNT_MODULE_ENABLED = false;
+// U17a — Cờ module tài khoản con nay theo GÓI (thay hằng TẮT cứng). Gói `free` để false.
+export function isSubAccountEnabled(hanMuc: HanMucGoi): boolean {
+  return hanMuc.choTaiKhoanCon;
+}
 
 // Username tài khoản CON hợp lệ: là NHÁNH của MST gốc (dài hơn + bắt đầu bằng MST) — chống
 // dùng MST ngoài doanh nghiệp. Vd "abcd-001" hợp lệ với MST "abcd"; "abcd" trơn là tài khoản
@@ -97,10 +100,6 @@ export function taxAccountsRoutes(deps: AppDeps) {
     if (!parsed.success) return c.json({ error: "bad_request" }, 400);
 
     const loai = parsed.data.loai ?? "chinh";
-    // Tài khoản con chỉ khả dụng khi module bật (mặc định TẮT — U23-D chỉ dựng nền).
-    if (loai === "con" && !SUB_ACCOUNT_MODULE_ENABLED) {
-      return c.json({ error: "sub_account_disabled" }, 400);
-    }
 
     const tenantId = c.get("tenantId");
     const { db, close } = await deps.getDb(c.env);
@@ -124,12 +123,16 @@ export function taxAccountsRoutes(deps: AppDeps) {
           username = tenant.mst;
         }
 
-        // Hạn mức (tạm =1) — đếm tài khoản thuế hiện có của tenant.
+        const hanMuc = await docHanMucGoi(tx, tenant.goiDichVu);
+        if (loai === "con" && !isSubAccountEnabled(hanMuc)) {
+          return { kind: "sub_disabled" as const };
+        }
+        // Hạn mức theo gói — đếm tài khoản thuế hiện có của tenant.
         const cnt = await tx
           .select({ n: count() })
           .from(taiKhoanThue)
           .where(eq(taiKhoanThue.tenantId, tenantId));
-        if (Number(cnt[0]?.n ?? 0) >= getGioiHanTkThue(tenant)) {
+        if (Number(cnt[0]?.n ?? 0) >= getGioiHanTkThue(hanMuc)) {
           return { kind: "limit_reached" as const };
         }
 
@@ -145,6 +148,8 @@ export function taxAccountsRoutes(deps: AppDeps) {
           return c.json({ error: "mst_missing", message: "Doanh nghiệp chưa khai MST" }, 400);
         case "sub_prefix_invalid":
           return c.json({ error: "sub_prefix_invalid" }, 400);
+        case "sub_disabled":
+          return c.json({ error: "sub_account_disabled" }, 400);
         case "limit_reached":
           return c.json({ error: "limit_reached", message: "Đã đạt hạn mức tài khoản thuế" }, 409);
         default:

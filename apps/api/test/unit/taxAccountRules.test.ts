@@ -1,19 +1,21 @@
 // U23-D2 — quy tắc tài khoản thuế thuần (không route/DB): hạn mức + validate tiền tố con.
 import { describe, expect, it } from "vitest";
+import { HAN_MUC_MAC_DINH } from "../../src/goiDichVuConfig";
 import {
-  SUB_ACCOUNT_MODULE_ENABLED,
   getGioiHanTkThue,
+  isSubAccountEnabled,
   isValidSubUsername,
 } from "../../src/routes/taxAccounts";
 
 describe("U23-D2 — quy tắc tài khoản thuế (unit)", () => {
-  it("getGioiHanTkThue tạm = 1 (TODO nối gói dịch vụ U17)", () => {
-    expect(getGioiHanTkThue({ goiDichVu: null })).toBe(1);
-    expect(getGioiHanTkThue({ goiDichVu: "Miễn phí" })).toBe(1);
+  it("getGioiHanTkThue lấy hạn mức từ GÓI, không còn hardcode (U17a)", () => {
+    expect(getGioiHanTkThue(HAN_MUC_MAC_DINH)).toBe(1);
+    expect(getGioiHanTkThue({ ...HAN_MUC_MAC_DINH, soMstToiDa: 5 })).toBe(5);
   });
 
-  it("module tài khoản con mặc định TẮT ở U23-D (chỉ dựng nền)", () => {
-    expect(SUB_ACCOUNT_MODULE_ENABLED).toBe(false);
+  it("module tài khoản con theo GÓI; gói free = tắt", () => {
+    expect(isSubAccountEnabled(HAN_MUC_MAC_DINH)).toBe(false);
+    expect(isSubAccountEnabled({ ...HAN_MUC_MAC_DINH, choTaiKhoanCon: true })).toBe(true);
   });
 
   it("isValidSubUsername: username con phải bắt đầu bằng MST gốc", () => {
