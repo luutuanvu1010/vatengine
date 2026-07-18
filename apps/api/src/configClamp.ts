@@ -8,7 +8,7 @@
 // refillPerSec xuống dưới 1/s (mặc định 2/s) — đúng hành vi Hiến pháp mong muốn nhất
 // ("Tôn trọng máy chủ thuế… Không gọi dồn dập").
 
-function parseFinite(raw: unknown): number | null {
+export function parseFinite(raw: unknown): number | null {
   if (raw === undefined || raw === null || raw === "") return null;
   const n = typeof raw === "number" ? raw : Number(raw);
   return Number.isFinite(n) ? n : null;

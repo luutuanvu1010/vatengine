@@ -127,4 +127,34 @@ describe("U17a — docCauHinhToanCuc (thứ tự DB → env → DEFAULT)", () =>
     );
     expect(n).toBe(5);
   });
+
+  it("giá trị DB rỗng (''), env có hợp lệ → rơi xuống env (KHÔNG nhảy cóc)", async () => {
+    await db.execute(
+      sql`update cau_hinh_he_thong set gia_tri = '' where khoa = 'dangky_max_moi_ip_gio'`,
+    );
+    const n = await docCauHinhToanCuc(
+      db,
+      "dangky_max_moi_ip_gio",
+      { DANGKY_MAX_MOI_IP_GIO: "7" },
+      "DANGKY_MAX_MOI_IP_GIO",
+      BIEN,
+      5,
+    );
+    expect(n).toBe(7);
+  });
+
+  it("giá trị DB rác ('abc'), env có hợp lệ → rơi xuống env (KHÔNG nhảy cóc)", async () => {
+    await db.execute(
+      sql`update cau_hinh_he_thong set gia_tri = 'abc' where khoa = 'dangky_max_moi_ip_gio'`,
+    );
+    const n = await docCauHinhToanCuc(
+      db,
+      "dangky_max_moi_ip_gio",
+      { DANGKY_MAX_MOI_IP_GIO: "7" },
+      "DANGKY_MAX_MOI_IP_GIO",
+      BIEN,
+      5,
+    );
+    expect(n).toBe(7);
+  });
 });

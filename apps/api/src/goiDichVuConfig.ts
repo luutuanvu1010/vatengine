@@ -8,7 +8,7 @@
 import { maskSensitive } from "@vat/crypto";
 import { cauHinhHeThong, goiDichVu } from "@vat/db";
 import { eq } from "drizzle-orm";
-import { clampInt } from "./configClamp";
+import { clampInt, parseFinite } from "./configClamp";
 import type { AnyDb } from "./types";
 
 export interface HanMucGoi {
@@ -141,7 +141,10 @@ export async function docCauHinhToanCuc(
     console.warn(JSON.stringify({ type: "cau_hinh_doc_loi", khoa, loi: maskSensitive(loi) }));
   }
 
-  // Thứ tự ưu tiên; giá trị rỗng/không đọc được thì rơi xuống tầng sau.
-  const tho = thoDb ?? env[envKey];
+  // Thứ tự ưu tiên: DB → env → DEFAULT.
+  // DB được dùng chỉ khi có giá trị THỰC SỰ DÙNG ĐƯỢC (parse ra số hữu hạn).
+  // Giá trị rỗng/rác trong DB (chuỗi rỗng, không phải số) thì BỎ QUA DB
+  // và rơi xuống tầng env, rồi mới tới DEFAULT. (KHÔNG nhảy cóc env.)
+  const tho = parseFinite(thoDb) !== null ? thoDb : env[envKey];
   return clampInt(tho, bien.min, bien.max, macDinh);
 }
