@@ -28,8 +28,18 @@ export function backfillRoutes(deps: AppDeps) {
 
     const { db, close } = await deps.getDb(c.env);
     try {
+      // `def.createdAtMs` (SỰ CỐ 2026-07-18): bỏ qua bản ghi THẤT BẠI CŨ hơn thời điểm
+      // tạo backfill — không để lỗi của các lần chạy trước làm banner báo "loi" NGAY
+      // khi bấm trong khi job mới còn chưa chạy.
       const progress = await withTenant(db, tenantId, (tx) =>
-        monthlyBackfillStatus(tx, tenantId, def.taikhoanId, def.directions, def.months),
+        monthlyBackfillStatus(
+          tx,
+          tenantId,
+          def.taikhoanId,
+          def.directions,
+          def.months,
+          def.createdAtMs,
+        ),
       );
       return c.json({ backfillId: id, ...progress });
     } finally {
