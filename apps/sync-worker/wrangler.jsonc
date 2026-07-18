@@ -41,9 +41,16 @@
         // của gói Free** → `lan_dong_bo` ghi n=61 lỗi "Too many subrequests by single
         // Worker invocation" (bằng chứng: production, 05:30–06:15Z 2026-07-18), kéo
         // theo mở circuit breaker và chặn toàn bộ đồng bộ.
-        // 1 message/invocation ⇒ mỗi job có trọn 50 subrequest. Đánh đổi: thông lượng
-        // thấp hơn (bù bằng `max_concurrency`). NÂNG LẠI khi lên Workers Paid
-        // (1000 subrequest/invocation) — lúc đó 10 là an toàn.
+        // 1 message/invocation ⇒ mỗi job có TRỌN ngân sách 50 subrequest thay vì chia
+        // cho 10 job. Đánh đổi: thông lượng thấp hơn (bù bằng `max_concurrency`).
+        // NÂNG LẠI khi lên Workers Paid (1000/invocation) — lúc đó 10 là an toàn.
+        //
+        // CHƯA KIỂM CHỨNG: rằng 50 subrequest LUÔN đủ cho MỘT job. `queryInvoices`
+        // phân trang 2 nguồn (normal + sco), mỗi trang 1 subrequest, cộng ghi DB +
+        // gọi DO limiter — một tenant nhiều hóa đơn/tháng vẫn có thể tự vượt 50 dù
+        // batch=1. Chưa có số liệu phân bố hóa đơn/tenant thật để khẳng định. Nếu sau
+        // deploy vẫn còn "Too many subrequests", phải chia nhỏ theo TRANG (chunk kỳ)
+        // chứ không chỉ theo message — xem BACKLOG 2026-07-18.
         "max_batch_size": 1,
         // H-B.4 — GIỚI HẠN đồng thời consumer: chặn bùng nổ invocation làm cạn pool
         // Hyperdrive/dồn dập GDT. Giá trị THẬN TRỌNG mặc định; tinh chỉnh trên staging

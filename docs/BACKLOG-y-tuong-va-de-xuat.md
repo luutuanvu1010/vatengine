@@ -156,3 +156,54 @@ Mẫu để copy khi thêm mục mới:
 - **Mức ưu tiên đề xuất:** Cao/Trung bình/Thấp.
 - **Nguồn phát hiện:** ...
 -->
+
+## [2026-07-18] "The operation was aborted" — chưa phân loại được là lỗi nền tảng hay GDT chậm
+
+**Ngày phát hiện:** 2026-07-18 (phát sinh khi vá sự cố circuit breaker kẹt mở).
+
+**Mô tả:** `classifyFailure()` (`packages/sync/src/sync.ts`) hiện nhận diện được trần
+nền tảng Workers qua chuỗi `"Too many subrequests"` → `failureKind: "local_limit"` →
+**không** tính vào circuit breaker GDT. Nhưng chuỗi **`"The operation was aborted"`**
+vẫn rơi vào `transient` mặc định ⇒ **vẫn** tính vào breaker.
+
+**Bối cảnh/bằng chứng:** trong sự cố production 2026-07-18, `lan_dong_bo` ghi
+`"The operation was aborted"` **n=43** — nhóm lỗi LỚN THỨ HAI, chỉ sau
+`"Too many subrequests"` (n=61). Chưa xác định được đây là (a) Workers ép hủy do trần
+CPU/wall-time (⇒ lỗi CỤC BỘ, không nên tính vào breaker), hay (b) timeout thật khi gọi
+GDT (⇒ đúng là tín hiệu sức khỏe GDT, nên tính). **CHƯA KIỂM CHỨNG** — không đoán,
+nên chưa match chuỗi này (nguyên tắc bằng chứng, CLAUDE.md).
+
+**Rủi ro nếu bỏ qua:** nếu phần lớn n=43 đó là lỗi nền tảng, sự cố "breaker mở oan
+chặn sạch đồng bộ" có thể **tái diễn một phần** dù đã vá `local_limit`.
+
+**Đề xuất hướng xử lý:** sau khi deploy bản vá, theo dõi `lan_dong_bo` + `wrangler tail`
+xem `"The operation was aborted"` còn xuất hiện không và đi kèm ngữ cảnh nào (có
+`AbortError` từ `AbortController` timeout của adapter không, hay lỗi runtime Workers).
+Có bằng chứng rồi mới thêm nhánh phân loại tường minh + test — **không nới chuỗi match
+một cách ẩu**.
+
+**Ưu tiên đề xuất:** Trung bình (chỉ Cao nếu quan sát thấy breaker lại mở oan sau deploy).
+
+**Nguồn phát hiện:** review chéo `dod-auditor` trên nhánh `claude/fix-subrequest-breaker`
+(Finding 2), phiên 2026-07-18.
+
+## [2026-07-18] `max_batch_size: 1` có thể vẫn chưa đủ cho tenant nhiều hóa đơn
+
+**Ngày phát hiện:** 2026-07-18 (cùng phiên trên).
+
+**Mô tả:** đã hạ `max_batch_size` 10 → 1 để mỗi job có trọn ngân sách 50
+subrequest/invocation (gói Free). Nhưng **CHƯA KIỂM CHỨNG** rằng 50 luôn đủ cho MỘT
+job: `queryInvoices` phân trang **2 nguồn** (normal + sco), mỗi trang 1 subrequest,
+cộng ghi DB + gọi Durable Object limiter. Một tenant nhiều hóa đơn/tháng/chiều vẫn có
+thể tự vượt 50 dù batch = 1.
+
+**Rủi ro nếu bỏ qua:** tenant lớn tiếp tục fail `"Too many subrequests"`, kỳ quá khứ
+không đồng bộ được — đúng triệu chứng gốc.
+
+**Đề xuất hướng xử lý:** đo phân bố số hóa đơn/tenant/tháng thật; nếu có tenant vượt,
+chia nhỏ theo **TRANG** (chunk kỳ thành nhiều message, mỗi message vài trang) chứ không
+chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
+
+**Ưu tiên đề xuất:** Trung bình.
+
+**Nguồn phát hiện:** review chéo `dod-auditor` (Finding 3), phiên 2026-07-18.

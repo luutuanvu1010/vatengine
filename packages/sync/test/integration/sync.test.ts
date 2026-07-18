@@ -341,6 +341,27 @@ describe("sync — upsert idempotent (integration, PGlite)", () => {
     expect(r.failureKind).toBe("rate_limited");
   });
 
+  it("[SỰ CỐ 2026-07-18] trần subrequest của Workers → failureKind='local_limit' (KHÔNG phải transient — tầng nền không được tính vào breaker GDT)", async () => {
+    // Chuỗi lỗi THẬT quan sát được ở production (`lan_dong_bo`, n=61, 05:30–06:15Z
+    // 2026-07-18) khi pha 1 vượt trần 50 subrequest/invocation của gói Free.
+    const { transport } = makeTransport(() => {
+      throw new Error(
+        "Too many subrequests by single Worker invocation. To configure this limit, refer to https://developers.cloudflare.com/workers/platform/limits/",
+      );
+    });
+    const r = await sync({
+      db,
+      transport,
+      tenantId,
+      taikhoanId,
+      ...BASE_OPTS,
+      retry: { maxAttempts: 1, backoffMs: 0 },
+    });
+    expect(r.trangThai).toBe("failed");
+    // Nếu ca này rơi về 'transient', breaker GDT lại bị mở oan như đúng sự cố.
+    expect(r.failureKind).toBe("local_limit");
+  });
+
   it("(U9) đồng bộ thành công → không gắn failureKind", async () => {
     const { transport } = makeTransport(onePage([inv("1")]));
     const r = await sync({ db, transport, tenantId, taikhoanId, ...BASE_OPTS });
