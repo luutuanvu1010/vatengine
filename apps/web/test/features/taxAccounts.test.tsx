@@ -52,6 +52,7 @@ function TaxPageAs({ mst, role = "quan_tri" }: { mst: string; role?: Role }) {
       ten: "DN",
       mst,
       goiDichVu: null,
+      goiDichVuTen: null,
       banQuyen: "Mặc định",
       ghiChu: null,
       role,

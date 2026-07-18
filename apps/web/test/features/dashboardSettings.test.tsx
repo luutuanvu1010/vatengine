@@ -42,6 +42,7 @@ function DashboardAs({ vaiTro }: { vaiTro: Role }) {
       ten: "DN",
       mst: "4201568932",
       goiDichVu: null,
+      goiDichVuTen: null,
       banQuyen: "Mặc định",
       ghiChu: null,
       role: vaiTro,

@@ -26,6 +26,7 @@ function ExportButtonsAs({ vaiTro, filter = FILTER }: { vaiTro: Role; filter?: I
       ten: "DN",
       mst: "0311772540",
       goiDichVu: null,
+      goiDichVuTen: null,
       banQuyen: "Mặc định",
       ghiChu: null,
       role: vaiTro,

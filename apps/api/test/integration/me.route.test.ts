@@ -38,10 +38,25 @@ describe("GET /me — hồ sơ tenant + vai", () => {
       ten: "Công ty TNHH Tour Đảo",
       mst: "4201568932",
       goiDichVu: "free",
+      // U17a-7: nhãn tiếng Việt kèm mã (QĐ-7) — xem test riêng bên dưới cho chi tiết join.
+      goiDichVuTen: "Miễn phí",
       banQuyen: "Mặc định",
       ghiChu: null,
       role: "ke_toan_truong",
     });
+  });
+
+  it("trả NHÃN gói tiếng Việt kèm mã (QĐ-7 — không để FE hiện 'free')", async () => {
+    // U17a-7: goiDichVu (cột tenants) chứa MÃ; goiDichVuTen là nhãn tiếng Việt lấy qua
+    // leftJoin sang bảng goi_dich_vu (Task 2, seed 'free' → 'Miễn phí' ở migration 0007).
+    const tid = await seedTenantFull(db, "Cty A", "0100000001", "free");
+    const app = createApp(injectDb(db));
+    const token = await tokenFor(tid, { role: "ke_toan" });
+    const res = await app.request("/me", { headers: bearer(token) }, makeEnv());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { goiDichVu: string; goiDichVuTen: string };
+    expect(body.goiDichVu).toBe("free");
+    expect(body.goiDichVuTen).toBe("Miễn phí");
   });
 
   it("goiDichVu mặc định 'free' khi chưa đặt gói (U17a-4: cột nay NOT NULL DEFAULT 'free')", async () => {

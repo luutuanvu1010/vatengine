@@ -47,6 +47,7 @@ function InvoicesPageAs({ vaiTro = "quan_tri" }: { vaiTro?: Role }) {
       ten: "DN",
       mst: "0311772540",
       goiDichVu: null,
+      goiDichVuTen: null,
       banQuyen: "Mặc định",
       ghiChu: null,
       role: vaiTro,
