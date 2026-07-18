@@ -5,6 +5,7 @@
 // fail-open (mở toang hạn mức cho khách chưa trả tiền) và KHÔNG fail-closed (khóa sạch
 // khách vì sự cố DB của mình). Mọi lần rơi về mặc định đều phát log có cấu trúc để phân
 // biệt "admin đặt vậy" với "DB hỏng".
+import { maskSensitive } from "@vat/crypto";
 import { goiDichVu } from "@vat/db";
 import { eq } from "drizzle-orm";
 import { clampInt } from "./configClamp";
@@ -86,9 +87,19 @@ export async function docHanMucGoi(db: AnyDb, maGoi: string): Promise<HanMucGoi>
         HAN_MUC_MAC_DINH.ghReconcileMoiPhut,
       ),
     };
-  } catch {
-    // DB hỏng KHÔNG được làm hỏng luồng khách. Log rồi dùng mặc định.
-    console.warn(JSON.stringify({ type: "goi_dich_vu_doc_loi", ma: maGoi }));
+  } catch (err) {
+    // DB hỏng KHÔNG được làm hỏng luồng khách — vẫn dùng mặc định. NHƯNG review Task 5,
+    // việc 1: bắt lỗi rỗng (không tham số) nuốt sạch chi tiết, khiến một bug thật (sai
+    // tên cột sau refactor, lỗi kiểu…) trông y hệt "DB hỏng" — không còn dấu vết để điều
+    // tra. Log kèm name+message (quy ước app.ts) để phân biệt được hai loại sự cố. Bảng
+    // goi_dich_vu chỉ chứa định nghĩa gói toàn cục, KHÔNG dữ liệu tenant → an toàn log
+    // message; vẫn qua maskSensitive để nhất quán phòng thủ (JWT/conn-string lỡ lọt vào
+    // chuỗi lỗi tự do).
+    const loi =
+      err instanceof Error ? { name: err.name, message: err.message } : { message: String(err) };
+    console.warn(
+      JSON.stringify({ type: "goi_dich_vu_doc_loi", ma: maGoi, loi: maskSensitive(loi) }),
+    );
     return HAN_MUC_MAC_DINH;
   }
 }

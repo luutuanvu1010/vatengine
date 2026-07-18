@@ -25,7 +25,7 @@ import { and, count, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { isUuid, requireTenant } from "../auth";
-import { type HanMucGoi, docHanMucGoi } from "../goiDichVuConfig";
+import { HAN_MUC_MAC_DINH, type HanMucGoi, docHanMucGoi } from "../goiDichVuConfig";
 import { isQueueRateLimited, resolveBackfillLinesPaceMs, sendBatchesPaced } from "../queueEnqueue";
 import { requireRole } from "../rbac";
 import type { AppDeps, AppEnv } from "../types";
@@ -110,6 +110,17 @@ export function taxAccountsRoutes(deps: AppDeps) {
           .from(tenants)
           .where(eq(tenants.id, tenantId));
         const tenant = trows[0];
+
+        // Review Task 5, việc 2 — khôi phục thứ tự ưu tiên TRƯỚC Task 5: kiểm cờ module
+        // tài khoản CON phải thắng TRƯỚC KHI xác định mst_missing/username, để request
+        // loai=con khi module tắt luôn nhận sub_account_disabled bất kể MST/username thế
+        // nào (không phụ thuộc thứ tự đọc dữ liệu khác trong transaction). Tenant không có
+        // bản ghi (hiếm — không có gói để đọc) dùng mặc định bảo thủ (choTaiKhoanCon=false)
+        // nên vẫn chặn CON đúng tinh thần fail-safe-to-DEFAULT.
+        const hanMuc = tenant ? await docHanMucGoi(tx, tenant.goiDichVu) : HAN_MUC_MAC_DINH;
+        if (loai === "con" && !isSubAccountEnabled(hanMuc)) {
+          return { kind: "sub_disabled" as const };
+        }
         if (!tenant || !tenant.mst) return { kind: "mst_missing" as const };
 
         // Username: chính auto = MST gốc; con validate tiền tố (startsWith MST).
@@ -123,10 +134,6 @@ export function taxAccountsRoutes(deps: AppDeps) {
           username = tenant.mst;
         }
 
-        const hanMuc = await docHanMucGoi(tx, tenant.goiDichVu);
-        if (loai === "con" && !isSubAccountEnabled(hanMuc)) {
-          return { kind: "sub_disabled" as const };
-        }
         // Hạn mức theo gói — đếm tài khoản thuế hiện có của tenant.
         const cnt = await tx
           .select({ n: count() })
