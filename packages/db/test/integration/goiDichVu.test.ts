@@ -283,9 +283,15 @@ describe("U17a — backfill tenants.goi_dich_vu (QĐ-7)", () => {
       }
     }
 
-    const truoc0007 = cacFile.filter((f) => !f.startsWith("0007"));
-    const file0007 = cacFile.find((f) => f.startsWith("0007"));
-    if (!file0007) throw new Error("không tìm thấy migration 0007");
+    // Lọc theo VỊ TRÍ trong danh sách đã sắp xếp, KHÔNG lọc theo tên: filter((f) =>
+    // !f.startsWith("0007")) từng để lọt một lỗi âm thầm — mọi file 0008 trở đi cũng
+    // không startsWith("0007") nên sẽ rơi vào "trước 0007" và bị áp SAI THỨ TỰ (trước cả
+    // 0007) ngay khi ai đó thêm migration kế tiếp. Dùng chỉ số để chỉ lấy đúng các file
+    // ĐỨNG TRƯỚC 0007 trong mảng đã .sort().
+    const idx0007 = cacFile.findIndex((f) => f.startsWith("0007"));
+    if (idx0007 === -1) throw new Error("không tìm thấy migration 0007");
+    const truoc0007 = cacFile.slice(0, idx0007);
+    const file0007 = cacFile[idx0007] as string;
 
     for (const f of truoc0007) await apFile(f);
 

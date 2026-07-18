@@ -137,25 +137,66 @@ GRANT INSERT ON "audit_log_admin" TO PUBLIC;--> statement-breakpoint
 -- Cột này đang chứa NHÃN, không phải mã: bằng chứng me.route.test.ts:38 dùng
 -- goiDichVu: "Miễn phí". Thêm FK mà không backfill trước sẽ vỡ trên dữ liệu thật.
 --
--- ⚠️ CẢNH BÁO VẬN HÀNH: tenants bật FORCE RLS (0000:128) với policy
+-- LƯU Ý VẬN HÀNH (đính chính review Task 4, 2026-07-18 — bản cũ mô tả một trạng thái BẤT
+-- KHẢ, xem chi tiết dưới): tenants bật FORCE RLS (0000:128) với policy
 --    id = nullif(current_setting('app.tenant_id', true), '')::uuid
--- Lúc chạy migration, GUC `app.tenant_id` KHÔNG được đặt → id = NULL → 0 hàng khớp →
--- câu UPDATE dưới đây đổi 0 hàng mà KHÔNG báo lỗi. Nó chỉ chạy được vì role migrate có
--- BYPASSRLS (Neon `neondb_owner` — xem chú thích 0001) hoặc là superuser.
--- ⇒ SAU KHI `make migrate` TRÊN PRODUCTION, PHẢI KIỂM BẰNG TAY:
---      SELECT count(*) FROM tenants WHERE goi_dich_vu NOT IN (SELECT ma FROM goi_dich_vu);
---    Kết quả phải = 0. Khác 0 nghĩa là backfill bị RLS nuốt — DỪNG, không deploy apps/api.
+-- Lúc chạy migration, GUC `app.tenant_id` KHÔNG được đặt → nếu role migrate bị RLS chi
+-- phối, câu UPDATE dưới đây CÓ THỂ đổi 0 hàng mà KHÔNG báo lỗi (UPDATE dưới RLS không ném
+-- lỗi khi WHERE không khớp hàng nào — đã đo ở goiDichVu.test.ts).
+--
+-- NHƯNG migration KHÔNG dừng lại im lặng ở đó. Ngay sau backfill là SET NOT NULL rồi
+-- ADD CONSTRAINT khoá ngoại (hai câu ngay dưới). Nếu backfill thật sự không chạy (còn
+-- NULL hoặc còn hàng mang nhãn cũ), MỘT trong hai câu đó sẽ NÉM LỖI:
+--   "column "goi_dich_vu" of relation "tenants" contains null values"
+--   hoặc "... violates foreign key constraint ... Key (goi_dich_vu)=(Miễn phí) is not
+--   present in table "goi_dich_vu""
+-- drizzle chạy TOÀN BỘ các migration đang chờ trong MỘT transaction
+-- (node_modules/drizzle-orm/pg-core/dialect.js: `session.transaction(async (tx) => { for
+-- await (const migration of migrations) { ... } })` bọc cả vòng lặp) ⇒ lỗi giữa chừng
+-- ROLLBACK TRỌN VẸN: không có FK, không có bảng goi_dich_vu, không có trạng thái nửa vời.
+--
+-- ⇒ Sau MỘT `make migrate` THÀNH CÔNG, bất biến "mọi tenant trỏ gói tồn tại" đã được
+-- chính khoá ngoại bảo chứng — không cần lệnh kiểm tay nào sau đó, và lệnh
+--    SELECT count(*) FROM tenants WHERE goi_dich_vu NOT IN (SELECT ma FROM goi_dich_vu);
+-- (nếu có ai chạy) sẽ HẰNG ĐÚNG = 0, không bắt được gì.
+--
+-- Rủi ro THẬT là NGƯỢC LẠI với bản cũ mô tả: nếu role migrate trên Neon THIẾU BYPASSRLS,
+-- `make migrate` sẽ THẤT BẠI HOÀN TOÀN với một trong hai lỗi ở trên (không phải "âm thầm
+-- bỏ sót dữ liệu"). Gặp lỗi đó, nghi trước tiên role migrate thiếu BYPASSRLS, không phải
+-- dữ liệu bẩn.
+--
+-- Kiểm RẺ TRƯỚC khi migrate (không tốn transaction thật, chạy tay trong psql):
+--      SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user;
+--    Phải trả về true cho role migrate.
+--
+-- "Neon `neondb_owner` CÓ BYPASSRLS": ĐÃ KIỂM CHỨNG trên Neon thật 2026-07-15 bằng probe
+-- tái lập được, không phải suy đoán từ chú thích 0001 — xem
+-- docs/adr/0004-neon-role-rls-pitr.md §E2 (script
+-- packages/db/provisioning/spike-role-rls-probe.mjs, output raw kèm ngày).
 UPDATE "tenants" SET "goi_dich_vu" = 'free'
 WHERE "goi_dich_vu" IS NULL
    OR "goi_dich_vu" NOT IN (SELECT "ma" FROM "goi_dich_vu");--> statement-breakpoint
 
+-- ⚠️ HỒI QUY FE (chưa sửa ở đây — thuộc Task 7): cột này đổi từ NHÃN ("Miễn phí") sang MÃ
+-- ("free"). apps/web/src/features/settings/SettingsPage.tsx render thô
+-- `{me.goiDichVu ?? "—"}` (dòng 93) ⇒ sau migration này màn "Cài đặt" sẽ hiện "free" thay
+-- vì "Miễn phí" cho tới khi Task 7 tra bảng goi_dich_vu để trả lại nhãn tiếng Việt. Không
+-- test FE nào bắt được vì test apps/web mock phản hồi API với nhãn hardcode.
+-- ⇒ KHÔNG deploy commit này độc lập lên production — phải đi kèm Task 7.
 ALTER TABLE "tenants" ALTER COLUMN "goi_dich_vu" SET DEFAULT 'free';--> statement-breakpoint
 ALTER TABLE "tenants" ALTER COLUMN "goi_dich_vu" SET NOT NULL;--> statement-breakpoint
 
 -- ON DELETE RESTRICT: không cho xóa gói khi còn tenant đang dùng.
+-- Lọc thêm conrelid: pg_constraint.conname KHÔNG duy nhất toàn database (chỉ duy nhất
+-- trong PHẠM VI MỘT bảng) — nếu bảng khác từng có constraint trùng tên
+-- 'tenants_goi_dich_vu_fk', điều kiện NOT EXISTS phía trên sẽ đúng ngay cả khi bảng
+-- "tenants" CHƯA có khoá ngoại này ⇒ ALTER TABLE bị bỏ qua mà migration vẫn báo thành
+-- công, đúng kiểu "âm thầm bỏ qua" mà chính migration này đang chống ở khối backfill trên.
 DO $$ BEGIN
   IF NOT EXISTS (
-    SELECT FROM pg_constraint WHERE conname = 'tenants_goi_dich_vu_fk'
+    SELECT FROM pg_constraint
+    WHERE conname = 'tenants_goi_dich_vu_fk'
+      AND conrelid = '"tenants"'::regclass
   ) THEN
     ALTER TABLE "tenants" ADD CONSTRAINT "tenants_goi_dich_vu_fk"
       FOREIGN KEY ("goi_dich_vu") REFERENCES "goi_dich_vu"("ma") ON DELETE RESTRICT;
