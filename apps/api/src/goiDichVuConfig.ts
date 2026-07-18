@@ -6,7 +6,7 @@
 // khách vì sự cố DB của mình). Mọi lần rơi về mặc định đều phát log có cấu trúc để phân
 // biệt "admin đặt vậy" với "DB hỏng".
 import { maskSensitive } from "@vat/crypto";
-import { goiDichVu } from "@vat/db";
+import { cauHinhHeThong, goiDichVu } from "@vat/db";
 import { eq } from "drizzle-orm";
 import { clampInt } from "./configClamp";
 import type { AnyDb } from "./types";
@@ -102,4 +102,46 @@ export async function docHanMucGoi(db: AnyDb, maGoi: string): Promise<HanMucGoi>
     );
     return HAN_MUC_MAC_DINH;
   }
+}
+
+/**
+ * U17a (QĐ-5 hạng B) — Phân giải một ngưỡng TOÀN CỤC theo thứ tự DB → env → DEFAULT.
+ *
+ * Vì sao giữ tầng env ở giữa: đó là đường thoát vận hành khi DB không đổi được (sự cố,
+ * hoặc chưa có bảng điều khiển). Không phải dư thừa.
+ *
+ * Giá trị luôn qua clampInt: ngưỡng nay do người nhập, admin đặt 0 hoặc 9 chữ số đều
+ * không được phép tắt cơ chế chống lạm dụng.
+ */
+export async function docCauHinhToanCuc(
+  db: AnyDb,
+  khoa: string,
+  env: Record<string, string | undefined>,
+  envKey: string,
+  bien: { min: number; max: number },
+  macDinh: number,
+): Promise<number> {
+  let thoDb: string | undefined;
+  try {
+    const rows = await db
+      .select({ giaTri: cauHinhHeThong.giaTri })
+      .from(cauHinhHeThong)
+      .where(eq(cauHinhHeThong.khoa, khoa));
+    thoDb = rows[0]?.giaTri;
+  } catch (err) {
+    // DB hỏng KHÔNG được làm hỏng luồng phục vụ — rơi tiếp xuống env/DEFAULT. NHƯNG
+    // (bài học review Task 5) bắt lỗi rỗng nuốt sạch chi tiết, khiến một bug thật (sai
+    // tên cột sau refactor, lỗi kiểu…) trông y hệt "DB hỏng" — không còn dấu vết để điều
+    // tra. Log kèm name+message (quy ước app.ts) để phân biệt được hai loại sự cố. Bảng
+    // cau_hinh_he_thong chỉ chứa cấu hình toàn cục, KHÔNG dữ liệu tenant → an toàn log
+    // message; vẫn qua maskSensitive để nhất quán phòng thủ (JWT/conn-string lỡ lọt vào
+    // chuỗi lỗi tự do).
+    const loi =
+      err instanceof Error ? { name: err.name, message: err.message } : { message: String(err) };
+    console.warn(JSON.stringify({ type: "cau_hinh_doc_loi", khoa, loi: maskSensitive(loi) }));
+  }
+
+  // Thứ tự ưu tiên; giá trị rỗng/không đọc được thì rơi xuống tầng sau.
+  const tho = thoDb ?? env[envKey];
+  return clampInt(tho, bien.min, bien.max, macDinh);
 }
