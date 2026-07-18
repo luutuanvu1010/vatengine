@@ -25,6 +25,16 @@
 
 ---
 
+## 📌 ERRATA (cập nhật 2026-07-18 sau khi Task 2 chạy thật)
+
+Ba khẳng định trong bản đầu của plan này **đã bị bác bỏ bằng đo đạc thật trên PGlite**. Chúng đã được sửa tại chỗ ở các mục bên dưới; ghi lại đây để không ai tái tạo lại từ bản cũ.
+
+1. **"Mọi đường ghi bị chặn ở tầng RLS, kể cả owner" — SAI.** `FORCE ROW LEVEL SECURITY` **không** chi phối role có `BYPASSRLS`/superuser. PGlite chạy role `postgres` (super + bypass); trên Neon, `app-role.sql:9` của chính kho này ghi *"`neondb_owner` CÓ BYPASSRLS!"*. Không tồn tại môi trường hiện có nào mà mệnh đề đó đúng.
+2. **`UPDATE`/`DELETE` dưới RLS KHÔNG ném lỗi** — chúng chạy bình thường và ảnh hưởng **0 hàng**. Chỉ `INSERT` ném `new row violates row-level security policy`. ⇒ Test khẳng định `rejects.toThrow()` cho UPDATE sẽ **đỏ**; phải khẳng định *dữ liệu không đổi* thay vì trông chờ exception. Mã ứng dụng nào trông chờ exception khi ghi sẽ "thành công" im lặng — U18 phải biết điều này.
+3. **Test kiểu "cấp mỗi USAGE rồi khẳng định lệnh ghi ném lỗi" LUÔN XANH.** Postgres kiểm quyền `GRANT` **trước** RLS, nên lỗi đến từ tầng GRANT. Mutation test ở Task 2 chứng minh: tiêm `CREATE POLICY ... FOR ALL USING(true) WITH CHECK(true)` mà test cũ vẫn xanh. ⇒ Muốn gác tầng RLS phải **(a)** khẳng định trực tiếp trên `pg_policies`, và **(b)** cấp **đủ** quyền ghi cho role test trước khi khẳng định RLS chặn — đó mới là cấu hình production (`app-role.sql:28` cấp `INSERT/UPDATE/DELETE ON ALL TABLES`).
+
+Lý do biện minh `GRANT SELECT ... TO PUBLIC` trong bản đầu ("an toàn vì đường ghi đã bị RLS chặn") cũng **không đứng vững** — an toàn của đường ghi không biện minh cho việc mở đường đọc. Lý do đúng: **bảng không chứa dữ liệu tenant nào**, nên không có bề mặt rò rỉ chéo giữa doanh nghiệp khách hàng.
+
 ## ⚠️ Hai cạm bẫy đã biết — đọc trước khi viết migration
 
 **Cạm bẫy 1 — FORCE RLS chặn cả seed.** Nếu bật `FORCE ROW LEVEL SECURITY` rồi mới `INSERT` seed, câu INSERT sẽ bị chính policy chặn (không có policy nào cho INSERT). **Thứ tự bắt buộc trong migration:** `CREATE TABLE` → `INSERT` seed → `ENABLE RLS` → `FORCE RLS` → `CREATE POLICY` (chỉ SELECT) → `GRANT SELECT`.
@@ -508,24 +518,54 @@ describe("U17a — cau_hinh_he_thong (integration, PGlite)", () => {
     expect(res.rows[0]?.gia_tri).toBe("5");
   });
 
-  it("RLS bật + FORCE, role app đọc được nhưng KHÔNG ghi được", async () => {
+  it("RLS bật + FORCE", async () => {
     const rls = (await db.execute(
       sql`select relrowsecurity, relforcerowsecurity from pg_class where relname = 'cau_hinh_he_thong'`,
     )) as { rows: Array<{ relrowsecurity: boolean; relforcerowsecurity: boolean }> };
     expect(rls.rows[0]?.relrowsecurity).toBe(true);
     expect(rls.rows[0]?.relforcerowsecurity).toBe(true);
+  });
 
+  it("KHÔNG có policy ghi nào (gác đúng tầng RLS, không phải tầng GRANT)", async () => {
+    // Khẳng định TRỰC TIẾP trên catalog. Suy ra từ "lệnh ghi ném lỗi" là gác nhầm tầng:
+    // Postgres kiểm quyền GRANT TRƯỚC RLS, nên một role thiếu GRANT sẽ ném lỗi kể cả khi
+    // policy mở toang đường ghi ⇒ test kiểu đó LUÔN XANH. (Đã kiểm chứng bằng mutation
+    // test ở Task 2: tiêm policy FOR ALL USING(true) mà test cũ vẫn xanh.)
+    const res = (await db.execute(
+      sql`select cmd from pg_policies where tablename = 'cau_hinh_he_thong'`,
+    )) as { rows: Array<{ cmd: string }> };
+    expect(res.rows.map((r) => r.cmd)).toEqual(["SELECT"]);
+  });
+
+  it("role app CÓ ĐỦ QUYỀN GHI vẫn bị RLS chặn (cấu hình giống production)", async () => {
     await db.execute(sql`create role app_user nosuperuser`);
     await db.execute(sql`grant usage on schema public to app_user`);
+    // Cấp ĐỦ quyền ghi — đây mới là cấu hình production thật: app-role.sql:28 chạy
+    // `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES`. Không cấp thì test gác nhầm tầng.
+    await db.execute(sql`grant select, insert, update, delete on cau_hinh_he_thong to app_user`);
     await db.execute(sql`set role app_user`);
+
     const doc = (await db.execute(
       sql`select khoa from cau_hinh_he_thong where khoa = 'dangky_max_moi_ip_gio'`,
     )) as { rows: Array<{ khoa: string }> };
     expect(doc.rows).toHaveLength(1);
+
+    // INSERT ném lỗi RLS ("new row violates row-level security policy").
+    await expect(
+      db.execute(sql`insert into cau_hinh_he_thong (khoa, gia_tri) values ('hack', '1')`),
+    ).rejects.toThrow();
+
+    // ⚠️ UPDATE/DELETE dưới RLS KHÔNG ném lỗi — chỉ ảnh hưởng 0 hàng (đo được ở Task 2).
+    // Vì vậy phải khẳng định DỮ LIỆU KHÔNG ĐỔI, không được dùng rejects.toThrow().
     await expect(
       db.execute(sql`update cau_hinh_he_thong set gia_tri = '9999' where khoa = 'dangky_max_moi_ip_gio'`),
-    ).rejects.toThrow();
+    ).resolves.not.toThrow();
     await db.execute(sql`reset role`);
+
+    const sau = (await db.execute(
+      sql`select gia_tri from cau_hinh_he_thong where khoa = 'dangky_max_moi_ip_gio'`,
+    )) as { rows: Array<{ gia_tri: string }> };
+    expect(sau.rows[0]?.gia_tri).toBe("5");
   });
 });
 
@@ -759,44 +799,77 @@ EOF
 
 - [ ] **Step 1: Viết test đỏ**
 
-Thêm vào `packages/db/test/integration/goiDichVu.test.ts`:
+Thêm import vào đầu `packages/db/test/integration/goiDichVu.test.ts` (test dưới đây áp từng file migration nên cần đọc thư mục):
+
+```ts
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
+```
+
+Rồi thêm vào cuối file:
 
 ```ts
 describe("U17a — backfill tenants.goi_dich_vu (QĐ-7)", () => {
-  it("KHẲNG ĐỊNH backfill thật sự đổi hàng, không âm thầm 0 hàng", async () => {
+  it("KHẲNG ĐỊNH migration 0007 thật sự backfill hàng cũ, không âm thầm 0 hàng", async () => {
     // CẠM BẪY: tenants bật FORCE RLS (0000:128) với policy id = current_setting
     // ('app.tenant_id'). Lúc migrate, GUC đó KHÔNG được đặt → id = NULL → 0 hàng khớp →
     // UPDATE không đổi gì mà KHÔNG báo lỗi. Nó chỉ chạy được nhờ role migrate tình cờ có
-    // BYPASSRLS (Neon neondb_owner) hoặc superuser (PGlite). Đó là giả định phụ thuộc môi
-    // trường — test này tồn tại để nó không lọt im lặng.
+    // BYPASSRLS (Neon neondb_owner) hoặc superuser (PGlite) — giả định phụ thuộc môi
+    // trường. Test này tồn tại để nó không lọt im lặng.
+    //
+    // PHẢI áp từng migration THEO THỨ TỰ: 0000→0006, chèn tenant mang NHÃN cũ, RỒI mới áp
+    // 0007. Gọi migrate() một lần (áp cả 0007) rồi chạy lại câu UPDATE bằng tay sẽ chứng
+    // minh SAI THỨ: nó chỉ cho thấy "một câu tương đương chạy được", không cho thấy câu
+    // TRONG 0007 đã đổi hàng thật.
     const client = new PGlite();
     const db = drizzle(client, { schema });
 
-    // Áp migration TỚI 0006 thì dừng, tạo dữ liệu cũ (nhãn), rồi mới áp 0007.
-    // PGlite migrator không hỗ trợ áp từng phần → dựng trạng thái "cũ" bằng tay:
-    await migrate(db, { migrationsFolder: MIGRATIONS });
-    // Sau khi 0007 đã chạy, mô phỏng hàng cũ bằng cách ghi thẳng nhãn rồi chạy lại
-    // đúng câu backfill của 0007 và ĐẾM số hàng bị ảnh hưởng.
+    const thuMuc = MIGRATIONS;
+    const cacFile = (await readdir(thuMuc))
+      .filter((f) => f.endsWith(".sql"))
+      .sort(); // 0000_… → 0007_… theo thứ tự tên file
+
+    async function apFile(ten: string): Promise<void> {
+      const noiDung = await readFile(join(thuMuc, ten), "utf8");
+      // drizzle phân tách câu bằng dấu mốc này; áp từng câu để giữ đúng thứ tự.
+      for (const cau of noiDung.split("--> statement-breakpoint")) {
+        const s = cau.trim();
+        if (s) await db.execute(sql.raw(s));
+      }
+    }
+
+    const truoc0007 = cacFile.filter((f) => !f.startsWith("0007"));
+    const file0007 = cacFile.find((f) => f.startsWith("0007"));
+    if (!file0007) throw new Error("không tìm thấy migration 0007");
+
+    for (const f of truoc0007) await apFile(f);
+
+    // Dữ liệu CŨ đúng như production: cột giữ NHÃN, chưa có bảng gói nên chưa có FK.
     await db.execute(
       sql`insert into tenants (ten, mst, goi_dich_vu) values ('Cty Cũ', '0100000099', 'Miễn phí')`,
     );
-    const truoc = (await db.execute(
+
+    // Áp 0007 — chính nó phải backfill.
+    await apFile(file0007);
+
+    // Không còn hàng nào mang nhãn cũ, và hàng đó nay trỏ đúng mã 'free'.
+    const conNhan = (await db.execute(
       sql`select count(*)::int as n from tenants where goi_dich_vu = 'Miễn phí'`,
     )) as { rows: Array<{ n: number }> };
-    expect(truoc.rows[0]?.n).toBe(1);
+    expect(conNhan.rows[0]?.n).toBe(0);
 
-    const updated = (await db.execute(
-      sql`update tenants set goi_dich_vu = 'free'
-          where goi_dich_vu is null or goi_dich_vu not in (select ma from goi_dich_vu)
-          returning id`,
-    )) as { rows: Array<{ id: string }> };
-    // ĐÂY là khẳng định quan trọng: phải > 0. Nếu RLS nuốt mất, con số này là 0.
-    expect(updated.rows.length).toBeGreaterThan(0);
+    const hang = (await db.execute(
+      sql`select goi_dich_vu from tenants where mst = '0100000099'`,
+    )) as { rows: Array<{ goi_dich_vu: string }> };
+    expect(hang.rows[0]?.goi_dich_vu).toBe("free");
 
-    const sau = (await db.execute(
-      sql`select count(*)::int as n from tenants where goi_dich_vu = 'Miễn phí'`,
+    // Bất biến tổng: không tenant nào trỏ tới gói không tồn tại (chính là lệnh kiểm tay
+    // bắt buộc sau `make migrate` trên production).
+    const mocoi = (await db.execute(
+      sql`select count(*)::int as n from tenants
+          where goi_dich_vu not in (select ma from goi_dich_vu)`,
     )) as { rows: Array<{ n: number }> };
-    expect(sau.rows[0]?.n).toBe(0);
+    expect(mocoi.rows[0]?.n).toBe(0);
   });
 
   it("FK chặn gán gói không tồn tại", async () => {
