@@ -8,6 +8,7 @@ import {
   DEFAULT_MAX_BACKPRESSURE,
   QUEUE_MAX_BATCH_BYTES,
   QUEUE_MAX_BATCH_COUNT,
+  blockedAction,
   chunkForQueue,
   consumerAction,
   jitterDelaySeconds,
@@ -113,6 +114,40 @@ describe("consumerAction — ánh xạ outcome → hành động hàng đợi", 
   it("lỗi tạm (transient) → retry (tính vào max_retries → dead-letter)", () => {
     const o: JobOutcome = { kind: "retry", reason: "transient" };
     expect(consumerAction(o, OPTS)).toEqual({ type: "retry" });
+  });
+});
+
+describe("H-B.6 — blockedAction", () => {
+  const header = {
+    tenantId: "t1",
+    taikhoanId: "a1",
+    direction: "purchase" as const,
+    dateFrom: "01/07/2026",
+    dateTo: "31/07/2026",
+    period: "2026-07",
+  };
+  it("DƯỚI trần → reenqueue, bpAttempt+1, mang delay", () => {
+    expect(blockedAction(header, { backpressureDelaySeconds: 60, maxBackpressure: 10 })).toEqual({
+      type: "reenqueue",
+      delaySeconds: 60,
+      bpAttempt: 1,
+    });
+  });
+  it("giữ bpAttempt tăng dần (5 → 6) khi còn dưới trần", () => {
+    expect(
+      blockedAction(
+        { ...header, bpAttempt: 5 },
+        { backpressureDelaySeconds: 30, maxBackpressure: 10 },
+      ),
+    ).toEqual({ type: "reenqueue", delaySeconds: 30, bpAttempt: 6 });
+  });
+  it("ĐẠT trần → retry (→ DLQ, điểm dừng khi chặn kéo dài)", () => {
+    expect(
+      blockedAction(
+        { ...header, bpAttempt: 10 },
+        { backpressureDelaySeconds: 60, maxBackpressure: 10 },
+      ),
+    ).toEqual({ type: "retry" });
   });
 });
 

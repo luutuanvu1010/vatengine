@@ -3,7 +3,7 @@
 // tiếp — quyết định #3), tránh báo động giả do trục trặc mạng nhất thời. OK ở
 // giữa reset chuỗi; đã cảnh báo thì không lặp lại tới khi hồi phục (chống spam).
 import { describe, expect, it } from "vitest";
-import { BAD_STREAK_THRESHOLD, HEALTHY, nextHealth } from "../../src/health";
+import { BAD_STREAK_THRESHOLD, HEALTHY, isEgressBlocked, nextHealth } from "../../src/health";
 
 // Chạy tuần tự một dãy verdict qua nextHealth, trả về (state cuối, danh sách alert).
 function run(verdicts: Parameters<typeof nextHealth>[1][]) {
@@ -65,5 +65,18 @@ describe("nextHealth — sức khỏe egress", () => {
       "GEO_BLOCKED",
     ]);
     expect(again.alerts).toHaveLength(2);
+  });
+});
+
+describe("H-B.6 — lastVerdict + isEgressBlocked", () => {
+  it("nextHealth ghi lastVerdict ở nhánh XẤU; nhánh OK giữ HEALTHY (lastVerdict undefined)", () => {
+    expect(nextHealth(HEALTHY, "GEO_BLOCKED").state.lastVerdict).toBe("GEO_BLOCKED");
+    // OK KHÔNG đặt lastVerdict (giữ nguyên HEALTHY) → gate mở. Xem Step 3 giải thích.
+    expect(nextHealth(HEALTHY, "OK").state.lastVerdict).toBeUndefined();
+  });
+  it("isEgressBlocked chỉ true khi lastVerdict = GEO_BLOCKED", () => {
+    expect(isEgressBlocked(nextHealth(HEALTHY, "GEO_BLOCKED").state)).toBe(true);
+    expect(isEgressBlocked(nextHealth(HEALTHY, "RATE_LIMITED").state)).toBe(false);
+    expect(isEgressBlocked(HEALTHY)).toBe(false); // mặc định không chặn
   });
 });

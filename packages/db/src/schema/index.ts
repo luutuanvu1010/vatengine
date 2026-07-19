@@ -2,6 +2,7 @@
 export * from "./auditLog";
 export * from "./auditLogAdmin";
 export * from "./cauHinhHeThong";
+export * from "./dongBoThatBai";
 export * from "./dongHangHoa";
 export * from "./goiDichVu";
 export * from "./hoaDon";

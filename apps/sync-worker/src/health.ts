@@ -13,6 +13,8 @@ export interface HealthState {
   consecutiveBad: number;
   /** Đã phát cảnh báo cho đợt xấu hiện tại chưa (chống spam). */
   alerted: boolean;
+  /** H-B.6 — verdict tick gần nhất, để EgressHealth-gate biết LOẠI lỗi. */
+  lastVerdict?: ProbeVerdict;
 }
 
 export const HEALTHY: HealthState = { consecutiveBad: 0, alerted: false };
@@ -39,7 +41,14 @@ export function nextHealth(prev: HealthState, verdict: ProbeVerdict): HealthStep
   const consecutiveBad = prev.consecutiveBad + 1;
   const shouldAlert = consecutiveBad >= BAD_STREAK_THRESHOLD && !prev.alerted;
   return {
-    state: { consecutiveBad, alerted: prev.alerted || shouldAlert },
+    state: { consecutiveBad, alerted: prev.alerted || shouldAlert, lastVerdict: verdict },
     alert: shouldAlert ? { verdict, consecutiveBad } : null,
   };
+}
+
+/** H-B.6 — egress đang bị CHẶN ĐỊA LÝ (403/451) theo verdict gần nhất. Chỉ GEO_BLOCKED
+ * mới gate (RATE_LIMITED do backpressure H-B.4 xử; TIMEOUT/ERROR không gate — tránh
+ * chặn oan khi mạng chập chờn). */
+export function isEgressBlocked(state: HealthState): boolean {
+  return state.lastVerdict === "GEO_BLOCKED";
 }
