@@ -1,7 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearToken } from "../../src/lib/apiClient";
 import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
@@ -32,14 +31,13 @@ async function loginMobile() {
       }),
   });
   renderWithProviders(<AppRouter />, "/");
-  await userEvent.type(screen.getByLabelText("Email công việc"), "ketoan@tourdao.vn");
+  await userEvent.type(await screen.findByLabelText("Email công việc"), "ketoan@tourdao.vn");
   await userEvent.type(screen.getByLabelText("Mật khẩu"), "matkhau");
   await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
 }
 
 describe("Điều hướng responsive — drawer trên mobile", () => {
   beforeEach(() => {
-    clearToken();
     forceMobile();
   });
   afterEach(() => vi.restoreAllMocks());

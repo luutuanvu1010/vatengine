@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../../src/features/auth/auth-context";
 import { DashboardPage } from "../../src/features/dashboard/DashboardPage";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import { AppRouter } from "../../src/routes/AppRouter";
 import type { MeResponse, Role, TaxAccountView } from "../../src/types/api";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
@@ -22,9 +21,22 @@ function taxAccount(over: Partial<TaxAccountView> = {}): TaxAccountView {
 }
 
 /** Mock fetch chỉ trả /tax-accounts (Dashboard tối giản chỉ cần trạng thái kết nối). */
-function mockTaxAccounts(accounts: TaxAccountView[]) {
+function mockTaxAccounts(accounts: TaxAccountView[], vaiTro: Role = "quan_tri") {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
+    // ADR-0003 Amendment #1 (C8): AuthProvider gọi /me lúc khởi động và lượt này về SAU
+    // applyMe của DashboardAs ⇒ nó ghi đè vai. Phải trả ĐÚNG vai, nếu không rơi xuống
+    // nhánh bắt-tất (object danh sách, không có `role`) và RBAC ẩn mất lối tắt.
+    if (url.endsWith("/me")) {
+      return json(200, {
+        ten: "DN",
+        mst: "0311772540",
+        goiDichVu: null,
+        banQuyen: "Mặc định",
+        ghiChu: null,
+        role: vaiTro,
+      });
+    }
     if (url.includes("/tax-accounts")) return json(200, accounts);
     return json(200, { rows: [], total: 0, limit: 50, offset: 0 });
   });
@@ -53,9 +65,7 @@ function DashboardAs({ vaiTro }: { vaiTro: Role }) {
 }
 
 describe("Dashboard (U23-C) — tối giản: 1 dòng trạng thái kết nối, không số tiền", () => {
-  beforeEach(() => setToken("t"));
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
   });
 
@@ -104,7 +114,7 @@ describe("Dashboard (U23-C) — tối giản: 1 dòng trạng thái kết nối,
   });
 
   it("(c) vai ke_toan: chỉ 'Xem hóa đơn'; ẩn 'Kết xuất' + 'Kết nối tài khoản thuế'", async () => {
-    mockTaxAccounts([]);
+    mockTaxAccounts([], "ke_toan");
     renderWithProviders(<DashboardAs vaiTro="ke_toan" />);
     expect(await screen.findByText("Xem hóa đơn")).toBeInTheDocument();
     expect(screen.queryByText("Kết xuất")).not.toBeInTheDocument();
@@ -112,7 +122,7 @@ describe("Dashboard (U23-C) — tối giản: 1 dòng trạng thái kết nối,
   });
 
   it("(d) vai ke_toan_truong: hiện đủ 3 lối tắt", async () => {
-    mockTaxAccounts([]);
+    mockTaxAccounts([], "ke_toan_truong");
     renderWithProviders(<DashboardAs vaiTro="ke_toan_truong" />);
     expect(await screen.findByText("Kết xuất")).toBeInTheDocument();
     expect(screen.getByText("Xem hóa đơn")).toBeInTheDocument();
@@ -121,7 +131,6 @@ describe("Dashboard (U23-C) — tối giản: 1 dòng trạng thái kết nối,
 });
 
 describe("Cài đặt chung (B6)", () => {
-  beforeEach(() => clearToken());
   afterEach(() => vi.restoreAllMocks());
 
   it("hiện Tên/MST/Gói/Vai trò từ /me — KHÔNG địa chỉ bịa", async () => {
@@ -138,7 +147,7 @@ describe("Cài đặt chung (B6)", () => {
         }),
     });
     renderWithProviders(<AppRouter />, "/");
-    await userEvent.type(screen.getByLabelText("Email công việc"), "kt@tourdao.vn");
+    await userEvent.type(await screen.findByLabelText("Email công việc"), "kt@tourdao.vn");
     await userEvent.type(screen.getByLabelText("Mật khẩu"), "pw");
     await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
     await userEvent.click(await screen.findByRole("link", { name: "Cài đặt chung" }));

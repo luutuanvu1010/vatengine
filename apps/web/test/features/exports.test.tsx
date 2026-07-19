@@ -2,7 +2,6 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ExportsPage } from "../../src/features/exports/ExportsPage";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import { renderWithProviders } from "../helpers/renderApp";
 
 let calls: { url: string; method: string }[];
@@ -32,7 +31,6 @@ function mockExports() {
 
 describe("U15.4 — kết xuất & convert", () => {
   beforeEach(() => {
-    setToken("t");
     vi.stubGlobal("URL", {
       ...URL,
       createObjectURL: vi.fn(() => "blob:x"),
@@ -41,7 +39,6 @@ describe("U15.4 — kết xuất & convert", () => {
     mockExports();
   });
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });

@@ -8,7 +8,6 @@ import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../../src/features/auth/auth-context";
 import { InvoiceExportButtons } from "../../src/features/invoices/InvoiceExportButtons";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import type { InvoiceFilter, MeResponse, Role } from "../../src/types/api";
 import { renderWithProviders } from "../helpers/renderApp";
 
@@ -37,11 +36,28 @@ function ExportButtonsAs({ vaiTro, filter = FILTER }: { vaiTro: Role; filter?: I
 }
 
 let calls: { url: string; method: string }[];
-function mockExports(postStatus = 201) {
+function mockExports(postStatus = 201, vaiTro: Role = "quan_tri") {
   calls = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
+    // ADR-0003 Amendment #1 (C8): AuthProvider gọi /me lúc khởi động. Phải trả hồ sơ
+    // ĐÚNG VAI: lượt này về SAU applyMe của component nên nó là bên ghi cuối cùng — để
+    // rơi xuống nhánh bắt-tất ("filebytes", không phải JSON) thì `me` bị xoá về null.
+    // KHÔNG đưa vào `calls`: đây là hạ tầng phiên, không phải hành vi mà test đang đo.
+    if (url.endsWith("/me")) {
+      return new Response(
+        JSON.stringify({
+          ten: "DN",
+          mst: "0311772540",
+          goiDichVu: null,
+          banQuyen: "Mặc định",
+          ghiChu: null,
+          role: vaiTro,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
     calls.push({ url, method });
     if (method === "POST" && url.includes("/exports")) {
       const body = postStatus === 201 ? { id: "e1", key: "k", url: "u" } : { error: "forbidden" };
@@ -56,7 +72,6 @@ function mockExports(postStatus = 201) {
 
 describe("B2 — nút kết xuất theo hóa đơn", () => {
   beforeEach(() => {
-    setToken("t");
     vi.stubGlobal("URL", {
       ...URL,
       createObjectURL: vi.fn(() => "blob:x"),
@@ -64,27 +79,26 @@ describe("B2 — nút kết xuất theo hóa đơn", () => {
     });
   });
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
   it("vai ke_toan_truong → thấy 2 nút Xuất Excel/CSV", () => {
-    mockExports();
+    mockExports(201, "ke_toan_truong");
     renderWithProviders(<ExportButtonsAs vaiTro="ke_toan_truong" />);
     expect(screen.getByRole("button", { name: "Xuất Excel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Xuất CSV" })).toBeInTheDocument();
   });
 
   it("vai ke_toan → KHÔNG render nút", () => {
-    mockExports();
+    mockExports(201, "ke_toan");
     renderWithProviders(<ExportButtonsAs vaiTro="ke_toan" />);
     expect(screen.queryByRole("button", { name: "Xuất Excel" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Xuất CSV" })).toBeNull();
   });
 
   it("bấm Xuất Excel → createExport('xlsx', filter) đúng bộ lọc rồi tải file", async () => {
-    mockExports();
+    mockExports(201, "quan_tri");
     renderWithProviders(<ExportButtonsAs vaiTro="quan_tri" />);
     await userEvent.click(screen.getByRole("button", { name: "Xuất Excel" }));
     await waitFor(() => {
@@ -102,7 +116,7 @@ describe("B2 — nút kết xuất theo hóa đơn", () => {
   });
 
   it("bấm Xuất CSV → createExport('csv', filter)", async () => {
-    mockExports();
+    mockExports(201, "quan_tri");
     renderWithProviders(<ExportButtonsAs vaiTro="quan_tri" />);
     await userEvent.click(screen.getByRole("button", { name: "Xuất CSV" }));
     await waitFor(() => {
@@ -113,7 +127,7 @@ describe("B2 — nút kết xuất theo hóa đơn", () => {
   });
 
   it("403 → hiện 'Bạn không có quyền kết xuất.', không crash", async () => {
-    mockExports(403);
+    mockExports(403, "quan_tri");
     renderWithProviders(<ExportButtonsAs vaiTro="quan_tri" />);
     await userEvent.click(screen.getByRole("button", { name: "Xuất Excel" }));
     expect(await screen.findByText(/không có quyền kết xuất/i)).toBeInTheDocument();

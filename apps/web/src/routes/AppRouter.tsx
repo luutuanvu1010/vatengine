@@ -25,9 +25,23 @@ function Forbidden() {
   );
 }
 
+/** Màn chờ trong lúc kiểm tra cookie phiên (C8c). Cố tình tối giản: nó chỉ hiện trong
+ * một nhịp mạng tới /me, nên bất kỳ thứ gì nặng hơn cũng chỉ gây nhấp nháy. */
+function DangKiemTraPhien() {
+  return (
+    <output aria-busy="true" style={{ display: "block", padding: "2rem" }}>
+      Đang kiểm tra phiên đăng nhập…
+    </output>
+  );
+}
+
 /** Chỉ cho vào khi đã đăng nhập; ngược lại đẩy tới /login. */
 function ProtectedLayout() {
   const { status, me, logout } = useAuth();
+  // ADR-0003 Amendment #1 (C8c): 'checking' KHÔNG được coi như chưa đăng nhập — nếu đẩy
+  // sang /login lúc này thì mỗi lần tải trang người dùng lại thấy màn Login loé lên rồi
+  // mới vào app, tệ hơn chính vấn đề đang sửa.
+  if (status === "checking") return <DangKiemTraPhien />;
   if (status !== "authed" || !me) return <Navigate to="/login" replace />;
   return <AppLayout me={me} onLogout={logout} />;
 }
@@ -42,6 +56,9 @@ function RoleRoute({ allow, children }: { allow: (role: Role) => boolean; childr
 
 function LoginRoute() {
   const { status } = useAuth();
+  // Chờ kiểm tra xong rồi mới quyết: vào thẳng /login khi cookie CÒN hạn mà render ngay
+  // form thì người dùng thấy form loé lên rồi bị đá về app (C8c, chiều ngược lại).
+  if (status === "checking") return <DangKiemTraPhien />;
   if (status === "authed") return <Navigate to="/" replace />;
   return <LoginPage />;
 }

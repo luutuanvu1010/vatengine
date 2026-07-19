@@ -23,19 +23,39 @@ interface MockRoutes {
   patchMe?: (body: unknown) => Response;
 }
 
-/** Mock fetch định tuyến theo path — cho test luồng đăng nhập/phiên không cần mạng. */
+/** Mock fetch định tuyến theo path — cho test luồng đăng nhập/phiên không cần mạng.
+ *
+ * ADR-0003 Amendment #1: phiên nằm trong cookie HttpOnly, và app khởi động bằng cách gọi
+ * `/me` để hỏi xem cookie còn hiệu lực không (C8). Vì vậy mock phải phân biệt hai kịch bản:
+ *
+ * - Test CÓ khai `login` ⇒ kịch bản "mở app khi chưa đăng nhập": `/me` trả **401** cho tới
+ *   khi `POST /auth/login` được gọi (mô phỏng chưa có cookie). Nếu cho `/me` trả 200 ngay,
+ *   app sẽ vào thẳng và màn Đăng nhập KHÔNG bao giờ hiện — test tưởng hỏng mà thực ra là
+ *   mock sai đời.
+ * - Test KHÔNG khai `login` ⇒ kịch bản "đã có cookie hợp lệ": `/me` trả hồ sơ ngay (thay
+ *   cho `setToken()` trước đây).
+ */
 export function mockFetch(routes: MockRoutes): void {
+  const batDauChuaDangNhap = routes.login !== undefined;
+  let coCookie = !batDauChuaDangNhap;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
+    if (url.endsWith("/auth/logout")) {
+      coCookie = false;
+      return json(200, { ok: true });
+    }
     if (url.endsWith("/auth/login")) {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      return routes.login?.(body) ?? new Response("{}", { status: 500 });
+      const res = routes.login?.(body) ?? new Response("{}", { status: 500 });
+      if (res.status === 200) coCookie = true; // Đăng nhập thành công = server đặt cookie.
+      return res;
     }
     if (url.endsWith("/me")) {
       if ((init?.method ?? "GET").toUpperCase() === "PATCH") {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
         return routes.patchMe?.(body) ?? new Response("{}", { status: 500 });
       }
+      if (!coCookie) return json(401, { error: "unauthorized" });
       return routes.me?.() ?? new Response("{}", { status: 500 });
     }
     // Shape hợp lệ mặc định để màn tiếp đất (vd Dashboard) không vỡ.

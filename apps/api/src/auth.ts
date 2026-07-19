@@ -3,6 +3,7 @@
 // → đặt vào context cho route lọc/RLS + RBAC (rbac.ts). U8 bổ sung phát hành (signToken)
 // dùng ở /auth/login. Mọi ca hỏng xác thực → 401 gọn (không rò lý do cho client).
 import type { MiddlewareHandler } from "hono";
+import { getCookie } from "hono/cookie";
 import { sign, verify } from "hono/jwt";
 import { isRole } from "./rbac";
 import type { Role } from "./rbac";
@@ -11,7 +12,14 @@ import type { AppEnv } from "./types";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Vòng đời token nội bộ (giây). Ngắn để giảm cửa sổ rủi ro nếu rò (security.md tinh thần).
-const TOKEN_TTL_SEC = 8 * 60 * 60; // 8 giờ.
+// Export vì cookie phiên (session.ts) phải dùng ĐÚNG giá trị này cho Max-Age — nếu hai
+// nơi khai riêng, chúng sẽ lệch nhau khi ai đó sửa một bên (ADR-0003 Amendment #1 C1).
+export const TOKEN_TTL_SEC = 8 * 60 * 60; // 8 giờ.
+
+// Tên cookie phiên. Đặt Ở ĐÂY (không phải session.ts) để phụ thuộc chạy MỘT CHIỀU
+// session.ts → auth.ts: session.ts cần TOKEN_TTL_SEC cho Max-Age, nên nếu auth.ts import
+// ngược lại sẽ thành vòng tròn. session.ts re-export tên này làm bề mặt công khai.
+export const SESSION_COOKIE = "vat_session";
 
 export function isUuid(v: unknown): v is string {
   return typeof v === "string" && UUID_RE.test(v);
@@ -32,8 +40,12 @@ export async function signToken(
 }
 
 export const requireTenant: MiddlewareHandler<AppEnv> = async (c, next) => {
+  // ADR-0003 Amendment #1 (C3) — COOKIE trước, `Authorization: Bearer` sau. Trình duyệt
+  // dùng cookie HttpOnly (JS không chạm được); Bearer giữ lại cho client không-trình-duyệt
+  // và test. Giữ Bearer KHÔNG làm yếu C1: kẻ tấn công vẫn không có đường lấy được token.
   const header = c.req.header("Authorization");
-  const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  const token =
+    getCookie(c, SESSION_COOKIE) ?? (header?.startsWith("Bearer ") ? header.slice(7) : undefined);
   if (!token) return c.json({ error: "unauthorized" }, 401);
 
   let payload: Awaited<ReturnType<typeof verify>>;

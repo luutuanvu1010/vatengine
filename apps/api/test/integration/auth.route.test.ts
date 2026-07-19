@@ -4,6 +4,7 @@
 import { verify } from "hono/jwt";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
+import { SESSION_COOKIE } from "../../src/session";
 import {
   type Db,
   TEST_SECRET,
@@ -15,6 +16,11 @@ import {
   seedInvoice,
   seedUser,
 } from "../helpers";
+
+/** Trích token phiên từ Set-Cookie (test đóng vai trình duyệt) — C2. */
+function sessionFrom(res: Response): string | undefined {
+  return res.headers.get("Set-Cookie")?.match(new RegExp(`${SESSION_COOKIE}=([^;]*)`))?.[1];
+}
 
 describe("POST /auth/login (integration, PGlite)", () => {
   let db: Db;
@@ -41,20 +47,21 @@ describe("POST /auth/login (integration, PGlite)", () => {
     );
   }
 
-  it("đúng email+mật khẩu → 200 + token mang tenant_id + role đúng", async () => {
+  it("đúng email+mật khẩu → 200 + token (trong cookie phiên) mang tenant_id + role đúng", async () => {
     const res = await login("ke.toan@a.vn", "mat-khau-dung");
     expect(res.status).toBe(200);
-    const { token } = (await res.json()) as { token: string };
-    const payload = await verify(token, TEST_SECRET, "HS256");
+    // ADR-0003 Amendment #1 (C2): token KHÔNG còn trong body — nó nằm trong cookie
+    // HttpOnly. Test đóng vai trình duyệt: đọc Set-Cookie thay vì đọc JSON.
+    const token = sessionFrom(res);
+    expect(token).toBeTruthy();
+    const payload = await verify(token as string, TEST_SECRET, "HS256");
     expect(payload.tenant_id).toBe(tenantA);
     expect(payload.role).toBe("ke_toan");
     expect(payload.exp).toBeGreaterThan(0);
   });
 
   it("token từ login dùng gọi /invoices → 200, chỉ dữ liệu tenant của mình", async () => {
-    const { token } = (await (await login("ke.toan@a.vn", "mat-khau-dung")).json()) as {
-      token: string;
-    };
+    const token = sessionFrom(await login("ke.toan@a.vn", "mat-khau-dung")) as string;
     const inv = await app.request("/invoices", { headers: bearer(token) }, makeEnv());
     expect(inv.status).toBe(200);
     const body = (await inv.json()) as { total: number };

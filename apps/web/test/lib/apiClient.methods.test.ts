@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, api, clearToken, configureApi, setToken } from "../../src/lib/apiClient";
+import { ApiError, api, configureApi } from "../../src/lib/apiClient";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -18,8 +18,6 @@ function lastCall(m: { mock: { calls: unknown[] } }): [string, RequestInit] {
 
 describe("apiClient — bề mặt đầy đủ (đúng path/method/body)", () => {
   beforeEach(() => {
-    clearToken();
-    setToken("t");
     configureApi({ onUnauthorized: undefined });
   });
   afterEach(() => vi.restoreAllMocks());
@@ -108,10 +106,6 @@ describe("apiClient — bề mặt đầy đủ (đúng path/method/body)", () =
 // 2026-07-17 — bảng điều khiển: đồng bộ theo khoảng (U22 backfill header) + đổ dòng
 // hàng còn thiếu (U26 backfill-lines).
 describe("apiClient — đồng bộ theo khoảng + backfill dòng hàng", () => {
-  beforeEach(() => {
-    clearToken();
-    setToken("t");
-  });
   afterEach(() => vi.restoreAllMocks());
 
   it("backfillTaxAccount → POST /tax-accounts/:id/backfill với body {tuNgay, denNgay}", async () => {
