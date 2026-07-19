@@ -1,6 +1,10 @@
 // U17b (§3.4) — Miền email dùng-một-lần. Danh sách TĨNH, tra offline có chủ ý: gọi API bên
 // thứ ba ở đường đăng ký công khai là thêm một phụ thuộc mạng vào đúng chỗ dễ bị dội tải
 // nhất, và làm rò địa chỉ email của khách sang bên ngoài.
+// Tiêu chí phân loại: chỉ liệt kê miền KHÔNG CẦN ĐĂNG KÝ và TỰ HẾT HẠN (mailinator, yopmail,
+// 10minutemail...). Dịch vụ email alias CÓ TRẢ PHÍ (anonaddy, simplelogin...) không thuộc
+// nhóm này — chúng yêu cầu đăng ký tài khoản và chuyển tiếp về địa chỉ thật của người dùng,
+// nên không chặn.
 // Danh sách không bao giờ đầy đủ — nó chỉ nâng chi phí lạm dụng, không phải hàng rào tuyệt
 // đối. Bổ sung dần khi thấy lạm dụng thật.
 export const DISPOSABLE_DOMAINS: ReadonlySet<string> = new Set([
@@ -31,8 +35,6 @@ export const DISPOSABLE_DOMAINS: ReadonlySet<string> = new Set([
   "inboxbear.com",
   "spambog.com",
   "burnermail.io",
-  "anonaddy.com",
-  "simplelogin.io",
   "33mail.com",
   "moakt.com",
   "tmpmail.org",
