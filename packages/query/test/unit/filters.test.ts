@@ -1,6 +1,6 @@
 // U6 unit — validate bộ lọc/phân trang (Zod, thuần, offline) + fail-loud ngày sai.
 import { describe, expect, it } from "vitest";
-import { buildWhere, invoiceFilterSchema, pageSchema } from "../../src/filters";
+import { buildWhere, dayBoundaryVn, invoiceFilterSchema, pageSchema } from "../../src/filters";
 
 describe("invoiceFilterSchema", () => {
   it("chấp nhận bộ lọc hợp lệ + ép kiểu số từ query string", () => {
@@ -77,5 +77,33 @@ describe("buildWhere", () => {
 
   it("chấp nhận 29/02 của năm NHUẬN (2028-02-29)", () => {
     expect(() => buildWhere(T, { tuNgay: "2028-02-29" })).not.toThrow();
+  });
+});
+
+// BUG lọc-dư-1-ngày (2026-07-20): `tdlap` lưu là khoảnh khắc UTC của ngày VN — hoá đơn
+// VN ngày D lưu `(D-1)T17:00:00Z` (bằng chứng prod: VN 18/07 → 17/07T17:00Z). Biên lọc
+// PHẢI theo giờ VN (UTC+7); nếu dựng bằng UTC (`Z`) thì cửa sổ dịch 7h → dư ngày cuối +
+// thiếu ngày đầu (chọn [1,2] trả [2,3]).
+describe("dayBoundaryVn — biên ngày theo giờ VN (UTC+7)", () => {
+  it("đầu ngày VN = 00:00+07:00 = 17:00Z hôm TRƯỚC", () => {
+    expect(dayBoundaryVn("2026-07-01", false).toISOString()).toBe("2026-06-30T17:00:00.000Z");
+  });
+  it("cuối ngày VN = 23:59:59.999+07:00 = 16:59:59.999Z cùng ngày", () => {
+    expect(dayBoundaryVn("2026-07-02", true).toISOString()).toBe("2026-07-02T16:59:59.999Z");
+  });
+  it("khoảng [01→02]: upper KHÔNG chạm hoá đơn VN ngày 03 (tdlap 2026-07-02T17:00Z)", () => {
+    // Đây là chốt chặn triệu chứng: denNgay=02 không được lọt VN-ngày-03.
+    expect(dayBoundaryVn("2026-07-02", true).getTime()).toBeLessThan(
+      Date.parse("2026-07-02T17:00:00.000Z"),
+    );
+  });
+  it("khoảng [01→02]: lower CHẠM hoá đơn VN ngày 01 (tdlap 2026-06-30T17:00Z)", () => {
+    // Không được rớt ngày đầu: tuNgay=01 phải bao được VN-ngày-01.
+    expect(dayBoundaryVn("2026-07-01", false).getTime()).toBeLessThanOrEqual(
+      Date.parse("2026-06-30T17:00:00.000Z"),
+    );
+  });
+  it("vẫn fail-loud ngày phi thực tế (2026-02-30)", () => {
+    expect(() => dayBoundaryVn("2026-02-30", false)).toThrow();
   });
 });
