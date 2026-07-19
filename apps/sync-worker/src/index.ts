@@ -31,6 +31,7 @@ import {
   resolveFanoutConfig,
 } from "./fanout";
 import { isEgressBlocked } from "./health";
+import { replayDeadLetters } from "./replay";
 import { detailConsumerAction, runDetailJob } from "./runDetailJob";
 import { runScheduledSync } from "./runJob";
 import { buildMessages, currentPeriodWindow, enumerateDueAccounts } from "./schedule";
@@ -43,6 +44,26 @@ export { TenantLimiter, EgressHealth };
 const EGRESS_PROBE_CRON = "*/15 * * * *";
 
 export default {
+  // H-B.6 (c) — endpoint phát lại THỦ CÔNG job DLQ. PHẢI đặt sau Cloudflare Access
+  // (khu quản trị — security.md); code KHÔNG tự xác thực, chỉ ép `tenantId` tường
+  // minh (không "replay tất tenant" ẩn — multi-tenant.md, "tenant_id phải nằm tường
+  // minh trong payload, không suy đoán ngầm").
+  async fetch(req: Request, env: Env): Promise<Response> {
+    const url = new URL(req.url);
+    if (req.method === "POST" && url.pathname === "/dlq/replay") {
+      const { tenantId, ids } = (await req.json()) as { tenantId?: string; ids?: string[] };
+      if (!tenantId) return Response.json({ error: "thiếu tenantId" }, { status: 400 });
+      const { db, close } = await getDbFromHyperdrive(env);
+      try {
+        const res = await replayDeadLetters(db, env.SYNC_QUEUE, { tenantId, ids });
+        return Response.json(res);
+      } finally {
+        await close();
+      }
+    }
+    return new Response("not found", { status: 404 });
+  },
+
   async scheduled(event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     // GIÁM SÁT: tick probe egress — không đụng DB đồng bộ, chỉ probe T0 + health-state.
     if (event.cron === EGRESS_PROBE_CRON) {
