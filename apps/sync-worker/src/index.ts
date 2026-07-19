@@ -15,7 +15,7 @@ import { isDetailMessage } from "@vat/sync";
 import { getDbFromHyperdrive } from "./db";
 import { listActiveTenantIds, makeDetailJobDeps, makeEgressProbeDeps, makeJobDeps } from "./deps";
 import { dlqConsume } from "./dlqConsumer";
-import { EgressHealth } from "./egressHealth";
+import { EgressHealth, egressHealthClient } from "./egressHealth";
 import { runEgressProbe } from "./egressProbe";
 import {
   QUEUE_MAX_BATCH_BYTES,
@@ -25,6 +25,7 @@ import {
   jitterDelaySeconds,
   resolveFanoutConfig,
 } from "./fanout";
+import { isEgressBlocked } from "./health";
 import { detailConsumerAction, runDetailJob } from "./runDetailJob";
 import { runScheduledSync } from "./runJob";
 import { buildMessages, currentPeriodWindow, enumerateDueAccounts } from "./schedule";
@@ -41,6 +42,14 @@ export default {
     // GIÁM SÁT: tick probe egress — không đụng DB đồng bộ, chỉ probe T0 + health-state.
     if (event.cron === EGRESS_PROBE_CRON) {
       await runEgressProbe(makeEgressProbeDeps(env));
+      return;
+    }
+
+    // H-B.6 (b) — GATE: egress đang GEO_BLOCKED (403/451) thì KHÔNG enqueue lô nào
+    // (chỉ nhồi DLQ vô ích). Sự kiện toàn cục → chỉ observability, không audit (cần tenant).
+    const health = await egressHealthClient(env.EGRESS_HEALTH).loadHealth();
+    if (isEgressBlocked(health)) {
+      console.warn("[GATE] egress GEO_BLOCKED — skip cron enqueue");
       return;
     }
 
