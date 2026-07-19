@@ -4,11 +4,15 @@
 //  - queue(): MỘT Worker consume 2 queue (batch.queue phân biệt nguồn) —
 //    "vat-sync-dlq" (H-B.6): dlqConsume ghi sổ dong_bo_that_bai + audit CRITICAL rồi
 //    ack (lỗi ghi sổ → retry, trần max_retries:3 của consumer DLQ làm chốt, KHÔNG log
-//    body); còn lại = "vat-sync" (H-B.4, KHÔNG đổi): consumer → runScheduledSync mỗi
-//    message → `consumerAction` ánh xạ outcome → hành động: `reenqueue` (backpressure
-//    rate_limited/breaker_open: gửi msg mới có delay + ack, KHÔNG tính max_retries) ·
-//    `retry` (lỗi thật: message.retry(), trần max_retries → dead-letter) · `ack` (xong
-//    / cần đăng nhập lại);
+//    body); còn lại = "vat-sync": trước tiên GATE H-B.6 (b) — đọc egress health MỘT
+//    LẦN đầu batch, GEO_BLOCKED → `blockedAction` hoãn TOÀN BỘ message thay vì chạy
+//    job (không đập GDT): dưới trần → reenqueue có delay + ack (KHÔNG tính max_retries),
+//    ĐẠT trần bpAttempt → retry thật (max_retries → dead-letter, điểm dừng khi chặn
+//    kéo dài — spec §4); nếu không blocked, khối xử lý
+//    H-B.4 (KHÔNG đổi): consumer → runScheduledSync mỗi message → `consumerAction`
+//    ánh xạ outcome → hành động: `reenqueue` (backpressure rate_limited/breaker_open:
+//    gửi msg mới có delay + ack, KHÔNG tính max_retries) · `retry` (lỗi thật:
+//    message.retry(), trần max_retries → dead-letter) · `ack` (xong / cần đăng nhập lại);
 //  - export TenantLimiter: Durable Object rate-limit/circuit-breaker theo tenant/MST.
 // Logic (schedule/runJob/fanout/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
 import { isDetailMessage } from "@vat/sync";
@@ -20,6 +24,7 @@ import { runEgressProbe } from "./egressProbe";
 import {
   QUEUE_MAX_BATCH_BYTES,
   QUEUE_MAX_BATCH_COUNT,
+  blockedAction,
   chunkForQueue,
   consumerAction,
   jitterDelaySeconds,
@@ -102,8 +107,25 @@ export default {
       }
       // ---- H-B.4 — khối xử lý "vat-sync" hiện có, KHÔNG đổi logic ----
       const { backpressureDelaySeconds, maxBackpressure } = resolveFanoutConfig(env);
+      // H-B.6 (b) — GATE: đọc health MỘT LẦN đầu batch (không mỗi message). GEO_BLOCKED
+      // → hoãn TOÀN BỘ message trong batch (reenqueue-delay, mirror backpressure H-B.4)
+      // thay vì chạy job (tránh đập GDT khi biết chắc đang bị chặn địa lý).
+      const blocked = isEgressBlocked(await egressHealthClient(env.EGRESS_HEALTH).loadHealth());
       for (const message of batch.messages) {
         const body = message.body;
+        if (blocked) {
+          const action = blockedAction(body, { backpressureDelaySeconds, maxBackpressure });
+          if (action.type === "reenqueue") {
+            await env.SYNC_QUEUE.send(
+              { ...body, bpAttempt: action.bpAttempt },
+              { delaySeconds: action.delaySeconds },
+            );
+            message.ack();
+          } else {
+            message.retry(); // đạt trần → tính max_retries → dead-letter
+          }
+          continue;
+        }
         // H-B.4 — TÁCH backpressure (rate_limited/breaker_open) khỏi lỗi thật:
         //  - reenqueue: gửi message MỚI có delay + ack bản cũ ⇒ KHÔNG tính max_retries
         //    (backpressure thoáng qua không được đẩy job vào dead-letter oan). Mang
