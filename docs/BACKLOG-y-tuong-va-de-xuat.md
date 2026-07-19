@@ -86,6 +86,37 @@ Một điểm đáng chú ý trong các plan này: câu hỏi "admin có đọc 
 - **Mức ưu tiên đề xuất:** Trung bình (giá trị kênh bán hàng tiềm năng, nhưng đụng kiến trúc cách ly tenant — cần thiết kế cẩn thận, không làm vội).
 - **Nguồn phát hiện:** Yêu cầu chủ dự án, phiên Cowork 2026-07-16.
 
+#### BỔ SUNG [2026-07-19] — chủ dự án mô tả rõ tầm nhìn: mô hình THÀNH VIÊN + CHIA SẺ hồ sơ MST
+
+Nguyên văn ý tưởng chủ dự án (phiên 2026-07-19):
+
+> *"Quản lý tài khoản theo thành viên (thành viên này có các vai trò khác nhau với 1 doanh nghiệp: Chủ/giám đốc, kế toán trưởng, nhân viên, cty dịch vụ kế toán). Một hồ sơ mã số thuế có thể đồng thời chia sẻ việc xem, xuất dữ liệu cho chủ doanh nghiệp, nhân viên kế toán hoặc công ty dịch vụ kế toán; trong khi đó, 1 công ty dịch vụ kế toán có thể có nhiều nhân viên, đồng thời có thể xem và xuất dữ liệu được đối với nhiều doanh nghiệp (MST được chia sẻ, mời xem)."*
+
+Đây **rộng hơn hẳn** mục gốc ở trên: không chỉ là "đại lý đọc nhiều tenant", mà là một mô hình **thành viên ↔ hồ sơ MST nhiều-nhiều, có vai trò theo từng quan hệ, kèm luồng mời/chia sẻ**.
+
+**Vì sao KHÔNG phải là một hạn mức trong bảng gói** (khảo sát 2026-07-19, có bằng chứng):
+
+- `so_mst_toi_da` **không hề đếm MST**. Nó đếm số hàng `tai_khoan_thue`, mà mọi hàng đó bị ép **cùng một MST gốc**: `username = tenant.mst` (`taxAccounts.ts:134`), tài khoản con phải `startsWith(mst)` (`taxAccounts.ts:67`). Tức "tài khoản con" hiện tại = **nhánh của cùng một MST** (vd chi nhánh `4201969169-001`), hoàn toàn khác "nhiều doanh nghiệp khác nhau".
+- `tenants.mst` **UNIQUE toàn cục** (migration `0006`) ⇒ doanh nghiệp thứ hai **bắt buộc** là một hàng `tenants` riêng.
+- `nguoi_dung.tenant_id` **NOT NULL** + `email` UNIQUE toàn cục (`nguoiDung.ts:19,27`) ⇒ một người dùng thuộc đúng một tenant.
+- JWT mang đúng **một** `tenant_id`; RLS keyed theo `tenant_id`.
+
+⇒ Đây là **thay đổi mô hình cách ly dữ liệu**, chạm trục rủi ro pháp lý cao nhất của dự án (NĐ 13/2023), **không phải** thêm một con số vào bảng gói.
+
+**Các trục thiết kế cần chốt trước khi code** (chưa có câu trả lời — đừng đoán):
+
+1. **Đơn vị được chia sẻ là gì** — cả tenant, hay từng *hồ sơ MST*? Chủ dự án nói "một hồ sơ mã số thuế", gợi ý đơn vị chia sẻ **nhỏ hơn** tenant. Điều này có thể buộc tách khái niệm "hồ sơ MST" ra khỏi `tenants`.
+2. **Danh tính đăng nhập** hiện gắn cứng vào một tenant. Mô hình mới cần identity **độc lập tenant**, rồi mới nối vào các hồ sơ qua bảng quan hệ — đụng `nguoi_dung`, JWT, và `auth_lookup_user`.
+3. **Vai trò theo từng quan hệ**, không phải theo người dùng: cùng một người có thể là *kế toán trưởng* ở doanh nghiệp A và *nhân viên công ty dịch vụ* với doanh nghiệp B. Ba vai hiện có (`ke_toan`/`ke_toan_truong`/`quan_tri`) là vai **trong một tenant** — không đủ.
+4. **Công ty dịch vụ kế toán là một thực thể** có nhiều nhân viên, và quyền của nhân viên suy ra từ quyền công ty được cấp. Tức có **hai tầng** quan hệ, không phải một.
+5. **Luồng mời/chấp nhận + thu hồi**, và **audit** mọi truy cập xuyên tổ chức.
+6. **Quyền chi tiết**: chủ dự án nêu "xem, xuất dữ liệu" — cần chốt tập quyền tối thiểu (xem / xuất / kết nối tài khoản thuế / đổi cấu hình), vì cấp nhầm quyền *kết nối thuế* cho bên thứ ba là rủi ro pháp lý.
+
+**Đề xuất:** đơn vị RIÊNG, có spec riêng + `security-reviewer` bắt buộc. **Không gộp** vào U17 (gói dịch vụ) — đã quyết 2026-07-19. Khi mô hình này có rồi, hạn mức liên quan (vd *số hồ sơ MST một công ty dịch vụ được nhận chia sẻ*) mới trở thành một quyền lợi theo gói bình thường.
+
+- **Mức ưu tiên (cập nhật):** Cao về giá trị kinh doanh, nhưng **phải sau** khi có spec và review bảo mật riêng.
+- **Nguồn:** Yêu cầu chủ dự án phiên 2026-07-19; khảo sát mã cùng phiên (4 agent + thẩm định đối kháng).
+
 ### [2026-07-16] Tích hợp đăng nhập bằng Định danh điện tử (VNeID) — ƯU TIÊN CAO, cần nghiên cứu kỹ
 
 - **Trạng thái:** Đề xuất — chưa triển khai. Chủ dự án nhấn mạnh **quan trọng và cần nghiên cứu kỹ** trước khi lên kế hoạch code.

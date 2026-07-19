@@ -29,8 +29,23 @@ CREATE TABLE IF NOT EXISTS "goi_dich_vu" (
 -- v1.0 chỉ có gói free; bảng cố ý linh hoạt để thêm gói trả phí không cần đổi lược đồ.
 -- Ngưỡng gh_* là số ĐỀ XUẤT CHƯA KIỂM CHỨNG (U17-plan §3.6) — phải đo bằng số thật của
 -- tenant production rồi chỉnh qua bảng điều khiển, KHÔNG cần deploy lại.
-INSERT INTO "goi_dich_vu" ("ma", "ten", "so_mst_toi_da", "so_hoa_don_thang", "cho_tai_khoan_con")
-VALUES ('free', 'Miễn phí', 1, NULL, false)
+--
+-- Gói 'enterprise' KHÔNG phải tính năng mới — nó BẮT BUỘC phải tồn tại để cứu dữ liệu thật.
+-- ĐO TRÊN PRODUCTION 2026-07-19: tenant "Công ty TNHH Tour Đảo" (MST 4201969169, 15548 hóa
+-- đơn) đang mang nhãn 'Enterprise ' (CÓ DẤU CÁCH THỪA). Không có hàng gói tương ứng thì câu
+-- backfill ở cuối file sẽ ép nó về 'free' ⇒ tụt còn 1 tài khoản thuế + tắt tài khoản con,
+-- và nhãn gốc mất (chỉ khôi phục được bằng PITR, không bằng SQL).
+--
+-- HẠN MỨC DƯỚI ĐÂY LÀ TẠM THỜI, CHƯA ĐƯỢC CHỦ DỰ ÁN CHỐT. Chủ dự án đã hoãn việc thiết kế
+-- danh mục quyền lợi (quyết định 2026-07-19) để nghiên cứu thêm. Chọn nới rộng có chủ ý: gói
+-- này chỉ phục vụ đúng một khách hiện hữu, nên nới KHÔNG gây rủi ro lạm dụng, còn siết thì
+-- gây hồi quy thật. Sửa lại qua bảng điều khiển khi đã chốt — KHÔNG cần deploy.
+INSERT INTO "goi_dich_vu"
+  ("ma", "ten", "so_mst_toi_da", "so_hoa_don_thang", "cho_tai_khoan_con",
+   "gh_invoices_moi_phut", "gh_exports_moi_phut", "gh_reconcile_moi_phut")
+VALUES
+  ('free',       'Miễn phí',   1, NULL, false, 120, 20, 20),
+  ('enterprise', 'Enterprise', 10, NULL, true,  300, 60, 60)
 ON CONFLICT ("ma") DO NOTHING;--> statement-breakpoint
 
 ALTER TABLE "goi_dich_vu" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -173,6 +188,16 @@ GRANT INSERT ON "audit_log_admin" TO PUBLIC;--> statement-breakpoint
 -- tái lập được, không phải suy đoán từ chú thích 0001 — xem
 -- docs/adr/0004-neon-role-rls-pitr.md §E2 (script
 -- packages/db/provisioning/spike-role-rls-probe.mjs, output raw kèm ngày).
+-- BƯỚC 1 — ÁNH XẠ NHÃN CŨ SANG MÃ. PHẢI chạy TRƯỚC câu ép-về-free bên dưới.
+-- Vì sao cần câu riêng: `NOT IN` so khớp CHÍNH XÁC, mà nhãn thật trên production là
+-- 'Enterprise ' CÓ DẤU CÁCH THỪA (đo 2026-07-19). Chỉ thêm hàng seed 'enterprise' là KHÔNG
+-- đủ — 'Enterprise ' vẫn không khớp 'enterprise' nên vẫn bị ép về free. `btrim` + `lower`
+-- xử cả dấu cách thừa lẫn khác biệt hoa/thường.
+-- Idempotent: chạy lần hai không khớp gì nữa (giá trị đã thành mã) nên vô hại.
+UPDATE "tenants" SET "goi_dich_vu" = 'enterprise'
+WHERE lower(btrim("goi_dich_vu")) = 'enterprise';--> statement-breakpoint
+
+-- BƯỚC 2 — phần còn lại (NULL, nhãn lạ không ánh xạ được) về gói mặc định.
 UPDATE "tenants" SET "goi_dich_vu" = 'free'
 WHERE "goi_dich_vu" IS NULL
    OR "goi_dich_vu" NOT IN (SELECT "ma" FROM "goi_dich_vu");--> statement-breakpoint

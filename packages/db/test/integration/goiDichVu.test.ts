@@ -300,6 +300,15 @@ describe("U17a — backfill tenants.goi_dich_vu (QĐ-7)", () => {
       sql`insert into tenants (ten, mst, goi_dich_vu) values ('Cty Cũ', '0100000099', 'Miễn phí')`,
     );
 
+    // DỮ LIỆU THẬT trên production 2026-07-19: nhãn 'Enterprise ' CÓ DẤU CÁCH THỪA.
+    // Đây là ca nguy hiểm nhất — `NOT IN` so khớp CHÍNH XÁC nên nếu 0007 chỉ thêm hàng seed
+    // 'enterprise' mà thiếu câu ánh xạ btrim/lower, tenant này bị ép về 'free' ⇒ tụt còn 1
+    // tài khoản thuế + tắt tài khoản con, nhãn gốc mất (chỉ PITR cứu được).
+    await db.execute(
+      sql`insert into tenants (ten, mst, goi_dich_vu)
+          values ('Cty Enterprise', '0100000088', 'Enterprise ')`,
+    );
+
     // Áp 0007 — chính nó phải backfill.
     await apFile(file0007);
 
@@ -313,6 +322,21 @@ describe("U17a — backfill tenants.goi_dich_vu (QĐ-7)", () => {
       sql`select goi_dich_vu from tenants where mst = '0100000099'`,
     )) as { rows: Array<{ goi_dich_vu: string }> };
     expect(hang.rows[0]?.goi_dich_vu).toBe("free");
+
+    // KHẲNG ĐỊNH QUAN TRỌNG NHẤT: tenant mang nhãn 'Enterprise ' (dấu cách thừa) phải được
+    // ÁNH XẠ sang mã 'enterprise', TUYỆT ĐỐI KHÔNG bị ép về 'free'. Nếu ai đó gỡ câu
+    // btrim/lower khỏi 0007, test này đỏ ngay — đó là lý do nó tồn tại.
+    const ent = (await db.execute(
+      sql`select goi_dich_vu from tenants where mst = '0100000088'`,
+    )) as { rows: Array<{ goi_dich_vu: string }> };
+    expect(ent.rows[0]?.goi_dich_vu).toBe("enterprise");
+
+    // Và gói đó phải giữ được quyền lợi cao hơn free — nếu không thì việc ánh xạ vô nghĩa.
+    const ql = (await db.execute(
+      sql`select so_mst_toi_da, cho_tai_khoan_con from goi_dich_vu where ma = 'enterprise'`,
+    )) as { rows: Array<{ so_mst_toi_da: number; cho_tai_khoan_con: boolean }> };
+    expect(ql.rows[0]?.so_mst_toi_da).toBeGreaterThan(1);
+    expect(ql.rows[0]?.cho_tai_khoan_con).toBe(true);
 
     // Bất biến tổng: không tenant nào trỏ tới gói không tồn tại (chính là lệnh kiểm tay
     // bắt buộc sau `make migrate` trên production).
