@@ -18,11 +18,20 @@ import {
   resolveLoginLockConfig,
 } from "../src/loginLimiter";
 import { hashPassword } from "../src/password";
+import {
+  type SignupLimitConfig,
+  type SignupState,
+  checkSignup,
+  initialSignupState,
+  recordSignup,
+  resolveSignupLimitConfig,
+} from "../src/signupLimiter";
 import type {
   AnyDb,
   BackfillTrackerClient,
   Env,
   LoginLimiterClient,
+  SignupLimiterClient,
   StorageHandle,
 } from "../src/types";
 
@@ -118,6 +127,20 @@ export function makeLoginLimiterFactory(cfg: LoginLockConfig = resolveLoginLockC
   });
 }
 
+/** U17b (QĐ-2) — factory limiter đăng ký GIẢ in-memory (dùng logic thuần signupLimiter +
+ * Date.now()) để test route /dang-ky (Task 5) sau này. Trạng thái giữ theo key (IP)
+ * trong Map. Không truyền cfg → mặc định (never-chặn trong các test không liên quan). */
+export function makeSignupLimiterFactory(cfg: SignupLimitConfig = resolveSignupLimitConfig({})) {
+  const states = new Map<string, SignupState>();
+  const get = (key: string) => states.get(key) ?? initialSignupState();
+  return (_env: Env, key: string): SignupLimiterClient => ({
+    check: async () => checkSignup(get(key), Date.now(), cfg),
+    record: async () => {
+      states.set(key, recordSignup(get(key), Date.now(), cfg));
+    },
+  });
+}
+
 /** U22 — factory tracker backfill GIẢ in-memory dùng ĐÚNG logic thuần initDef/readDef
  * (như DO thật): store-once idempotent + cách ly tenant. Trạng thái theo backfillId. */
 export function makeBackfillTrackerFactory() {
@@ -134,14 +157,15 @@ export function makeBackfillTrackerFactory() {
 }
 
 /** Tiêm db PGlite + R2 giả + transport GDT giả + limiter giả + tracker giả vào createApp
- * (close = noop). storage/transport/loginLimiter/backfillTracker tùy chọn; mặc định
- * factory giả — test cần đối chiếu trạng thái truyền factory riêng phơi store. */
+ * (close = noop). storage/transport/loginLimiter/backfillTracker/signupLimiter tùy chọn;
+ * mặc định factory giả — test cần đối chiếu trạng thái truyền factory riêng phơi store. */
 export function injectDb(
   db: Db,
   storage: FakeStorage = makeStorage(),
   transport: GdtTransport = makeTransport(),
   getLoginLimiter = makeLoginLimiterFactory(),
   getBackfillTracker = makeBackfillTrackerFactory(),
+  getSignupLimiter = makeSignupLimiterFactory(),
 ) {
   return {
     getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }),
@@ -149,6 +173,7 @@ export function injectDb(
     getTransport: () => transport,
     getLoginLimiter,
     getBackfillTracker,
+    getSignupLimiter,
   };
 }
 

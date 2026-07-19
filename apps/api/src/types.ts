@@ -6,8 +6,9 @@ import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { BackfillDef } from "./backfillTracker";
 import type { LockGate, LoginLockEnv } from "./loginLimiter";
 import type { Role } from "./rbac";
+import type { SignupGate, SignupLimitEnv } from "./signupLimiter";
 
-export interface Env extends LoginLockEnv {
+export interface Env extends LoginLockEnv, SignupLimitEnv {
   ENVIRONMENT?: string;
   // Postgres qua Hyperdrive (ADR-0001). `.connectionString` dùng để mở kết nối pg.
   HYPERDRIVE: Hyperdrive;
@@ -36,6 +37,10 @@ export interface Env extends LoginLockEnv {
   // production; thiếu → producer backfill (B5) trả 503 (không fail-open — không tracker
   // thì không theo dõi tiến độ được).
   BACKFILL_TRACKER?: DurableObjectNamespace;
+  // U17b (QĐ-2) — Durable Object đếm lượt đăng ký công khai theo IP (chống lạm dụng cổng
+  // /dang-ky). Optional: binding production; test tiêm getSignupLimiter giả. Thiếu →
+  // fail-open (đăng ký vẫn chạy; WAF per-IP ở edge vẫn còn một lớp bảo vệ).
+  SIGNUP_LIMITER?: DurableObjectNamespace;
 }
 
 // Trích từ JWT nội bộ (U6/U8): `tenantId` để lọc + RLS; `role` (vai RBAC, U8) để
@@ -78,6 +83,15 @@ export interface BackfillTrackerClient {
   get: (tenantId: string) => Promise<BackfillDef | null>;
 }
 
+// U17b (QĐ-2) — client gọi Durable Object đếm lượt đăng ký công khai theo IP. Production
+// gọi DO thật; test tiêm giả (in-memory dùng logic thuần). check() TRƯỚC khi tạo
+// tenant/user; record() SAU MỌI lượt (kể cả thành công) — khác LoginLimiterClient
+// (record() đơn nhất, không tách failure/success vì SignupLimiter đếm mọi kết quả).
+export interface SignupLimiterClient {
+  check: () => Promise<SignupGate>;
+  record: () => Promise<void>;
+}
+
 // Tiêm phụ thuộc để test đi qua route thật với PGlite + R2 giả (không cần binding thật).
 export interface AppDeps {
   getDb: (env: Env) => Promise<DbHandle>;
@@ -89,4 +103,7 @@ export interface AppDeps {
   getLoginLimiter: (env: Env, key: string) => LoginLimiterClient;
   // U22 — tracker backfill theo backfillId (DO thật ở production; test tiêm giả).
   getBackfillTracker: (env: Env, backfillId: string) => BackfillTrackerClient;
+  // U17b (QĐ-2) — đếm lượt đăng ký công khai theo IP. key = IP nguồn. Route /dang-ky
+  // (Task 5) tiêu thụ; KHÔNG hiện thực ở đây.
+  getSignupLimiter: (env: Env, key: string) => SignupLimiterClient;
 }
