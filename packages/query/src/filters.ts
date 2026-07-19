@@ -31,20 +31,30 @@ export const pageSchema = z.object({
 });
 export type Page = z.infer<typeof pageSchema>;
 
-/** `YYYY-MM-DD` → thời khắc UTC đầu/cuối ngày. Ngày phi thực tế → ném (fail-loud):
- * lọc theo ngày sai âm thầm còn tệ hơn báo lỗi. */
-function dayBoundaryUtc(isoYmd: string, end: boolean): Date {
-  const d = new Date(`${isoYmd}${end ? "T23:59:59.999Z" : "T00:00:00.000Z"}`);
-  if (Number.isNaN(d.getTime())) {
-    throw new Error(`Ngày lọc không hợp lệ (không có thật): ${isoYmd}`);
-  }
-  // `new Date` CUỘN âm thầm ngày tràn số ngày của tháng (2026-02-30 → 2026-03-02,
-  // 29/02 năm không nhuận → 01/03) thay vì NaN → đối chiếu lại Y-M-D để fail-loud.
+// Portal/GDT dùng giờ VN (UTC+7, không DST). `tdlap` lưu là KHOẢNH KHẮC UTC của ngày VN:
+// hoá đơn VN ngày D được lưu `(D-1)T17:00:00Z` (bằng chứng prod 2026-07-20: VN 18/07 →
+// 17/07T17:00Z). Vì vậy biên lọc PHẢI dựng theo giờ VN — nếu dựng bằng UTC (`Z`) thì cửa
+// sổ dịch 7h, dư ngày cuối + thiếu ngày đầu (chọn [1,2] trả nhầm [2,3]).
+const VN_TZ_OFFSET = "+07:00";
+
+/** `YYYY-MM-DD` (ngày theo giờ VN) → thời khắc UTC đầu/cuối ngày ĐÓ Ở GIỜ VN. Ngày phi
+ * thực tế → ném (fail-loud): lọc theo ngày sai âm thầm còn tệ hơn báo lỗi. */
+export function dayBoundaryVn(isoYmd: string, end: boolean): Date {
+  // Kiểm ngày CÓ THẬT bằng probe UTC — `new Date` CUỘN âm thầm ngày tràn-tháng
+  // (2026-02-30 → 03-02; 29/02 năm không nhuận → 01/03) thay vì NaN → đối chiếu Y-M-D.
   const [y, m, day] = isoYmd.split("-").map(Number);
-  if (d.getUTCFullYear() !== y || d.getUTCMonth() + 1 !== m || d.getUTCDate() !== day) {
-    throw new Error(`Ngày lọc không có thật (tràn số ngày của tháng): ${isoYmd}`);
+  const probe = new Date(`${isoYmd}T00:00:00.000Z`);
+  if (
+    Number.isNaN(probe.getTime()) ||
+    probe.getUTCFullYear() !== y ||
+    probe.getUTCMonth() + 1 !== m ||
+    probe.getUTCDate() !== day
+  ) {
+    throw new Error(`Ngày lọc không có thật (định dạng đúng nhưng ngày phi thực tế): ${isoYmd}`);
   }
-  return d;
+  // Biên theo GIỜ VN: đầu ngày 00:00 VN, cuối ngày 23:59:59.999 VN → offset +07:00 cho
+  // ra đúng khoảnh khắc UTC để so với `tdlap` (cũng là khoảnh khắc UTC của ngày VN).
+  return new Date(`${isoYmd}${end ? "T23:59:59.999" : "T00:00:00.000"}${VN_TZ_OFFSET}`);
 }
 
 /** Dựng điều kiện WHERE Drizzle từ bộ lọc, LUÔN gắn `tenant_id` tường minh. */
@@ -56,8 +66,8 @@ export function buildWhere(tenantId: string, filter: InvoiceFilter): SQL {
   if (filter.nmmst) conds.push(eq(hoaDon.nmmst, filter.nmmst));
   if (filter.ttxly !== undefined) conds.push(eq(hoaDon.ttxly, filter.ttxly));
   if (filter.tthai !== undefined) conds.push(eq(hoaDon.tthai, filter.tthai));
-  if (filter.tuNgay) conds.push(gte(hoaDon.tdlap, dayBoundaryUtc(filter.tuNgay, false)));
-  if (filter.denNgay) conds.push(lte(hoaDon.tdlap, dayBoundaryUtc(filter.denNgay, true)));
+  if (filter.tuNgay) conds.push(gte(hoaDon.tdlap, dayBoundaryVn(filter.tuNgay, false)));
+  if (filter.denNgay) conds.push(lte(hoaDon.tdlap, dayBoundaryVn(filter.denNgay, true)));
   const where = and(...conds);
   // Luôn có ít nhất điều kiện tenant → không kỳ vọng undefined; chốt kiểu an toàn.
   if (!where) throw new Error("buildWhere: điều kiện rỗng (không kỳ vọng)");
