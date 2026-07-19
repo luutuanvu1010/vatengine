@@ -36,6 +36,9 @@ export default defineConfig({
         // U22 — DO wiring backfill (runtime workerd; logic thuần đã phủ ở
         // backfillTracker.test.ts, giống loginLimiterDO).
         "src/backfillTrackerDO.ts",
+        // U17b — DO wiring signup (runtime workerd; logic thuần đã phủ ở
+        // signupLimiter.test.ts, giống loginLimiterDO).
+        "src/signupLimiterDO.ts",
       ],
       thresholds: { lines: 80, statements: 80, branches: 80, functions: 80 },
     },
