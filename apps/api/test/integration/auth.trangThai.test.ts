@@ -4,10 +4,23 @@
 // chờ duyệt" với "không tồn tại", tức rò thông tin.
 import { auditLog, tenants } from "@vat/db";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Review finding 1 — bọc verifyPassword để CHỨNG MINH cổng trạng thái vẫn nằm SAU verify
+// PBKDF2 (không có `if` riêng trả về sớm bỏ qua verify) — đúng khuôn mẫu
+// auth.hardening.test.ts (H-A.5a). Nếu một refactor sau này tách cổng ra thành `if` sớm,
+// guard này phải ĐỎ.
+vi.mock("../../src/password", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/password")>();
+  return { ...actual, verifyPassword: vi.fn(actual.verifyPassword) };
+});
+
 import { createApp } from "../../src/app";
+import { verifyPassword } from "../../src/password";
 import { SESSION_COOKIE } from "../../src/session";
 import { type Db, freshDb, injectDb, makeEnv, makeTenant, seedUser } from "../helpers";
+
+const verifySpy = vi.mocked(verifyPassword);
 
 const EMAIL = "ke.toan@a.vn";
 const MAT_KHAU_DUNG = "mat-khau-dung";
@@ -19,6 +32,7 @@ describe("POST /auth/login — cổng trạng thái tenant (U17b)", () => {
   let tenantA: string;
 
   beforeEach(async () => {
+    verifySpy.mockClear();
     db = await freshDb();
     app = createApp(injectDb(db));
     tenantA = await makeTenant(db, "Cty A", "0100000001");
@@ -47,16 +61,28 @@ describe("POST /auth/login — cổng trạng thái tenant (U17b)", () => {
 
   for (const trangThai of ["cho_duyet", "khoa", "tu_choi"]) {
     it(`tenant '${trangThai}' + mật khẩu ĐÚNG → 401 giống hệt sai mật khẩu, KHÔNG cookie phiên`, async () => {
-      await setTrangThai(trangThai);
-      const res = await login(EMAIL, MAT_KHAU_DUNG);
+      // Finding 3 — chuẩn (baseline) "sai mật khẩu" phải lấy TRƯỚC khi hạ trạng thái tenant,
+      // tức trên tenant vẫn còn 'active'. Lấy sau khi hạ trạng thái sẽ so sánh nhánh
+      // chưa-duyệt với chính nó, không còn ý nghĩa "giống hệt sai mật khẩu" như tên test nêu.
       const wrongPw = await login(EMAIL, MAT_KHAU_SAI);
+
+      await setTrangThai(trangThai);
+      // Cô lập lần gọi verify cho request bị chặn cổng trạng thái (bỏ qua lần verify của
+      // wrongPw ở trên) để đếm chính xác bên dưới.
+      verifySpy.mockClear();
+      const res = await login(EMAIL, MAT_KHAU_DUNG);
 
       expect(res.status).toBe(401);
       expect(res.status).toBe(wrongPw.status);
-      // Thân lỗi phải BYTE-IDENTICAL với sai mật khẩu — không được lộ thêm chi tiết nào.
+      // Finding 4 — so sánh CẤU TRÚC (object đã json()-parse), không phải byte-for-byte;
+      // toEqual không phân biệt được thứ tự khoá hay khoảng trắng khác nhau giữa hai thân
+      // phản hồi, nhưng đủ để bắt rò rỉ thêm trường/nội dung.
       expect(await res.json()).toEqual(await wrongPw.json());
-      expect(res.headers.get(SESSION_COOKIE)).toBeNull();
       expect(res.headers.get("Set-Cookie")).toBeNull();
+      // Finding 1 — cổng trạng thái PHẢI nằm SAU verify PBKDF2 (đúng 1 lần), KHÔNG được có
+      // `if` riêng trả về sớm bỏ qua verify — nếu có, tenant chưa duyệt phản hồi NHANH HƠN
+      // đo được từ bên ngoài so với sai mật khẩu, tức rò trạng thái qua timing.
+      expect(verifySpy).toHaveBeenCalledTimes(1);
     });
   }
 
