@@ -201,16 +201,14 @@ git commit -m "feat(db): H-B.6 bảng dong_bo_that_bai (dead-letter, RLS FORCE) 
 - Consumes: `ProbeVerdict` (`@vat/gdt-client`), `nextHealth`, `HealthState` (đã có).
 - Produces: `HealthState.lastVerdict?: ProbeVerdict`; `isEgressBlocked(state: HealthState): boolean` (true ⇔ `lastVerdict === 'GEO_BLOCKED'`).
 
-- [ ] **Step 1: Viết test đỏ** — **APPEND** vào `apps/sync-worker/test/unit/health.test.ts` (file đã có; thêm `describe` mới, dùng import sẵn có nếu trùng):
+- [ ] **Step 1: Viết test đỏ** — **APPEND** vào `apps/sync-worker/test/unit/health.test.ts` (file đã có). KHÔNG lặp import: file đã có `import { describe, expect, it } from "vitest"` (dòng 5) và `import { BAD_STREAK_THRESHOLD, HEALTHY, nextHealth } from "../../src/health"` (dòng 6). **Chỉ (i) thêm `isEgressBlocked` vào dòng import health sẵn có** → `import { BAD_STREAK_THRESHOLD, HEALTHY, isEgressBlocked, nextHealth } from "../../src/health";`, rồi (ii) APPEND khối `describe` dưới đây (không thêm dòng import nào):
 
 ```ts
-import { describe, expect, it } from "vitest";
-import { HEALTHY, isEgressBlocked, nextHealth } from "../../src/health";
-
 describe("H-B.6 — lastVerdict + isEgressBlocked", () => {
-  it("nextHealth ghi lastVerdict cho mỗi verdict", () => {
+  it("nextHealth ghi lastVerdict ở nhánh XẤU; nhánh OK giữ HEALTHY (lastVerdict undefined)", () => {
     expect(nextHealth(HEALTHY, "GEO_BLOCKED").state.lastVerdict).toBe("GEO_BLOCKED");
-    expect(nextHealth(HEALTHY, "OK").state.lastVerdict).toBe("OK");
+    // OK KHÔNG đặt lastVerdict (giữ nguyên HEALTHY) → gate mở. Xem Step 3 giải thích.
+    expect(nextHealth(HEALTHY, "OK").state.lastVerdict).toBeUndefined();
   });
   it("isEgressBlocked chỉ true khi lastVerdict = GEO_BLOCKED", () => {
     expect(isEgressBlocked(nextHealth(HEALTHY, "GEO_BLOCKED").state)).toBe(true);
@@ -223,7 +221,7 @@ describe("H-B.6 — lastVerdict + isEgressBlocked", () => {
 - [ ] **Step 2: Chạy test — ĐỎ**
 
 Run: `npx vitest run --root apps/sync-worker test/unit/health.test.ts`
-Expected: FAIL (`isEgressBlocked` chưa tồn tại; `lastVerdict` undefined).
+Expected: FAIL (`isEgressBlocked` chưa tồn tại). Các ca cũ (a)–(f) vẫn PHẢI xanh — xem Step 3 (nhánh OK không đổi).
 
 - [ ] **Step 3: Sửa `health.ts`** — thêm `lastVerdict` vào interface + ghi trong `nextHealth` + hàm mới:
 
@@ -235,10 +233,10 @@ export interface HealthState {
   lastVerdict?: ProbeVerdict;
 }
 ```
-Trong `nextHealth`, nhánh OK:
+Nhánh OK — **GIỮ NGUYÊN** (KHÔNG thêm `lastVerdict`): OK reset về đúng `HEALTHY` để (a) test cũ `health.test.ts:23` `toEqual(HEALTHY)` + các ca (c)/(f) vẫn xanh, và (b) sau một tick OK thì `lastVerdict` undefined → `isEgressBlocked` = false → **gate mở** (đúng nghĩa "hết chặn"). Gate chỉ cần biết verdict XẤU gần nhất có phải GEO_BLOCKED không.
 ```ts
   if (verdict === "OK") {
-    return { state: { ...HEALTHY, lastVerdict: "OK" }, alert: null };
+    return { state: HEALTHY, alert: null }; // KHÔNG đổi — OK reset sạch về HEALTHY
   }
 ```
 Nhánh xấu — thêm `lastVerdict: verdict` vào state trả về:
