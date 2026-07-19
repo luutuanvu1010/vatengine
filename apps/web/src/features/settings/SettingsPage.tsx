@@ -90,7 +90,8 @@ export function SettingsPage() {
           <Row label="Bản quyền">{me.banQuyen}</Row>
           <Row label="Gói dịch vụ">
             <span style={{ color: "var(--success-700)", fontWeight: "var(--fw-semibold)" }}>
-              {me.goiDichVu ?? "—"}
+              {/* U17a (QĐ-7) — hiện nhãn tiếng Việt; goiDichVu nay là MÃ, chỉ rơi về khi thiếu nhãn. */}
+              {me.goiDichVuTen ?? me.goiDichVu ?? "—"}
             </span>
           </Row>
           <Row label="Ghi chú">

@@ -71,6 +71,18 @@ describe("POST /tax-accounts (U23-D2 — auto MST + hạn mức, PGlite)", () =>
     expect(res.status).toBe(400);
   });
 
+  // Review Task 5, việc 2 — ca lỗi KÉP: module tắt VÀ username sai tiền tố. Trước Task 5,
+  // kiểm cờ module chạy TRƯỚC MỌI THỨ nên luôn thắng; Task 5 vô tình đảo thứ tự khiến
+  // client thấy sub_prefix_invalid thay vì sub_account_disabled. Khôi phục: sub_disabled
+  // phải thắng bất kể username có hợp lệ hay không.
+  it("(e) tài khoản con, module TẮT, VÀ username sai tiền tố → vẫn sub_account_disabled (không phải sub_prefix_invalid)", async () => {
+    const token = await tokenFor(tenantA, { role: "quan_tri" });
+    const res = await register(token, { loai: "con", username: "sai-tien-to-khong-phai-mst" });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("sub_account_disabled");
+  });
+
   it("vai ke_toan → 403", async () => {
     const token = await tokenFor(tenantA, { role: "ke_toan" });
     const res = await register(token, {});

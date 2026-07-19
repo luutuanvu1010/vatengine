@@ -156,6 +156,8 @@ export interface MeResponse {
   ten: string;
   mst: string;
   goiDichVu: string | null;
+  // U17a (QĐ-7) — nhãn tiếng Việt của gói; `goiDichVu` nay là MÃ ('free').
+  goiDichVuTen: string | null;
   banQuyen: string;
   ghiChu: string | null;
   role: Role;
