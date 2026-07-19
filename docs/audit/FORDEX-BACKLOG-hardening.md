@@ -65,6 +65,7 @@
 
 **H-B.6 · CODE · Vòng khép kín DLQ + EgressHealth + quota tổng** *(Cụm 1)* — Chặn: **H-B.4**
 - Consumer `vat-sync-dlq` (audit CRITICAL + cảnh báo + phát lại); đọc `EgressHealth` trước enqueue (GEO_BLOCKED → skip nhanh); DO `global-egress` quota tổng.
+- (2026-07-20) Phạm vi H-B.6 thu hẹp còn (a)+(b) — xem docs/plans/H-B.6-plan.md + H-B.6-impl.md. Phần (c) DO global-egress quota tách thành H-B.6c, hợp nhất BACKLOG mục #1.
 
 ---
 

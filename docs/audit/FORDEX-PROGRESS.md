@@ -33,7 +33,8 @@
 | H-B.3 | CODE | Xong (phần P1) — `queryClient.clear()` + `clearInvoiceFilter()` ở 3 ranh giới phiên (logout/401/login); QA2 PASS (dod+security). **Hoãn có chủ đích:** tenantId-in-queryKey (thừa vì clear() bao trùm mọi cache ở mọi ranh giới; client cố ý không có tenant_id — apiClient) và `--text-disabled` (đã định nghĩa sẵn tokens.css:33). Ràng buộc tương lai: mọi luồng đổi phiên/tenant MỚI phải gọi cleanup này (xem `.claude/rules/multi-tenant.md`). | (commit đơn vị) |
 | H-B.4 | CODE | Xong — fan-out: `chunkForQueue` ≤100/≤256KB + `jitterDelaySeconds` (hash-tenant) + `consumerAction` tách backpressure (rate_limited/breaker_open → reenqueue msg mới có delay, KHÔNG tính max_retries) khỏi lỗi thật; **trần `bpAttempt` (mặc định 10) → rơi dead-letter** chặn vòng lặp vô hạn (fix Major security-review); `max_concurrency:3`. QA2 PASS (dod+security). | (commit đơn vị) |
 | H-B.5 | CODE | Chờ H-B.4 — sharding set-based | — |
-| H-B.6 | CODE | Chờ H-B.4 — DLQ consumer + egress health + quota tổng | — |
+| H-B.6 | CODE | Xong (a)+(b) — DLQ consumer (dong_bo_that_bai + audit CRITICAL + replay thủ công) + EgressHealth-gate GEO_BLOCKED (scheduled + consumer). Hoãn (c) quota toàn cục → H-B.6c. | (commit đơn vị) |
+| H-B.6c | CODE | Chưa bắt đầu — DO global-egress quota tổng; HỢP NHẤT BACKLOG #1 (rate-limit toàn cục GDT). | — |
 | **GATE C — chặn thương mại hóa** | | | |
 | H-C.1 | DECISION+CODE | Chờ H-B.1 — partition/retention/R2 cold-tier (cần duyệt ADR) | — |
 | H-C.2 | CODE | Chờ H-B.4 — XLSX job nền + stream R2 | — |
