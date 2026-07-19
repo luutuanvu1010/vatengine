@@ -6,18 +6,31 @@ import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../../src/features/auth/auth-context";
 import { SubAccountBlock, TaxAccountsPage } from "../../src/features/taxAccounts/TaxAccountsPage";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import { AppRouter } from "../../src/routes/AppRouter";
 import type { MeResponse, Role, TaxAccountView } from "../../src/types/api";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
 let calls: { url: string; method: string }[];
 
-function mock(list: TaxAccountView[]) {
+function mock(list: TaxAccountView[], hoSo: { mst?: string; role?: Role } = {}) {
   calls = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
+    // ADR-0003 Amendment #1 (C8): AuthProvider gọi /me lúc khởi động, và lượt này về SAU
+    // applyMe của TaxPageAs nên nó ghi đè `me`. Không xử ở đây thì `/me` rơi xuống nhánh
+    // bắt-tất và `me` thành MẢNG danh sách tài khoản ⇒ mst/role undefined.
+    // KHÔNG đưa vào `calls`: hạ tầng phiên, không phải hành vi test đang đo.
+    if (url.endsWith("/me")) {
+      return json(200, {
+        ten: "DN",
+        mst: hoSo.mst ?? "0311772540",
+        goiDichVu: null,
+        banQuyen: "Mặc định",
+        ghiChu: null,
+        role: hoSo.role ?? "quan_tri",
+      });
+    }
     calls.push({ url, method });
     if (url.includes("/captcha"))
       return json(200, { key: "ck", content: '<svg id="cap"><text>7K9P2</text></svg>' });
@@ -62,9 +75,7 @@ function TaxPageAs({ mst, role = "quan_tri" }: { mst: string; role?: Role }) {
 }
 
 describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
-  beforeEach(() => setToken("t"));
   afterEach(() => {
-    clearToken();
     localStorage.clear();
     vi.restoreAllMocks();
   });
@@ -84,7 +95,7 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
   });
 
   it("tenant chưa khai MST → cảnh báo, không cho kết nối", async () => {
-    mock([]);
+    mock([], { mst: "" }); // /me phải khớp: tenant CHƯA khai MST.
     renderWithProviders(<TaxPageAs mst="" />);
     expect(await screen.findByText(/chưa khai mã số thuế/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Kết nối tài khoản thuế" })).toBeNull();
@@ -169,7 +180,7 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
         }),
     });
     renderWithProviders(<AppRouter />, "/");
-    await userEvent.type(screen.getByLabelText("Email công việc"), "kt@x.vn");
+    await userEvent.type(await screen.findByLabelText("Email công việc"), "kt@x.vn");
     await userEvent.type(screen.getByLabelText("Mật khẩu"), "pw");
     await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
     await screen.findByRole("heading", { name: "Tổng quan" }); // đã vào app (dashboard)
@@ -180,9 +191,7 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
 
 // Khối tài khoản con dựng nền (mặc định ẩn sau cờ) — test trực tiếp validate tiền tố MST.
 describe("U23-D — SubAccountBlock (dựng nền, validate tiền tố MST gốc)", () => {
-  beforeEach(() => setToken("t"));
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
   });
 

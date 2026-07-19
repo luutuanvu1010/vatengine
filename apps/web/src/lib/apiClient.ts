@@ -1,5 +1,7 @@
-// API client gõ kiểu — NƠI DUY NHẤT gọi apps/api (U15-plan §4A). JWT giữ TRONG BỘ NHỚ
-// (ADR-0003 #3 — không localStorage, chống XSS-exfil). Ánh xạ mã lỗi → hành vi UI:
+// API client gõ kiểu — NƠI DUY NHẤT gọi apps/api (U15-plan §4A). Phiên nằm trong COOKIE
+// HttpOnly do apps/api phát (ADR-0003 Amendment #1) — JS ở đây KHÔNG cầm token, không
+// đọc được, không gửi Authorization. Trình duyệt tự đính cookie nhờ `credentials`.
+// (Trước Amendment #1: token giữ in-memory ⇒ reload là mất phiên.) Ánh xạ mã lỗi → UI:
 // 401 (hết hạn) → onUnauthorized (về đăng nhập); 403 (sai vai) / 400 / 404 → ApiError
 // mang status để UI xử. KHÔNG log token. tenant_id KHÔNG bao giờ gửi từ client (từ token).
 import type {
@@ -32,17 +34,11 @@ export class ApiError extends Error {
   }
 }
 
-// --- Token in-memory (không bền qua reload — đăng nhập lại; ADR-0003 #3) -------------
-let accessToken: string | null = null;
-export function setToken(t: string): void {
-  accessToken = t;
-}
-export function clearToken(): void {
-  accessToken = null;
-}
-export function getToken(): string | null {
-  return accessToken;
-}
+// --- Phiên: cookie HttpOnly (ADR-0003 Amendment #1) ----------------------------------
+// KHÔNG có biến token ở client — cố ý. Trình duyệt giữ cookie; `credentials: "same-origin"`
+// khiến nó tự đính vào mọi request tới cùng origin (web+api chung origin, ADR §A.2).
+// Hệ quả: phiên sống qua reload, mà XSS vẫn không đọc được token.
+const CREDENTIALS: RequestCredentials = "same-origin";
 
 // --- Cấu hình hành vi (callback 401) -----------------------------------------------
 interface ApiConfig {
@@ -65,20 +61,19 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 interface RequestOpts {
   query?: Record<string, string | number | undefined>;
   body?: unknown;
-  auth?: boolean;
 }
 
 async function request<T>(method: string, path: string, opts: RequestOpts = {}): Promise<T> {
-  const { query, body, auth = true } = opts;
+  const { query, body } = opts;
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (auth && accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}${buildQuery(query ?? {})}`, {
       method,
       headers,
+      credentials: CREDENTIALS,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -101,11 +96,9 @@ async function request<T>(method: string, path: string, opts: RequestOpts = {}):
 }
 
 async function requestBlob(path: string): Promise<Blob> {
-  const headers: Record<string, string> = {};
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, { headers });
+    res = await fetch(`${API_BASE}${path}`, { credentials: CREDENTIALS });
   } catch {
     throw new ApiError(0, "network_error");
   }
@@ -133,9 +126,14 @@ function filterQuery(f: InvoiceFilter, p?: Page): Record<string, string | number
 
 // --- Bề mặt gõ kiểu (đúng hợp đồng apps/api) ---------------------------------------
 export const api = {
-  // Auth nội bộ (công khai — không Authorization).
-  login(email: string, password: string): Promise<{ token: string }> {
-    return request("POST", "/auth/login", { body: { email, password }, auth: false });
+  // Auth nội bộ. Thành công → server đặt cookie phiên; body KHÔNG mang token (C2).
+  login(email: string, password: string): Promise<{ ok: true }> {
+    return request("POST", "/auth/login", { body: { email, password } });
+  },
+  // C4 — đăng xuất THẬT: chỉ server mới xoá được cookie HttpOnly. Bỏ bước này thì
+  // "Đăng xuất" chỉ dọn state phía client, cookie vẫn sống và phiên vẫn dùng được.
+  logout(): Promise<{ ok: true }> {
+    return request("POST", "/auth/logout");
   },
 
   // Tra cứu (3 vai).

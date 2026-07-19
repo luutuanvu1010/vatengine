@@ -11,6 +11,7 @@ import { invoicesRoutes } from "./routes/invoices";
 import { meRoutes } from "./routes/me";
 import { reconcileRoutes } from "./routes/reconcile";
 import { taxAccountsRoutes } from "./routes/taxAccounts";
+import { requireSameOrigin } from "./session";
 import type { AppDeps, AppEnv } from "./types";
 
 export function createApp(deps: AppDeps) {
@@ -20,6 +21,13 @@ export function createApp(deps: AppDeps) {
   app.get("/health", (c) =>
     c.json({ status: "ok", service: "vat-api", env: c.env.ENVIRONMENT ?? "dev" }),
   );
+
+  // ADR-0003 Amendment #1 (C6) — chặn CSRF cho MỌI method đổi trạng thái, đặt TRƯỚC mọi
+  // route nghiệp vụ. Từ khi phiên đi bằng cookie, trình duyệt tự đính cookie vào cả
+  // request do trang của kẻ tấn công khởi tạo; SameSite=Strict đã chặn gần trọn vẹn và
+  // đây là lớp thứ hai. Phủ cả /auth/login (chặn "login CSRF" — ép nạn nhân đăng nhập
+  // vào tài khoản của kẻ tấn công).
+  app.use("*", requireSameOrigin);
 
   // U8: phát hành token — NGOÀI requireTenant (login xảy ra trước khi có token/tenant).
   app.route("/auth", authRoutes(deps));

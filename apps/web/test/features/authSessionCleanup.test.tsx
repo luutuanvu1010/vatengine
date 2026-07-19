@@ -3,7 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "../../src/features/auth/auth-context";
-import { clearToken } from "../../src/lib/apiClient";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../src/lib/filterStore";
 import { json } from "../helpers/renderApp";
 
@@ -29,7 +28,6 @@ function LoginHarness() {
 
 describe("H-B.3 — dọn trạng thái phiên client", () => {
   beforeEach(() => {
-    clearToken();
     localStorage.clear();
   });
   afterEach(() => {

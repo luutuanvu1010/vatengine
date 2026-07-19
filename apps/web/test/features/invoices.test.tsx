@@ -2,7 +2,6 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InvoicesPage } from "../../src/features/invoices/InvoicesPage";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import type { InvoiceListRow } from "../../src/types/api";
 import { renderWithProviders } from "../helpers/renderApp";
 
@@ -58,9 +57,7 @@ function mockList(rows: InvoiceListRow[], total: number) {
 }
 
 describe("U15.2 — tra cứu + lọc + tổng hợp", () => {
-  beforeEach(() => setToken("t"));
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
   });
 

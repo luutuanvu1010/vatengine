@@ -11,7 +11,6 @@ import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../../src/features/auth/auth-context";
 import { InvoicesPage } from "../../src/features/invoices/InvoicesPage";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import { saveInvoiceFilter } from "../../src/lib/filterStore";
 import type { InvoiceListRow, MeResponse, Role, TaxAccountView } from "../../src/types/api";
 import { renderWithProviders } from "../helpers/renderApp";
@@ -90,6 +89,7 @@ function mockApi(opts: {
   accounts: TaxAccountView[];
   rows?: InvoiceListRow[];
   progressTong?: string;
+  vaiTro?: Role;
 }) {
   const posts: string[] = [];
   let invoiceCalls = 0;
@@ -113,6 +113,20 @@ function mockApi(opts: {
         trangThaiTong: opts.progressTong ?? "dang_chay",
       });
     }
+    // ADR-0003 Amendment #1 (C8): AuthProvider gọi /me lúc khởi động để khôi phục phiên.
+    // Phải trả hồ sơ ĐÚNG VAI ở đây — nếu để rơi xuống nhánh bắt-tất bên dưới, `me` sẽ
+    // thành object danh sách hóa đơn (không có `role`) và ghi đè vai mà InvoicesPageAs
+    // vừa seed, làm panel đồng bộ biến mất vì RBAC.
+    if (url.endsWith("/me")) {
+      return j(200, {
+        ten: "DN",
+        mst: "0311772540",
+        goiDichVu: null,
+        banQuyen: "Mặc định",
+        ghiChu: null,
+        role: opts.vaiTro ?? "quan_tri",
+      });
+    }
     if (url.includes("/tax-accounts")) return j(200, opts.accounts);
     if (url.includes("/invoices/summary")) return j(200, EMPTY_SUMMARY);
     invoiceCalls += 1;
@@ -124,11 +138,9 @@ function mockApi(opts: {
 
 describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
   beforeEach(() => {
-    setToken("t");
     saveInvoiceFilter({ tuNgay: "2026-03-01", denNgay: "2026-06-30" });
   });
   afterEach(() => {
-    clearToken();
     localStorage.clear();
     vi.restoreAllMocks();
   });
@@ -180,7 +192,7 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
   });
 
   it("vai ke_toan → KHÔNG hiện panel VÀ không tự gọi backfill (U27-B3 AC6)", async () => {
-    const { posts } = mockApi({ accounts: [ACC] }); // kỳ rỗng
+    const { posts } = mockApi({ accounts: [ACC], vaiTro: "ke_toan" }); // kỳ rỗng
     renderWithProviders(<InvoicesPageAs vaiTro="ke_toan" />);
     // Kỳ rỗng + vai không đủ quyền → auto KHÔNG chạy → hiện ô rỗng thường (không thanh tiến độ).
     expect(await screen.findByText(/Không có hóa đơn khớp bộ lọc/)).toBeInTheDocument();

@@ -2,7 +2,6 @@ import { screen, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InvoiceDetailPage } from "../../src/features/invoices/InvoiceDetailPage";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import type { InvoiceDetailResponse, InvoiceLineRow } from "../../src/types/api";
 import { json, renderWithProviders } from "../helpers/renderApp";
 
@@ -63,9 +62,7 @@ function renderDetail() {
 }
 
 describe("U15.3 — chi tiết hóa đơn (header)", () => {
-  beforeEach(() => setToken("t"));
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
   });
 
@@ -108,9 +105,7 @@ describe("U15.3 — chi tiết hóa đơn (header)", () => {
 });
 
 describe("U23-A — siết tiêu chí dòng hàng (chi tiết)", () => {
-  beforeEach(() => setToken("t"));
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
   });
 

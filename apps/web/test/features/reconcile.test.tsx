@@ -1,7 +1,6 @@
 import { screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReconcilePage } from "../../src/features/reconcile/ReconcilePage";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import type { ReconcileReport } from "../../src/types/api";
 import { json, renderWithProviders } from "../helpers/renderApp";
 
@@ -25,9 +24,7 @@ const report: ReconcileReport = {
 };
 
 describe("U15.5 — đối chiếu", () => {
-  beforeEach(() => setToken("t"));
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
   });
 

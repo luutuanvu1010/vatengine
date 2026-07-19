@@ -1,7 +1,6 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearToken } from "../../src/lib/apiClient";
 import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
@@ -16,14 +15,13 @@ const ME = {
 
 async function login() {
   renderWithProviders(<AppRouter />, "/");
-  await userEvent.type(screen.getByLabelText("Email công việc"), "qt@tourdao.vn");
+  await userEvent.type(await screen.findByLabelText("Email công việc"), "qt@tourdao.vn");
   await userEvent.type(screen.getByLabelText("Mật khẩu"), "pw");
   await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
   await screen.findByRole("link", { name: "Cài đặt chung" }); // vào app xong
 }
 
 describe("ProfileMenu — dropdown avatar", () => {
-  beforeEach(() => clearToken());
   afterEach(() => vi.restoreAllMocks());
 
   it("mở menu → hiện email/bản quyền/ghi chú + Sửa hồ sơ + Đăng xuất; Esc đóng", async () => {

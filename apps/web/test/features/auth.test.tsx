@@ -1,7 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearToken } from "../../src/lib/apiClient";
 import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
@@ -16,21 +15,34 @@ const profile = (role: string) => () =>
   });
 
 async function loginAs(role: string) {
-  mockFetch({ login: () => json(200, { token: "jwt" }), me: profile(role) });
+  // Mô phỏng TRUNG THỰC cookie phiên (ADR-0003 Amendment #1): trước khi đăng nhập chưa
+  // có cookie ⇒ /me phải 401 (nếu để 200 sẵn thì app vào thẳng và form đăng nhập không
+  // bao giờ hiện). Sau khi POST /auth/login "đặt cookie" thì /me mới trả hồ sơ.
+  let coCookie = false;
+  mockFetch({
+    login: () => {
+      coCookie = true;
+      return json(200, { ok: true });
+    },
+    me: () => (coCookie ? profile(role)() : json(401, { error: "unauthorized" })),
+  });
   renderWithProviders(<AppRouter />, "/");
-  await userEvent.type(screen.getByLabelText("Email công việc"), "ketoan@tourdao.vn");
+  // ADR-0003 Amendment #1 (C8): app khởi động ở 'checking' và gọi /me trước, nên form
+  // đăng nhập chỉ xuất hiện SAU khi biết cookie không còn hiệu lực → phải chờ.
+  await userEvent.type(await screen.findByLabelText("Email công việc"), "ketoan@tourdao.vn");
   await userEvent.type(screen.getByLabelText("Mật khẩu"), "matkhau");
   await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
 }
 
 describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
-  beforeEach(() => clearToken());
   afterEach(() => vi.restoreAllMocks());
 
-  it("chưa đăng nhập → hiển thị màn đăng nhập", () => {
+  it("chưa đăng nhập → hiển thị màn đăng nhập", async () => {
     mockFetch({});
     renderWithProviders(<AppRouter />, "/");
-    expect(screen.getByRole("heading", { name: "Đăng nhập" })).toBeInTheDocument();
+    // findBy (không phải getBy): màn Đăng nhập chỉ hiện SAU khi /me trả lỗi/401 —
+    // trước đó app đang ở 'checking' (C8).
+    expect(await screen.findByRole("heading", { name: "Đăng nhập" })).toBeInTheDocument();
   });
 
   it("đăng nhập đúng (kế toán trưởng) → vào app, thấy nav kết xuất + kết nối thuế", async () => {
@@ -49,9 +61,19 @@ describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
   });
 
   it("kế toán vào thẳng /exports → màn 403 (không nội dung kết xuất)", async () => {
-    mockFetch({ login: () => json(200, { token: "jwt" }), me: profile("ke_toan") });
+    // Như loginAs: chưa có cookie ⇒ /me 401 trước, 200 sau khi đăng nhập.
+    let coCookie = false;
+    mockFetch({
+      login: () => {
+        coCookie = true;
+        return json(200, { ok: true });
+      },
+      me: () => (coCookie ? profile("ke_toan")() : json(401, { error: "unauthorized" })),
+    });
     renderWithProviders(<AppRouter />, "/login");
-    await userEvent.type(screen.getByLabelText("Email công việc"), "kt@tourdao.vn");
+    // ADR-0003 Amendment #1 (C8): app khởi động ở 'checking' và gọi /me trước, nên form
+    // đăng nhập chỉ xuất hiện SAU khi biết cookie không còn hiệu lực → phải chờ.
+    await userEvent.type(await screen.findByLabelText("Email công việc"), "kt@tourdao.vn");
     await userEvent.type(screen.getByLabelText("Mật khẩu"), "pw");
     await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
     await screen.findByText("Công ty TNHH Tour Đảo");
@@ -63,7 +85,9 @@ describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
   it("sai mật khẩu (401) → báo lỗi, ở lại màn đăng nhập", async () => {
     mockFetch({ login: () => json(401, { error: "unauthorized" }) });
     renderWithProviders(<AppRouter />, "/");
-    await userEvent.type(screen.getByLabelText("Email công việc"), "x@y.vn");
+    // ADR-0003 Amendment #1 (C8): app khởi động ở 'checking' và gọi /me trước, nên form
+    // đăng nhập chỉ xuất hiện SAU khi biết cookie không còn hiệu lực → phải chờ.
+    await userEvent.type(await screen.findByLabelText("Email công việc"), "x@y.vn");
     await userEvent.type(screen.getByLabelText("Mật khẩu"), "sai");
     await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
     expect(await screen.findByText("Email hoặc mật khẩu không đúng.")).toBeInTheDocument();

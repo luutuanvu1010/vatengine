@@ -1,7 +1,6 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearToken } from "../../src/lib/apiClient";
 import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
@@ -16,14 +15,13 @@ const ME_ADMIN = {
 
 async function loginTo(path: string) {
   renderWithProviders(<AppRouter />, "/");
-  await userEvent.type(screen.getByLabelText("Email công việc"), "qt@tourdao.vn");
+  await userEvent.type(await screen.findByLabelText("Email công việc"), "qt@tourdao.vn");
   await userEvent.type(screen.getByLabelText("Mật khẩu"), "pw");
   await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
   await userEvent.click(await screen.findByRole("link", { name: "Cài đặt chung" }));
 }
 
 describe("Cài đặt — sửa hồ sơ (quan_tri)", () => {
-  beforeEach(() => clearToken());
   afterEach(() => vi.restoreAllMocks());
 
   it("quan_tri sửa Tên → Lưu gọi PATCH + cập nhật hiển thị", async () => {

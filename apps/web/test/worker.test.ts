@@ -62,6 +62,47 @@ describe("front-door worker — security header", () => {
     expect(csp).not.toMatch(/script-src[^;]*'unsafe-inline'/);
   });
 
+  // ADR-0003 Amendment #1 §A.7 — mắt xích DUY NHẤT của thiết kế cookie chưa được kiểm
+  // chứng khi soạn ADR: `Set-Cookie` do vat-api phát phải đi XUYÊN front-door tới trình
+  // duyệt. `withSecurityHeaders` dựng lại `new Response(res.body, res)`, và nếu bước đó
+  // đánh rơi Set-Cookie thì đăng nhập "thành công" nhưng phiên không bao giờ được thiết
+  // lập — hỏng câm, không lỗi. Ràng lại bằng test để không ai vô tình phá về sau.
+  it("§A.7 — Set-Cookie từ vat-api đi XUYÊN front-door (giữ nguyên thuộc tính)", async () => {
+    const setCookie =
+      "vat_session=jwt-abc; Max-Age=28800; Path=/; HttpOnly; Secure; SameSite=Strict";
+    const env = mockEnv(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), { headers: { "Set-Cookie": setCookie } }),
+    );
+    const res = await worker.fetch(
+      new Request("https://vatengine.example/api/auth/login", { method: "POST" }),
+      env,
+    );
+    const got = res.headers.get("set-cookie") ?? "";
+    expect(got).toContain("vat_session=jwt-abc");
+    expect(got).toContain("HttpOnly");
+    expect(got).toContain("Secure");
+    expect(got).toContain("SameSite=Strict");
+    expect(got).toContain("Path=/");
+    // Security header vẫn được áp — cookie không "đánh đổi" mất lớp bảo vệ nào.
+    expectSecurityHeaders(res);
+  });
+
+  it("§A.7b — Cookie của trình duyệt đi XUÔI tới vat-api (nếu rơi thì luôn 401)", async () => {
+    let seenCookie: string | null = null;
+    const env = mockEnv(async (r) => {
+      seenCookie = r.headers.get("Cookie");
+      return new Response("{}");
+    });
+    await worker.fetch(
+      new Request("https://vatengine.example/api/me", {
+        headers: { Cookie: "vat_session=jwt-abc" },
+      }),
+      env,
+    );
+    expect(seenCookie).toBe("vat_session=jwt-abc");
+  });
+
   it("KHÔNG phá routing: strip tiền tố /api trước khi chuyển tiếp", async () => {
     let seenPath = "";
     const env = mockEnv(async (r) => {

@@ -4,7 +4,6 @@
 import { screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InvoicesPage } from "../../src/features/invoices/InvoicesPage";
-import { clearToken, setToken } from "../../src/lib/apiClient";
 import type { InvoiceListRow } from "../../src/types/api";
 import { renderWithProviders } from "../helpers/renderApp";
 
@@ -61,9 +60,7 @@ function mockList(rows: InvoiceListRow[]) {
 }
 
 describe("Danh sách hóa đơn — cột Hàng hóa, dịch vụ + Số lượng (2026-07-17)", () => {
-  beforeEach(() => setToken("t"));
   afterEach(() => {
-    clearToken();
     vi.restoreAllMocks();
   });
 

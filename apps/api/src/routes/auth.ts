@@ -14,6 +14,7 @@ import { z } from "zod";
 import { signToken } from "../auth";
 import { verifyPassword } from "../password";
 import { isRole } from "../rbac";
+import { clearSessionCookie, setSessionCookie } from "../session";
 import type { AnyDb, AppDeps, AppEnv } from "../types";
 
 const loginSchema = z.object({
@@ -138,12 +139,28 @@ export function authRoutes(deps: AppDeps) {
         c.env.JWT_SECRET,
       );
       await settle(auditLogin(db, row.tenant_id, row.id, "thanh_cong"));
-      return c.json({ token });
+      // ADR-0003 Amendment #1 (C1+C2): token đi bằng cookie HttpOnly, KHÔNG trả trong
+      // body. Trả trong body thì JS lại cầm được token ⇒ triệt tiêu toàn bộ lợi ích
+      // chống XSS-exfil của HttpOnly. Đây là điểm dễ vô hiệu hoá cả thiết kế nhất.
+      setSessionCookie(c, token);
+      return c.json({ ok: true });
     } catch (e) {
       // Lỗi TRƯỚC settle (lookup/verify/signToken) → đóng kết nối rồi ném (app.onError lo).
       await closeOnce();
       throw e;
     }
+  });
+
+  // POST /auth/logout — ADR-0003 Amendment #1 (C4). BẮT BUỘC, không phải tuỳ chọn: khi
+  // phiên nằm trong cookie, "Đăng xuất" chỉ dọn state phía client sẽ KHÔNG thực sự đăng
+  // xuất — cookie vẫn còn và request kế tiếp vẫn được xác thực.
+  //
+  // KHÔNG requireTenant: đăng xuất phải luôn thành công, kể cả khi cookie đã hết hạn hay
+  // hỏng — nếu bắt xác thực, người dùng mang cookie hỏng sẽ mắc kẹt không xoá được.
+  // Idempotent: gọi nhiều lần vẫn 200.
+  r.post("/logout", (c) => {
+    clearSessionCookie(c);
+    return c.json({ ok: true });
   });
 
   return r;
