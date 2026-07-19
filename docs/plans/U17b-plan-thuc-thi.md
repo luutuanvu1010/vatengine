@@ -22,7 +22,7 @@
 
 ## ⚠️ HAI ĐIỀU CHỈNH SO VỚI SPEC — đọc trước
 
-**1. Migration là `0008`, KHÔNG phải `0007`.** Spec §3.3 viết "migration `0007` `CREATE OR REPLACE` `auth_lookup_user`". Nhưng `0007` **đã áp lên production 2026-07-19** — sửa file đã áp thì drizzle bỏ qua vĩnh viễn (nó so mốc thời gian, không so hash). Tạo `0008_auth_lookup_trang_thai.sql`.
+**1. Migration là `0009`, KHÔNG phải `0007`.** Spec §3.3 viết "migration `0007` `CREATE OR REPLACE` `auth_lookup_user`". Nhưng `0007` **đã áp lên production 2026-07-19** — sửa file đã áp thì drizzle bỏ qua vĩnh viễn (nó so mốc thời gian, không so hash). Tạo `0009_auth_lookup_trang_thai.sql` (đính chính 2026-07-20: nhánh được rebase lên trunk, `0008_dong_bo_that_bai` đã chiếm số `0008` trước — file thật nằm ở `0009`, không phải `0008` như lần đính chính đầu ghi ở đây).
 
 **2. Luồng login đã đổi (U29, PR #14).** Token nay đi bằng **cookie HttpOnly** (`setSessionCookie`), không trả trong body; đăng nhập thành công trả `{ ok: true }`. Mọi số dòng trong spec §3.3 đã lệch — đọc mã thật.
 
@@ -42,7 +42,7 @@
 
 | File | Trách nhiệm |
 |---|---|
-| `packages/db/migrations/0008_auth_lookup_trang_thai.sql` | **Tạo.** `CREATE OR REPLACE auth_lookup_user` trả thêm `tenant_trang_thai` |
+| `packages/db/migrations/0009_auth_lookup_trang_thai.sql` | **Tạo.** DROP + CREATE `auth_lookup_user` trả thêm `tenant_trang_thai` (đính chính 2026-07-20: không phải `CREATE OR REPLACE` — xem Task 3) |
 | `apps/api/src/lib/disposableDomains.ts` | **Tạo.** Danh sách tĩnh ~50 miền dùng-1-lần |
 | `apps/api/src/lib/validateEmailDangKy.ts` | **Tạo.** Hàm thuần validate email đăng ký |
 | `apps/api/src/signupLimiter.ts` | **Tạo.** Logic thuần đếm lượt đăng ký theo cửa sổ trượt |
@@ -302,44 +302,17 @@ Thêm vào `apps/api/src/types.ts`: `SIGNUP_LIMITER?: DurableObjectNamespace` tr
 
 ---
 
-## Task 3: Migration `0008` — `auth_lookup_user` trả thêm trạng thái tenant
+## Task 3: Migration `0009` — `auth_lookup_user` trả thêm trạng thái tenant
 
-**Files:** Create `packages/db/migrations/0008_auth_lookup_trang_thai.sql`; Modify `packages/db/migrations/meta/_journal.json`; Test `packages/db/test/integration/authLookup.test.ts`
+**Files:** Create `packages/db/migrations/0009_auth_lookup_trang_thai.sql`; Modify `packages/db/migrations/meta/_journal.json`; Test `packages/db/test/integration/authLookup.test.ts`
 
-> **`_journal.json` BẮT BUỘC có entry mới** — drizzle chỉ áp migration theo `journal.entries`, **không quét thư mục**. Quên là file nằm chết trên đĩa. Đặt `when` **lớn hơn** `1784400000000` (mốc của 0007).
+> **`_journal.json` BẮT BUỘC có entry mới** — drizzle chỉ áp migration theo `journal.entries`, **không quét thư mục**. Quên là file nằm chết trên đĩa. Đặt `when` **lớn hơn** mốc của migration liền trước trong journal thật tại thời điểm chạy (không hard-code một con số — journal có thể đã dịch chuyển do rebase, như đã xảy ra ở đơn vị này: 0007→0008→0009).
 
 - [ ] **Step 1: Test đỏ** — khẳng định hàm trả đủ 5 cột và `tenant_trang_thai` khớp `tenants.trang_thai`; tenant `cho_duyet` trả đúng `'cho_duyet'`.
 
 - [ ] **Step 2: ĐỎ** → **Step 3: Migration**
 
-```sql
--- U17b — auth_lookup_user trả thêm tenant_trang_thai để login chặn tenant chưa duyệt.
---
--- VÌ SAO PHẢI SỬA HÀM chứ không query bảng: login xảy ra TRƯỚC khi biết tenant nên không
--- chạy trong withTenant; `tenants` bật FORCE RLS ⇒ SELECT thường thấy 0 hàng. Hàm này là
--- đường hợp lệ duy nhất (owner `auth_lookup` NOLOGIN BYPASSRLS, xem 0001).
---
--- GIỮ NGUYÊN OWNER + GRANT của 0001 — CREATE OR REPLACE không đổi chủ sở hữu, nên KHÔNG
--- cần lặp lại nghi thức SET ROLE/ALTER OWNER. Bề mặt vẫn hẹp: chỉ thêm MỘT cột trạng thái,
--- không thêm dữ liệu nhạy cảm nào.
-CREATE OR REPLACE FUNCTION auth_lookup_user(p_email text)
-RETURNS TABLE (id uuid, tenant_id uuid, vai_tro text, password_hash text, tenant_trang_thai text)
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT n.id, n.tenant_id, n.vai_tro, n.password_hash, t.trang_thai
-  FROM nguoi_dung n
-  JOIN tenants t ON t.id = n.tenant_id
-  WHERE n.email = p_email
-$$;--> statement-breakpoint
--- Owner `auth_lookup` cần SELECT trên `tenants` (BYPASSRLS chỉ bỏ qua policy HÀNG, không
--- thay quyền BẢNG). 0001 mới cấp trên `nguoi_dung`.
-GRANT SELECT ON "tenants" TO auth_lookup;
-```
-
-> **JOIN chứ không LEFT JOIN có chủ ý:** `nguoi_dung.tenant_id` là NOT NULL + FK, nên không có người dùng mồ côi. Nếu vì lý do nào đó có, `JOIN` làm họ **không đăng nhập được** — fail-closed, đúng hướng an toàn cho một hàm xác thực.
+> **ĐÍNH CHÍNH 2026-07-20 — không phải `CREATE OR REPLACE`.** Bản kế hoạch ban đầu (SQL bên dưới lược bỏ) giả định `CREATE OR REPLACE` giữ nguyên owner nên khỏi lặp nghi thức ownership. Giả định đó SAI: PostgreSQL từ chối `CREATE OR REPLACE` khi đổi danh sách cột `RETURNS TABLE` (lỗi `42P13` "cannot change return type of existing function", tái lập qua PGlite khi thử). Migration thật ở `packages/db/migrations/0009_auth_lookup_trang_thai.sql` phải `DROP FUNCTION IF EXISTS` rồi `CREATE FUNCTION` lại — và vì `DROP` xoá sạch mọi quyền gắn trên hàm (kể cả `GRANT EXECUTE` cho `vat_app`, cấp ngoài lịch sử migration ở `packages/db/provisioning/app-role.sql`), migration phải lặp lại TOÀN BỘ nghi thức ownership + least-privilege của `0001` và tự cấp lại EXECUTE cho `vat_app` qua guard `IF EXISTS pg_roles` (kèm `RAISE WARNING` khi tên role app khác `vat_app`, xem chú thích trong chính file `0009`). Đọc `0009` để biết trình tự đầy đủ — không chép lại SQL ở đây.
 
 - [ ] **Step 4: XANH** → **Step 5: Commit**
 
@@ -426,7 +399,7 @@ và phân nhánh audit (giữ nguyên `settle()` off-critical-path):
 
 ## Ghi chú deploy (khi tới lượt)
 
-1. `make migrate` (`0008`) **TRƯỚC** khi deploy `apps/api`.
+1. `make migrate` (`0009`) **TRƯỚC** khi deploy `apps/api`.
 2. Wrangler migration tag `v5` tạo DO `SignupLimiter` — thuần cộng dồn, an toàn.
 3. Smoke đúng đường `POST /dang-ky`, không chỉ `/health`. Kiểm cả ca 429.
 4. **Kiểm lại local-vs-origin trước deploy** (vết sự cố 2026-07-16).

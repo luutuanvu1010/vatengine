@@ -3,9 +3,11 @@
 --
 -- VÌ SAO PHẢI DROP + CREATE (không CREATE OR REPLACE): các cột trong RETURNS TABLE là
 -- OUT parameter của hàm; Postgres CHẶN đổi danh sách này qua CREATE OR REPLACE — lỗi
--- 42P13 "cannot change return type of existing function". Bản nháp trước dùng CREATE OR
--- REPLACE cho task này đã ĐƯỢC KIỂM CHỨNG THẤT BẠI vì lý do trên (không phải giả định).
--- Phải DROP hàm cũ rồi CREATE lại với danh sách cột mới.
+-- 42P13 "cannot change return type of existing function". KIỂM CHỨNG 2026-07-20 (đơn vị
+-- này): thử CREATE OR REPLACE FUNCTION auth_lookup_user(...) với RETURNS TABLE thêm cột
+-- tenant_trang_thai qua PGlite (packages/db/test/integration) → tái lập đúng lỗi 42P13
+-- "cannot change return type of existing function". Phải DROP hàm cũ rồi CREATE lại với
+-- danh sách cột mới.
 --
 -- HỆ QUẢ CỦA DROP (khác CREATE OR REPLACE): DROP FUNCTION xoá SẠCH mọi quyền gắn TRÊN
 -- HÀM — kể cả GRANT EXECUTE cho `vat_app`, role Hyperdrive production được cấp NGOÀI
@@ -26,7 +28,11 @@
 -- qua membership, không cần SET ROLE tường minh (đúng cơ chế 0001 đã dùng cho ALTER
 -- OWNER); (b) ALTER OWNER + REVOKE FROM PUBLIC bên dưới; (c) SET ROLE ở Bước 6.
 GRANT auth_lookup TO CURRENT_USER;--> statement-breakpoint
-DROP FUNCTION auth_lookup_user(text);--> statement-breakpoint
+-- IF EXISTS (hardening — review 2026-07-20): 0001 tự nhận "Idempotent" nhưng DROP gốc
+-- không có IF EXISTS. Vô hại trong thực tế (Drizzle không chạy lại migration đã áp; nếu lỗi
+-- giữa chừng, transaction rollback nguyên khối — xem ghi chú 0001 dòng 44-45) — thêm để file
+-- khớp đúng cái nó tự nhận, không phải vì có đường lỗi thật đang xảy ra.
+DROP FUNCTION IF EXISTS auth_lookup_user(text);--> statement-breakpoint
 -- Bước 2: tạo lại hàm với CỘT MỚI DUY NHẤT tenant_trang_thai (t.trang_thai) — bề mặt vẫn
 -- hẹp như 0001 quy định, không thêm cột nào khác.
 -- JOIN (không LEFT JOIN) giữ nguyên vì cùng lý do 0001: nguoi_dung.tenant_id NOT NULL +
@@ -71,9 +77,23 @@ REVOKE ALL ON FUNCTION auth_lookup_user(text) FROM PUBLIC;--> statement-breakpoi
 -- provision (xem app-role.sql bước 3): CHỈ owner (hoặc thành viên hành động NHƯ owner)
 -- mới GRANT EXECUTE được trên một hàm vừa REVOKE ALL FROM PUBLIC.
 SET ROLE auth_lookup;--> statement-breakpoint
+-- Guard theo TÊN CỐ ĐỊNH 'vat_app' (hardening — review 2026-07-20): tên role app KHÔNG cố
+-- định theo môi trường — packages/db/provisioning/app-role.sql tham số hoá qua `-v role=
+-- <APP_ROLE>`, và docs/plans/U17a-plan-thuc-thi.md nói rõ tên khác nhau mỗi môi trường
+-- (production: vat_app; test: app_user). Ở môi trường dùng tên khác, nhánh IF không khớp,
+-- guard NO-OP TRONG IM LẶNG — migration báo thành công nhưng login sẽ hỏng ở đó, không có
+-- tín hiệu nào. Nhánh ELSE dưới đây CHỈ để phát tín hiệu (RAISE WARNING, không phải
+-- EXCEPTION): production hiện đặt đúng tên 'vat_app' (KIỂM CHỨNG, xem
+-- docs/plans/production-deploy.md dòng 18) nên đây không phải sự cố đang xảy ra — nhưng
+-- dev/CI/PGlite hợp pháp KHÔNG có role này (0001 dùng cùng idiom IF EXISTS pg_roles cho lý
+-- do này), nên dùng EXCEPTION ở đây sẽ làm hỏng local dev một cách không cần thiết.
+-- RAISE WARNING vẫn hiện trong output `make migrate`, đủ để người vận hành thấy và tự
+-- GRANT EXECUTE tay nếu môi trường của họ đặt tên role app khác 'vat_app'.
 DO $$ BEGIN
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'vat_app') THEN
     GRANT EXECUTE ON FUNCTION public.auth_lookup_user(text) TO vat_app;
+  ELSE
+    RAISE WARNING 'auth_lookup_user(): role "vat_app" không tồn tại — BỎ QUA re-grant EXECUTE. Nếu môi trường này CÓ role app dùng tên khác (xem packages/db/provisioning/app-role.sql), role đó SẼ KHÔNG gọi được auth_lookup_user() sau migration này (permission denied khi login) cho tới khi cấp tay: GRANT EXECUTE ON FUNCTION public.auth_lookup_user(text) TO <ten_role_app>;';
   END IF;
 END $$;--> statement-breakpoint
 RESET ROLE;--> statement-breakpoint
@@ -81,4 +101,13 @@ RESET ROLE;--> statement-breakpoint
 -- Đặt CUỐI CÙNG vì DROP/ALTER OWNER/REVOKE FROM PUBLIC/SET ROLE ở trên đều cần role
 -- migrate còn là thành viên auth_lookup. Sau dòng này `SET ROLE auth_lookup` bị chặn lại
 -- với role migrate — cùng trạng thái cuối mà 0001 để lại.
+--
+-- GIỚI HẠN PHỦ TEST (ghi nhận minh bạch — review bảo mật 2026-07-20): bước REVOKE này
+-- KHÔNG có coverage hiệu quả trong bộ test PGlite. PGlite chạy dưới superuser, và quyền
+-- SET ROLE được Postgres xét trên session_user chứ không phải role hiện có — nên superuser
+-- luôn SET ROLE được bất kể còn membership hay không; xoá hẳn dòng REVOKE này test vẫn
+-- xanh. Câu lệnh vẫn ĐÚNG và ĐÚNG VỊ TRÍ; độ tin cậy của nó dựa vào lần kiểm chứng tay trên
+-- Neon ghi ở 0001 (dòng 60-65: "sau bước này SET ROLE auth_lookup bị CHẶN"), không phải bộ
+-- test này. Không cố viết test cho bước này dưới PGlite — reviewer đã xác nhận không khả
+-- thi ở tầng đó.
 REVOKE auth_lookup FROM CURRENT_USER;

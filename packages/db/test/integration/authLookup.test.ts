@@ -181,9 +181,16 @@ describe("U17b (Task 3, Correction 2) — migration 0009 tự khôi phục EXECU
     await db.execute(sql`create role vat_app nosuperuser nobypassrls`);
     await db.execute(sql`grant usage on schema public to vat_app`);
     await db.execute(sql`set role vat_app`);
+    // Khớp đúng SQLSTATE 42501 (insufficient_privilege), không phải toThrow() trần — bare
+    // toThrow() cũng xanh nếu hàm bị đổi tên hay kết nối lỗi, tức KHÔNG chứng minh được cổng
+    // PHÂN QUYỀN thật sự kích hoạt (hardening — review 2026-07-20). Driver pg (qua PGlite) đặt
+    // lỗi Postgres gốc ở `error.cause`, không phải `error.message` (đã kiểm bằng test dò thủ
+    // công) — `error.message` chỉ là "Failed query: ..." của drizzle, không mang SQLSTATE.
     await expect(
       db.execute(sql`select id from auth_lookup_user('khong-ton-tai@vat-app-test.vn')`),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ code: "42501" }),
+    });
     await db.execute(sql`reset role`);
   });
 });
