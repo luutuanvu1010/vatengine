@@ -271,3 +271,17 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 **Nguồn phát hiện:** phiên chẩn đoán 2026-07-18 (bằng chứng `lan_dong_bo` production),
 đối chiếu `docs/plans/U28-plan.md` (phiên song song cùng ngày, nhánh
 `claude/fix-subrequest-breaker`).
+
+## [2026-07-20] Thiếu UI admin — replay & quản trị hệ thống chỉ có endpoint máy
+
+**Ngày phát hiện:** 2026-07-20 (phiên deploy H-B.6).
+
+**Vấn đề:** H-B.6 dựng endpoint `POST /dlq/replay` (phát lại job đồng bộ hỏng) nhưng **chỉ gọi được bằng `curl`** — không có giao diện. Chủ dự án muốn một **trang admin để một mình quản lý mọi thứ** (xem/replay job hỏng từ `dong_bo_that_bai`, xem tình trạng đồng bộ mọi tenant, quản người dùng/tenant/phân quyền, xem audit log/cảnh báo). App hiện tại (`vatengine.tourdao.vn`) chỉ là màn tra cứu/kết xuất hoá đơn **theo từng tenant**, KHÔNG có tầng quản trị hệ thống.
+
+**Phân rã đề xuất (2 mức, tách được):**
+- **Nhỏ — trang replay có giao diện:** một màn admin (sau Cloudflare Access) liệt kê `dong_bo_that_bai` trạng thái `da_dau` + nút "Phát lại", gọi `/dlq/replay`. Phạm vi vừa, làm nhanh.
+- **Lớn — trang quản trị toàn hệ thống:** thuộc vùng **U24** (quản lý người dùng nội bộ) + hơn thế. Cần đặc tả riêng: định nghĩa "super-admin" là ai; RLS/pháp lý khi một identity đọc **nhiều tenant** (đối lập quy tắc cách ly tenant — xem mục "công ty dịch vụ đọc nhiều DN" phía trên); audit truy cập admin. KHÔNG làm ẩu — dễ thành lỗ rò dữ liệu giữa khách hàng.
+
+**Ưu tiên:** Cao (chủ dự án chủ động nêu). Bắt đầu bằng mức Nhỏ nếu chỉ cần thao tác vận hành; mức Lớn cần brainstorm → spec như H-B.6.
+
+**Nguồn phát hiện:** phiên deploy H-B.6 2026-07-20 (`docs/audit/HANDOFF-2026-07-20.md`).
