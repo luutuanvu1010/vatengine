@@ -70,25 +70,52 @@ describe("dong_bo_that_bai (integration, PGlite)", () => {
     db = await freshDb();
   });
 
-  it("INSERT + đọc lại qua withTenant (RLS lọc đúng tenant)", async () => {
+  // RLS phải kiểm dưới role NON-SUPERUSER: PGlite mặc định = postgres (superuser) BỎ QUA
+  // RLS kể cả FORCE (constraints.test.ts ca (13) + multi-tenant.md). Kiểm CẢ HAI role:
+  // (a) non-owner (ENABLE chi phối) VÀ (b) owner+FORCE — thiếu (b) thì xóa FORCE khỏi
+  // migration test vẫn xanh (không chứng minh được FORCE có tác dụng).
+  async function assertIsolated(a: string, b: string, label: string) {
+    await withTenant(db, a, async (tx) => {
+      expect((await tx.select().from(dongBoThatBai)).length, `${label}: A thấy A`).toBe(1);
+    });
+    await withTenant(db, b, async (tx) => {
+      expect((await tx.select().from(dongBoThatBai)).length, `${label}: B không thấy A`).toBe(0);
+    });
+    expect((await db.select().from(dongBoThatBai)).length, `${label}: không tenant → 0`).toBe(0);
+  }
+
+  it("RLS cách ly tenant cho CẢ role non-owner (ENABLE) LẪN owner (FORCE)", async () => {
     const a = await seedTenant(db, "0100000001");
     const b = await seedTenant(db, "0100000002");
-    await withTenant(db, a, (tx) =>
-      tx.insert(dongBoThatBai).values({
-        tenantId: a,
-        loai: "header",
-        payload: { tenantId: a, period: "2026-07", direction: "purchase" },
-        lyDo: "max_retries",
-        trangThai: TRANG_THAI_DA_DAU,
-      }),
+    // Seed 1 hàng cho A dưới role mặc định (superuser bypass RLS khi seed).
+    await db.insert(dongBoThatBai).values({
+      tenantId: a,
+      loai: "header",
+      payload: { tenantId: a, period: "2026-07", direction: "purchase" },
+      lyDo: "max_retries",
+      trangThai: TRANG_THAI_DA_DAU,
+    });
+    await db.execute(sql`create role app_user nosuperuser`);
+    await db.execute(sql`create role owner_role nosuperuser`);
+    await db.execute(sql`grant usage on schema public to app_user, owner_role`);
+    await db.execute(
+      sql`grant select, insert, update, delete on all tables in schema public to app_user, owner_role`,
     );
-    const seenByA = await withTenant(db, a, (tx) => tx.select().from(dongBoThatBai));
-    expect(seenByA.length).toBe(1);
-    const seenByB = await withTenant(db, b, (tx) => tx.select().from(dongBoThatBai));
-    expect(seenByB.length).toBe(0); // RLS: tenant B không thấy hàng của A
+
+    // (a) role KHÔNG-owner → RLS có hiệu lực nhờ ENABLE (mô hình production).
+    await db.execute(sql`set role app_user`);
+    await assertIsolated(a, b, "app_user(non-owner)");
+    await db.execute(sql`reset role`);
+
+    // (b) role SỞ HỮU bảng → chỉ FORCE mới bắt owner tuân policy (thiếu FORCE → test ĐỎ).
+    await db.execute(sql`alter table dong_bo_that_bai owner to owner_role`);
+    await db.execute(sql`set role owner_role`);
+    await assertIsolated(a, b, "owner_role(owner+FORCE)");
+    await db.execute(sql`reset role`);
   });
 });
 ```
+> ⚠️ **Bài học QA/impl (2026-07-20):** (1) bản đầu nhái `auditAppendOnly.test.ts` (trigger, OK dưới superuser) → assert RLS không thể xanh dưới superuser PGlite. (2) Chỉ kiểm non-owner thì FORCE không được chứng minh. Test RLS cách ly PHẢI theo mẫu `constraints.test.ts` ca (13): CẢ non-owner LẪN owner+FORCE. Schema/migration KHÔNG đổi.
 
 - [ ] **Step 2: Chạy test — xác nhận ĐỎ**
 
