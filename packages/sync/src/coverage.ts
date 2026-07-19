@@ -154,14 +154,28 @@ function reduceDirState(trangThais: string[]): DirState {
  * Suy tiến độ backfill (thuần, dễ test): từ các bản ghi `lan_dong_bo` (`{period, chieu,
  * trangThai}`), tính trạng thái TỪNG THÁNG trong `months` + trạng thái TỔNG (AC4). Một
  * tháng 'xong' khi MỌI chiều `completed`. Bản ghi ngoài `months` bị bỏ qua.
+ *
+ * `sinceMs` (SỰ CỐ 2026-07-18): bản ghi THẤT BẠI/CẦN ĐĂNG NHẬP LẠI **cũ hơn thời điểm
+ * backfill này được tạo** (`def.createdAtMs`) bị BỎ QUA — trước đó chúng làm GET
+ * /backfill/:id trả `co_loi` NGAY sau khi bấm (UI ngừng poll trong khi job mới còn
+ * chưa chạy). `completed` vẫn tính MỌI thời điểm: tháng đã phủ từ trước là "xong" thật.
+ * Không truyền `sinceMs` → hành vi cũ (tương thích lùi).
  */
 export function deriveBackfillStatus(
-  rows: { period: string; chieu: InvoiceDirection; trangThai: string }[],
+  rows: { period: string; chieu: InvoiceDirection; trangThai: string; batDauMs?: number }[],
   directions: InvoiceDirection[],
   months: string[],
+  sinceMs?: number,
 ): BackfillProgress {
   const byKey = new Map<string, string[]>(); // "period|chieu" → danh sách trạng thái
   for (const r of rows) {
+    const laLoiCu =
+      sinceMs !== undefined &&
+      r.batDauMs !== undefined &&
+      r.batDauMs < sinceMs &&
+      (r.trangThai === TRANG_THAI_LAN_DONG_BO.THAT_BAI ||
+        r.trangThai === TRANG_THAI_LAN_DONG_BO.CAN_DANG_NHAP_LAI);
+    if (laLoiCu) continue;
     const k = `${r.period}|${r.chieu}`;
     const arr = byKey.get(k);
     if (arr) arr.push(r.trangThai);
@@ -216,9 +230,10 @@ export async function monthlyBackfillStatus<
   taikhoanId: string,
   directions: InvoiceDirection[],
   months: string[],
+  sinceMs?: number,
 ): Promise<BackfillProgress> {
   if (months.length === 0 || directions.length === 0) {
-    return deriveBackfillStatus([], directions, months);
+    return deriveBackfillStatus([], directions, months, sinceMs);
   }
   let lo: Date | null = null;
   let hi: Date | null = null;
@@ -228,13 +243,14 @@ export async function monthlyBackfillStatus<
     if (lo === null || s.getTime() < lo.getTime()) lo = s;
     if (hi === null || e.getTime() > hi.getTime()) hi = e;
   }
-  if (lo === null || hi === null) return deriveBackfillStatus([], directions, months);
+  if (lo === null || hi === null) return deriveBackfillStatus([], directions, months, sinceMs);
 
   const rows = await db
     .select({
       tuNgay: lanDongBo.tuNgay,
       chieu: lanDongBo.chieu,
       trangThai: lanDongBo.trangThai,
+      batDau: lanDongBo.batDau,
     })
     .from(lanDongBo)
     .where(
@@ -250,6 +266,7 @@ export async function monthlyBackfillStatus<
     period: periodOf(r.tuNgay),
     chieu: r.chieu as InvoiceDirection,
     trangThai: r.trangThai,
+    batDauMs: r.batDau.getTime(),
   }));
-  return deriveBackfillStatus(mapped, directions, months);
+  return deriveBackfillStatus(mapped, directions, months, sinceMs);
 }

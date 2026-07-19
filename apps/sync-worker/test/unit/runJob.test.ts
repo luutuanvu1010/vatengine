@@ -8,6 +8,7 @@ import type { GdtTransport } from "@vat/gdt-client";
 import type { DetailSyncMessage, SyncResult } from "@vat/sync";
 import { describe, expect, it } from "vitest";
 import { runScheduledSync } from "../../src/runJob";
+import { throttledTransport } from "../../src/throttledTransport";
 import type {
   AccountToken,
   JobRecorder,
@@ -332,5 +333,27 @@ describe("runScheduledSync — điều phối job đồng bộ nền", () => {
     });
     const out = await runScheduledSync(deps, MSG);
     expect(out.kind).toBe("retry");
+  });
+
+  it("(U28) pha 1 kìm nhịp theo TỪNG request: transport bọc throttledTransport (như wiring deps.ts) → N trang = 1+N permit", async () => {
+    // Mô phỏng sync() phân trang 3 lần qua transport (như queryInvoices thật);
+    // wiring production (deps.ts) bọc transport bằng CÙNG limiter của job.
+    const { deps, calls } = makeDeps({
+      sync: async (o) => {
+        await o.transport.fetch("https://hoadondientu.gdt.gov.vn/p1");
+        await o.transport.fetch("https://hoadondientu.gdt.gov.vn/p2");
+        await o.transport.fetch("https://hoadondientu.gdt.gov.vn/p3");
+        return completed();
+      },
+    });
+    deps.transport = throttledTransport(deps.transport, deps.limiter, { wait: async () => {} });
+
+    const out = await runScheduledSync(deps, MSG);
+
+    expect(out.kind).toBe("completed");
+    expect(calls.transportFetch).toBe(3);
+    // 1 permit đầu job (fail-fast + audit breakerSkip) + 3 permit cho 3 request —
+    // trước U28 con số này là 1 bất kể bao nhiêu request (gốc rễ 429 hàng loạt).
+    expect(calls.tryAcquire).toBe(1 + 3);
   });
 });

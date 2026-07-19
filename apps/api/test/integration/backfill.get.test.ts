@@ -40,6 +40,8 @@ async function seedRun(
     chieu: InvoiceDirection;
     period: string;
     trangThai: string;
+    /** Ghi đè bat_dau (mặc định: đầu tháng của period) — cho ca kiểm sinceMs. */
+    batDau?: Date;
   },
 ): Promise<void> {
   const m = /^(\d{4})-(\d{2})$/.exec(o.period);
@@ -56,7 +58,7 @@ async function seedRun(
     soHdMoi: 0,
     soHdCapNhat: 0,
     trangThai: o.trangThai,
-    batDau: new Date(Date.UTC(y, mo - 1, 1)),
+    batDau: o.batDau ?? new Date(Date.UTC(y, mo - 1, 1)),
     ketThuc: new Date(Date.UTC(y, mo - 1, lastDay)),
   });
 }
@@ -131,6 +133,58 @@ describe("GET /backfill/:id — theo dõi tiến độ (U22 B6)", () => {
     expect(b.soXong).toBe(1);
     expect(b.tongSoThang).toBe(3);
     expect(b.trangThaiTong).toBe("dang_chay");
+  });
+
+  // SỰ CỐ 2026-07-18: bản ghi failed CŨ (trước khi backfill này được tạo) làm banner
+  // báo "loi" NGAY khi bấm. Route phải truyền def.createdAtMs (trừ biên đua 5s) xuống
+  // monthlyBackfillStatus — ca này bắt đúng WIRING đó (review chéo Finding 3: test
+  // trước đây dùng createdAtMs=1 nên filter luôn no-op, quên truyền cũng không lộ).
+  it("failed CŨ hơn createdAtMs → KHÔNG 'co_loi'; failed MỚI sau createdAtMs → 'co_loi'", async () => {
+    const t = await makeTenant(db, "DN A", "0100000001");
+    const acc = await seedTaxAccount(db, t, { username: "0311772540" });
+    const createdAt = Date.UTC(2026, 6, 18, 15, 7, 0); // backfill tạo 15:07Z 18/07
+
+    // Lỗi CŨ (job của các lần bấm trước — 10:58Z cùng ngày, TRƯỚC createdAtMs).
+    await seedRun(db, {
+      tenantId: t,
+      taikhoanId: acc,
+      chieu: "purchase",
+      period: "2026-05",
+      trangThai: TRANG_THAI_LAN_DONG_BO.THAT_BAI,
+      batDau: new Date(Date.UTC(2026, 6, 18, 10, 58, 0)),
+    });
+
+    const { factory, store } = fakeTracker();
+    store.set(BFID, {
+      tenantId: t,
+      taikhoanId: acc,
+      months: ["2026-05"],
+      directions: ["purchase"],
+      createdAtMs: createdAt,
+    });
+    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const env = makeEnv({ BACKFILL_TRACKER: {} as DurableObjectNamespace });
+
+    const res1 = await get(app, BFID, t, env);
+    expect(res1.status).toBe(200);
+    const b1 = (await res1.json()) as { thang: { trangThai: string }[]; trangThaiTong: string };
+    // Lỗi cũ bị bỏ qua → tháng còn 'cho', tổng 'dang_chay' (KHÔNG terminal co_loi).
+    expect(b1.thang[0]?.trangThai).toBe("cho");
+    expect(b1.trangThaiTong).toBe("dang_chay");
+
+    // Job MỚI của chính backfill này thất bại (sau createdAtMs) → lỗi THẬT, phải hiện.
+    await seedRun(db, {
+      tenantId: t,
+      taikhoanId: acc,
+      chieu: "purchase",
+      period: "2026-05",
+      trangThai: TRANG_THAI_LAN_DONG_BO.THAT_BAI,
+      batDau: new Date(createdAt + 60_000),
+    });
+    const res2 = await get(app, BFID, t, env);
+    const b2 = (await res2.json()) as { thang: { trangThai: string }[]; trangThaiTong: string };
+    expect(b2.thang[0]?.trangThai).toBe("loi");
+    expect(b2.trangThaiTong).toBe("co_loi");
   });
 
   it("backfillId không tồn tại → 404", async () => {
