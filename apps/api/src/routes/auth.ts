@@ -77,10 +77,20 @@ export function authRoutes(deps: AppDeps) {
     if (!parsed.success) return c.json({ error: "bad_request" }, 400);
     const { email, password } = parsed.data;
 
+    // U17b (Task 5b) — CHUẨN HOÁ MỘT LẦN DUY NHẤT, dùng chung cho cả khoá limiter lẫn tra
+    // cứu DB. LỖI ĐO ĐƯỢC (báo cáo 2026-07-20, DB thật): dangKy.ts (đăng ký công khai) chuẩn
+    // hoá trim+lowercase TRƯỚC khi lưu, nhưng đường login TRƯỚC BẢN VÁ NÀY truyền `email` THÔ
+    // cho auth_lookup_user() — SQL của hàm so khớp byte-exact (`WHERE n.email = p_email`,
+    // migration 0001/0009). Hậu quả: DB lưu "person@example.com", đăng nhập bằng ĐÚNG chuỗi
+    // đã gõ lúc đăng ký "Person@Example.com" → 401; chỉ gõ toàn thường mới vào được — bất kỳ
+    // ai đăng ký email có ký tự hoa đều tự khoá mình khỏi tài khoản của chính họ. Chuẩn hoá
+    // ở TẦNG GỌI (không sửa auth_lookup_user — hàm SECURITY DEFINER ngoài phạm vi sửa này).
+    const emailChuanHoa = email.trim().toLowerCase();
+
     // H-A.5b — KHÓA per-account (lớp app, bổ sung WAF per-IP ở edge). Key = email chuẩn
     // hóa; kiểm TRƯỚC mọi việc DB. Đếm theo email (KỂ CẢ email giả) ⇒ enumeration-neutral
     // (email không tồn tại cũng bị khóa sau N lần). Khóa → 429 gọn (không lộ tài khoản).
-    const limiter = deps.getLoginLimiter(c.env, `login:${email.trim().toLowerCase()}`);
+    const limiter = deps.getLoginLimiter(c.env, `login:${emailChuanHoa}`);
     const gate = await limiter.check();
     if (gate.locked) {
       return c.json({ error: "too_many_attempts" }, 429, {
@@ -118,7 +128,7 @@ export function authRoutes(deps: AppDeps) {
 
     try {
       const res = (await db.execute(
-        sql`select id, tenant_id, vai_tro, password_hash, tenant_trang_thai from auth_lookup_user(${email})`,
+        sql`select id, tenant_id, vai_tro, password_hash, tenant_trang_thai from auth_lookup_user(${emailChuanHoa})`,
       )) as { rows: AuthRow[] };
       const row = res.rows[0];
       // LUÔN chạy MỘT verify PBKDF2 (hash thật hoặc DUMMY) trước khi rẽ nhánh → chi phí/

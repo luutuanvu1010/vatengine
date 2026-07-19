@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { tenantIsolationPolicy } from "./_rls";
 import { tenants } from "./tenants";
@@ -10,6 +11,10 @@ import { tenants } from "./tenants";
 // thuế (security.md chỉ cấm lưu mật khẩu THUẾ thô). Nullable để không chặn hàng cũ.
 // `email` UNIQUE TOÀN CỤC (không theo tenant): login xảy ra TRƯỚC khi biết tenant nên
 // một email định danh đúng một người dùng toàn hệ thống (quyết định U8-2026-07-14).
+// U17b (Task 5b, F4) — chỉ mục duy nhất là BIỂU THỨC lower(email), KHÔNG phải cột "email"
+// trần: byte-exact để "Boss@Corp.vn" và "BOSS@CORP.VN" lọt qua như hai người khác nhau, phá
+// vỡ dedup (migration 0010_email_khong_phan_biet_hoa_thuong.sql). Cột email vẫn giữ NGUYÊN
+// case người dùng gõ (hiển thị/audit); chỉ ép DUY NHẤT theo dạng đã chuẩn hoá.
 export const nguoiDung = pgTable(
   "nguoi_dung",
   {
@@ -24,6 +29,6 @@ export const nguoiDung = pgTable(
   },
   (t) => [
     tenantIsolationPolicy("nguoi_dung", t.tenantId),
-    uniqueIndex("nguoi_dung_email_unique").on(t.email),
+    uniqueIndex("nguoi_dung_email_unique").on(sql`lower(${t.email})`),
   ],
 );

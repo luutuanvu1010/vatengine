@@ -131,6 +131,30 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
     expect(orphan).toHaveLength(0);
   });
 
+  // U17b (Task 5b, F4) — lỗ hổng đo được: chỉ mục cũ nguoi_dung_email_unique là byte-exact
+  // trên cột "email" trần. dangKy.ts chuẩn hoá (trim+lowercase) email MỚI trước khi ghi,
+  // nhưng KHÔNG chạm được hàng ĐÃ CÓ SẴN mang case gốc (dữ liệu cũ trước khi có chuẩn hoá,
+  // hoặc một đường ghi khác trong tương lai không đi qua dangKy.ts) — "Boss@Corp.vn" y hệt
+  // ví dụ đo được trong báo cáo. Test chèn THẲNG (không qua /dang-ky) để dựng đúng ca đó,
+  // rồi đăng ký lại bằng biến thể HOA/thường — PHẢI vẫn bị coi là trùng (409), không được
+  // tạo tenant thứ hai. Migration 0010 thay chỉ mục bằng biểu thức lower(email); TRƯỚC khi
+  // có 0010, test này ĐỎ (201, tạo trùng).
+  it("email trùng KHÁC HOA/THƯỜNG (F4) → vẫn 409 da_ton_tai, không tạo tenant thứ hai", async () => {
+    const t = await makeTenant(db, "Cty cũ", "0100000001");
+    await db.insert(nguoiDung).values({
+      tenantId: t,
+      email: "Boss@Corp.vn",
+      vaiTro: "quan_tri",
+    });
+
+    const res = await dangKy(app, body({ email: "BOSS@CORP.VN", mst: "0100000099" }));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "da_ton_tai" });
+
+    const orphan = await db.select().from(tenants).where(eq(tenants.mst, "0100000099"));
+    expect(orphan).toHaveLength(0);
+  });
+
   it("vượt ngưỡng IP → 429 qua_nhieu_yeu_cau + Retry-After", async () => {
     const limitedApp = createApp(
       injectDb(
@@ -192,6 +216,49 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
       makeEnv(),
     );
     expect(loginRes.status).toBe(401);
+  });
+
+  // U17b (Task 5b) — lỗ hổng đo được TRÊN DB THẬT (báo cáo 2026-07-20): sau đăng ký, DB lưu
+  // email đã chuẩn hoá lowercase ("person@example.com"), nhưng đăng nhập lại BẰNG ĐÚNG chuỗi
+  // đã gõ lúc đăng ký ("Person@Example.com") → 401, vì auth.ts (TRƯỚC sửa) truyền email THÔ
+  // cho auth_lookup_user(), còn SQL của hàm so khớp byte-exact (`WHERE n.email = p_email`).
+  // Chỉ đăng nhập được nếu gõ TOÀN THƯỜNG — bất kỳ ai đăng ký email có ký tự hoa đều tự khoá
+  // mình khỏi tài khoản của chính họ. Test dựng nối tiếp /dang-ky → (mô phỏng active + đặt
+  // mật khẩu — hai bước NGOÀI phạm vi Task 5, xảy ra ở luồng duyệt/đặt mật khẩu sau) →
+  // /auth/login bằng ĐÚNG chuỗi hoa/thường gốc. TRƯỚC sửa auth.ts: 401 (ĐỎ). SAU sửa: 200.
+  it("đăng ký email HOA/thường lẫn lộn rồi đăng nhập lại BẰNG ĐÚNG chuỗi đã gõ → 200 (F đăng nhập-khoá)", async () => {
+    const emailGoc = "Nguoi.Dung@CongTy.VN";
+
+    const dk = await dangKy(app, body({ email: emailGoc, mst: "0100000077" }));
+    expect(dk.status).toBe(201);
+
+    const t = await db.select().from(tenants).where(eq(tenants.mst, "0100000077"));
+    const tenantId = t[0]?.id as string;
+
+    // DB lưu email đã chuẩn hoá lowercase (dangKy.ts trim+lowercase trước insert) — đúng
+    // hiện trạng đo được ("stored in DB = person@example.com").
+    const u = await db.select().from(nguoiDung).where(eq(nguoiDung.tenantId, tenantId));
+    expect(u[0]?.email).toBe("nguoi.dung@congty.vn");
+
+    // Mô phỏng admin duyệt + đặt mật khẩu (luồng sau, ngoài phạm vi Task 5) để cô lập ĐÚNG
+    // lỗi đang sửa: chuẩn hoá ở ĐƯỜNG LOGIN — không phải cổng trạng thái (đã có test riêng
+    // ở trên) hay việc thiếu mật khẩu.
+    await db.update(tenants).set({ trangThai: "active" }).where(eq(tenants.id, tenantId));
+    await db
+      .update(nguoiDung)
+      .set({ passwordHash: await hashPassword("gi-do-sau-duyet-01") })
+      .where(eq(nguoiDung.tenantId, tenantId));
+
+    const loginRes = await app.request(
+      "/auth/login",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: emailGoc, password: "gi-do-sau-duyet-01" }),
+      },
+      makeEnv(),
+    );
+    expect(loginRes.status).toBe(200);
   });
 
   // QĐ-1 — điểm chốt hướng đi của cả route: INSERT tenant qua withTenant(UUID tự sinh) có
