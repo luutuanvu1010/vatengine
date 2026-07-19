@@ -120,7 +120,9 @@ export default {
             message.ack();
           } catch (err) {
             // Ghi sổ lỗi → retry (max_retries:3 của DLQ consumer làm chốt). KHÔNG log body.
-            console.warn(`DLQ consumer lỗi ghi sổ: ${err instanceof Error ? err.name : "unknown"}`);
+            console.warn(
+              `DLQ consumer lỗi ghi sổ (tenant=${message.body.tenantId}): ${err instanceof Error ? err.name : "unknown"}`,
+            );
             message.retry();
           }
         }
