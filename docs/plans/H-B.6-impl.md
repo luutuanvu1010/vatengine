@@ -563,35 +563,31 @@ git commit -m "feat(sync): H-B.6 (b) gate scheduled() — skip enqueue khi egres
 
 **Files:**
 - Modify: `apps/sync-worker/src/index.ts` (nhánh xử lý `vat-sync`)
-- Modify: `apps/sync-worker/src/fanout.ts` (thêm hàm thuần `blockedReenqueue`)
-- Test: `apps/sync-worker/test/unit/fanout.test.ts` (thêm ca `blockedReenqueue`)
+- Modify: `apps/sync-worker/src/fanout.ts` (thêm hàm thuần `blockedAction`)
+- Test: `apps/sync-worker/test/unit/fanout.test.ts` (thêm ca `blockedAction`)
 
 **Interfaces:**
-- Produces: `blockedReenqueue(body, delaySeconds): { body: VatSyncQueueMessage; delaySeconds: number }` — dựng message reenqueue mang `bpAttempt+1` + delay (mirror backpressure H-B.4, KHÔNG tính max_retries).
+- Produces: `blockedAction(body, opts: { backpressureDelaySeconds: number; maxBackpressure: number }): QueueAction` — DƯỚI trần → `{type:"reenqueue", delaySeconds, bpAttempt: bp+1}`; ĐẠT trần (`bpAttempt >= maxBackpressure`) → `{type:"retry"}` (tính max_retries → **rơi DLQ**, có điểm dừng). Dùng LẠI type `QueueAction` sẵn có (mirror `consumerAction` H-B.4). **KHÔNG** vòng reenqueue vô hạn khi GEO_BLOCKED kéo dài — đây là điểm khép "vòng khép kín" của spec §4.
 
-- [ ] **Step 1: Viết test đỏ** — thêm vào `apps/sync-worker/test/unit/fanout.test.ts`:
+- [ ] **Step 1: Viết test đỏ** — thêm vào `apps/sync-worker/test/unit/fanout.test.ts` (đã có import `describe/expect/it`; chỉ thêm import `blockedAction`):
 
 ```ts
-import { blockedReenqueue } from "../../src/fanout";
+import { blockedAction } from "../../src/fanout";
 
-describe("H-B.6 — blockedReenqueue", () => {
-  it("tăng bpAttempt + gắn delay (mặc định 0 → 1)", () => {
-    const r = blockedReenqueue(
-      { tenantId: "t1", taikhoanId: "a1", direction: "purchase",
-        dateFrom: "01/07/2026", dateTo: "31/07/2026", period: "2026-07" },
-      60,
-    );
-    expect(r.delaySeconds).toBe(60);
-    expect((r.body as { bpAttempt?: number }).bpAttempt).toBe(1);
+describe("H-B.6 — blockedAction", () => {
+  const header = { tenantId: "t1", taikhoanId: "a1", direction: "purchase" as const,
+    dateFrom: "01/07/2026", dateTo: "31/07/2026", period: "2026-07" };
+  it("DƯỚI trần → reenqueue, bpAttempt+1, mang delay", () => {
+    const a = blockedAction(header, { backpressureDelaySeconds: 60, maxBackpressure: 10 });
+    expect(a).toEqual({ type: "reenqueue", delaySeconds: 60, bpAttempt: 1 });
   });
-  it("giữ bpAttempt tăng dần (5 → 6)", () => {
-    const r = blockedReenqueue(
-      { kind: "detail", tenantId: "t1", taikhoanId: "a1", hoaDonId: "h",
-        ref: { nbmst: "x", khhdon: "1", khmshdon: "1", shdon: "5", source: "normal" },
-        bpAttempt: 5 },
-      30,
-    );
-    expect((r.body as { bpAttempt?: number }).bpAttempt).toBe(6);
+  it("giữ bpAttempt tăng dần (5 → 6) khi còn dưới trần", () => {
+    const a = blockedAction({ ...header, bpAttempt: 5 }, { backpressureDelaySeconds: 30, maxBackpressure: 10 });
+    expect(a).toEqual({ type: "reenqueue", delaySeconds: 30, bpAttempt: 6 });
+  });
+  it("ĐẠT trần → retry (→ DLQ, điểm dừng khi chặn kéo dài)", () => {
+    const a = blockedAction({ ...header, bpAttempt: 10 }, { backpressureDelaySeconds: 60, maxBackpressure: 10 });
+    expect(a).toEqual({ type: "retry" });
   });
 });
 ```
@@ -599,26 +595,26 @@ describe("H-B.6 — blockedReenqueue", () => {
 - [ ] **Step 2: Chạy test — ĐỎ**
 
 Run: `npx vitest run --root apps/sync-worker test/unit/fanout.test.ts`
-Expected: FAIL (`blockedReenqueue` chưa tồn tại).
+Expected: FAIL (`blockedAction` chưa tồn tại).
 
-- [ ] **Step 3: Thêm `blockedReenqueue` vào `fanout.ts`**:
+- [ ] **Step 3: Thêm `blockedAction` vào `fanout.ts`** (dùng lại type `QueueAction` đã có trong file; đảm bảo import type `VatSyncQueueMessage` từ `@vat/sync`):
 
 ```ts
-import type { VatSyncQueueMessage } from "@vat/sync";
-
 /** H-B.6 (b) — khi egress GEO_BLOCKED, hoãn job thay vì đập GDT. Mirror backpressure
- * H-B.4: message MỚI mang bpAttempt+1 + delay, ack bản cũ (KHÔNG tính max_retries),
- * nhưng vẫn tôn trọng trần bpAttempt → rơi DLQ nếu chặn kéo dài (có điểm dừng). */
-export function blockedReenqueue(
+ * H-B.4: DƯỚI trần → reenqueue message MỚI mang bpAttempt+1 + delay (ack bản cũ, KHÔNG
+ * tính max_retries); ĐẠT trần bpAttempt → retry THẬT (tính max_retries → rơi DLQ) để có
+ * ĐIỂM DỪNG khi GEO_BLOCKED kéo dài — không reenqueue vô hạn (spec §4 "vòng khép kín"). */
+export function blockedAction(
   body: VatSyncQueueMessage,
-  delaySeconds: number,
-): { body: VatSyncQueueMessage; delaySeconds: number } {
-  const bpAttempt = (body.bpAttempt ?? 0) + 1;
-  return { body: { ...body, bpAttempt }, delaySeconds };
+  opts: { backpressureDelaySeconds: number; maxBackpressure: number },
+): QueueAction {
+  const bpAttempt = body.bpAttempt ?? 0;
+  if (bpAttempt >= opts.maxBackpressure) return { type: "retry" };
+  return { type: "reenqueue", delaySeconds: opts.backpressureDelaySeconds, bpAttempt: bpAttempt + 1 };
 }
 ```
 
-- [ ] **Step 4: Wiring `index.ts`** — trong nhánh `vat-sync` của `queue()`, đọc health MỘT lần đầu batch; nếu blocked, reenqueue mọi message thay vì chạy job:
+- [ ] **Step 4: Wiring `index.ts`** — trong nhánh `vat-sync` của `queue()`, đọc health MỘT lần đầu batch; nếu blocked, áp `blockedAction` cho mỗi message (GIỐNG cách áp `consumerAction` của H-B.4):
 
 ```ts
     // (nhánh vat-sync)
@@ -627,16 +623,20 @@ export function blockedReenqueue(
     for (const message of batch.messages) {
       const body = message.body;
       if (blocked) {
-        // H-B.6 (b) — egress GEO_BLOCKED: hoãn cả batch, không đập GDT.
-        const r = blockedReenqueue(body, backpressureDelaySeconds);
-        await env.SYNC_QUEUE.send(r.body, { delaySeconds: r.delaySeconds });
-        message.ack();
+        // H-B.6 (b) — egress GEO_BLOCKED: hoãn, không đập GDT; đạt trần → retry (→ DLQ).
+        const action = blockedAction(body, { backpressureDelaySeconds, maxBackpressure });
+        if (action.type === "reenqueue") {
+          await env.SYNC_QUEUE.send({ ...body, bpAttempt: action.bpAttempt }, { delaySeconds: action.delaySeconds });
+          message.ack();
+        } else {
+          message.retry(); // đạt trần → tính max_retries → dead-letter
+        }
         continue;
       }
       // ... khối xử lý message hiện có (H-B.4) không đổi ...
     }
 ```
-Thêm import `blockedReenqueue` (từ `./fanout`) — `isEgressBlocked`/`egressHealthClient` đã import ở Task 5.
+Thêm import `blockedAction` (từ `./fanout`) — `isEgressBlocked`/`egressHealthClient` đã import ở Task 5.
 
 - [ ] **Step 5: Chạy toàn bộ test — XANH, không hồi quy**
 
