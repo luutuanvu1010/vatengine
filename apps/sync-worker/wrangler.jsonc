@@ -64,6 +64,14 @@
         // tối ưu — đây là trần an toàn, không phải cam kết hiệu năng.
         "max_concurrency": 3,
         "dead_letter_queue": "vat-sync-dlq"
+      },
+      // H-B.6 — consumer riêng cho queue dead-letter: ghi sổ dong_bo_that_bai + audit
+      // CRITICAL (dlqConsume) rồi ack. KHÔNG khai dead_letter_queue ở đây (tránh
+      // DLQ-của-DLQ vô hạn) — max_retries:3 là chốt chặn cuối, lỗi vượt trần bị bỏ.
+      {
+        "queue": "vat-sync-dlq",
+        "max_retries": 3,
+        "max_batch_size": 10
       }
     ]
   },

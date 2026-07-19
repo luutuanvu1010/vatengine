@@ -1,15 +1,20 @@
 // Worker đồng bộ nền (U9) — điểm vào Cloudflare. WIRING thuần (loại khỏi ngưỡng phủ):
 //  - scheduled(): Cron → liệt kê account đến hạn → CHIA lô (≤100/≤256KB) + jitter
 //    delaySeconds theo tenant → enqueue một message/(account×chiều) (H-B.4);
-//  - queue(): consumer → runScheduledSync mỗi message → `consumerAction` ánh xạ outcome
-//    → hành động: `reenqueue` (backpressure rate_limited/breaker_open: gửi msg mới có
-//    delay + ack, KHÔNG tính max_retries) · `retry` (lỗi thật: message.retry(), trần
-//    max_retries → dead-letter) · `ack` (xong / cần đăng nhập lại) — H-B.4;
+//  - queue(): MỘT Worker consume 2 queue (batch.queue phân biệt nguồn) —
+//    "vat-sync-dlq" (H-B.6): dlqConsume ghi sổ dong_bo_that_bai + audit CRITICAL rồi
+//    ack (lỗi ghi sổ → retry, trần max_retries:3 của consumer DLQ làm chốt, KHÔNG log
+//    body); còn lại = "vat-sync" (H-B.4, KHÔNG đổi): consumer → runScheduledSync mỗi
+//    message → `consumerAction` ánh xạ outcome → hành động: `reenqueue` (backpressure
+//    rate_limited/breaker_open: gửi msg mới có delay + ack, KHÔNG tính max_retries) ·
+//    `retry` (lỗi thật: message.retry(), trần max_retries → dead-letter) · `ack` (xong
+//    / cần đăng nhập lại);
 //  - export TenantLimiter: Durable Object rate-limit/circuit-breaker theo tenant/MST.
 // Logic (schedule/runJob/fanout/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
 import { isDetailMessage } from "@vat/sync";
 import { getDbFromHyperdrive } from "./db";
 import { listActiveTenantIds, makeDetailJobDeps, makeEgressProbeDeps, makeJobDeps } from "./deps";
+import { dlqConsume } from "./dlqConsumer";
 import { EgressHealth } from "./egressHealth";
 import { runEgressProbe } from "./egressProbe";
 import {
@@ -70,8 +75,24 @@ export default {
     _ctx: ExecutionContext,
   ): Promise<void> {
     const { db, close } = await getDbFromHyperdrive(env);
-    const { backpressureDelaySeconds, maxBackpressure } = resolveFanoutConfig(env);
     try {
+      // H-B.6 — nhánh DLQ (batch.queue === "vat-sync-dlq"): ghi sổ + audit rồi ack;
+      // KHÔNG chạm khối xử lý "vat-sync" (H-B.4) bên dưới.
+      if (batch.queue === "vat-sync-dlq") {
+        for (const message of batch.messages) {
+          try {
+            await dlqConsume(db, message.body);
+            message.ack();
+          } catch (err) {
+            // Ghi sổ lỗi → retry (max_retries:3 của DLQ consumer làm chốt). KHÔNG log body.
+            console.warn(`DLQ consumer lỗi ghi sổ: ${err instanceof Error ? err.name : "unknown"}`);
+            message.retry();
+          }
+        }
+        return;
+      }
+      // ---- H-B.4 — khối xử lý "vat-sync" hiện có, KHÔNG đổi logic ----
+      const { backpressureDelaySeconds, maxBackpressure } = resolveFanoutConfig(env);
       for (const message of batch.messages) {
         const body = message.body;
         // H-B.4 — TÁCH backpressure (rate_limited/breaker_open) khỏi lỗi thật:
