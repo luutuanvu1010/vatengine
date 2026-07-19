@@ -6,7 +6,7 @@
 
 **Architecture:** Thêm bảng dead-letter `dong_bo_that_bai` (tenant-scoped, RLS) làm sổ bền cho job rơi `vat-sync-dlq`. Cùng Worker `vat-sync-worker` consume THÊM queue `vat-sync-dlq` (phân nhánh trong `queue()` theo `batch.queue`) → ghi sổ + audit CRITICAL + `console.error` + ack. Mở rộng `HealthState.lastVerdict` để cả `scheduled()` (skip enqueue) lẫn `queue()` (reenqueue-delay) chặn khi `GEO_BLOCKED`. Replay thủ công qua `fetch()` sau Cloudflare Access.
 
-**Tech Stack:** TypeScript · Cloudflare Workers (Queues + Durable Objects) · Drizzle ORM + Postgres (Hyperdrive) · Vitest + `@cloudflare/vitest-pool-workers` (Miniflare) + PGlite (integration DB) · Biome.
+**Tech Stack:** TypeScript · Cloudflare Workers (Queues + Durable Objects) · Drizzle ORM + Postgres (Hyperdrive) · **Vitest chạy Node** (KHÔNG vitest-pool-workers — `apps/sync-worker/vitest.config.ts` nói rõ PGlite/pg không chạy trong workerd) — unit dùng mock, integration dùng **PGlite** · Biome.
 
 ## Global Constraints
 
@@ -18,6 +18,7 @@
 - **Kênh cảnh báo** = `console.error` → Workers observability/Logpush (email/Slack là U24, chưa xây).
 - **Verdict gate = `'GEO_BLOCKED'` cụ thể** (không gate TIMEOUT/ERROR/RATE_LIMITED ở bản này).
 - **Commands:** `make lint` (Biome + `tsc --noEmit`) · test một workspace: `npx vitest run --root apps/sync-worker` hoặc `--root packages/db` (né flake PGlite) · `make migrate`.
+- **⚠️ Vị trí test (bắt buộc — QA1):** `apps/sync-worker/vitest.config.ts` chỉ include `test/unit/**` + `test/integration/**`. Test đặt trong `src/` sẽ **KHÔNG được phát hiện**. Mọi test sync-worker ở đơn vị này đặt tại `apps/sync-worker/test/unit/<tên>.test.ts`, import mã nguồn bằng `../../src/<tên>`. Các file `test/unit/health.test.ts` và `test/unit/fanout.test.ts` **ĐÃ TỒN TẠI** → **APPEND** ca mới, không tạo file mới. Test DB (`packages/db`) đặt ở `packages/db/test/integration/`.
 - **⚠️ Va số migration:** nhánh `feat/u29/u17` đã có `0007_dang_ky_va_goi_dich_vu.sql`; nhánh này migration mới nhất = `0006`. Migration mới ở Task 1 tạm đánh `0007_dong_bo_that_bai`. **KHI HỢP NHẤT với trục mang 0007_dang_ky → PHẢI đánh số lại (0008+) + hoà giải `meta/_journal.json`.** Hệ quả trực tiếp của nợ git-mess (BACKLOG 2026-07-19); ghi lại, không tự đoán trục đích.
 
 ---
@@ -153,9 +154,9 @@ ALTER TABLE "dong_bo_that_bai" ENABLE ROW LEVEL SECURITY;--> statement-breakpoin
 ALTER TABLE "dong_bo_that_bai" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 DROP POLICY IF EXISTS "dong_bo_that_bai_tenant_isolation" ON "dong_bo_that_bai";--> statement-breakpoint
 CREATE POLICY "dong_bo_that_bai_tenant_isolation" ON "dong_bo_that_bai"
-	AS PERMISSIVE FOR ALL
-	USING ("tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
-	WITH CHECK ("tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
+	AS PERMISSIVE FOR ALL TO public
+	USING ("dong_bo_that_bai"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid)
+	WITH CHECK ("dong_bo_that_bai"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "dong_bo_that_bai_tenant_trangthai_idx"
 	ON "dong_bo_that_bai" ("tenant_id", "trang_thai", "tao_luc" DESC);
 ```
@@ -194,17 +195,17 @@ git commit -m "feat(db): H-B.6 bảng dong_bo_that_bai (dead-letter, RLS FORCE) 
 
 **Files:**
 - Modify: `apps/sync-worker/src/health.ts`
-- Test: `apps/sync-worker/src/health.test.ts` (thêm ca; nếu chưa có file, tạo)
+- Test: `apps/sync-worker/test/unit/health.test.ts` (**APPEND** — file đã tồn tại)
 
 **Interfaces:**
 - Consumes: `ProbeVerdict` (`@vat/gdt-client`), `nextHealth`, `HealthState` (đã có).
 - Produces: `HealthState.lastVerdict?: ProbeVerdict`; `isEgressBlocked(state: HealthState): boolean` (true ⇔ `lastVerdict === 'GEO_BLOCKED'`).
 
-- [ ] **Step 1: Viết test đỏ** — thêm vào `apps/sync-worker/src/health.test.ts`:
+- [ ] **Step 1: Viết test đỏ** — **APPEND** vào `apps/sync-worker/test/unit/health.test.ts` (file đã có; thêm `describe` mới, dùng import sẵn có nếu trùng):
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { HEALTHY, isEgressBlocked, nextHealth } from "./health";
+import { HEALTHY, isEgressBlocked, nextHealth } from "../../src/health";
 
 describe("H-B.6 — lastVerdict + isEgressBlocked", () => {
   it("nextHealth ghi lastVerdict cho mỗi verdict", () => {
@@ -221,7 +222,7 @@ describe("H-B.6 — lastVerdict + isEgressBlocked", () => {
 
 - [ ] **Step 2: Chạy test — ĐỎ**
 
-Run: `npx vitest run --root apps/sync-worker src/health.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/health.test.ts`
 Expected: FAIL (`isEgressBlocked` chưa tồn tại; `lastVerdict` undefined).
 
 - [ ] **Step 3: Sửa `health.ts`** — thêm `lastVerdict` vào interface + ghi trong `nextHealth` + hàm mới:
@@ -259,14 +260,14 @@ export function isEgressBlocked(state: HealthState): boolean {
 
 - [ ] **Step 4: Chạy test — XANH**
 
-Run: `npx vitest run --root apps/sync-worker src/health.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/health.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Lint + commit**
 
 Run: `make lint` → sạch.
 ```bash
-git add apps/sync-worker/src/health.ts apps/sync-worker/src/health.test.ts
+git add apps/sync-worker/src/health.ts apps/sync-worker/test/unit/health.test.ts
 git commit -m "feat(sync): H-B.6 HealthState.lastVerdict + isEgressBlocked (nền EgressHealth-gate)"
 ```
 
@@ -276,17 +277,17 @@ git commit -m "feat(sync): H-B.6 HealthState.lastVerdict + isEgressBlocked (nề
 
 **Files:**
 - Create: `apps/sync-worker/src/dlqConsumer.ts`
-- Test: `apps/sync-worker/src/dlqConsumer.test.ts`
+- Test: `apps/sync-worker/test/unit/dlqConsumer.test.ts`
 
 **Interfaces:**
 - Consumes: `VatSyncQueueMessage`, `isDetailMessage` (`@vat/sync`).
 - Produces: `DlqRecord = { loai: 'header'|'detail'; lyDo: string; doiTuong: string; payload: VatSyncQueueMessage }`; `dlqRecord(body: VatSyncQueueMessage): DlqRecord`. Hằng `AUDIT_HANH_DONG_DLQ = 'dong_bo_that_bai_dlq'`.
 
-- [ ] **Step 1: Viết test đỏ** `apps/sync-worker/src/dlqConsumer.test.ts`:
+- [ ] **Step 1: Viết test đỏ** `apps/sync-worker/test/unit/dlqConsumer.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { dlqRecord } from "./dlqConsumer";
+import { dlqRecord } from "../../src/dlqConsumer";
 
 describe("H-B.6 — dlqRecord (thuần)", () => {
   it("message header → loai 'header' + doiTuong theo kỳ/chiều", () => {
@@ -311,7 +312,7 @@ describe("H-B.6 — dlqRecord (thuần)", () => {
 
 - [ ] **Step 2: Chạy test — ĐỎ**
 
-Run: `npx vitest run --root apps/sync-worker src/dlqConsumer.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/dlqConsumer.test.ts`
 Expected: FAIL (`dlqConsumer` chưa tồn tại).
 
 - [ ] **Step 3: Tạo `dlqConsumer.ts` (phần thuần)**:
@@ -349,14 +350,14 @@ export function dlqRecord(body: VatSyncQueueMessage): DlqRecord {
 
 - [ ] **Step 4: Chạy test — XANH**
 
-Run: `npx vitest run --root apps/sync-worker src/dlqConsumer.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/dlqConsumer.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Lint + commit**
 
 Run: `make lint` → sạch.
 ```bash
-git add apps/sync-worker/src/dlqConsumer.ts apps/sync-worker/src/dlqConsumer.test.ts
+git add apps/sync-worker/src/dlqConsumer.ts apps/sync-worker/test/unit/dlqConsumer.test.ts
 git commit -m "feat(sync): H-B.6 dlqRecord — ánh xạ message DLQ → hàng sổ (thuần)"
 ```
 
@@ -368,7 +369,7 @@ git commit -m "feat(sync): H-B.6 dlqRecord — ánh xạ message DLQ → hàng s
 - Modify: `apps/sync-worker/src/dlqConsumer.ts` (thêm `dlqConsume`)
 - Modify: `apps/sync-worker/src/index.ts` (phân nhánh `queue()` theo `batch.queue`)
 - Modify: `apps/sync-worker/wrangler.jsonc` (thêm consumer `vat-sync-dlq`)
-- Test: `apps/sync-worker/src/dlqConsumer.test.ts` (thêm ca `dlqConsume`)
+- Test: `apps/sync-worker/test/unit/dlqConsumer.test.ts` (thêm ca `dlqConsume`)
 
 **Interfaces:**
 - Consumes: `AnyDb`, `withTenant`, `auditLog`, `dongBoThatBai` (`@vat/db`); `maskSensitive` (`@vat/crypto`); `dlqRecord`, `AUDIT_HANH_DONG_DLQ` (Task 3).
@@ -377,7 +378,7 @@ git commit -m "feat(sync): H-B.6 dlqRecord — ánh xạ message DLQ → hàng s
 - [ ] **Step 1: Viết test đỏ** — thêm vào `dlqConsumer.test.ts` (mock db kiểu ghi-lại):
 
 ```ts
-import { dlqConsume } from "./dlqConsumer";
+import { dlqConsume } from "../../src/dlqConsumer";
 
 it("dlqConsume ghi 1 hàng dong_bo_that_bai + 1 audit qua withTenant", async () => {
   const inserted: unknown[] = [];
@@ -393,7 +394,7 @@ it("dlqConsume ghi 1 hàng dong_bo_that_bai + 1 audit qua withTenant", async () 
   // Giả withTenant: db.transaction(fn) → fn(tx). (withTenant tự gọi tx.execute bên trong.)
   const db = {
     transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx),
-  } as unknown as import("./types").AnyDb;
+  } as unknown as import("../../src/types").AnyDb;
   await dlqConsume(db, {
     tenantId: "t1", taikhoanId: "a1", direction: "sold",
     dateFrom: "01/07/2026", dateTo: "31/07/2026", period: "2026-07",
@@ -405,7 +406,7 @@ it("dlqConsume ghi 1 hàng dong_bo_that_bai + 1 audit qua withTenant", async () 
 
 - [ ] **Step 2: Chạy test — ĐỎ**
 
-Run: `npx vitest run --root apps/sync-worker src/dlqConsumer.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/dlqConsumer.test.ts`
 Expected: FAIL (`dlqConsume` chưa tồn tại).
 
 - [ ] **Step 3: Thêm `dlqConsume` vào `dlqConsumer.ts`**:
@@ -477,7 +478,7 @@ Thêm `import { dlqConsume } from "./dlqConsumer";` ở đầu file.
 
 - [ ] **Step 6: Chạy test — XANH**
 
-Run: `npx vitest run --root apps/sync-worker src/dlqConsumer.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/dlqConsumer.test.ts`
 Expected: PASS (3 ca: 2 của Task 3 + `dlqConsume`).
 
 - [ ] **Step 7: Lint + commit**
@@ -485,7 +486,7 @@ Expected: PASS (3 ca: 2 của Task 3 + `dlqConsume`).
 Run: `make lint` → sạch.
 ```bash
 git add apps/sync-worker/src/dlqConsumer.ts apps/sync-worker/src/index.ts \
-  apps/sync-worker/wrangler.jsonc apps/sync-worker/src/dlqConsumer.test.ts
+  apps/sync-worker/wrangler.jsonc apps/sync-worker/test/unit/dlqConsumer.test.ts
 git commit -m "feat(sync): H-B.6 (a) DLQ consumer — ghi sổ dong_bo_that_bai + audit CRITICAL + ack"
 ```
 
@@ -495,7 +496,7 @@ git commit -m "feat(sync): H-B.6 (a) DLQ consumer — ghi sổ dong_bo_that_bai 
 
 **Files:**
 - Modify: `apps/sync-worker/src/index.ts` (`scheduled()`, nhánh cron đồng bộ)
-- Test: `apps/sync-worker/src/gate.test.ts` (test hàm thuần quyết định)
+- Test: KHÔNG có test riêng — gate ở `scheduled()` là WIRING (index.ts đã nằm trong `coverage.exclude`); logic `isEgressBlocked` đã phủ ở Task 2. Bước 2 chỉ chạy lại toàn bộ suite để bảo đảm không hồi quy.
 
 **Interfaces:**
 - Consumes: `isEgressBlocked`, `HealthState` (Task 2); `egressHealthClient` (`./egressHealth`).
@@ -538,15 +539,15 @@ git commit -m "feat(sync): H-B.6 (b) gate scheduled() — skip enqueue khi egres
 **Files:**
 - Modify: `apps/sync-worker/src/index.ts` (nhánh xử lý `vat-sync`)
 - Modify: `apps/sync-worker/src/fanout.ts` (thêm hàm thuần `blockedReenqueue`)
-- Test: `apps/sync-worker/src/fanout.test.ts` (thêm ca `blockedReenqueue`)
+- Test: `apps/sync-worker/test/unit/fanout.test.ts` (thêm ca `blockedReenqueue`)
 
 **Interfaces:**
 - Produces: `blockedReenqueue(body, delaySeconds): { body: VatSyncQueueMessage; delaySeconds: number }` — dựng message reenqueue mang `bpAttempt+1` + delay (mirror backpressure H-B.4, KHÔNG tính max_retries).
 
-- [ ] **Step 1: Viết test đỏ** — thêm vào `apps/sync-worker/src/fanout.test.ts`:
+- [ ] **Step 1: Viết test đỏ** — thêm vào `apps/sync-worker/test/unit/fanout.test.ts`:
 
 ```ts
-import { blockedReenqueue } from "./fanout";
+import { blockedReenqueue } from "../../src/fanout";
 
 describe("H-B.6 — blockedReenqueue", () => {
   it("tăng bpAttempt + gắn delay (mặc định 0 → 1)", () => {
@@ -572,7 +573,7 @@ describe("H-B.6 — blockedReenqueue", () => {
 
 - [ ] **Step 2: Chạy test — ĐỎ**
 
-Run: `npx vitest run --root apps/sync-worker src/fanout.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/fanout.test.ts`
 Expected: FAIL (`blockedReenqueue` chưa tồn tại).
 
 - [ ] **Step 3: Thêm `blockedReenqueue` vào `fanout.ts`**:
@@ -621,7 +622,7 @@ Expected: PASS toàn bộ.
 
 Run: `make lint` → sạch.
 ```bash
-git add apps/sync-worker/src/index.ts apps/sync-worker/src/fanout.ts apps/sync-worker/src/fanout.test.ts
+git add apps/sync-worker/src/index.ts apps/sync-worker/src/fanout.ts apps/sync-worker/test/unit/fanout.test.ts
 git commit -m "feat(sync): H-B.6 (b) gate consumer — reenqueue-delay khi egress GEO_BLOCKED"
 ```
 
@@ -632,7 +633,7 @@ git commit -m "feat(sync): H-B.6 (b) gate consumer — reenqueue-delay khi egres
 **Files:**
 - Modify: `apps/sync-worker/src/index.ts` (thêm `fetch()` handler)
 - Create: `apps/sync-worker/src/replay.ts` (hàm thuần + ghi DB)
-- Test: `apps/sync-worker/src/replay.test.ts`
+- Test: `apps/sync-worker/test/unit/replay.test.ts`
 
 **Interfaces:**
 - Consumes: `dongBoThatBai`, `TRANG_THAI_DA_DAU`, `TRANG_THAI_DA_PHAT_LAI`, `withTenant`, `eq`, `and`, `inArray` (`@vat/db`/`drizzle-orm`); `SYNC_QUEUE`.
@@ -640,13 +641,13 @@ git commit -m "feat(sync): H-B.6 (b) gate consumer — reenqueue-delay khi egres
 
 > **Bảo vệ:** endpoint đặt sau **Cloudflare Access** (cấu hình hạ tầng, không phải code — security.md "khu quản trị dùng Cloudflare Access"). Code KHÔNG tự xác thực; DoD ghi rõ route `/dlq/replay` PHẢI được Access bảo vệ trước khi bật production. Yêu cầu `tenantId` tường minh (không "replay tất tenant" ẩn — multi-tenant.md).
 >
-> **Test-design:** `apps/sync-worker` chạy trong Miniflare (`vitest-pool-workers`) — **KHÔNG** dùng PGlite/`fs migrate` ở đây (khác env `packages/db`). Test phần THUẦN `replayMessages` (không db) + mock db/queue cho `replayDeadLetters`.
+> **Test-design:** `apps/sync-worker` chạy **Node + PGlite** (KHÔNG vitest-pool-workers — `vitest.config.ts`). Đơn vị này test `replayDeadLetters` bằng **mock db/queue** (đủ nhẹ, khỏi seed PGlite) + hàm THUẦN `replayMessages`; nếu muốn integration DB thật thì đặt ở `apps/sync-worker/test/integration/` (mẫu `runJob.db.test.ts`).
 
-- [ ] **Step 1: Viết test đỏ** `apps/sync-worker/src/replay.test.ts`:
+- [ ] **Step 1: Viết test đỏ** `apps/sync-worker/test/unit/replay.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { replayMessages, replayDeadLetters } from "./replay";
+import { replayMessages, replayDeadLetters } from "../../src/replay";
 
 describe("H-B.6 — replay", () => {
   it("replayMessages reset bpAttempt về 0 (thuần)", () => {
@@ -669,7 +670,7 @@ describe("H-B.6 — replay", () => {
       ] }) }),
       update: (_t: unknown) => ({ set: (v: unknown) => ({ where: async () => { updates.push(v); } }) }),
     };
-    const db = { transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx) } as unknown as import("./types").AnyDb;
+    const db = { transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx) } as unknown as import("../../src/types").AnyDb;
     const queue = { send: async (b: unknown) => { sent.push(b); } } as unknown as Queue;
     const res = await replayDeadLetters(db, queue, { tenantId: "t1" });
     expect(res.daPhatLai).toBe(1);
@@ -681,7 +682,7 @@ describe("H-B.6 — replay", () => {
 
 - [ ] **Step 2: Chạy test — ĐỎ**
 
-Run: `npx vitest run --root apps/sync-worker src/replay.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/replay.test.ts`
 Expected: FAIL (`replay` chưa tồn tại).
 
 - [ ] **Step 3: Tạo `replay.ts`**:
@@ -747,14 +748,14 @@ Thêm `import { replayDeadLetters } from "./replay";`.
 
 - [ ] **Step 5: Chạy test — XANH**
 
-Run: `npx vitest run --root apps/sync-worker src/replay.test.ts`
+Run: `npx vitest run --root apps/sync-worker test/unit/replay.test.ts`
 Expected: PASS.
 
 - [ ] **Step 6: Lint + commit**
 
 Run: `make lint` → sạch.
 ```bash
-git add apps/sync-worker/src/replay.ts apps/sync-worker/src/index.ts apps/sync-worker/src/replay.test.ts
+git add apps/sync-worker/src/replay.ts apps/sync-worker/src/index.ts apps/sync-worker/test/unit/replay.test.ts
 git commit -m "feat(sync): H-B.6 replay thủ công job DLQ (endpoint sau Cloudflare Access)"
 ```
 
