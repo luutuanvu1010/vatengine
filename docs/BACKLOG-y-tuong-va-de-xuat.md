@@ -271,3 +271,39 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 **Nguồn phát hiện:** phiên chẩn đoán 2026-07-18 (bằng chứng `lan_dong_bo` production),
 đối chiếu `docs/plans/U28-plan.md` (phiên song song cùng ngày, nhánh
 `claude/fix-subrequest-breaker`).
+
+## [2026-07-19] Rủi ro quy trình: nhiều agent cùng MỘT thư mục repo + nợ dọn sau U27
+
+**Ngày phát hiện:** 2026-07-18 → 19 (phiên thực thi U27).
+
+**1. Rủi ro quy trình — ĐÃ GÂY THIỆT HẠI THẬT (ưu tiên Cao).**
+Hai phiên Claude chạy song song trong **cùng thư mục repo chính** dùng chung `.git/index`
+và working tree. Hậu quả đo được trong phiên này:
+
+- Một `git commit` (chủ ý chỉ `add` 2 file) đã **nuốt 23 file / +925 dòng** của phiên kia
+  — kể cả `apps/api` — vào commit `e7ad31b`. `git status` ngay trước đó chỉ hiện 2 file.
+- File nguồn bị **đồng-sửa theo thời gian thực**: một dòng `import` biến mất rồi hiện lại
+  giữa hai lệnh bash liên tiếp; Edit tool báo "file modified on disk since last read".
+
+**Đề xuất:** khi chạy nhiều agent trên cùng repo, mỗi agent làm trong **git worktree
+riêng** (`git worktree add -b <nhánh> <dir> <base>` — index/HEAD/working tree riêng).
+Muốn bảo toàn việc chưa-commit của phiên khác mà KHÔNG chạm cây của họ: dựng snapshot
+bằng **index tạm** (`GIT_INDEX_FILE=<tmp> git read-tree HEAD && … add -A && write-tree`
+→ `git commit-tree` → `git branch <backup>`). Cân nhắc ghi thành luật trong
+`.claude/rules/` vì đây là lần **thứ hai** (xem sự cố git-race 2026-07-15).
+
+**2. Nợ dọn cụ thể (ưu tiên Thấp):**
+
+- Nhánh **`feat/u27-web-loc-ketxuat-dongbo`** (commit `ba8c41e`) chỉ tồn tại ở máy local,
+  là bản U27 **trùng lặp** với PR #10 đã merge (`5410337`), và còn chứa `yesterdayVN`
+  (mặc-định-hôm-qua) mà chủ dự án đã quyết **BỎ**. Nên xoá để tránh nhầm lẫn về sau.
+- Worktree `Documents/Projects/vat-u27-clean`, nhánh cứu hộ
+  `wip/line-view-snapshot-20260717`, và stash trên `claude/u22-backfill` — xoá được khi
+  chắc không cần.
+
+**3. Nghiệm thu U27 còn thiếu (ưu tiên Thấp):** hành vi (c) — bấm "Đồng bộ khoảng này" và
+xem báo kết quả — **chưa smoke-test được** trên production vì kỳ quá khứ chiều mua vào còn
+bị 429 chặn (xem mục 2026-07-18 phía trên). Hai hành vi còn lại đã kiểm trên production và
+**ĐẠT**: (a) chọn Mua vào/Bán ra ẩn đúng ô MST; (b) nút Xuất Excel/CSV hiện với vai đủ quyền.
+
+**Nguồn phát hiện:** phiên thực thi U27 (2026-07-18 → 19).
