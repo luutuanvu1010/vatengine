@@ -36,7 +36,10 @@ async function auditLogin(
   db: AnyDb,
   tenantId: string,
   userId: string,
-  ketQua: "thanh_cong" | "that_bai",
+  // U17b: thêm "login_fail_chua_duyet" — tenant tồn tại nhưng chưa active (cho_duyet/
+  // khoa/tu_choi). hanhDong (audit_log.hanh_dong) VẪN LUÔN "dang_nhap_saas"; giá trị này
+  // chỉ nằm trong chi_tiet.ket_qua, không đổi mã lỗi HTTP trả về (vẫn 401 gọn).
+  ketQua: "thanh_cong" | "that_bai" | "login_fail_chua_duyet",
 ): Promise<void> {
   await withTenant(db, tenantId, async (tx) => {
     await tx.insert(auditLog).values({
@@ -53,6 +56,9 @@ interface AuthRow {
   tenant_id: string;
   vai_tro: string;
   password_hash: string | null;
+  // U17b (Task 3, migration 0009) — trạng thái duyệt của tenant sở hữu người dùng này.
+  // Tập hợp lệ: active | cho_duyet | khoa | tu_choi. Chỉ "active" được đăng nhập.
+  tenant_trang_thai: string;
 }
 
 export function authRoutes(deps: AppDeps) {
@@ -112,20 +118,38 @@ export function authRoutes(deps: AppDeps) {
 
     try {
       const res = (await db.execute(
-        sql`select id, tenant_id, vai_tro, password_hash from auth_lookup_user(${email})`,
+        sql`select id, tenant_id, vai_tro, password_hash, tenant_trang_thai from auth_lookup_user(${email})`,
       )) as { rows: AuthRow[] };
       const row = res.rows[0];
       // LUÔN chạy MỘT verify PBKDF2 (hash thật hoặc DUMMY) trước khi rẽ nhánh → chi phí/
       // độ trễ đồng nhất dù email có tồn tại hay không (chống dò tài khoản qua timing).
       const passwordOk = await verifyPassword(password, row?.password_hash ?? DUMMY_HASH);
 
-      // Thành công cần: user thật + có hash + mật khẩu khớp + vai hợp lệ (chặn dữ liệu bẩn).
-      if (!row || !row.password_hash || !passwordOk || !isRole(row.vai_tro)) {
+      // Thành công cần: user thật + có hash + mật khẩu khớp + vai hợp lệ (chặn dữ liệu bẩn)
+      // + tenant đã duyệt (active).
+      if (
+        !row ||
+        !row.password_hash ||
+        !passwordOk ||
+        !isRole(row.vai_tro) ||
+        // U17b — cổng trạng thái. ĐẶT TRONG CÙNG biểu thức 401 có chủ ý: một `if` riêng đặt
+        // trước sẽ trả về SỚM hơn, bỏ qua verify PBKDF2 và recordFailure() ⇒ tenant chưa
+        // duyệt phản hồi nhanh hơn tenant sai mật khẩu, đo được từ ngoài ⇒ rò trạng thái.
+        row.tenant_trang_thai !== "active"
+      ) {
         // Ghi một lần sai vào bộ đếm khóa — UNIFORM cho mọi nhánh sai (email thật lẫn giả)
         // ⇒ không rò tồn tại. Audit THẤT BẠI chỉ khi quy được về tenant (email có thật).
         await limiter.recordFailure();
+        // U17b — phân nhánh audit: tenant có thật nhưng chưa active ghi
+        // login_fail_chua_duyet (để soi được lý do thật khi tra audit), còn lại (sai mật
+        // khẩu / vai không hợp lệ) vẫn that_bai như cũ. KHÔNG đổi mã lỗi HTTP (vẫn 401 gọn,
+        // vẫn qua đúng một settle() off-critical-path).
+        const hanhDong =
+          row?.password_hash && row.tenant_trang_thai !== "active"
+            ? "login_fail_chua_duyet"
+            : "that_bai";
         const audit = row?.password_hash
-          ? auditLogin(db, row.tenant_id, row.id, "that_bai")
+          ? auditLogin(db, row.tenant_id, row.id, hanhDong)
           : undefined;
         await settle(audit);
         return c.json({ error: "unauthorized" }, 401);
