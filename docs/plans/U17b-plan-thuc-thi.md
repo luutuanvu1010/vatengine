@@ -230,6 +230,8 @@ export function validateEmailDangKy(email: string): KetQuaValidate {
 
 > **KHÁC `LoginLimiter` ở điểm cốt lõi:** `LoginLimiter` đếm **lần SAI** rồi khoá, và `recordSuccess()` xoá sạch bộ đếm. `SignupLimiter` đếm **MỌI lượt** kể cả thành công — vì một kẻ lạm dụng đăng ký thành công 1000 tenant rác vẫn là lạm dụng. Đừng tái dùng `LoginLimiter`.
 
+> **ĐÍNH CHÍNH 2026-07-20 (whole-branch review, mục C — task-6-report.md) — API bên dưới ĐÃ BỊ THAY, KHÔNG dùng nữa.** `checkSignup()`/`recordSignup()` tách rời + `SignupLimiterClient { check(); record(); }` mô tả trong "Produces" ở trên và trong test mẫu Step 1 ngay dưới đây là bản kế hoạch BAN ĐẦU — đã bị chứng minh RACE-VULNERABLE (TOCTOU, Finding 1): `dangKy.ts` gọi `check()` rồi làm việc DB thật rồi mới `record()` là HAI round-trip DO tách rời; Durable Object chỉ tuần tự hoá TỪNG `fetch()` riêng lẻ chứ không tuần tự hoá một CẶP `check()`→`record()` cách nhau bởi việc khác, nên nhiều request đồng thời cùng IP đều lọt qua `check()` trước khi request đầu kịp `record()` — ĐO ĐƯỢC 12/12 request lọt ngưỡng 3 (RED-PROOF, `apps/api/test/integration/dangKy.test.ts`). Hiện thực THẬT đã thay bằng một thao tác NGUYÊN TỬ duy nhất: hàm thuần `checkAndRecordSignup(state, nowMs, cfg)` (kiểm+ghi trong một lần gọi) và `SignupLimiterClient { checkAndRecord: () => Promise<SignupCheckAndRecordResult> }` (`apps/api/src/signupLimiter.ts`, `apps/api/src/types.ts`) + `refundSignup` để hoàn lượt khi việc DB sau đó thất bại. Ai theo plan này hôm nay mà hiện thực lại cặp `check()`/`record()` tách rời sẽ TÁI TẠO ĐÚNG lỗ hổng đã vá — đọc mã thật (`signupLimiter.ts`, `signupLimiterDO.ts`, `types.ts`) thay vì chép API bên dưới.
+
 - [ ] **Step 1: Viết test đỏ** — `apps/api/test/unit/signupLimiter.test.ts`
 
 ```ts
@@ -399,7 +401,22 @@ và phân nhánh audit (giữ nguyên `settle()` off-critical-path):
 
 ## Ghi chú deploy (khi tới lượt)
 
-1. `make migrate` (`0009`) **TRƯỚC** khi deploy `apps/api`.
-2. Wrangler migration tag `v5` tạo DO `SignupLimiter` — thuần cộng dồn, an toàn.
-3. Smoke đúng đường `POST /dang-ky`, không chỉ `/health`. Kiểm cả ca 429.
-4. **Kiểm lại local-vs-origin trước deploy** (vết sự cố 2026-07-16).
+> **CẬP NHẬT 2026-07-20 (whole-branch review, mục A — task-6-report.md):** bản trước chỉ nhắc `0009`, bỏ sót `0010` và bỏ sót bước dò tay bắt buộc trước `0010`. Cả `0009` lẫn `0010` đều CHƯA áp production tại thời điểm viết đính chính này — cả hai phải chạy TRƯỚC khi deploy `apps/api` (đường đăng nhập phụ thuộc cả hai: `0009` sửa hàm tra cứu, `0010` đổi chỉ mục UNIQUE mà hàm đó dựa vào để không quét tuần tự toàn bảng).
+
+1. **Trước khi migrate — chạy tay hai câu dò trên production** (không migration nào tự chạy được câu đầu tiên; câu thứ hai `0010` tự dò lại, nhưng chạy tay trước để biết sớm, không đợi migration RAISE EXCEPTION giữa chừng):
+   - **Dò trùng lặp case-insensitive (BẮT BUỘC, chặn `0010`):** `0010` tạo `UNIQUE INDEX` trên `lower(email)` — nếu đã có ≥ 2 hàng `nguoi_dung` mà `lower(email)` trùng nhau, migration **RAISE EXCEPTION** và dừng (chủ ý, xem chú thích trong chính file `0010`). Dò trước để xử lý tay (đổi email hoặc gộp tenant có chủ đích) thay vì để migration fail giữa lượt deploy:
+     ```sql
+     SELECT lower(email) AS email_thuong, array_agg(email) AS bien_the,
+            array_agg(id) AS id_lien_quan, count(*) AS so_luong
+     FROM nguoi_dung GROUP BY lower(email) HAVING count(*) > 1;
+     ```
+     Có hàng trả về → DỪNG, xử lý tay trước khi migrate. Rỗng → an toàn cho `0010`.
+   - **Dò email chưa chuẩn hoá (THÔNG TIN, không chặn gì):** sau bản vá Critical (`0009` so `lower(n.email) = p_email`), những hàng có `email` mang ký tự HOA **KHÔNG còn bị khoá đăng nhập** — chuẩn hoá ở tầng gọi (`auth.ts`) đã khớp đúng hàm tra cứu đã sửa. Câu dưới đây chỉ cho biết **hàng nào đang lưu email chưa ở dạng chuẩn hoá** (vệ sinh dữ liệu / theo dõi, không phải dò khoá):
+     ```sql
+     SELECT id, email FROM nguoi_dung WHERE email <> lower(email);
+     ```
+2. `make migrate` (`0009` rồi `0010`, đúng thứ tự journal) **TRƯỚC** khi deploy `apps/api`.
+3. Wrangler migration tag `v5` tạo DO `SignupLimiter` — thuần cộng dồn, an toàn.
+4. Smoke đúng đường `POST /dang-ky`, không chỉ `/health`. Kiểm cả ca 429.
+5. **Đăng nhập bằng một tài khoản có email lưu sẵn dạng HOA/thường lẫn lộn (nếu câu dò email chưa chuẩn hoá ở Bước 1 trả về hàng)** — xác nhận Critical fix có hiệu lực thật trên production, không chỉ trên PGlite.
+6. **Kiểm lại local-vs-origin trước deploy** (vết sự cố 2026-07-16).

@@ -38,6 +38,34 @@ DROP FUNCTION IF EXISTS auth_lookup_user(text);--> statement-breakpoint
 -- JOIN (không LEFT JOIN) giữ nguyên vì cùng lý do 0001: nguoi_dung.tenant_id NOT NULL +
 -- FK nên không có người dùng mồ côi; nếu có, JOIN làm họ KHÔNG đăng nhập được thay vì trả
 -- trạng thái rác — fail-closed, đúng hướng an toàn cho một hàm xác thực.
+-- ĐÍNH CHÍNH 2026-07-20 (whole-branch review, Critical — task-6-report.md) — HỢP ĐỒNG CHUẨN
+-- HOÁ EMAIL: ba nơi sau đây PHẢI cùng đồng ý một chuẩn (trim + lowercase), nếu không thì
+-- một trong số chúng sẽ tự khoá người dùng có thật ra khỏi tài khoản của họ:
+--   1. TẦNG GỌI (apps/api/src/routes/auth.ts) — chuẩn hoá email GÕ VÀO trước khi truyền cho
+--      hàm này (`emailChuanHoa = email.trim().toLowerCase()`, thêm ở Task 5b/U17b).
+--   2. HÀM NÀY — PHẢI so khớp trên email đã chuẩn hoá tương đương, tức `lower(n.email)`,
+--      KHÔNG PHẢI cột `n.email` trần (byte-exact).
+--   3. CHỈ MỤC UNIQUE (migration 0010) — trên đúng BIỂU THỨC `lower(email)`, để (a) chặn
+--      trùng lặp case-insensitive khi ghi và (b) phục vụ truy vấn của mục 2 bằng index thay
+--      vì sequential scan.
+-- BẢN NHÁP BAN ĐẦU của hàm này (SQL bên dưới, trước đính chính) chỉ làm đúng có MỘT trong
+-- ba: dùng `WHERE n.email = p_email` — byte-exact. Vì Task 5b chuẩn hoá tầng gọi RIÊNG,
+-- không sửa hàm này (chủ ý ghi trong auth.ts: "KHÔNG chạm hàm SQL — chuẩn hoá ở tầng gọi"),
+-- kết quả là tầng gọi luôn gửi chuỗi THƯỜNG trong khi cột `email` vẫn giữ NGUYÊN case người
+-- dùng gõ lúc đăng ký (đây là chủ ý — xem 0010, không ép cột thành thường để giữ hiển thị/
+-- audit đúng nguyên bản). Với người dùng có email lưu sẵn mang ký tự HOA (dữ liệu cũ trước
+-- chuẩn hoá, hoặc bất kỳ đường ghi nào không qua dangKy.ts), so byte-exact giữa "thường" và
+-- "hoa/thường lẫn lộn" KHÔNG BAO GIỜ khớp — dù gõ đúng y hệt lúc đăng ký cũng 401. Vì
+-- /auth/login cố ý trả 401 gọn cho mọi lỗi (chống dò tài khoản), người dùng không có manh
+-- mối gì để biết vì sao. ĐO ĐƯỢC (task-6-report.md, PGlite, không phải giả định): trước bản
+-- vá này, "Boss@Corp.vn" gõ ĐÚNG case → 401; gõ thường → 401 — không còn chuỗi nào đăng
+-- nhập được. SỬA: đổi vế so sánh thành `lower(n.email) = p_email` — khớp đúng những gì tầng
+-- gọi đã chuẩn hoá, và cho phép planner dùng chỉ mục biểu thức của 0010 (xem EXPLAIN trong
+-- task-6-report.md) thay vì quét tuần tự toàn bảng `nguoi_dung` trên MỌI lượt đăng nhập
+-- (kể cả thất bại) — quan trọng ở mục tiêu 100k tenant của dự án.
+--
+-- 0009 CHƯA áp lên production (migration mới trên nhánh này) nên sửa TẠI ĐÂY, không tạo
+-- migration vá riêng — đúng nguyên tắc "chỉ sửa file migration chưa áp" của dự án.
 CREATE FUNCTION auth_lookup_user(p_email text)
 RETURNS TABLE (id uuid, tenant_id uuid, vai_tro text, password_hash text, tenant_trang_thai text)
 LANGUAGE sql
@@ -48,7 +76,7 @@ AS $$
   SELECT n.id, n.tenant_id, n.vai_tro, n.password_hash, t.trang_thai
   FROM nguoi_dung n
   JOIN tenants t ON t.id = n.tenant_id
-  WHERE n.email = p_email
+  WHERE lower(n.email) = p_email
 $$;--> statement-breakpoint
 -- Bước 3: hàm mới vừa tạo hiện thuộc CURRENT_USER (role migrate) — trả chủ về auth_lookup
 -- như 0001. auth_lookup cần CREATE TẠM trên schema public để đủ điều kiện "nhận" quyền sở

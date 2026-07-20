@@ -1,4 +1,11 @@
--- U17b (Task 5b, F4) — nguoi_dung_email_unique (migration 0006) là chỉ mục BYTE-EXACT trên
+-- ĐÍNH CHÍNH 2026-07-20 (whole-branch review, mục B — task-6-report.md): xuất xứ ghi SAI ở
+-- bản trước — nguoi_dung_email_unique KHÔNG do migration 0006 tạo. Nó được tạo ở migration
+-- 0001 (dòng 3, CREATE UNIQUE INDEX "nguoi_dung_email_unique" ... USING btree ("email")).
+-- 0006 chỉ tạo tenants_mst_unique và tai_khoan_thue_tenant_username_unique — không đụng tới
+-- chỉ mục email. Đã KIỂM LẠI TỪ NGUỒN SƠ CẤP (đọc trực tiếp 0001 dòng 3 và 0006 dòng 5-6),
+-- không suy đoán theo dây chuyền — đúng nguyên tắc bằng chứng của dự án.
+--
+-- U17b (Task 5b, F4) — nguoi_dung_email_unique (migration 0001) là chỉ mục BYTE-EXACT trên
 -- cột "email" trần. dangKy.ts (đăng ký công khai) chuẩn hoá (trim+lowercase) email MỚI
 -- trước khi ghi, nhưng chỉ mục byte-exact KHÔNG bắt được trùng lặp với hàng ĐÃ CÓ SẴN mang
 -- case gốc (dữ liệu cũ trước khi có chuẩn hoá, hoặc bất kỳ đường ghi nào trong tương lai
@@ -45,8 +52,8 @@ BEGIN
   END IF;
 END $$;--> statement-breakpoint
 -- IF EXISTS (hardening — cùng idiom 0009 dùng cho DROP FUNCTION): vô hại trong thực tế vì
--- 0006 luôn chạy trước (thứ tự journal) nên chỉ mục chắc chắn tồn tại — thêm để file khớp
--- đúng cái nó tự nhận ("Idempotent" — convention dự án, xem chú thích 0006), không phải vì
--- có đường lỗi thật đang xảy ra.
+-- 0001 (KHÔNG PHẢI 0006 — xem đính chính đầu file) luôn chạy trước (thứ tự journal) nên chỉ
+-- mục chắc chắn tồn tại — thêm để file khớp đúng cái nó tự nhận ("Idempotent" — convention
+-- dự án, xem chú thích 0006), không phải vì có đường lỗi thật đang xảy ra.
 DROP INDEX IF EXISTS "nguoi_dung_email_unique";--> statement-breakpoint
 CREATE UNIQUE INDEX "nguoi_dung_email_unique" ON "nguoi_dung" (lower("email"));
