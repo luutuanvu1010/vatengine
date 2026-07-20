@@ -2,7 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # TRUNK THẬT của dự án là `feat/cloudflare-stack-u0` (HEAD mặc định của repo), KHÔNG
+    # phải `main` — `main` dừng ở 2026-07-15 và chậm 159 commit (đo 2026-07-20).
+    # Trước khi sửa, danh sách này chỉ có `main` ⇒ mọi cú push vào trunk KHÔNG được CI
+    # kiểm, kể cả các lần merge PR trước đó. Chỉ PR mới chạy CI. Đây là lỗ hổng quy trình,
+    # không phải chủ ý: Definition of Done đòi lint+test xanh, mà cổng máy lại không chạy.
+    # Giữ `main` trong danh sách để không phá gì nếu sau này quay về dùng nó.
+    branches: [main, feat/cloudflare-stack-u0]
   pull_request:
   schedule:
     # GIÁM SÁT mục C — Vòng 1: contract test hằng ngày 02:00 UTC (bắt GDT đổi API +

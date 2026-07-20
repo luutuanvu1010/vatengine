@@ -3,7 +3,7 @@
 // (2) parser CSV tối giản; (3) seed PGlite (Postgres WASM, offline) cho test `rows`.
 // KHÔNG mạng, KHÔNG dữ liệu thật (testing.md).
 import { PGlite } from "@electric-sql/pglite";
-import { hoaDon, tenants } from "@vat/db";
+import { dongHangHoa, hoaDon, tenants } from "@vat/db";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { unzipSync } from "fflate";
@@ -183,4 +183,31 @@ export async function seedInvoice(
   const row = rows[0];
   if (!row) throw new Error("insert hoa_don không trả về id");
   return row.id;
+}
+
+type DongHangHoaInsert = typeof dongHangHoa.$inferInsert;
+
+/** Gieo một dòng hàng cho hóa đơn `hoaDonId` (U29 — test tóm tắt dòng hàng).
+ * `tenantId` truyền TƯỜNG MINH để dựng được cả ca dữ liệu lệch tenant. */
+export async function seedLine(
+  db: Db,
+  tenantId: string,
+  hoaDonId: string,
+  over: Partial<DongHangHoaInsert> = {},
+): Promise<void> {
+  const base: DongHangHoaInsert = {
+    tenantId,
+    hoaDonId,
+    stt: 1,
+    ten: "Hàng A",
+    dvtinh: "cái",
+    sluong: "2",
+    dgia: "1000",
+    thtien: "2000",
+    ltsuat: "8%",
+    tsuat: "0.08",
+    tsuatTien: "160",
+    rawJson: {},
+  };
+  await db.insert(dongHangHoa).values({ ...base, ...over });
 }

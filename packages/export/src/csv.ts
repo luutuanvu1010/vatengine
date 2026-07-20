@@ -1,4 +1,3 @@
-import type { HoaDonRow } from "@vat/query";
 // Encoder CSV (U7 + tổng quát hóa U11). RFC-4180: phân cách phẩy, escape nháy kép
 // (double-up), CRLF; BOM UTF-8 để Excel mở đúng tiếng Việt. Tiền giữ CHUỖI numeric nguyên
 // bản (máy đọc được, không tách nghìn). Core `*For(columns)` chạy trên RenderColumn[] để
@@ -12,6 +11,7 @@ import {
   nativeRenderColumns,
 } from "./columns";
 import type { InvoiceLineLike } from "./invoiceDoc";
+import type { ExportRow } from "./rows";
 
 export const CSV_BOM = "﻿";
 
@@ -103,17 +103,17 @@ export function csvHeaderLine(): string {
 }
 
 /** Một dòng dữ liệu CSV cho một hóa đơn (mẫu native). */
-export function csvRowLine(row: HoaDonRow): string {
+export function csvRowLine(row: ExportRow): string {
   return csvRowLineFor(NATIVE, row);
 }
 
 /** Encode CẢ tập thành bytes CSV (mẫu native). Kết xuất lớn nên dùng csvStream. */
-export function toCsv(rows: HoaDonRow[]): Uint8Array {
+export function toCsv(rows: ExportRow[]): Uint8Array {
   return toCsvFor(NATIVE, rows);
 }
 
 /** Stream CSV native từ các LÔ (async) → ReadableStream để ghi thẳng R2. */
-export function csvStream(batches: AsyncIterable<HoaDonRow[]>): ReadableStream<Uint8Array> {
+export function csvStream(batches: AsyncIterable<ExportRow[]>): ReadableStream<Uint8Array> {
   return csvStreamFor(NATIVE, batches);
 }
 
@@ -125,8 +125,8 @@ export function csvStream(batches: AsyncIterable<HoaDonRow[]>): ReadableStream<U
  * KHÔNG gom cả tập vào RAM. Tiền/số lượng giữ CHUỖI nguyên bản (không ép float).
  */
 export function csvStreamWithLines(
-  invoiceBatches: AsyncIterable<HoaDonRow[]>,
-  lineBatches: AsyncIterable<HoaDonRow[]>,
+  invoiceBatches: AsyncIterable<ExportRow[]>,
+  lineBatches: AsyncIterable<ExportRow[]>,
   fetchLines: (ids: string[]) => Promise<Map<string, InvoiceLineLike[]>>,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();

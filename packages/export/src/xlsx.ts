@@ -1,4 +1,3 @@
-import type { HoaDonRow } from "@vat/query";
 import { zipSync } from "fflate";
 // Encoder xlsx (U7 + tổng quát hóa U11) — TỰ DỰNG SpreadsheetML (OOXML) + đóng gói bằng
 // fflate.zipSync. Vì sao không thư viện write/read sẵn: cần kiểm soát numFmt "#,##0" của ô
@@ -13,13 +12,17 @@ import {
   nativeRenderColumns,
 } from "./columns";
 import type { InvoiceLineLike } from "./invoiceDoc";
+import type { ExportRow } from "./rows";
 
 const NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const enc = new TextEncoder();
 
-// Chỉ số style trong cellXfs: 0 mặc định · 1 header đậm · 2 tiền (#,##0).
+// Chỉ số style trong cellXfs: 0 mặc định · 1 header đậm · 2 tiền (#,##0) ·
+// 3 ô NHIỀU DÒNG (wrapText) — ô liệt kê hàng hóa; thiếu style này Excel dồn tất cả
+// mặt hàng thành một dòng dài, người dùng tưởng mất dữ liệu.
 const STYLE_HEADER = "1";
 const STYLE_MONEY = "2";
+const STYLE_WRAP = "3";
 
 function colLetter(n1: number): string {
   let n = n1;
@@ -58,7 +61,9 @@ function dataRowXml<T>(columns: RenderColumn<T>[], row: T, rowIndex: number): st
         const s = col.money ? ` s="${STYLE_MONEY}"` : "";
         return `<c r="${ref}"${s}><v>${cell.v}</v></c>`;
       }
-      return inlineStrCell(ref, cell.v);
+      // Ô chứa xuống dòng (danh sách hàng hóa) phải bật wrapText, nếu không Excel dồn
+      // mọi mặt hàng vào một dòng và người dùng tưởng chỉ có một mặt hàng.
+      return inlineStrCell(ref, cell.v, cell.v.includes("\n") ? STYLE_WRAP : undefined);
     })
     .join("");
   return `<row r="${rowIndex}">${cells}</row>`;
@@ -104,7 +109,7 @@ function workbookRelsXml(sheetCount: number): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`;
 }
 
-const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>`;
+const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs></styleSheet>`;
 
 // Đóng gói N sheet — NGUỒN OOXML DUY NHẤT (zipXlsx 1-sheet chỉ là trường hợp đặc biệt).
 function zipXlsxMulti(sheets: { name: string; body: string }[]): Uint8Array {
@@ -130,7 +135,7 @@ function zipXlsx(sheetBody: string, sheetName: string): Uint8Array {
 /** Encode CẢ tập thành bytes xlsx theo tập cột render + tên sheet. */
 export function toXlsxFor(
   columns: RenderColumn[],
-  rows: HoaDonRow[],
+  rows: ExportRow[],
   sheetName: string,
 ): Uint8Array {
   let body = headerRowXml(columns);
@@ -144,7 +149,7 @@ export function toXlsxFor(
  * KHÔNG gom toàn bộ hàng ORM vào RAM cùng lúc. */
 export async function toXlsxFromBatchesFor(
   columns: RenderColumn[],
-  batches: AsyncIterable<HoaDonRow[]>,
+  batches: AsyncIterable<ExportRow[]>,
   sheetName: string,
 ): Promise<Uint8Array> {
   let body = headerRowXml(columns);
@@ -162,12 +167,12 @@ const NATIVE_SHEET = "HoaDon";
 const LINE_COLS = lineDetailRenderColumns();
 
 /** Encode CẢ tập hóa đơn thành bytes xlsx (mẫu native). */
-export function toXlsx(rows: HoaDonRow[]): Uint8Array {
+export function toXlsx(rows: ExportRow[]): Uint8Array {
   return toXlsxFor(NATIVE, rows, NATIVE_SHEET);
 }
 
 /** Encode native từ các LÔ (async) — route dùng để tiêu thụ generator keyset lô-by-lô. */
-export function toXlsxFromBatches(batches: AsyncIterable<HoaDonRow[]>): Promise<Uint8Array> {
+export function toXlsxFromBatches(batches: AsyncIterable<ExportRow[]>): Promise<Uint8Array> {
   return toXlsxFromBatchesFor(NATIVE, batches, NATIVE_SHEET);
 }
 
@@ -179,7 +184,7 @@ export function toXlsxFromBatches(batches: AsyncIterable<HoaDonRow[]>): Promise<
  * không ép float). Hóa đơn không có dòng hàng → không sinh row (map.get ?? []).
  */
 export async function toXlsxWithLinesFromBatches(
-  invoiceBatches: AsyncIterable<HoaDonRow[]>,
+  invoiceBatches: AsyncIterable<ExportRow[]>,
   fetchLines: (ids: string[]) => Promise<Map<string, InvoiceLineLike[]>>,
 ): Promise<Uint8Array> {
   let invBody = headerRowXml(NATIVE);

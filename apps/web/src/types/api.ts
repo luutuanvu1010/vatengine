@@ -1,5 +1,4 @@
-// Kiểu hợp đồng API — PHẢN CHIẾU JSON trên đường truyền (nguồn: apps/api routes +
-// packages/*). LƯU Ý: qua JSON, cột `numeric` Postgres → CHUỖI; `timestamp` → ISO
+// Kiểu hợp đồng API — PHẢN CHIẾU JSON trên đường truyền (nguồn: apps/api routes +// packages/*). LƯU Ý: qua JSON, cột `numeric` Postgres → CHUỖI; `timestamp` → ISO
 // string. Vì vậy tiền là `string|null` và ngày là `string|null` (KHÁC HoaDonRow phía
 // server dùng Date/number). Đây là NƠI DUY NHẤT cập nhật khi backend đổi shape
 // (U15-plan §rủi ro). KHÔNG bịa trường ngoài hợp đồng.
@@ -41,9 +40,10 @@ export interface InvoiceRow {
 export interface InvoiceListRow extends InvoiceRow {
   /** Tên hàng dòng đầu (stt nhỏ nhất); null khi chưa đồng bộ chi tiết. */
   tenHangDau: string | null;
+  /** Mọi mặt hàng kèm số lượng + đơn vị CỦA CHÍNH NÓ, theo thứ tự stt (nghiệm thu
+   * 2026-07-20). Một cấu trúc chung để tên và số lượng không thể lệch nhau. */
+  hangHoa: { ten: string | null; sluong: string | null; dvtinh: string | null }[];
   soDongHang: number;
-  /** Tổng số lượng (numeric → chuỗi qua JSON); null khi chưa có dòng hàng. */
-  tongSoLuong: string | null;
 }
 
 export interface InvoiceListResult {
@@ -134,6 +134,32 @@ export interface InvoiceFilter {
   tthai?: number;
   nbmst?: string;
   nmmst?: string;
+  // U31 — lọc theo cột (văn bản "chứa", không phân biệt hoa thường).
+  shdon?: string;
+  nbten?: string;
+  nmten?: string;
+  dvtte?: string;
+  ttbsoTu?: string;
+  ttbsoDen?: string;
+}
+
+/** U31 — sắp xếp theo cột. `sortBy` phải khớp ALLOWLIST của server (packages/query). */
+export type SortBy =
+  | "tdlap"
+  | "shdon"
+  | "nbten"
+  | "nmten"
+  | "tgtcthue"
+  | "tgtthue"
+  | "tgtttbso"
+  | "dvtte"
+  | "ttxly"
+  | "tthai"
+  | "chieu"
+  | "nguon";
+export interface InvoiceSort {
+  sortBy?: SortBy;
+  sortDir?: "asc" | "desc";
 }
 export interface Page {
   limit?: number; // ≤200

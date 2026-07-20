@@ -7,7 +7,7 @@ import { api } from "../../lib/apiClient";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
 import { formatMoney } from "../../lib/format";
 import { canManageTaxAccounts } from "../../lib/rbac";
-import type { InvoiceFilter } from "../../types/api";
+import type { InvoiceFilter, InvoiceSort } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
 import { FilterBar } from "./FilterBar";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
@@ -23,10 +23,17 @@ export function InvoicesPage() {
   const canSync = canManageTaxAccounts(me?.role ?? "ke_toan");
   const [filter, setFilter] = useState<InvoiceFilter>(() => loadInvoiceFilter());
   const [offset, setOffset] = useState(0);
+  // U30 — lựa chọn dòng để xuất. CỐ Ý để ở state trang, KHÔNG localStorage: đây là dữ
+  // liệu tenant, để sót lại sau khi đổi phiên là lỗ hổng (multi-tenant.md H-B.3).
+  // Giữ qua phân trang (quyết định chủ dự án 2026-07-20) nên không reset theo `offset`.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+
+  // U31 — sắp xếp theo cột. Rỗng ⇒ không gửi tham số ⇒ server giữ thứ tự mặc định.
+  const [sort, setSort] = useState<InvoiceSort>({});
 
   const list = useQuery({
-    queryKey: ["invoices", filter, offset],
-    queryFn: () => api.getInvoices(filter, { limit: LIMIT, offset }),
+    queryKey: ["invoices", filter, offset, sort],
+    queryFn: () => api.getInvoices(filter, { limit: LIMIT, offset }, sort),
   });
   const summary = useQuery({
     queryKey: ["invoices-summary", filter],
@@ -37,6 +44,51 @@ export function InvoicesPage() {
     setFilter(next);
     setOffset(0);
     saveInvoiceFilter(next);
+    // XÓA lựa chọn khi đổi bộ lọc: giữ lại sẽ khiến người dùng xuất nhầm những hóa đơn
+    // họ KHÔNG còn nhìn thấy trên màn hình. Lật trang thì ngược lại — giữ nguyên.
+    setSelectedIds(new Set());
+  }
+
+  // U31 — lọc theo cột đi CHUNG `InvoiceFilter` với thanh lọc trên: một nguồn sự thật cho
+  // "tập hóa đơn đang xem", nên tổng tiền và nút xuất tự khớp với bảng. Tách hai hệ lọc
+  // sẽ khiến con số dưới bảng nói khác bảng.
+  // Khóa "ttbso" là ảo: menu trả "tu|den", tách ra hai tham số server.
+  const giaTriLoc = (khoa: string): string => {
+    if (khoa === "ttbso") {
+      const tu = filter.ttbsoTu ?? "";
+      const den = filter.ttbsoDen ?? "";
+      return tu || den ? `${tu}|${den}` : "";
+    }
+    return ((filter as Record<string, unknown>)[khoa] as string | undefined) ?? "";
+  };
+
+  const onLoc = (khoa: string, giaTri: string) => {
+    if (khoa === "ttbso") {
+      const [tu = "", den = ""] = giaTri.split("|");
+      applyFilter({ ...filter, ttbsoTu: tu || undefined, ttbsoDen: den || undefined });
+      return;
+    }
+    applyFilter({ ...filter, [khoa]: giaTri || undefined });
+  };
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
+
+  /** Chọn/bỏ chọn toàn bộ dòng của TRANG hiện tại, không đụng lựa chọn ở trang khác. */
+  function togglePage(ids: string[], checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
   }
 
   const rows = list.data?.rows ?? [];
@@ -96,10 +148,50 @@ export function InvoicesPage() {
           <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
             Tổng thanh toán <strong className="tabular">{formatMoney(tongTtbso) || "—"}</strong> đ
           </span>
-          {/* B2 (U27) — kết xuất toàn bộ kết quả theo bộ lọc; tự ẩn với vai không có quyền. */}
-          <InvoiceExportButtons filter={filter} />
+          {/* B2 (U27) — kết xuất theo bộ lọc; U30 — hoặc theo các dòng đã tick. */}
+          <InvoiceExportButtons filter={filter} selectedIds={[...selectedIds]} />
         </div>
       </div>
+
+      {/* U30 — thanh trạng thái lựa chọn, chỉ hiện khi có dòng được chọn. */}
+      {selectedIds.size > 0 && (
+        // <output> mang sẵn role="status" — vùng cập nhật động, trình đọc màn hình
+        // được báo khi số đã chọn đổi (dùng phần tử ngữ nghĩa thay vì gán role).
+        <output
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-3)",
+            flexWrap: "wrap",
+            marginBottom: "var(--sp-2)",
+            padding: "var(--sp-2) var(--sp-3)",
+            background: "var(--info-50)",
+            border: "1px solid var(--info-200)",
+            borderRadius: "var(--radius-md)",
+            fontSize: "var(--fs-sm)",
+            color: "var(--text-secondary)",
+          }}
+        >
+          <span>
+            Đã chọn <strong>{selectedIds.size}</strong> hóa đơn
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: "var(--info-700)",
+              fontSize: "var(--fs-sm)",
+              textDecoration: "underline",
+            }}
+          >
+            Bỏ chọn tất cả
+          </button>
+        </output>
+      )}
 
       <Card style={{ padding: 0 }}>
         {list.isPending ? (
@@ -116,7 +208,19 @@ export function InvoicesPage() {
           />
         ) : (
           <>
-            <InvoiceTable rows={rows} />
+            <InvoiceTable
+              rows={rows}
+              selection={{ selectedIds, onToggle: toggleOne, onTogglePage: togglePage }}
+              ops={{
+                sort,
+                onSort: (sortBy, sortDir) => {
+                  setSort({ sortBy, sortDir });
+                  setOffset(0);
+                },
+                giaTriLoc,
+                onLoc,
+              }}
+            />
             <div style={{ padding: "0 var(--sp-4)" }}>
               <Pagination total={total} limit={LIMIT} offset={offset} onOffset={setOffset} />
             </div>

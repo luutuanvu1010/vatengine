@@ -13,6 +13,7 @@ import type {
   InvoiceDetailResponse,
   InvoiceFilter,
   InvoiceListResult,
+  InvoiceSort,
   InvoiceSummary,
   MeResponse,
   Page,
@@ -119,6 +120,14 @@ function filterQuery(f: InvoiceFilter, p?: Page): Record<string, string | number
     tthai: f.tthai,
     nbmst: f.nbmst,
     nmmst: f.nmmst,
+    // U31 — lọc theo cột. Chuỗi rỗng → undefined để không gửi tham số vô nghĩa lên server
+    // (server cũng bỏ qua, nhưng URL sạch hơn và cache key ổn định hơn).
+    shdon: f.shdon || undefined,
+    nbten: f.nbten || undefined,
+    nmten: f.nmten || undefined,
+    dvtte: f.dvtte || undefined,
+    ttbsoTu: f.ttbsoTu || undefined,
+    ttbsoDen: f.ttbsoDen || undefined,
     limit: p?.limit,
     offset: p?.offset,
   };
@@ -137,8 +146,11 @@ export const api = {
   },
 
   // Tra cứu (3 vai).
-  getInvoices(filter: InvoiceFilter, page: Page): Promise<InvoiceListResult> {
-    return request("GET", "/invoices", { query: filterQuery(filter, page) });
+  // U31 — `sort` tùy chọn; không truyền ⇒ server giữ thứ tự mặc định (tdlap desc).
+  getInvoices(filter: InvoiceFilter, page: Page, sort?: InvoiceSort): Promise<InvoiceListResult> {
+    return request("GET", "/invoices", {
+      query: { ...filterQuery(filter, page), sortBy: sort?.sortBy, sortDir: sort?.sortDir },
+    });
   },
   getSummary(filter: InvoiceFilter): Promise<InvoiceSummary> {
     return request("GET", "/invoices/summary", { query: filterQuery(filter) });
@@ -151,16 +163,25 @@ export const api = {
   },
 
   // Kết xuất (ke_toan_truong + quan_tri).
-  createExport(format: ExportFormat, filter: InvoiceFilter): Promise<ExportResult> {
-    return request("POST", "/exports", { query: { format, ...filterQuery(filter) } });
+  // U30 — `ids` (tùy chọn) = các dòng người dùng đã tick. Gửi qua BODY vì hàng nghìn
+  // uuid không nhét được vào query string. Không có ids ⇒ body vắng ⇒ server giữ hành vi
+  // cũ (xuất theo bộ lọc). Server bỏ qua bộ lọc khi có ids (M2).
+  createExport(format: ExportFormat, filter: InvoiceFilter, ids?: string[]): Promise<ExportResult> {
+    return request("POST", "/exports", {
+      query: { format, ...filterQuery(filter) },
+      body: ids?.length ? { ids } : undefined,
+    });
   },
+  // `ids` cùng hợp đồng với createExport (U30b) — /convert tôn trọng dòng đã chọn y hệt.
   convertExport(
     profile: string,
     format: ExportFormat,
     filter: InvoiceFilter,
+    ids?: string[],
   ): Promise<ConvertResult> {
     return request("POST", "/exports/convert", {
       query: { profile, format, ...filterQuery(filter) },
+      body: ids?.length ? { ids } : undefined,
     });
   },
   downloadExport(id: string): Promise<Blob> {

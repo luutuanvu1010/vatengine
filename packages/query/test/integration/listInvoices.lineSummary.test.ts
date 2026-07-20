@@ -63,12 +63,10 @@ describe("listInvoices — tóm tắt dòng hàng cho danh sách (integration, P
     const co = byShdon.get("1");
     expect(co?.tenHangDau).toBe("VW tiêu chuẩn NL");
     expect(co?.soDongHang).toBe(2);
-    expect(Number(co?.tongSoLuong)).toBe(15);
 
     const trong = byShdon.get("2");
     expect(trong?.tenHangDau).toBeNull();
     expect(trong?.soDongHang).toBe(0);
-    expect(trong?.tongSoLuong).toBeNull();
   });
 
   it("cách ly tenant: dòng hàng của B không lẫn vào tóm tắt của A (dù trùng shdon)", async () => {

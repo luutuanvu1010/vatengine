@@ -307,3 +307,54 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 - **Đề xuất hướng xử lý:** khi có cơ hội (không chặn deploy U17b) — thêm một phép kiểm chứng chạy trên `workerd` thật (`wrangler dev --remote` hoặc `vitest-pool-workers` nếu đủ độ trung thực DO) bắn N request đồng thời vào một `SignupLimiter` DO thật, đo lại đúng kịch bản RED-PROOF (N request, ngưỡng thấp, đếm số lượt lọt) để xác nhận input-gating thật khớp mô hình. Tới khi có bằng chứng đó, tiếp tục dán nhãn CHƯA KIỂM CHỨNG mọi nơi tiền đề này được viện dẫn.
 - **Mức ưu tiên đề xuất:** Thấp–Trung bình (tiền đề input-gating nằm trong tài liệu chính thức Cloudflare, khả năng sai thấp — nhưng theo Hiến pháp, "đã có trong tài liệu" không tự động là "đã kiểm chứng" khi áp cho một cơ chế bảo mật cụ thể).
 - **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
+
+---
+
+## `dvtte` trống ở 100% hóa đơn `sco` — nghi lỗ hổng ánh xạ tầng adapter
+
+**Phát hiện:** 2026-07-20, khi khảo sát production để lập `docs/plans/U29-plan.md` (§8b-E1).
+
+**Bằng chứng (Neon production, 1 tenant, 22.350 hóa đơn, truy vấn chỉ-đọc):**
+
+| `nguon` | số HĐ | có `dvtte` | có khóa `tgia` trong `raw_json` |
+|---|---|---|---|
+| `sco` (purchase + sold) | 22.229 | **0** | **0** |
+| `normal` (purchase) | 121 | **121 = 100%** | **121 = 100%** |
+
+Hai trường `dvtte`/`tgia` hiện diện ở **100%** hóa đơn `normal` và **0%** hóa đơn `sco`.
+Trùng khít con số 121 ở cả hai cột ⇒ không phải ngẫu nhiên: **họ endpoint `/sco-query/`
+không trả hai trường này**, không phải "hóa đơn máy tính tiền không có đơn vị tiền tệ".
+
+**Vì sao đáng lưu:** cột "Tiền tệ" đã có trong `EXPORT_COLUMNS` từ U7 nên file kết xuất
+hiện **trống 99,5%** ở cột đó. Đây là lỗi **có sẵn từ trước**, không do U29 gây ra, nhưng
+U29 là lúc phát hiện ra nó.
+
+**Câu hỏi cần quyết ở tầng adapter (KHÔNG tự quyết ở tầng export):** adapter có nên mặc
+định `sco → dvtte = 'VND'` không? Hóa đơn máy tính tiền gần như chắc chắn là nội địa —
+nhưng **"gần như chắc chắn" không phải bằng chứng** (Hiến pháp §"Nguyên tắc bằng chứng").
+Cần kiểm chứng từ nguồn sơ cấp (tài liệu GDT hoặc phản hồi thật của `/sco-query/`) trước
+khi điền giá trị mặc định vào dữ liệu người dùng.
+
+## `tgia` (tỷ giá) — đã LOẠI khỏi U29, kèm điều kiện mở lại
+
+**Quyết định chủ dự án 2026-07-20:** không thêm cột tỷ giá vào file kết xuất
+("không cần thiết"). Là lựa chọn YAGNI hợp lệ — production **0 hóa đơn `dvtte≠'VND'`**,
+79 giá trị `tgia` khác null thì **toàn bộ = 1**, phương sai bằng 0 ⇒ cột sẽ không mang
+thông tin nào, và không có mẫu nào để kiểm chứng ngữ nghĩa tỷ giá-ngoại tệ.
+
+**Điều kiện mở lại (đừng để mất dấu):** sự *hiện diện* của `tgia` do `nguon='normal'`
+quyết định 100%, không do nghiệp vụ — tenant này là cây xăng, 99,5% `sco`, nên hồ sơ
+**bất thường**. Một tenant B2B/xuất nhập khẩu dùng chủ yếu hóa đơn `normal` sẽ có trường
+này đầy đủ. ⇒ Khi xuất hiện tenant đầu tiên có `dvtte≠'VND'`: kiểm chứng
+`raw_json->>'tgia'` bằng dữ liệu thật, rồi mới thêm cột.
+
+## Nợ tên: `ColumnKind` có cả `int` lẫn `num`
+
+U29 thêm `num` ("số có thể thập phân, không numFmt") cạnh `int` ("số nguyên thô") trong
+`packages/export/src/columns.ts`. Hai kind này hiện **cùng hành vi** (`{t:"num"}`, không
+áp `#,##0`) — tách ra chỉ để `int` không nói dối trên cột thập phân. Đáng gộp thành một
+kind duy nhất khi có dịp chạm vào file đó; không đáng một commit riêng.
+
+**Ưu tiên đề xuất:** Thấp (nợ tên, không ảnh hưởng hành vi).
+
+**Nguồn phát hiện:** `docs/plans/U29-plan.md` §8b + §9 (M1/M3).
