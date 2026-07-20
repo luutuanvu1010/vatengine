@@ -2,7 +2,7 @@
 // `buildWhere` LUÔN kèm ràng buộc `tenant_id` tường minh (lớp 1 — multi-tenant.md);
 // RLS `withTenant` là lớp 2. Khoảng `tdlap` fail-loud khi ngày phi thực tế (không đoán).
 import { hoaDon } from "@vat/db";
-import { type SQL, and, eq, gte, lte } from "drizzle-orm";
+import { type SQL, and, eq, gte, inArray, lte } from "drizzle-orm";
 import { z } from "zod";
 
 export const INVOICE_DIRECTIONS = ["purchase", "sold"] as const;
@@ -23,6 +23,25 @@ export const invoiceFilterSchema = z.object({
   nmmst: z.string().min(1).optional(),
 });
 export type InvoiceFilter = z.infer<typeof invoiceFilterSchema>;
+
+// ------------------------- Chọn dòng để xuất (U30) ------------------------- //
+
+/** Trần số hóa đơn chọn tay trong một lần xuất.
+ * ⚠️ Đây là trần SẢN PHẨM (chặn hành vi phi thực tế: chọn tay >1000 dòng thì nên dùng
+ * bộ lọc), KHÔNG phải trần KỸ THUẬT đã đo. Giới hạn thật của Workers/Hyperdrive với câu
+ * `IN (...)` dài CHƯA KIỂM CHỨNG — nếu sau này chạm trần thấp hơn thì hạ số này xuống,
+ * đừng coi 1000 là con số đã kiểm chứng. (Quyết định chủ dự án 2026-07-20, U30 §7-M1.) */
+export const MAX_EXPORT_IDS = 1000;
+
+// Body của POST /exports. `ids` là input KHÔNG TIN CẬY → ép đúng dạng uuid để không nhét
+// được chuỗi tùy ý vào mệnh đề IN. Mảng RỖNG bị từ chối: client muốn "xuất theo bộ lọc"
+// thì bỏ hẳn `ids`, không gửi [] mơ hồ.
+export const exportSelectionSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(MAX_EXPORT_IDS).optional(),
+});
+
+/** Bộ lọc U6 + danh sách ID chọn tay (U30). `ids` chỉ THU HẸP tập — xem buildWhere. */
+export type InvoiceSelection = InvoiceFilter & { ids?: string[] };
 
 // Phân trang: chặn `limit` ở trần 200 để không kéo tập lớn (giới hạn Workers).
 export const pageSchema = z.object({
@@ -57,9 +76,14 @@ export function dayBoundaryVn(isoYmd: string, end: boolean): Date {
   return new Date(`${isoYmd}${end ? "T23:59:59.999" : "T00:00:00.000"}${VN_TZ_OFFSET}`);
 }
 
-/** Dựng điều kiện WHERE Drizzle từ bộ lọc, LUÔN gắn `tenant_id` tường minh. */
-export function buildWhere(tenantId: string, filter: InvoiceFilter): SQL {
+/** Dựng điều kiện WHERE Drizzle từ bộ lọc, LUÔN gắn `tenant_id` tường minh.
+ *
+ * U30 — `filter.ids` (chọn tay từ client) là điều kiện GIAO thêm, đứng sau `tenant_id`.
+ * Bất biến an toàn: ids chỉ THU HẸP tập, KHÔNG BAO GIỜ mở rộng. Tenant A gửi id của
+ * tenant B ⇒ giao với `tenant_id` của chính A ⇒ tập rỗng, không phải rò dữ liệu. */
+export function buildWhere(tenantId: string, filter: InvoiceSelection): SQL {
   const conds: SQL[] = [eq(hoaDon.tenantId, tenantId)];
+  if (filter.ids?.length) conds.push(inArray(hoaDon.id, filter.ids));
   if (filter.chieu) conds.push(eq(hoaDon.chieu, filter.chieu));
   if (filter.nguon) conds.push(eq(hoaDon.nguon, filter.nguon));
   if (filter.nbmst) conds.push(eq(hoaDon.nbmst, filter.nbmst));

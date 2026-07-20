@@ -1,6 +1,14 @@
 // U6 unit — validate bộ lọc/phân trang (Zod, thuần, offline) + fail-loud ngày sai.
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
-import { buildWhere, dayBoundaryVn, invoiceFilterSchema, pageSchema } from "../../src/filters";
+import {
+  MAX_EXPORT_IDS,
+  buildWhere,
+  dayBoundaryVn,
+  exportSelectionSchema,
+  invoiceFilterSchema,
+  pageSchema,
+} from "../../src/filters";
 
 describe("invoiceFilterSchema", () => {
   it("chấp nhận bộ lọc hợp lệ + ép kiểu số từ query string", () => {
@@ -105,5 +113,72 @@ describe("dayBoundaryVn — biên ngày theo giờ VN (UTC+7)", () => {
   });
   it("vẫn fail-loud ngày phi thực tế (2026-02-30)", () => {
     expect(() => dayBoundaryVn("2026-02-30", false)).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// U30 — chọn dòng để xuất. `ids` do CLIENT gửi lên ⇒ input không tin cậy.
+// Bất biến an toàn: ids chỉ THU HẸP tập, không bao giờ MỞ RỘNG — `tenant_id` luôn là
+// điều kiện đầu tiên trong buildWhere và không thể bị ids ghi đè.
+// ---------------------------------------------------------------------------
+
+describe("U30 — exportSelectionSchema (danh sách ID chọn tay)", () => {
+  const ID_A = "11111111-1111-4111-8111-111111111111";
+  const ID_B = "22222222-2222-4222-8222-222222222222";
+
+  it("chấp nhận mảng uuid hợp lệ", () => {
+    expect(exportSelectionSchema.parse({ ids: [ID_A, ID_B] }).ids).toEqual([ID_A, ID_B]);
+  });
+
+  it("thiếu ids / body rỗng → hợp lệ, ids undefined (giữ hành vi xuất theo bộ lọc)", () => {
+    expect(exportSelectionSchema.parse({}).ids).toBeUndefined();
+  });
+
+  it("từ chối phần tử không phải uuid (chống nhét chuỗi tùy ý vào IN)", () => {
+    expect(() => exportSelectionSchema.parse({ ids: ["không-phải-uuid"] })).toThrow();
+    expect(() => exportSelectionSchema.parse({ ids: [ID_A, "1 OR 1=1"] })).toThrow();
+  });
+
+  it("từ chối mảng rỗng (client phải bỏ hẳn ids, không gửi mảng rỗng mơ hồ)", () => {
+    expect(() => exportSelectionSchema.parse({ ids: [] })).toThrow();
+  });
+
+  it(`từ chối quá MAX_EXPORT_IDS (${MAX_EXPORT_IDS})`, () => {
+    const vua = Array.from({ length: MAX_EXPORT_IDS }, () => ID_A);
+    const qua = Array.from({ length: MAX_EXPORT_IDS + 1 }, () => ID_A);
+    expect(() => exportSelectionSchema.parse({ ids: vua })).not.toThrow();
+    expect(() => exportSelectionSchema.parse({ ids: qua })).toThrow();
+  });
+});
+
+describe("U30 — buildWhere với ids", () => {
+  const TENANT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const ID_A = "11111111-1111-4111-8111-111111111111";
+
+  // Dựng SQL THẬT (sql + params) thay vì soi object — chỉ cách này mới chứng minh được
+  // tenant_id nằm trong câu lệnh và ids đi qua tham số bind chứ không nối chuỗi.
+  const render = (sel: Parameters<typeof buildWhere>[1]) =>
+    new PgDialect().sqlToQuery(buildWhere(TENANT, sel));
+
+  it("có ids → GIAO thêm điều kiện id, KHÔNG thay thế điều kiện tenant_id", () => {
+    const q = render({ ids: [ID_A] });
+    expect(q.sql).toContain("tenant_id");
+    expect(q.sql).toContain(" in ");
+    // Bất biến an toàn: tenant vẫn là tham số của câu lệnh, ids chỉ thu hẹp thêm.
+    expect(q.params).toContain(TENANT);
+    expect(q.params).toContain(ID_A);
+  });
+
+  it("ids đi qua tham số BIND, không nối chuỗi vào câu lệnh", () => {
+    const q = render({ ids: [ID_A] });
+    expect(q.sql).not.toContain(ID_A);
+  });
+
+  it("không có ids → câu lệnh y hệt bộ lọc thường (không hồi quy U6)", () => {
+    expect(render({ chieu: "sold" }).sql).toBe(render({ chieu: "sold", ids: undefined }).sql);
+  });
+
+  it("ids rỗng → KHÔNG sinh mệnh đề IN (tránh 'IN ()' luôn sai)", () => {
+    expect(render({ ids: [] }).sql).not.toContain(" in ");
   });
 });

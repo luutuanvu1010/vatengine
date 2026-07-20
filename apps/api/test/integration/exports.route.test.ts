@@ -258,3 +258,191 @@ describe("REST /exports (integration, PGlite + R2 giả)", () => {
     expect(gone.status).toBe(404);
   });
 });
+
+// ---------------------------------------------------------------------------
+// U30 — chọn dòng để xuất. `ids` đến từ BODY JSON (query string không chứa nổi hàng
+// nghìn uuid). Mở rộng CỘNG THÊM: không body ⇒ hành vi cũ nguyên vẹn.
+// ---------------------------------------------------------------------------
+
+describe("REST /exports — chọn dòng bằng ids (U30)", () => {
+  let db: Db;
+  let storage: FakeStorage;
+  let app: ReturnType<typeof createApp>;
+  let tenantA: string;
+  let tenantB: string;
+  let idA1: string;
+  let idA2: string;
+  let idB1: string;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    storage = makeStorage();
+    app = createApp(injectDb(db, storage));
+    tenantA = await makeTenant(db, "Cty A", "0100000001");
+    tenantB = await makeTenant(db, "Cty B", "0100000009");
+    idA1 = await seedInvoice(db, tenantA, { shdon: "1", chieu: "purchase" });
+    idA2 = await seedInvoice(db, tenantA, {
+      shdon: "2",
+      chieu: "sold",
+      tdlap: new Date("2026-04-15T10:00:00Z"),
+    });
+    idB1 = await seedInvoice(db, tenantB, { shdon: "1", nbmst: "9999999999" });
+  });
+
+  /** POST /exports kèm body JSON tùy chọn. */
+  async function createExport(token: string, query: string, body?: unknown) {
+    return app.request(
+      `/exports?${query}`,
+      {
+        method: "POST",
+        headers: body ? { ...bearer(token), "content-type": "application/json" } : bearer(token),
+        body: body ? JSON.stringify(body) : undefined,
+      },
+      makeEnv(),
+    );
+  }
+
+  async function csvOf(token: string, res: Response): Promise<string[]> {
+    const { url } = (await res.json()) as { url: string };
+    const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
+    return csvLines(new Uint8Array(await dl.arrayBuffer()));
+  }
+
+  it("T1 — KHÔNG có body → xuất theo bộ lọc như cũ (tương thích ngược)", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await createExport(token, "format=csv");
+    expect(res.status).toBe(201);
+    expect(invoiceSection(await csvOf(token, res)).length).toBe(3); // header + 2 HĐ
+  });
+
+  it("T2 — ids 1 phần tử → file chỉ chứa đúng hóa đơn đó", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await createExport(token, "format=csv", { ids: [idA2] });
+    expect(res.status).toBe(201);
+    const lines = invoiceSection(await csvOf(token, res));
+    expect(lines.length).toBe(2); // header + 1
+    expect(lines[1]).toContain(",2,"); // shdon = 2
+  });
+
+  it("T3 — có ids thì BỎ QUA bộ lọc trong query string (M2)", async () => {
+    const token = await tokenFor(tenantA);
+    // Bộ lọc chieu=purchase sẽ loại idA2 (sold) NẾU còn được áp. Kỳ vọng: vẫn ra idA2.
+    const res = await createExport(token, "format=csv&chieu=purchase", { ids: [idA2] });
+    expect(res.status).toBe(201);
+    const lines = invoiceSection(await csvOf(token, res));
+    expect(lines.length).toBe(2);
+    expect(lines[1]).toContain(",2,");
+  });
+
+  it("T4 — id không tồn tại bị bỏ qua lặng lẽ, phần còn lại vẫn xuất", async () => {
+    const token = await tokenFor(tenantA);
+    const ma = "00000000-0000-4000-8000-000000000000";
+    const res = await createExport(token, "format=csv", { ids: [idA1, ma] });
+    expect(res.status).toBe(201);
+    expect(invoiceSection(await csvOf(token, res)).length).toBe(2); // header + 1
+  });
+
+  it("T5 — vượt trần 1000 id → 400, KHÔNG ghi R2", async () => {
+    const token = await tokenFor(tenantA);
+    const truoc = storage.map.size;
+    const qua = Array.from({ length: 1001 }, () => idA1);
+    const res = await createExport(token, "format=csv", { ids: qua });
+    expect(res.status).toBe(400);
+    expect(storage.map.size).toBe(truoc); // không tạo file rác
+  });
+
+  // CRITICAL (multi-tenant.md): id của tenant khác KHÔNG được kéo dữ liệu về.
+  it("T6 — tenant A gửi id hóa đơn của tenant B → file RỖNG, không rò dữ liệu B", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await createExport(token, "format=csv", { ids: [idB1] });
+    expect(res.status).toBe(201);
+    const lines = await csvOf(token, res);
+    expect(invoiceSection(lines).length).toBe(1); // chỉ header
+    expect(lines.join("\n")).not.toContain("9999999999");
+  });
+
+  it("T7 — ids không phải uuid → 400", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await createExport(token, "format=csv", { ids: ["1 OR 1=1"] });
+    expect(res.status).toBe(400);
+  });
+
+  it("T8 — audit 'export' vẫn ghi, kèm số lượng id đã chọn", async () => {
+    const token = await tokenFor(tenantA);
+    await createExport(token, "format=csv", { ids: [idA1, idA2] });
+    const rows = await withTenant(db, tenantA, (tx) => tx.select().from(auditLog));
+    const ex = rows.filter((r) => r.hanhDong === "export");
+    expect(ex.length).toBe(1);
+    // Khẳng định ĐÚNG TRƯỜNG, không phải "chuỗi có chứa số 2" (uuid nào cũng chứa '2').
+    expect(ex[0]?.chiTiet).toMatchObject({ soIdDaChon: 2 });
+  });
+
+  it("T8b — không chọn dòng nào → audit KHÔNG có soIdDaChon (phân biệt hai chế độ)", async () => {
+    const token = await tokenFor(tenantA);
+    await createExport(token, "format=csv");
+    const rows = await withTenant(db, tenantA, (tx) => tx.select().from(auditLog));
+    const ex = rows.filter((r) => r.hanhDong === "export");
+    expect(ex[0]?.chiTiet).not.toHaveProperty("soIdDaChon");
+  });
+
+  it("xlsx cũng tôn trọng ids", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await createExport(token, "format=xlsx", { ids: [idA1] });
+    const { url } = (await res.json()) as { url: string };
+    const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
+    expect(xlsxDataRowCount(new Uint8Array(await dl.arrayBuffer()))).toBe(1);
+  });
+});
+
+// U30 — phòng thủ tường minh cho bề mặt MỚI: route nay đọc body JSON. Trần MAX_EXPORT_IDS
+// chỉ chặn SAU khi đã parse xong; body khổng lồ vẫn tốn CPU/RAM của Worker trước đó.
+// Không dựa ngầm vào giới hạn mặc định của nền tảng (phát hiện review bảo mật 2026-07-20).
+describe("REST /exports — trần kích thước body (U30)", () => {
+  let db: Db;
+  let storage: FakeStorage;
+  let app: ReturnType<typeof createApp>;
+  let tenantA: string;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    storage = makeStorage();
+    app = createApp(injectDb(db, storage));
+    tenantA = await makeTenant(db, "Cty A", "0100000001");
+    await seedInvoice(db, tenantA, { shdon: "1" });
+  });
+
+  it("body vượt trần → 413, KHÔNG chạm DB/R2", async () => {
+    const token = await tokenFor(tenantA);
+    const truoc = storage.map.size;
+    // ~2MB chuỗi rác: vượt xa 1000 uuid (~40KB) nhưng vẫn dưới giới hạn nền tảng.
+    const res = await app.request(
+      "/exports?format=csv",
+      {
+        method: "POST",
+        headers: { ...bearer(token), "content-type": "application/json" },
+        body: JSON.stringify({ ids: ["x".repeat(2_000_000)] }),
+      },
+      makeEnv(),
+    );
+    expect(res.status).toBe(413);
+    expect(storage.map.size).toBe(truoc);
+  });
+
+  it("body kích thước bình thường (1000 uuid) vẫn qua được trần", async () => {
+    const token = await tokenFor(tenantA);
+    const ids = Array.from(
+      { length: 1000 },
+      (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+    );
+    const res = await app.request(
+      "/exports?format=csv",
+      {
+        method: "POST",
+        headers: { ...bearer(token), "content-type": "application/json" },
+        body: JSON.stringify({ ids }),
+      },
+      makeEnv(),
+    );
+    expect(res.status).toBe(201); // trần phải đủ rộng cho ca dùng hợp lệ tối đa
+  });
+});

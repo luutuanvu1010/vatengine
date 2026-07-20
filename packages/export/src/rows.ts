@@ -4,7 +4,7 @@
 // lúc (mục 11 + tiêu chí "file lớn"). Generic trên PgDatabase (PGlite test / pg khi chạy);
 // PgTransaction (từ withTenant) cũng thỏa vì kế thừa PgDatabase. Chỉ ĐỌC — không gọi GDT.
 import { hoaDon } from "@vat/db";
-import { type InvoiceFilter, type LineSummary, buildWhere, lineSummarySelect } from "@vat/query";
+import { type InvoiceSelection, type LineSummary, buildWhere, lineSummarySelect } from "@vat/query";
 import { type SQL, and, desc, eq, getTableColumns, lt, or } from "drizzle-orm";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
@@ -22,7 +22,7 @@ export async function* iterateInvoices<
 >(
   db: PgDatabase<TQuery, TFull, TSchema>,
   tenantId: string,
-  filter: InvoiceFilter,
+  filter: InvoiceSelection,
   pageSize: number = DEFAULT_PAGE_SIZE,
 ): AsyncGenerator<ExportRow[]> {
   const base: SQL = buildWhere(tenantId, filter);

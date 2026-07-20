@@ -151,8 +151,14 @@ export const api = {
   },
 
   // Kết xuất (ke_toan_truong + quan_tri).
-  createExport(format: ExportFormat, filter: InvoiceFilter): Promise<ExportResult> {
-    return request("POST", "/exports", { query: { format, ...filterQuery(filter) } });
+  // U30 — `ids` (tùy chọn) = các dòng người dùng đã tick. Gửi qua BODY vì hàng nghìn
+  // uuid không nhét được vào query string. Không có ids ⇒ body vắng ⇒ server giữ hành vi
+  // cũ (xuất theo bộ lọc). Server bỏ qua bộ lọc khi có ids (M2).
+  createExport(format: ExportFormat, filter: InvoiceFilter, ids?: string[]): Promise<ExportResult> {
+    return request("POST", "/exports", {
+      query: { format, ...filterQuery(filter) },
+      body: ids?.length ? { ids } : undefined,
+    });
   },
   convertExport(
     profile: string,
