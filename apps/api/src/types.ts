@@ -83,13 +83,34 @@ export interface BackfillTrackerClient {
   get: (tenantId: string) => Promise<BackfillDef | null>;
 }
 
+// U17b (QĐ-2, Finding 1 — TOCTOU) — kết quả một lượt kiểm+ghi NGUYÊN TỬ (checkAndRecord()).
+// `token` (= nowMs DO dùng để ghi) CHỈ có khi `gate.chan === false` (có ghi thật) — dùng để
+// refund() ĐÚNG một lượt cụ thể nếu request sau đó lộ ra là lỗi HẠ TẦNG của hệ thống (không
+// phải hành vi của người gọi — xem dangKy.ts).
+export interface SignupCheckAndRecordResult {
+  gate: SignupGate;
+  token?: number;
+}
+
 // U17b (QĐ-2) — client gọi Durable Object đếm lượt đăng ký công khai theo IP. Production
-// gọi DO thật; test tiêm giả (in-memory dùng logic thuần). check() TRƯỚC khi tạo
-// tenant/user; record() SAU MỌI lượt (kể cả thành công) — khác LoginLimiterClient
-// (record() đơn nhất, không tách failure/success vì SignupLimiter đếm mọi kết quả).
+// gọi DO thật; test tiêm giả (in-memory dùng logic thuần).
+//
+// F1 (2026-07-20, TOCTOU) — TRƯỚC bản vá: check() + record() là HAI round-trip DO RIÊNG,
+// với việc DB thật xen giữa ⇒ N request đồng thời cùng IP đều lọt qua check() trước khi
+// request đầu kịp record() (đo được 12/12 lọt ngưỡng 3, xem RED-PROOF trong dangKy.test.ts).
+// checkAndRecord() gộp kiểm+ghi vào MỘT round-trip DO nguyên tử — DO chỉ tuần tự hoá TỪNG
+// fetch() riêng lẻ nên gộp làm một fetch() duy nhất khép được lỗ hổng. Một request đã biết
+// bị chặn KHÔNG ghi thêm (không thổi phồng cửa sổ — xử lý bên trong checkAndRecordSignup).
+//
+// refund() hoàn lại lượt vừa ghi CHỈ khi request thất bại vì lỗi HẠ TẦNG của hệ thống (vd DB
+// mất kết nối giữa chừng) — KHÔNG dùng cho 4xx nghiệp vụ hay 409 trùng lặp (những ca đó VẪN
+// phải tính vào quota, đúng thiết kế "đếm mọi lượt kể cả sẽ thất bại sau ở tầng validate" đã
+// chốt — validate rẻ không được là đường né limiter). KHÔNG tái dùng LoginLimiterClient
+// (record() đơn nhất, không tách failure/success vì SignupLimiter đếm mọi kết quả, kể cả
+// thành công — 1000 tenant rác thành công vẫn là lạm dụng, KHÔNG có success-reset).
 export interface SignupLimiterClient {
-  check: () => Promise<SignupGate>;
-  record: () => Promise<void>;
+  checkAndRecord: () => Promise<SignupCheckAndRecordResult>;
+  refund: (token: number) => Promise<void>;
 }
 
 // Tiêm phụ thuộc để test đi qua route thật với PGlite + R2 giả (không cần binding thật).

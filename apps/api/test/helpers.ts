@@ -21,9 +21,9 @@ import { hashPassword } from "../src/password";
 import {
   type SignupLimitConfig,
   type SignupState,
-  checkSignup,
+  checkAndRecordSignup,
   initialSignupState,
-  recordSignup,
+  refundSignup,
   resolveSignupLimitConfig,
 } from "../src/signupLimiter";
 import type {
@@ -127,17 +127,66 @@ export function makeLoginLimiterFactory(cfg: LoginLockConfig = resolveLoginLockC
   });
 }
 
-/** U17b (QĐ-2) — factory limiter đăng ký GIẢ in-memory (dùng logic thuần signupLimiter +
- * Date.now()) để test route /dang-ky (Task 5) sau này. Trạng thái giữ theo key (IP)
- * trong Map. Không truyền cfg → mặc định (never-chặn trong các test không liên quan). */
+/** U17b (QĐ-2, Finding 1) — factory limiter đăng ký GIẢ in-memory (dùng logic thuần
+ * checkAndRecordSignup NGUYÊN TỬ + Date.now()) để test route /dang-ky. Trạng thái giữ theo
+ * key (IP) trong Map. Không truyền cfg → mặc định (never-chặn trong các test không liên
+ * quan). Dùng SEQUENTIAL (await từng lượt) — KHÔNG mô phỏng round-trip DO thật nên KHÔNG
+ * dùng để test đua đồng thời (xem makeRacySignupLimiterFactory bên dưới cho việc đó). */
 export function makeSignupLimiterFactory(cfg: SignupLimitConfig = resolveSignupLimitConfig({})) {
   const states = new Map<string, SignupState>();
   const get = (key: string) => states.get(key) ?? initialSignupState();
   return (_env: Env, key: string): SignupLimiterClient => ({
-    check: async () => checkSignup(get(key), Date.now(), cfg),
-    record: async () => {
-      states.set(key, recordSignup(get(key), Date.now(), cfg));
+    checkAndRecord: async () => {
+      const outcome = checkAndRecordSignup(get(key), Date.now(), cfg);
+      states.set(key, outcome.state);
+      return outcome.token === undefined
+        ? { gate: outcome.gate }
+        : { gate: outcome.gate, token: outcome.token };
     },
+    refund: async (token: number) => {
+      states.set(key, refundSignup(get(key), token));
+    },
+  });
+}
+
+/** U17b (QĐ-2, Finding 1 — TOCTOU) — factory limiter đăng ký GIẢ mô phỏng ĐÚNG đặc tính một
+ * Durable Object THẬT: mỗi lệnh gọi (checkAndRecord/refund) tới "DO" của MỘT key được XẾP
+ * HÀNG + xử lý TUẦN TỰ (input-gating thật — một fetch() chạy trọn vẹn trước fetch() kế), có
+ * độ trễ round-trip giả lập (`delayMs`, mặc định 5ms). Khác `makeSignupLimiterFactory`
+ * (đồng bộ-thực-chất, không mô phỏng độ trễ mạng) — dùng khi bài test cần bắn nhiều request
+ * ĐỒNG THỜI (Promise.all) và cần một double đáng tin cậy để phơi ra (hoặc xác nhận đã vá)
+ * lỗi đua, bất kể PGlite trong máy chạy nhanh/chậm thế nào. */
+export function makeRacySignupLimiterFactory(
+  cfg: SignupLimitConfig = resolveSignupLimitConfig({}),
+  delayMs = 5,
+) {
+  const states = new Map<string, SignupState>();
+  const queues = new Map<string, Promise<unknown>>();
+  const enqueue = <T>(key: string, task: () => Promise<T>): Promise<T> => {
+    const prev = queues.get(key) ?? Promise.resolve();
+    const next = prev.then(task, task);
+    queues.set(
+      key,
+      next.catch(() => {}),
+    );
+    return next;
+  };
+  const get = (key: string) => states.get(key) ?? initialSignupState();
+  return (_env: Env, key: string): SignupLimiterClient => ({
+    checkAndRecord: () =>
+      enqueue(key, async () => {
+        await new Promise((r) => setTimeout(r, delayMs));
+        const outcome = checkAndRecordSignup(get(key), Date.now(), cfg);
+        states.set(key, outcome.state);
+        return outcome.token === undefined
+          ? { gate: outcome.gate }
+          : { gate: outcome.gate, token: outcome.token };
+      }),
+    refund: (token: number) =>
+      enqueue(key, async () => {
+        await new Promise((r) => setTimeout(r, delayMs));
+        states.set(key, refundSignup(get(key), token));
+      }),
   });
 }
 

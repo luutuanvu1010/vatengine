@@ -6,14 +6,22 @@ import { count, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
 import { hashPassword } from "../../src/password";
+import type { AnyDb } from "../../src/types";
 import {
   type Db,
   freshDb,
   injectDb,
   makeEnv,
+  makeRacySignupLimiterFactory,
   makeSignupLimiterFactory,
   makeTenant,
 } from "../helpers";
+
+// IP mặc định cho MỌI test trong file này (TEST-NET-3, RFC 5737 — không phải IP thật). Sau
+// Finding 3 (F6), thiếu CF-Connecting-IP giờ bị TỪ CHỐI TƯỜNG MINH (503) thay vì âm thầm gộp
+// vào bucket "unknown" — nếu KHÔNG đặt header này ở đây, MỌI test 201/4xx/409 hiện có sẽ vỡ.
+// Test riêng cho ca THIẾU header (503) tự gọi app.request trực tiếp, không qua helper này.
+const IP_MAC_DINH = "203.0.113.10";
 
 function body(over: Record<string, unknown> = {}) {
   return {
@@ -25,12 +33,13 @@ function body(over: Record<string, unknown> = {}) {
   };
 }
 
-function dangKy(app: ReturnType<typeof createApp>, b: unknown) {
-  return app.request(
-    "/dang-ky",
-    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) },
-    makeEnv(),
-  );
+// ip: chuỗi IP (mặc định IP_MAC_DINH khi bỏ qua tham số) — truyền THẲNG `null` (KHÔNG phải
+// `undefined`, vì default-parameter của JS chỉ kích hoạt khi giá trị truyền vào là
+// `undefined`) để mô phỏng request THIẾU HẲN header CF-Connecting-IP (Finding 3 test).
+function dangKy(app: ReturnType<typeof createApp>, b: unknown, ip: string | null = IP_MAC_DINH) {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (ip !== null) headers["CF-Connecting-IP"] = ip;
+  return app.request("/dang-ky", { method: "POST", headers, body: JSON.stringify(b) }, makeEnv());
 }
 
 describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
@@ -290,5 +299,143 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
     const t = await db.select().from(tenants).where(eq(tenants.mst, "0100000077"));
     expect(t).toHaveLength(1);
     expect(t[0]?.trangThai).toBe("cho_duyet");
+  });
+
+  // Finding 1 (TOCTOU) — dùng makeRacySignupLimiterFactory (helpers.ts): double mô phỏng
+  // ĐÚNG một Durable Object thật (mỗi lệnh checkAndRecord/refund tới "DO" của một key được
+  // xếp hàng + xử lý TUẦN TỰ, có độ trễ round-trip giả lập). 12 request đồng thời cùng IP,
+  // ngưỡng 3 — implementation NGUYÊN TỬ (checkAndRecordSignup) phải để lọt ĐÚNG 3, chặn 9.
+  //
+  // ĐÃ XÁC NHẬN test này ĐỎ dưới implementation CŨ (check()/record() tách rời): 12/12 lọt
+  // qua ngưỡng 3 — chạy TRƯỚC khi sửa (git history commit này), dùng double tương đương xây
+  // trực tiếp trong file test (mô phỏng đúng cặp check()/record() rời với xếp hàng + độ trễ
+  // round-trip — xem báo cáo task-5c-report.md để biết số liệu quan sát được).
+  it("[TOCTOU] N request đồng thời cùng IP KHÔNG được vượt ngưỡng (Finding 1)", async () => {
+    const N = 12;
+    const MAX = 3;
+    const racyApp = createApp(
+      injectDb(
+        db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        makeRacySignupLimiterFactory({ maxMoiCuaSo: MAX, cuaSoMs: 3_600_000 }),
+      ),
+    );
+    const results = await Promise.all(
+      Array.from({ length: N }, (_, i) =>
+        dangKy(
+          racyApp,
+          body({ mst: `010000${String(i).padStart(4, "0")}`, email: `race${i}@abc.vn` }),
+        ),
+      ),
+    );
+    const soThanhCong = results.filter((r) => r.status === 201).length;
+    const soChan = results.filter((r) => r.status === 429).length;
+    expect(soThanhCong).toBe(MAX);
+    expect(soChan).toBe(N - MAX);
+  });
+
+  // Finding 3 (F6) — header CF-Connecting-IP VẮNG MẶT phải bị TỪ CHỐI TƯỜNG MINH, KHÔNG âm
+  // thầm dồn vào bucket "unknown" chung cho cả Internet (tự-DoS: 5 lượt/giờ khoá luôn cổng
+  // đăng ký toàn cầu). 503 — không phải lỗi của người gọi, mà là điều kiện hạ tầng tạm thời.
+  it("Finding 3 — THIẾU header CF-Connecting-IP → 503 khong_xac_dinh_duoc_ip, KHÔNG tạo hàng nào", async () => {
+    const res = await dangKy(app, body(), null);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "khong_xac_dinh_duoc_ip" });
+    expect((await db.select().from(tenants)).length).toBe(0);
+  });
+
+  // Finding 4 — nhánh chưa test: body KHÔNG phải JSON hợp lệ → 400 bad_request (không phải
+  // 500) — c.req.json() ném, xuLyDangKy bắt riêng TRƯỚC khi chạm limiter/DB.
+  it("Finding 4 — body KHÔNG phải JSON hợp lệ → 400 bad_request", async () => {
+    const res = await app.request(
+      "/dang-ky",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "CF-Connecting-IP": IP_MAC_DINH },
+        body: "{ khong phai json",
+      },
+      makeEnv(),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "bad_request" });
+  });
+
+  // Finding 4 — nhánh chưa test: .strict() phải THẬT SỰ từ chối trường lạ không khai báo
+  // trong schema (không chỉ đọc code mà tin — CLAUDE.md nguyên tắc bằng chứng).
+  it("Finding 4 — trường lạ KHÔNG khai báo trong schema (.strict()) → 400 bad_request", async () => {
+    const res = await dangKy(app, body({ vaiTroMongMuon: "quan_tri" }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "bad_request" });
+  });
+
+  // Finding 4 — nhánh chưa test: lỗi DB KHÔNG PHẢI unique violation phải NỔI LÊN app.onError
+  // ({error:"internal"}, 500) — KHÔNG bị isUniqueViolation nuốt nhầm thành 409. Đồng thời
+  // xác nhận thiết kế refund (Finding 1): lỗi HẠ TẦNG (không phải lạm dụng) phải được HOÀN
+  // lại quota — request kế tiếp CÙNG IP vẫn phải được cho qua dù ngưỡng chỉ có 1.
+  it("Finding 4 — lỗi DB KHÔNG PHẢI unique violation → 500 {error:'internal'} (không bị nuốt thành 409), VÀ hoàn lại quota (refund)", async () => {
+    const closeSpy = { called: 0 };
+    const brokenDb = {
+      transaction: async () => {
+        throw new Error("mat ket noi DB — khong phai loi unique");
+      },
+    } as unknown as AnyDb;
+    const deps = {
+      ...injectDb(
+        db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        makeSignupLimiterFactory({ maxMoiCuaSo: 1, cuaSoMs: 3_600_000 }),
+      ),
+      getDb: async () => ({
+        db: brokenDb,
+        close: async () => {
+          closeSpy.called += 1;
+        },
+      }),
+    };
+    const brokenApp = createApp(deps);
+
+    const res1 = await dangKy(brokenApp, body());
+    expect(res1.status).toBe(500);
+    expect(await res1.json()).toEqual({ error: "internal" });
+    expect(closeSpy.called).toBe(1);
+
+    // Ngưỡng chỉ 1/giờ — nếu KHÔNG refund, request thứ hai (cùng IP) sẽ bị 429. Được cho
+    // qua (kết quả KHÔNG phải 429) ⇒ quota của lượt lỗi hạ tầng ở trên đã được hoàn lại.
+    // (Vẫn 500 vì cùng brokenDb — nhưng KHÔNG PHẢI 429, đó là điều đang kiểm chứng.)
+    const res2 = await dangKy(brokenApp, body({ mst: "0100000098", email: "khac2@abc.vn" }));
+    expect(res2.status).not.toBe(429);
+  });
+
+  // Finding 2 (F9) mở rộng — refund() CHÍNH NÓ cũng là một lệnh gọi DO, có thể trục trặc.
+  // Lỗi refund() TUYỆT ĐỐI không được thay thế lỗi 500 gốc (lặp lại đúng lớp bug F9: một
+  // finally/catch phụ trợ ném đè lên kết quả chính) — phải vẫn thấy {error:'internal'}, có
+  // log cảnh báo (không PII), KHÔNG có exception nào rò ra ngoài route (unhandled rejection).
+  it("Finding 2 (F9 mở rộng) — refund() tự nó lỗi KHÔNG được thay thế lỗi 500 gốc", async () => {
+    const brokenDb = {
+      transaction: async () => {
+        throw new Error("mat ket noi DB — khong phai loi unique");
+      },
+    } as unknown as AnyDb;
+    const deps = {
+      ...injectDb(db),
+      getDb: async () => ({ db: brokenDb, close: async () => {} }),
+      getSignupLimiter: () => ({
+        checkAndRecord: async () => ({ gate: { chan: false, thuLaiSauMs: 0 }, token: 123 }),
+        refund: async () => {
+          throw new Error("DO signup-limiter tạm thời không phản hồi");
+        },
+      }),
+    };
+    const brokenApp = createApp(deps);
+
+    const res = await dangKy(brokenApp, body());
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "internal" });
   });
 });
