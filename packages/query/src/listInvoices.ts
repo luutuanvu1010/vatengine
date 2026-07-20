@@ -7,10 +7,16 @@
 // bảng hiện được Tên hàng hóa + Số lượng. 3 subquery scalar / hàng trên trang ≤50 —
 // lọc tenant TƯỜNG MINH trong subquery (multi-tenant.md, cạnh RLS).
 import { hoaDon } from "@vat/db";
-import { type SQL, count, desc, getTableColumns } from "drizzle-orm";
+import { type SQL, count, getTableColumns } from "drizzle-orm";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { type InvoiceFilter, type Page, buildWhere } from "./filters";
+import {
+  type InvoiceFilter,
+  type InvoiceSort,
+  type Page,
+  buildOrderBy,
+  buildWhere,
+} from "./filters";
 import { type LineSummary, lineSummarySelect } from "./lineSummary";
 
 export type HoaDonRow = typeof hoaDon.$inferSelect;
@@ -34,6 +40,9 @@ export async function listInvoices<
   tenantId: string,
   filter: InvoiceFilter,
   page: Page,
+  // U31 — sắp xếp theo cột. Mặc định giữ nguyên hành vi trước U31 (tdlap desc, id desc)
+  // để không phá client cũ; buildOrderBy luôn kèm tie-breaker `id`.
+  sort: InvoiceSort = { sortDir: "desc" },
 ): Promise<InvoiceListResult> {
   const where: SQL = buildWhere(tenantId, filter);
   // Đếm tổng khớp bộ lọc (độc lập phân trang) để client biết tổng số trang.
@@ -47,10 +56,10 @@ export async function listInvoices<
       ...lineSummarySelect(tenantId),
     })
     .from(hoaDon)
-    // Khóa phụ `id` để sắp XÁC ĐỊNH: `tdlap` GDT chỉ tới giây → lô hóa đơn trùng
-    // tdlap; thiếu tie-breaker thì phân trang limit/offset có thể bỏ/lặp bản ghi.
+    // Thứ tự do buildOrderBy dựng (U31) — LUÔN kèm tie-breaker `id`: `tdlap` GDT chỉ tới
+    // giây nên có lô hóa đơn trùng; thiếu khóa phụ thì limit/offset bỏ hoặc lặp bản ghi.
     .where(where)
-    .orderBy(desc(hoaDon.tdlap), desc(hoaDon.id))
+    .orderBy(...buildOrderBy(sort))
     .limit(page.limit)
     .offset(page.offset);
   return { rows, total, limit: page.limit, offset: page.offset };

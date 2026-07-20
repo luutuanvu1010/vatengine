@@ -138,3 +138,55 @@ describe("REST /invoices (integration, PGlite)", () => {
     expect(res.status).toBe(404);
   });
 });
+
+// U31 — sắp xếp & lọc theo cột qua REST. Trọng tâm: tham số sắp xếp từ client PHẢI đi
+// qua allowlist, giá trị lạ bị chặn ở biên chứ không chạm SQL.
+describe("REST /invoices — sắp xếp & lọc cột (U31)", () => {
+  let db: Db;
+  let app: ReturnType<typeof createApp>;
+  let tenantA: string;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    app = createApp(injectDb(db));
+    tenantA = await makeTenant(db, "Cty A", "0100000001");
+    await seedInvoice(db, tenantA, { shdon: "1", nbten: "Cty C" });
+    await seedInvoice(db, tenantA, { shdon: "2", nbten: "Cty A" });
+    await seedInvoice(db, tenantA, { shdon: "3", nbten: "Cty B" });
+  });
+
+  const get = async (token: string, qs: string) =>
+    app.request(`/invoices?${qs}`, { headers: bearer(token) }, makeEnv());
+
+  it("sortBy hợp lệ → 200, đúng thứ tự", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await get(token, "sortBy=nbten&sortDir=asc");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { rows: { nbten: string }[] };
+    expect(body.rows.map((r) => r.nbten)).toEqual(["Cty A", "Cty B", "Cty C"]);
+  });
+
+  it("T11 — sortBy NGOÀI allowlist → 400 (không chạm SQL)", async () => {
+    const token = await tokenFor(tenantA);
+    expect((await get(token, "sortBy=raw_json")).status).toBe(400);
+    expect((await get(token, "sortBy=id;drop%20table%20hoa_don")).status).toBe(400);
+    expect((await get(token, "sortBy=tenant_id")).status).toBe(400);
+  });
+
+  it("sortDir lạ → 400", async () => {
+    const token = await tokenFor(tenantA);
+    expect((await get(token, "sortBy=nbten&sortDir=up")).status).toBe(400);
+  });
+
+  it("T12 — không truyền sort → 200 và thứ tự cũ (tương thích ngược)", async () => {
+    const token = await tokenFor(tenantA);
+    expect((await get(token, "")).status).toBe(200);
+  });
+
+  it("lọc cột nbten qua query → chỉ trả bản ghi khớp", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await get(token, "nbten=cty%20a");
+    const body = (await res.json()) as { rows: unknown[]; total: number };
+    expect(body.total).toBe(1);
+  });
+});

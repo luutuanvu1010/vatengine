@@ -8,6 +8,7 @@ import {
   invoiceFilterSchema,
   listInvoices,
   pageSchema,
+  sortSchema,
   summarizeInvoices,
 } from "@vat/query";
 import { Hono } from "hono";
@@ -28,13 +29,18 @@ export function invoicesRoutes(deps: AppDeps) {
     const q = c.req.query();
     const filter = invoiceFilterSchema.safeParse(q);
     const page = pageSchema.safeParse(q);
-    if (!filter.success || !page.success) return c.json({ error: "bad_request" }, 400);
+    // U31 — tham số sắp xếp. `sortBy` phải nằm trong ALLOWLIST của sortSchema; giá trị lạ
+    // bị chặn ngay tại biên và KHÔNG BAO GIỜ chạm được vào ORDER BY (chống injection).
+    const sort = sortSchema.safeParse(q);
+    if (!filter.success || !page.success || !sort.success) {
+      return c.json({ error: "bad_request" }, 400);
+    }
 
     const tenantId = c.get("tenantId");
     const { db, close } = await deps.getDb(c.env);
     try {
       const result = await withTenant(db, tenantId, (tx) =>
-        listInvoices(tx, tenantId, filter.data, page.data),
+        listInvoices(tx, tenantId, filter.data, page.data, sort.data),
       );
       return c.json(result);
     } finally {

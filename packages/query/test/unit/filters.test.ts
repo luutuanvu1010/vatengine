@@ -1,13 +1,17 @@
 // U6 unit — validate bộ lọc/phân trang (Zod, thuần, offline) + fail-loud ngày sai.
+import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import {
   MAX_EXPORT_IDS,
+  SORT_BY_VALUES,
+  buildOrderBy,
   buildWhere,
   dayBoundaryVn,
   exportSelectionSchema,
   invoiceFilterSchema,
   pageSchema,
+  sortSchema,
 } from "../../src/filters";
 
 describe("invoiceFilterSchema", () => {
@@ -180,5 +184,115 @@ describe("U30 — buildWhere với ids", () => {
 
   it("ids rỗng → KHÔNG sinh mệnh đề IN (tránh 'IN ()' luôn sai)", () => {
     expect(render({ ids: [] }).sql).not.toContain(" in ");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// U31 — lọc & sắp xếp theo cột. RỦI RO LỚN NHẤT: tên cột sắp xếp đến từ client và đi vào
+// ORDER BY. Nội suy chuỗi vào đó là injection trực tiếp — phải qua ALLOWLIST.
+// ---------------------------------------------------------------------------
+
+describe("U31 — sortSchema (allowlist cột sắp xếp)", () => {
+  it("chấp nhận cột hợp lệ + hai chiều", () => {
+    expect(sortSchema.parse({ sortBy: "nbten", sortDir: "asc" })).toMatchObject({
+      sortBy: "nbten",
+      sortDir: "asc",
+    });
+  });
+
+  it("mặc định chiều giảm dần khi không truyền", () => {
+    expect(sortSchema.parse({}).sortDir).toBe("desc");
+  });
+
+  it("TỪ CHỐI tên cột ngoài allowlist — kể cả payload injection", () => {
+    expect(() => sortSchema.parse({ sortBy: "id; drop table hoa_don" })).toThrow();
+    expect(() => sortSchema.parse({ sortBy: "raw_json" })).toThrow();
+    expect(() => sortSchema.parse({ sortBy: "tenant_id" })).toThrow();
+    expect(() => sortSchema.parse({ sortBy: "1" })).toThrow();
+  });
+
+  it("TỪ CHỐI chiều lạ", () => {
+    expect(() => sortSchema.parse({ sortBy: "tdlap", sortDir: "; --" })).toThrow();
+  });
+
+  it("KHÔNG cho sắp xếp theo cột nhạy cảm/nội bộ", () => {
+    for (const k of ["tenantId", "rawJson", "createdAt"]) {
+      expect(() => sortSchema.parse({ sortBy: k })).toThrow();
+    }
+  });
+});
+
+describe("U31 — buildOrderBy", () => {
+  const render = (sql: SQL) => new PgDialect().sqlToQuery(sql);
+
+  // Duyệt HẾT allowlist, không lấy mẫu vài cột: chỉ cần MỘT cột thiếu tie-breaker là
+  // phân trang bỏ/lặp bản ghi ở đúng cột đó, và ca lấy mẫu sẽ không bắt được.
+  it("MỌI cột trong allowlist đều kết thúc bằng tie-breaker `id`", () => {
+    expect(SORT_BY_VALUES.length).toBeGreaterThan(0);
+    for (const col of SORT_BY_VALUES) {
+      for (const dir of ["asc", "desc"] as const) {
+        const parts = buildOrderBy({ sortBy: col, sortDir: dir });
+        const last = render(parts[parts.length - 1] as SQL).sql;
+        expect(last, `cột ${col}/${dir} thiếu tie-breaker`).toContain("id");
+      }
+    }
+  });
+
+  // T3 — chứng minh tên cột đi vào SQL dưới dạng ĐỊNH DANH ĐƯỢC TRÍCH DẪN do Drizzle sinh,
+  // không phải chuỗi client nối vào, và không có giá trị nào bị bind từ tên cột.
+  it("T3 — tên cột render thành định danh trích dẫn, KHÔNG có tham số bind nào", () => {
+    for (const col of SORT_BY_VALUES) {
+      const q = render(buildOrderBy({ sortBy: col, sortDir: "asc" })[0] as SQL);
+      expect(q.sql).toMatch(/"[a-z_]+"/); // định danh có dấu nháy kép do Drizzle sinh
+      expect(q.params, `cột ${col} không được sinh tham số`).toEqual([]);
+    }
+  });
+
+  it("không truyền sortBy → thứ tự MẶC ĐỊNH y hệt trước U31 (tdlap desc, id desc)", () => {
+    const parts = buildOrderBy({ sortDir: "desc" });
+    const sql = parts.map((p) => render(p as SQL).sql).join(", ");
+    expect(sql).toContain("tdlap");
+    expect(sql).toContain("id");
+  });
+
+  it("chiều asc/desc render khác nhau", () => {
+    const a = render(buildOrderBy({ sortBy: "nbten", sortDir: "asc" })[0] as SQL).sql;
+    const d = render(buildOrderBy({ sortBy: "nbten", sortDir: "desc" })[0] as SQL).sql;
+    expect(a).not.toBe(d);
+  });
+});
+
+describe("U31 — lọc văn bản theo cột", () => {
+  const TENANT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const render = (sel: Parameters<typeof buildWhere>[1]) =>
+    new PgDialect().sqlToQuery(buildWhere(TENANT, sel));
+
+  it("nbten/nmten/shdon sinh mệnh đề ilike với tham số bind", () => {
+    const q = render({ nbten: "tour dao" });
+    expect(q.sql.toLowerCase()).toContain("ilike");
+    expect(q.sql).not.toContain("tour dao"); // giá trị KHÔNG nằm trong câu lệnh
+    expect(q.params.some((p) => String(p).includes("tour dao"))).toBe(true);
+  });
+
+  // Nếu không escape, "50%" thành ký tự đại diện → khớp mọi bản ghi, SAI ÂM THẦM.
+  it("ESCAPE ký tự đại diện % và _ trong chuỗi người dùng nhập", () => {
+    const q = render({ nbten: "50%_x" });
+    const bound = q.params.map(String).find((p) => p.includes("50"));
+    expect(bound).toBe("%50\\%\\_x%");
+  });
+
+  it("chuỗi rỗng → KHÔNG sinh mệnh đề lọc (tránh lọc bằng '' vô nghĩa)", () => {
+    expect(render({ nbten: "" }).sql.toLowerCase()).not.toContain("ilike");
+  });
+
+  it("khoảng tiền ttbsoTu/ttbsoDen bao gồm hai đầu mút (>= và <=)", () => {
+    const q = render({ ttbsoTu: "1000", ttbsoDen: "2000" });
+    expect(q.sql).toContain(">=");
+    expect(q.sql).toContain("<=");
+  });
+
+  it("điều kiện tenant_id VẪN đứng đầu dù thêm bao nhiêu bộ lọc cột", () => {
+    const q = render({ nbten: "x", nmten: "y", shdon: "1", dvtte: "VND", ttbsoTu: "5" });
+    expect(q.params[0]).toBe(TENANT);
   });
 });
