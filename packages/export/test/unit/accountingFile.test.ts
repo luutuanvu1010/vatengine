@@ -2,7 +2,6 @@
 // chí LÕI U11: "ánh xạ đúng định dạng mục tiêu". Dùng profile THAM CHIẾU (fixture) để đọc
 // lại file và kiểm: header đúng thứ tự đích, transform (ngày dd/MM/yyyy), tiền = chuỗi
 // numeric nguyên bản + numFmt "#,##0" (xlsx), null → ô trống. Offline.
-import type { HoaDonRow } from "@vat/query";
 import { describe, expect, it } from "vitest";
 import {
   accountingCsvStream,
@@ -10,12 +9,13 @@ import {
   toAccountingFile,
 } from "../../src/accountingFile";
 import { REFERENCE_PROFILE } from "../../src/profiles/reference";
+import type { ExportRow } from "../../src/rows";
 import { parseCsv, readXlsx, utf8 } from "../helpers";
 
 const HEADERS = REFERENCE_PROFILE.columns.map((c) => c.header);
 const iOf = (h: string) => HEADERS.indexOf(h);
 
-async function* batchesOf(rows: HoaDonRow[], size: number): AsyncGenerator<HoaDonRow[]> {
+async function* batchesOf(rows: ExportRow[], size: number): AsyncGenerator<ExportRow[]> {
   for (let i = 0; i < rows.length; i += size) yield rows.slice(i, i + size);
 }
 
@@ -37,7 +37,7 @@ async function drain(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
   return merged;
 }
 
-function row(over: Partial<HoaDonRow> = {}): HoaDonRow {
+function row(over: Partial<ExportRow> = {}): ExportRow {
   return {
     id: "00000000-0000-0000-0000-000000000001",
     tenantId: "00000000-0000-0000-0000-0000000000aa",
@@ -63,8 +63,11 @@ function row(over: Partial<HoaDonRow> = {}): HoaDonRow {
     rawJson: {},
     createdAt: new Date(),
     updatedAt: new Date(),
+    tenHangDau: null,
+    soDongHang: 0,
+    tongSoLuong: null,
     ...over,
-  } as HoaDonRow;
+  } as ExportRow;
 }
 
 describe("toAccountingFile — CSV theo profile tham chiếu", () => {

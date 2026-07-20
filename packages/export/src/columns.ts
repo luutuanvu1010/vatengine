@@ -1,19 +1,29 @@
 // Mẫu cột kết xuất chuẩn DUY NHẤT (U7) — port từ MVP `backend/gdt_client.py::EXPORT_COLUMNS`.
 // Nguồn sự thật cho CẢ csv lẫn xlsx (không nhân đôi danh sách cột). ttxly/tthai xuất MÃ số
 // (chốt #3: KHÔNG nhãn tiếng Việt — U6 đã hoãn nhãn, tránh nguồn sự thật thứ hai).
-import type { HoaDonRow } from "@vat/query";
 import type { InvoiceLineLike } from "./invoiceDoc";
+import type { ExportRow } from "./rows";
 
-export type ColumnKind = "text" | "date" | "money" | "int";
+// `int`  — số nguyên thô, không numFmt (mã trạng thái). Tên giữ nguyên từ U7.
+// `num`  — số CÓ THỂ THẬP PHÂN, không numFmt (U29). Tách khỏi `money` vì "#,##0" làm
+//          tròn khi hiển thị: số lượng xăng dầu 62.925 lít sẽ hiện thành 63 ⇒ SAI.
+//          Ô không bật cờ `money` sẽ không mang s="2", rơi vào numFmt General của
+//          Excel — General hiện đủ phần thập phân (xlsx.ts:107 khai styles).
+// (Nợ kỹ thuật: `int` là tên hẹp cho "số thô"; gộp `int`+`num` để sau — xem BACKLOG.)
+export type ColumnKind = "text" | "date" | "money" | "int" | "num";
 
 export interface ExportColumn {
-  key: keyof HoaDonRow;
+  key: keyof ExportRow;
   label: string;
   kind: ColumnKind;
 }
 
+// U29: +5 cột (ncnhat, tenHangDau, soDongHang, tongSoLuong, ttcktmai) chèn theo trật tự
+// NGHIỆP VỤ, không nối đuôi — thời điểm rẻ nhất để sắp lại là lúc còn ít khách hàng.
+// `tgia` bị LOẠI (M3): production chưa có hóa đơn dvtte≠VND nào để kiểm chứng.
 export const EXPORT_COLUMNS: readonly ExportColumn[] = [
   { key: "tdlap", label: "Ngày lập", kind: "date" },
+  { key: "ncnhat", label: "Ngày cập nhật", kind: "date" },
   { key: "khmshdon", label: "Ký hiệu mẫu số", kind: "text" },
   { key: "khhdon", label: "Ký hiệu HĐ", kind: "text" },
   { key: "shdon", label: "Số HĐ", kind: "text" },
@@ -21,7 +31,11 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = [
   { key: "nbten", label: "Tên người bán", kind: "text" },
   { key: "nmmst", label: "MST người mua", kind: "text" },
   { key: "nmten", label: "Tên người mua", kind: "text" },
+  { key: "tenHangDau", label: "Tên hàng (dòng đầu)", kind: "text" },
+  { key: "soDongHang", label: "Số dòng hàng", kind: "num" },
+  { key: "tongSoLuong", label: "Tổng số lượng", kind: "num" },
   { key: "tgtcthue", label: "Tiền chưa thuế", kind: "money" },
+  { key: "ttcktmai", label: "Chiết khấu", kind: "money" },
   { key: "tgtthue", label: "Tiền thuế", kind: "money" },
   { key: "tgtttbso", label: "Tổng thanh toán", kind: "money" },
   { key: "dvtte", label: "Tiền tệ", kind: "text" },
@@ -50,7 +64,7 @@ export function formatDate(d: Date): string {
 // "#,##0" cho ô số không) + hàm `cell` sinh ExportCell từ một hóa đơn. Đây là lớp chung cho
 // CẢ mẫu native (U7) LẪN profile ánh xạ kế toán (U11) → một encoder duy nhất, không nhân
 // đôi logic mã hóa (tránh nguồn sự thật thứ hai).
-export interface RenderColumn<T = HoaDonRow> {
+export interface RenderColumn<T = ExportRow> {
   header: string;
   money: boolean;
   cell: (row: T) => ExportCell;
@@ -62,7 +76,7 @@ export function nativeRenderColumns(): RenderColumn[] {
   return EXPORT_COLUMNS.map((col) => ({
     header: col.label,
     money: col.kind === "money",
-    cell: (row: HoaDonRow) => cellFor(col, row),
+    cell: (row: ExportRow) => cellFor(col, row),
   }));
 }
 
@@ -83,7 +97,13 @@ const numCell = (v: string | number | null | undefined): ExportCell =>
   v === null || v === undefined ? BLANK : { t: "num", v: String(v) };
 
 /** Cột render cho khối/sheet dòng hàng: shdon · stt · ten · dvtinh · sluong · dgia · thtien
- * · tsuat. `dgia`/`thtien` áp numFmt tiền; `sluong`/`tsuat` là số thô (không #,##0). */
+ * · ltsuat · tsuat · tsuatTien. `dgia`/`thtien`/`tsuatTien` áp numFmt tiền; `sluong`/`tsuat`
+ * là số thô (không #,##0).
+ *
+ * U29 — "Mã thuế suất" (`ltsuat`) là cột CHỮ, đặt ngay trước cột số. Bằng chứng production
+ * 2026-07-20: `KCT` (không chịu thuế) và `KKKNT` (không kê khai khấu trừ) đều có
+ * `tsuat = 0`, y hệt thuế suất 0% thật ⇒ nếu chỉ xuất cột số thì BA nghiệp vụ khác nhau
+ * gộp thành một chữ số `0`, không phân biệt nổi. `ltsuat` là thứ duy nhất tách được. */
 export function lineDetailRenderColumns(): RenderColumn<LineDetailRow>[] {
   return [
     { header: "Số HĐ", money: false, cell: (r) => strCell(r.shdon) },
@@ -93,12 +113,14 @@ export function lineDetailRenderColumns(): RenderColumn<LineDetailRow>[] {
     { header: "Số lượng", money: false, cell: (r) => numCell(r.sluong) },
     { header: "Đơn giá", money: true, cell: (r) => numCell(r.dgia) },
     { header: "Thành tiền", money: true, cell: (r) => numCell(r.thtien) },
+    { header: "Mã thuế suất", money: false, cell: (r) => strCell(r.ltsuat) },
     { header: "Thuế suất", money: false, cell: (r) => numCell(r.tsuat) },
+    { header: "Tiền thuế dòng", money: true, cell: (r) => numCell(r.tsuatTien) },
   ];
 }
 
 /** Chuẩn hóa một ô theo cột + hàng. null/undefined → trống (không giá trị giả). */
-export function cellFor(col: ExportColumn, row: HoaDonRow): ExportCell {
+export function cellFor(col: ExportColumn, row: ExportRow): ExportCell {
   const raw = row[col.key];
   if (raw === null || raw === undefined) return BLANK;
   switch (col.kind) {
@@ -106,6 +128,9 @@ export function cellFor(col: ExportColumn, row: HoaDonRow): ExportCell {
       return { t: "str", v: formatDate(raw instanceof Date ? raw : new Date(String(raw))) };
     case "money":
     case "int":
+    // `num` PHẢI nằm ở đây. Quên case → rơi xuống `default` và số bị xuất thành CHUỖI —
+    // lỗi im lặng, tsc không bắt được (U29 §M1).
+    case "num":
       return { t: "num", v: String(raw) };
     default:
       return { t: "str", v: String(raw) };

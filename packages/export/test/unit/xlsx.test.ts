@@ -1,17 +1,17 @@
 // U7 unit — encoder xlsx (xlsx.ts) tự dựng SpreadsheetML + fflate. Tiêu chí LÕI U7:
 // "đọc lại file, đúng cột và ĐỊNH DẠNG TIỀN". readXlsx unzip + parse để kiểm ô số +
 // numFmt "#,##0". Offline; fflate zipSync thuần JS (chạy cả Node lẫn workerd — spike riêng).
-import type { HoaDonRow } from "@vat/query";
 import { describe, expect, it } from "vitest";
 import { EXPORT_COLUMNS } from "../../src/columns";
+import type { ExportRow } from "../../src/rows";
 import { toXlsx, toXlsxFromBatches } from "../../src/xlsx";
 import { readXlsx } from "../helpers";
 
-async function* batchesOf(rows: HoaDonRow[], size: number): AsyncGenerator<HoaDonRow[]> {
+async function* batchesOf(rows: ExportRow[], size: number): AsyncGenerator<ExportRow[]> {
   for (let i = 0; i < rows.length; i += size) yield rows.slice(i, i + size);
 }
 
-function row(over: Partial<HoaDonRow> = {}): HoaDonRow {
+function row(over: Partial<ExportRow> = {}): ExportRow {
   return {
     id: "00000000-0000-0000-0000-000000000001",
     tenantId: "00000000-0000-0000-0000-0000000000aa",
@@ -37,8 +37,11 @@ function row(over: Partial<HoaDonRow> = {}): HoaDonRow {
     rawJson: {},
     createdAt: new Date(),
     updatedAt: new Date(),
+    tenHangDau: null,
+    soDongHang: 0,
+    tongSoLuong: null,
     ...over,
-  } as HoaDonRow;
+  } as ExportRow;
 }
 
 const iOf = (key: string) => EXPORT_COLUMNS.findIndex((c) => c.key === key);

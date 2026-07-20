@@ -2,6 +2,7 @@
 // dựng để đóng gói xml.zip/html.zip. Escape ký tự đặc biệt (chống phá cấu trúc file khi
 // tên người bán/mua chứa "&", "<", ">" — dữ liệu từ GDT, bên thứ ba, không tin cậy).
 import { describe, expect, it } from "vitest";
+import { EXPORT_COLUMNS } from "../../src/columns";
 import { invoiceFileStem, invoiceToHtml, invoiceToXml } from "../../src/invoiceDoc";
 import type { ExportRow } from "../../src/rows";
 
@@ -92,5 +93,53 @@ describe("invoiceFileStem", () => {
 
   it("loại ký tự không hợp lệ trong tên file (vd '/')", () => {
     expect(invoiceFileStem(makeRow({ khhdon: "C26/TAA", shdon: "1/2" }))).toBe("C26_TAA-1_2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T11 (U29 §4) — xml/html phải mang ĐỦ cột sau khi EXPORT_COLUMNS nở 16 → 21.
+// Vì sao cần canh riêng: invoiceToXml/invoiceToHtml lặp EXPORT_COLUMNS ĐỘNG, nên
+// chúng "tự xanh" khi thêm cột — test cũ vẫn qua mà không chứng minh gì về cột mới.
+// Ca dưới đây canh cả tính ĐỦ (mọi key có thẻ) lẫn GIÁ TRỊ thật của 5 cột U29.
+// ---------------------------------------------------------------------------
+describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)", () => {
+  const row = makeRow({
+    ncnhat: new Date("2026-05-01T10:00:00Z"),
+    ttcktmai: "60257129",
+    tenHangDau: "Xăng E10 RON 95",
+    soDongHang: 3,
+    tongSoLuong: "62.925",
+  });
+
+  it("xml có thẻ cho MỌI cột trong EXPORT_COLUMNS (không sót cột nào)", () => {
+    const xml = invoiceToXml(row, []);
+    for (const col of EXPORT_COLUMNS) {
+      expect(xml, `thiếu thẻ <${col.key}>`).toContain(`<${col.key}>`);
+    }
+    expect(EXPORT_COLUMNS.length).toBe(21);
+  });
+
+  it("xml mang đúng GIÁ TRỊ của 5 cột U29 (không phải thẻ rỗng)", () => {
+    const xml = invoiceToXml(row, []);
+    expect(xml).toContain("<ncnhat>2026-05-01 10:00:00</ncnhat>");
+    expect(xml).toContain("<ttcktmai>60257129</ttcktmai>");
+    expect(xml).toContain("<tenHangDau>Xăng E10 RON 95</tenHangDau>");
+    expect(xml).toContain("<soDongHang>3</soDongHang>");
+    // Giữ đủ phần thập phân (M1) — không làm tròn thành 63.
+    expect(xml).toContain("<tongSoLuong>62.925</tongSoLuong>");
+  });
+
+  it("xml KHÔNG có thẻ tgia (M3 — đã loại khỏi phạm vi)", () => {
+    expect(invoiceToXml(row, [])).not.toContain("<tgia>");
+  });
+
+  it("html có nhãn + giá trị của 5 cột U29", () => {
+    const html = invoiceToHtml(row, []);
+    for (const col of EXPORT_COLUMNS) {
+      expect(html, `thiếu nhãn ${col.label}`).toContain(`<th>${col.label}</th>`);
+    }
+    expect(html).toContain("<td>60257129</td>");
+    expect(html).toContain("<td>62.925</td>");
+    expect(html).toContain("<td>Xăng E10 RON 95</td>");
   });
 });

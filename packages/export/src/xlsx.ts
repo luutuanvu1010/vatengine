@@ -1,4 +1,3 @@
-import type { HoaDonRow } from "@vat/query";
 import { zipSync } from "fflate";
 // Encoder xlsx (U7 + tổng quát hóa U11) — TỰ DỰNG SpreadsheetML (OOXML) + đóng gói bằng
 // fflate.zipSync. Vì sao không thư viện write/read sẵn: cần kiểm soát numFmt "#,##0" của ô
@@ -13,6 +12,7 @@ import {
   nativeRenderColumns,
 } from "./columns";
 import type { InvoiceLineLike } from "./invoiceDoc";
+import type { ExportRow } from "./rows";
 
 const NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const enc = new TextEncoder();
@@ -130,7 +130,7 @@ function zipXlsx(sheetBody: string, sheetName: string): Uint8Array {
 /** Encode CẢ tập thành bytes xlsx theo tập cột render + tên sheet. */
 export function toXlsxFor(
   columns: RenderColumn[],
-  rows: HoaDonRow[],
+  rows: ExportRow[],
   sheetName: string,
 ): Uint8Array {
   let body = headerRowXml(columns);
@@ -144,7 +144,7 @@ export function toXlsxFor(
  * KHÔNG gom toàn bộ hàng ORM vào RAM cùng lúc. */
 export async function toXlsxFromBatchesFor(
   columns: RenderColumn[],
-  batches: AsyncIterable<HoaDonRow[]>,
+  batches: AsyncIterable<ExportRow[]>,
   sheetName: string,
 ): Promise<Uint8Array> {
   let body = headerRowXml(columns);
@@ -162,12 +162,12 @@ const NATIVE_SHEET = "HoaDon";
 const LINE_COLS = lineDetailRenderColumns();
 
 /** Encode CẢ tập hóa đơn thành bytes xlsx (mẫu native). */
-export function toXlsx(rows: HoaDonRow[]): Uint8Array {
+export function toXlsx(rows: ExportRow[]): Uint8Array {
   return toXlsxFor(NATIVE, rows, NATIVE_SHEET);
 }
 
 /** Encode native từ các LÔ (async) — route dùng để tiêu thụ generator keyset lô-by-lô. */
-export function toXlsxFromBatches(batches: AsyncIterable<HoaDonRow[]>): Promise<Uint8Array> {
+export function toXlsxFromBatches(batches: AsyncIterable<ExportRow[]>): Promise<Uint8Array> {
   return toXlsxFromBatchesFor(NATIVE, batches, NATIVE_SHEET);
 }
 
@@ -179,7 +179,7 @@ export function toXlsxFromBatches(batches: AsyncIterable<HoaDonRow[]>): Promise<
  * không ép float). Hóa đơn không có dòng hàng → không sinh row (map.get ?? []).
  */
 export async function toXlsxWithLinesFromBatches(
-  invoiceBatches: AsyncIterable<HoaDonRow[]>,
+  invoiceBatches: AsyncIterable<ExportRow[]>,
   fetchLines: (ids: string[]) => Promise<Map<string, InvoiceLineLike[]>>,
 ): Promise<Uint8Array> {
   let invBody = headerRowXml(NATIVE);

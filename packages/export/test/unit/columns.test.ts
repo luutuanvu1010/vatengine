@@ -1,8 +1,14 @@
 // U7 unit — mẫu cột chuẩn DUY NHẤT (columns.ts) + chuẩn hóa ô. ttxly/tthai xuất MÃ số
 // (chốt #3: KHÔNG nhãn tiếng Việt — tránh nguồn sự thật thứ hai). Offline.
-import type { HoaDonRow } from "@vat/query";
 import { describe, expect, it } from "vitest";
-import { EXPORT_COLUMNS, type ExportColumn, cellFor, formatDate } from "../../src/columns";
+import {
+  EXPORT_COLUMNS,
+  type ExportColumn,
+  cellFor,
+  formatDate,
+  nativeRenderColumns,
+} from "../../src/columns";
+import type { ExportRow } from "../../src/rows";
 
 function col(key: string): ExportColumn {
   const c = EXPORT_COLUMNS.find((x) => x.key === key);
@@ -10,7 +16,7 @@ function col(key: string): ExportColumn {
   return c;
 }
 
-function row(over: Partial<HoaDonRow> = {}): HoaDonRow {
+function row(over: Partial<ExportRow> = {}): ExportRow {
   return {
     id: "00000000-0000-0000-0000-000000000001",
     tenantId: "00000000-0000-0000-0000-0000000000aa",
@@ -36,14 +42,19 @@ function row(over: Partial<HoaDonRow> = {}): HoaDonRow {
     rawJson: {},
     createdAt: new Date(),
     updatedAt: new Date(),
+    // Tóm tắt dòng hàng (U29) — nguồn: lineSummarySelect, xem @vat/query.
+    tenHangDau: null,
+    soDongHang: 0,
+    tongSoLuong: null,
     ...over,
-  } as HoaDonRow;
+  } as ExportRow;
 }
 
 describe("EXPORT_COLUMNS (mẫu cột chuẩn)", () => {
   it("đúng danh sách key + kind theo thứ tự kỳ vọng", () => {
     expect(EXPORT_COLUMNS.map((c) => c.key)).toEqual([
       "tdlap",
+      "ncnhat",
       "khmshdon",
       "khhdon",
       "shdon",
@@ -51,7 +62,11 @@ describe("EXPORT_COLUMNS (mẫu cột chuẩn)", () => {
       "nbten",
       "nmmst",
       "nmten",
+      "tenHangDau",
+      "soDongHang",
+      "tongSoLuong",
       "tgtcthue",
+      "ttcktmai",
       "tgtthue",
       "tgtttbso",
       "dvtte",
@@ -62,9 +77,22 @@ describe("EXPORT_COLUMNS (mẫu cột chuẩn)", () => {
     ]);
   });
 
-  it("ba cột tiền được đánh dấu kind 'money'", () => {
+  // U29/M3: `tgia` bị LOẠI khỏi phạm vi (quyết định chủ dự án 2026-07-20) — production
+  // chưa có hóa đơn `dvtte≠VND` nào để kiểm chứng ngữ nghĩa tỷ giá.
+  it("KHÔNG có cột tgia", () => {
+    expect(EXPORT_COLUMNS.some((c) => c.key === "tgia")).toBe(false);
+  });
+
+  it("bốn cột tiền được đánh dấu kind 'money'", () => {
     const money = EXPORT_COLUMNS.filter((c) => c.kind === "money").map((c) => c.key);
-    expect(money).toEqual(["tgtcthue", "tgtthue", "tgtttbso"]);
+    expect(money).toEqual(["tgtcthue", "ttcktmai", "tgtthue", "tgtttbso"]);
+  });
+
+  it("ncnhat là 'date'; tóm tắt dòng hàng là 'num' (số thô, KHÔNG numFmt tiền)", () => {
+    expect(EXPORT_COLUMNS.find((c) => c.key === "ncnhat")?.kind).toBe("date");
+    expect(EXPORT_COLUMNS.find((c) => c.key === "tenHangDau")?.kind).toBe("text");
+    expect(EXPORT_COLUMNS.find((c) => c.key === "soDongHang")?.kind).toBe("num");
+    expect(EXPORT_COLUMNS.find((c) => c.key === "tongSoLuong")?.kind).toBe("num");
   });
 
   it("ttxly/tthai là 'int' (MÃ số) — không có cột nhãn tiếng Việt", () => {
@@ -109,6 +137,64 @@ describe("cellFor — chuẩn hóa ô (không ép float)", () => {
       t: "str",
       v: "2026-04-12 09:05:03",
     });
+  });
+
+  it("ncnhat (ngày cập nhật) → ô chuỗi; null → trống", () => {
+    const c = col("ncnhat");
+    expect(cellFor(c, row({ ncnhat: new Date("2026-05-01T10:00:00Z") }))).toEqual({
+      t: "str",
+      v: "2026-05-01 10:00:00",
+    });
+    expect(cellFor(c, row({ ncnhat: null }))).toEqual({ t: "blank" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// U29 — tóm tắt dòng hàng + chiết khấu. Bằng chứng production 2026-07-20 dẫn ở
+// docs/plans/U29-plan.md §8b.
+// ---------------------------------------------------------------------------
+
+describe("U29 — tổng số lượng giữ ĐẦY ĐỦ phần thập phân (M1)", () => {
+  // E4: 32/48.134 dòng có sluong thập phân, max scale 3 — "62.925 Lít" dầu Điêzen.
+  // Áp numFmt tiền "#,##0" sẽ hiện "63" ⇒ SAI số lượng trên hóa đơn nhiên liệu.
+  it("tongSoLuong '62.925' → ô số giữ nguyên 3 chữ số thập phân", () => {
+    expect(cellFor(col("tongSoLuong"), row({ tongSoLuong: "62.925" }))).toEqual({
+      t: "num",
+      v: "62.925",
+    });
+  });
+
+  it("cột tổng số lượng KHÔNG bật cờ money (⇒ xlsx không gắn s='2', rơi vào General)", () => {
+    const cols = nativeRenderColumns();
+    const c = cols.find((x) => x.header === col("tongSoLuong").label);
+    expect(c?.money).toBe(false);
+  });
+
+  it("soDongHang → ô số; hóa đơn chưa có dòng hàng → '0'", () => {
+    expect(cellFor(col("soDongHang"), row({ soDongHang: 3 }))).toEqual({ t: "num", v: "3" });
+    expect(cellFor(col("soDongHang"), row({ soDongHang: 0 }))).toEqual({ t: "num", v: "0" });
+  });
+
+  it("tenHangDau → chuỗi; chưa có dòng hàng → trống", () => {
+    expect(cellFor(col("tenHangDau"), row({ tenHangDau: "Xăng E10 RON 95" }))).toEqual({
+      t: "str",
+      v: "Xăng E10 RON 95",
+    });
+    expect(cellFor(col("tenHangDau"), row({ tenHangDau: null }))).toEqual({ t: "blank" });
+  });
+});
+
+describe("U29 — chiết khấu (ttcktmai)", () => {
+  it("ttcktmai null → ô TRỐNG, không '0' giả (phân biệt 'không có' với 'chưa có dữ liệu')", () => {
+    expect(cellFor(col("ttcktmai"), row({ ttcktmai: null }))).toEqual({ t: "blank" });
+  });
+
+  // E2: 8 hóa đơn điều chỉnh giảm thật, tgtcthue = -ttcktmai, tới 60 triệu đồng.
+  it("hóa đơn điều chỉnh giảm: chiết khấu dương + tiền chưa thuế ÂM, giữ nguyên dấu", () => {
+    const r = row({ ttcktmai: "60257129", tgtcthue: "-60257129", tgtttbso: "-65077699" });
+    expect(cellFor(col("ttcktmai"), r)).toEqual({ t: "num", v: "60257129" });
+    expect(cellFor(col("tgtcthue"), r)).toEqual({ t: "num", v: "-60257129" });
+    expect(cellFor(col("tgtttbso"), r)).toEqual({ t: "num", v: "-65077699" });
   });
 });
 
