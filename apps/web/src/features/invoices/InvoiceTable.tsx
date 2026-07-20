@@ -7,7 +7,18 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { formatDateVN, formatMoney } from "../../lib/format";
-import type { InvoiceListRow } from "../../types/api";
+import type { InvoiceListRow, InvoiceSort, SortBy } from "../../types/api";
+import { ColumnMenu, type LoaiLoc } from "./ColumnMenu";
+
+// Giá trị hợp lệ do server định nghĩa (INVOICE_DIRECTIONS / INVOICE_SOURCES) — không bịa.
+const CHIEU_CHON = [
+  ["purchase", "Mua vào"],
+  ["sold", "Bán ra"],
+] as const;
+const NGUON_CHON = [
+  ["normal", "HĐĐT thường"],
+  ["sco", "Máy tính tiền"],
+] as const;
 import { ChieuChip, NguonLabel, TthaiChip, TtxlyChip } from "./chips";
 
 const th: React.CSSProperties = {
@@ -75,10 +86,56 @@ function HeaderCheckbox({
   );
 }
 
+// U31 — cấu hình lọc/sắp xếp cho từng cột. Trang cha truyền vào; bảng chỉ hiển thị.
+export interface ColumnOpsProps {
+  sort: InvoiceSort;
+  onSort: (by: SortBy, dir: "asc" | "desc") => void;
+  /** Giá trị lọc hiện tại theo khóa cột (rỗng = không lọc). */
+  giaTriLoc: (khoa: string) => string;
+  onLoc: (khoa: string, giaTri: string) => void;
+}
+
+/** Bọc nhãn cột + menu tùy chọn. Không có `ops` (vd dùng ở màn khác) → chỉ hiện nhãn. */
+function ThMenu({
+  nhan,
+  khoa,
+  sortBy,
+  loaiLoc = "none",
+  chonLua,
+  ops,
+  style,
+}: {
+  nhan: string;
+  khoa?: string;
+  sortBy?: SortBy;
+  loaiLoc?: LoaiLoc;
+  chonLua?: ReadonlyArray<readonly [string, string]>;
+  ops?: ColumnOpsProps;
+  style: React.CSSProperties;
+}) {
+  if (!ops) return <th style={style}>{nhan}</th>;
+  return (
+    <th style={style}>
+      {nhan}
+      <ColumnMenu
+        nhan={nhan}
+        sortBy={sortBy}
+        loaiLoc={loaiLoc}
+        chonLua={chonLua}
+        giaTri={khoa ? ops.giaTriLoc(khoa) : ""}
+        dangSap={sortBy && ops.sort.sortBy === sortBy ? (ops.sort.sortDir ?? "desc") : null}
+        onSap={(dir) => sortBy && ops.onSort(sortBy, dir)}
+        onLoc={(v) => khoa && ops.onLoc(khoa, v)}
+      />
+    </th>
+  );
+}
+
 export function InvoiceTable({
   rows,
   selection,
-}: { rows: InvoiceListRow[]; selection?: InvoiceSelectionProps }) {
+  ops,
+}: { rows: InvoiceListRow[]; selection?: InvoiceSelectionProps; ops?: ColumnOpsProps }) {
   const pageIds = rows.map((r) => r.id);
   const soDaChonTrongTrang = selection
     ? pageIds.filter((id) => selection.selectedIds.has(id)).length
@@ -100,20 +157,66 @@ export function InvoiceTable({
                 />
               </th>
             ) : null}
-            <th style={th}>Ngày lập</th>
-            <th style={th}>Ký hiệu · Số HĐ</th>
-            <th style={th}>Người bán</th>
-            <th style={th}>Người mua</th>
+            <ThMenu nhan="Ngày lập" sortBy="tdlap" ops={ops} style={th} />
+            <ThMenu
+              nhan="Ký hiệu · Số HĐ"
+              khoa="shdon"
+              sortBy="shdon"
+              loaiLoc="text"
+              ops={ops}
+              style={th}
+            />
+            <ThMenu
+              nhan="Người bán"
+              khoa="nbten"
+              sortBy="nbten"
+              loaiLoc="text"
+              ops={ops}
+              style={th}
+            />
+            <ThMenu
+              nhan="Người mua"
+              khoa="nmten"
+              sortBy="nmten"
+              loaiLoc="text"
+              ops={ops}
+              style={th}
+            />
+            {/* Hai cột tóm tắt dòng hàng là sub-select — lọc/sắp theo chúng cần HAVING
+                hoặc bảng dẫn xuất, để ngoài U31 (xem U31-plan §1). */}
             <th style={th}>Hàng hóa, dịch vụ</th>
             <th style={thRight}>Số lượng</th>
-            <th style={thRight}>Chưa thuế</th>
-            <th style={thRight}>Tiền thuế</th>
-            <th style={thRight}>Tổng TT</th>
+            <ThMenu nhan="Chưa thuế" sortBy="tgtcthue" ops={ops} style={thRight} />
+            <ThMenu nhan="Tiền thuế" sortBy="tgtthue" ops={ops} style={thRight} />
+            <ThMenu
+              nhan="Tổng TT"
+              khoa="ttbso"
+              sortBy="tgtttbso"
+              loaiLoc="range"
+              ops={ops}
+              style={thRight}
+            />
             <th style={th}>Tiền tệ</th>
             <th style={th}>TT xử lý</th>
             <th style={th}>TT hóa đơn</th>
-            <th style={th}>Chiều</th>
-            <th style={th}>Nguồn</th>
+            <ThMenu
+              nhan="Chiều"
+              khoa="chieu"
+              sortBy="chieu"
+              loaiLoc="select"
+              chonLua={CHIEU_CHON}
+              ops={ops}
+              style={th}
+            />
+            <ThMenu
+              nhan="Nguồn"
+              khoa="nguon"
+              sortBy="nguon"
+              loaiLoc="select"
+              chonLua={NGUON_CHON}
+              ops={ops}
+              style={th}
+            />
           </tr>
         </thead>
         <tbody>

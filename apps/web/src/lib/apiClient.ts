@@ -13,6 +13,7 @@ import type {
   InvoiceDetailResponse,
   InvoiceFilter,
   InvoiceListResult,
+  InvoiceSort,
   InvoiceSummary,
   MeResponse,
   Page,
@@ -119,6 +120,14 @@ function filterQuery(f: InvoiceFilter, p?: Page): Record<string, string | number
     tthai: f.tthai,
     nbmst: f.nbmst,
     nmmst: f.nmmst,
+    // U31 — lọc theo cột. Chuỗi rỗng → undefined để không gửi tham số vô nghĩa lên server
+    // (server cũng bỏ qua, nhưng URL sạch hơn và cache key ổn định hơn).
+    shdon: f.shdon || undefined,
+    nbten: f.nbten || undefined,
+    nmten: f.nmten || undefined,
+    dvtte: f.dvtte || undefined,
+    ttbsoTu: f.ttbsoTu || undefined,
+    ttbsoDen: f.ttbsoDen || undefined,
     limit: p?.limit,
     offset: p?.offset,
   };
@@ -137,8 +146,11 @@ export const api = {
   },
 
   // Tra cứu (3 vai).
-  getInvoices(filter: InvoiceFilter, page: Page): Promise<InvoiceListResult> {
-    return request("GET", "/invoices", { query: filterQuery(filter, page) });
+  // U31 — `sort` tùy chọn; không truyền ⇒ server giữ thứ tự mặc định (tdlap desc).
+  getInvoices(filter: InvoiceFilter, page: Page, sort?: InvoiceSort): Promise<InvoiceListResult> {
+    return request("GET", "/invoices", {
+      query: { ...filterQuery(filter, page), sortBy: sort?.sortBy, sortDir: sort?.sortDir },
+    });
   },
   getSummary(filter: InvoiceFilter): Promise<InvoiceSummary> {
     return request("GET", "/invoices/summary", { query: filterQuery(filter) });

@@ -7,7 +7,7 @@ import { api } from "../../lib/apiClient";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
 import { formatMoney } from "../../lib/format";
 import { canManageTaxAccounts } from "../../lib/rbac";
-import type { InvoiceFilter } from "../../types/api";
+import type { InvoiceFilter, InvoiceSort } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
 import { FilterBar } from "./FilterBar";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
@@ -28,9 +28,12 @@ export function InvoicesPage() {
   // Giữ qua phân trang (quyết định chủ dự án 2026-07-20) nên không reset theo `offset`.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
+  // U31 — sắp xếp theo cột. Rỗng ⇒ không gửi tham số ⇒ server giữ thứ tự mặc định.
+  const [sort, setSort] = useState<InvoiceSort>({});
+
   const list = useQuery({
-    queryKey: ["invoices", filter, offset],
-    queryFn: () => api.getInvoices(filter, { limit: LIMIT, offset }),
+    queryKey: ["invoices", filter, offset, sort],
+    queryFn: () => api.getInvoices(filter, { limit: LIMIT, offset }, sort),
   });
   const summary = useQuery({
     queryKey: ["invoices-summary", filter],
@@ -45,6 +48,28 @@ export function InvoicesPage() {
     // họ KHÔNG còn nhìn thấy trên màn hình. Lật trang thì ngược lại — giữ nguyên.
     setSelectedIds(new Set());
   }
+
+  // U31 — lọc theo cột đi CHUNG `InvoiceFilter` với thanh lọc trên: một nguồn sự thật cho
+  // "tập hóa đơn đang xem", nên tổng tiền và nút xuất tự khớp với bảng. Tách hai hệ lọc
+  // sẽ khiến con số dưới bảng nói khác bảng.
+  // Khóa "ttbso" là ảo: menu trả "tu|den", tách ra hai tham số server.
+  const giaTriLoc = (khoa: string): string => {
+    if (khoa === "ttbso") {
+      const tu = filter.ttbsoTu ?? "";
+      const den = filter.ttbsoDen ?? "";
+      return tu || den ? `${tu}|${den}` : "";
+    }
+    return ((filter as Record<string, unknown>)[khoa] as string | undefined) ?? "";
+  };
+
+  const onLoc = (khoa: string, giaTri: string) => {
+    if (khoa === "ttbso") {
+      const [tu = "", den = ""] = giaTri.split("|");
+      applyFilter({ ...filter, ttbsoTu: tu || undefined, ttbsoDen: den || undefined });
+      return;
+    }
+    applyFilter({ ...filter, [khoa]: giaTri || undefined });
+  };
 
   function toggleOne(id: string) {
     setSelectedIds((prev) => {
@@ -186,6 +211,15 @@ export function InvoicesPage() {
             <InvoiceTable
               rows={rows}
               selection={{ selectedIds, onToggle: toggleOne, onTogglePage: togglePage }}
+              ops={{
+                sort,
+                onSort: (sortBy, sortDir) => {
+                  setSort({ sortBy, sortDir });
+                  setOffset(0);
+                },
+                giaTriLoc,
+                onLoc,
+              }}
             />
             <div style={{ padding: "0 var(--sp-4)" }}>
               <Pagination total={total} limit={LIMIT} offset={offset} onOffset={setOffset} />

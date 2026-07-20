@@ -1,5 +1,4 @@
-// Kiểu hợp đồng API — PHẢN CHIẾU JSON trên đường truyền (nguồn: apps/api routes +
-// packages/*). LƯU Ý: qua JSON, cột `numeric` Postgres → CHUỖI; `timestamp` → ISO
+// Kiểu hợp đồng API — PHẢN CHIẾU JSON trên đường truyền (nguồn: apps/api routes +// packages/*). LƯU Ý: qua JSON, cột `numeric` Postgres → CHUỖI; `timestamp` → ISO
 // string. Vì vậy tiền là `string|null` và ngày là `string|null` (KHÁC HoaDonRow phía
 // server dùng Date/number). Đây là NƠI DUY NHẤT cập nhật khi backend đổi shape
 // (U15-plan §rủi ro). KHÔNG bịa trường ngoài hợp đồng.
@@ -134,6 +133,32 @@ export interface InvoiceFilter {
   tthai?: number;
   nbmst?: string;
   nmmst?: string;
+  // U31 — lọc theo cột (văn bản "chứa", không phân biệt hoa thường).
+  shdon?: string;
+  nbten?: string;
+  nmten?: string;
+  dvtte?: string;
+  ttbsoTu?: string;
+  ttbsoDen?: string;
+}
+
+/** U31 — sắp xếp theo cột. `sortBy` phải khớp ALLOWLIST của server (packages/query). */
+export type SortBy =
+  | "tdlap"
+  | "shdon"
+  | "nbten"
+  | "nmten"
+  | "tgtcthue"
+  | "tgtthue"
+  | "tgtttbso"
+  | "dvtte"
+  | "ttxly"
+  | "tthai"
+  | "chieu"
+  | "nguon";
+export interface InvoiceSort {
+  sortBy?: SortBy;
+  sortDir?: "asc" | "desc";
 }
 export interface Page {
   limit?: number; // ≤200
