@@ -1,6 +1,6 @@
 // Bảng hóa đơn = EXPORT_COLUMNS (packages/export/src/columns.ts) — KHÔNG bịa cột,
 // NGOẠI LỆ (quyết định chủ dự án 2026-07-17, thay U23-A): 2 cột tóm tắt dòng hàng
-// "Hàng hóa, dịch vụ" + "Số lượng" (tenHangDau/soDongHang/tongSoLuong từ listInvoices)
+// "Hàng hóa, dịch vụ" + "Số lượng" (hangHoa/soDongHang từ listInvoices)
 // chỉ có trên UI, chưa vào file xuất (xuất đã có khối "Chi tiết dòng hàng" riêng). Tiền
 // định dạng chuỗi (không float), căn phải, tabular. Ngày giờ VN. ttxly & tthai TÁCH riêng
 // (mã), chip trung tính khi chưa kiểm chứng (B1). Gồm dvtte (Tiền tệ) + nguon (M1).
@@ -65,13 +65,6 @@ const dsSoLuong: React.CSSProperties = {
   listStyle: "none",
   display: "grid",
   gap: "2px",
-};
-const dongTong: React.CSSProperties = {
-  marginTop: "var(--sp-1)",
-  paddingTop: "var(--sp-1)",
-  borderTop: "1px solid var(--border-subtle)",
-  fontSize: "var(--fs-xs)",
-  color: "var(--text-tertiary)",
 };
 
 // U30 — cột chọn dòng. `selectedIds` là state của TRANG (không localStorage: lựa chọn là
@@ -310,13 +303,9 @@ export function InvoiceTable({
                         </li>
                       ))}
                     </ol>
-                    {/* Tổng chỉ hiện khi có từ 2 mặt hàng, và ghi rõ chữ "Tổng" để không
-                        bị đọc nhầm thành số lượng của một mặt hàng nào đó. */}
-                    {r.hangHoa.length > 1 && r.tongSoLuong ? (
-                      <div style={dongTong}>
-                        Tổng <span className="tabular">{r.tongSoLuong}</span>
-                      </div>
-                    ) : null}
+                    {/* KHÔNG cộng tổng số lượng (quyết định chủ dự án 2026-07-20): các mặt
+                        hàng có ĐƠN VỊ khác nhau (Lít, Kg, cái) nên tổng của chúng là con
+                        số vô nghĩa — cộng 42 lít với 3 cái không ra đại lượng nào cả. */}
                   </>
                 ) : (
                   "—"

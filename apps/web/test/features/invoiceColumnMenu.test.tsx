@@ -37,7 +37,6 @@ function row(over: Partial<InvoiceListRow>): InvoiceListRow {
     tenHangDau: null,
     hangHoa: [],
     soDongHang: 0,
-    tongSoLuong: null,
     ...over,
   };
 }

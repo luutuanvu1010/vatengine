@@ -39,10 +39,6 @@ export function lineSummarySelect(tenantId: string) {
         where d.hoadon_id = hoa_don.id and d.tenant_id = ${tenantId}), '[]'::json)`,
     soDongHang: sql<number>`(select count(*)::int from ${dongHangHoa} d
       where d.hoadon_id = hoa_don.id and d.tenant_id = ${tenantId})`,
-    /** Tổng `sluong` — numeric giữ CHUỖI (không ép float), giữ nguyên phần thập phân
-     * (hóa đơn xăng dầu có số lượng lẻ tới 3 chữ số). null khi chưa có dòng hàng. */
-    tongSoLuong: sql<string | null>`(select sum(d.sluong) from ${dongHangHoa} d
-      where d.hoadon_id = hoa_don.id and d.tenant_id = ${tenantId})`,
   };
 }
 
@@ -62,5 +58,4 @@ export interface LineSummary {
    * đồng bộ dòng hàng. Đi thành một cấu trúc để tên và số lượng không thể lệch nhau. */
   hangHoa: HangHoaTomTat[];
   soDongHang: number;
-  tongSoLuong: string | null;
 }

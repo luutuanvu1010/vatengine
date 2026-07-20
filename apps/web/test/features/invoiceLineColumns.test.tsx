@@ -36,7 +36,6 @@ function row(over: Partial<InvoiceListRow>): InvoiceListRow {
     tenHangDau: null,
     hangHoa: [],
     soDongHang: 0,
-    tongSoLuong: null,
     ...over,
   };
 }
@@ -79,7 +78,6 @@ describe("Danh sách hóa đơn — cột Hàng hóa, dịch vụ + Số lượn
           { ten: "Bao bì", sluong: "1", dvtinh: "cái" },
         ],
         soDongHang: 3,
-        tongSoLuong: "15",
       }),
     ]);
     renderWithProviders(<InvoicesPage />);
@@ -87,7 +85,6 @@ describe("Danh sách hóa đơn — cột Hàng hóa, dịch vụ + Số lượn
     expect(screen.getByText("Phí giao hàng")).toBeTruthy();
     expect(screen.getByText("Bao bì")).toBeTruthy();
     expect(screen.queryByText(/\+\d+ dòng khác/)).toBeNull();
-    expect(screen.getByText("15")).toBeTruthy();
     expect(screen.getByText("Hàng hóa, dịch vụ")).toBeTruthy();
     expect(screen.getByText("Số lượng")).toBeTruthy();
   });
@@ -99,7 +96,6 @@ describe("Danh sách hóa đơn — cột Hàng hóa, dịch vụ + Số lượn
         tenHangDau: "Xăng RON 95",
         hangHoa: [{ ten: "Xăng RON 95", sluong: "1", dvtinh: "cái" }],
         soDongHang: 1,
-        tongSoLuong: "40",
       }),
     ]);
     renderWithProviders(<InvoicesPage />);

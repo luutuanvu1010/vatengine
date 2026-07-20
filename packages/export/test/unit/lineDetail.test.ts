@@ -41,7 +41,6 @@ function row(over: Partial<ExportRow> = {}): ExportRow {
     updatedAt: new Date(),
     tenHangDau: null,
     soDongHang: 0,
-    tongSoLuong: null,
     ...over,
   } as ExportRow;
 }

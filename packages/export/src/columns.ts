@@ -23,7 +23,7 @@ export interface ExportColumn {
   kind: ColumnKind;
 }
 
-// U29: +5 cột (ncnhat, tenHangDau, soDongHang, tongSoLuong, ttcktmai) chèn theo trật tự
+// U29: cột phụ (ncnhat, hangHoa, soDongHang, ttcktmai) chèn theo trật tự
 // NGHIỆP VỤ, không nối đuôi — thời điểm rẻ nhất để sắp lại là lúc còn ít khách hàng.
 // `tgia` bị LOẠI (M3): production chưa có hóa đơn dvtte≠VND nào để kiểm chứng.
 export const EXPORT_COLUMNS: readonly ExportColumn[] = [
@@ -38,7 +38,6 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = [
   { key: "nmten", label: "Tên người mua", kind: "text" },
   { key: "hangHoa", label: "Hàng hóa, dịch vụ (số lượng)", kind: "list" },
   { key: "soDongHang", label: "Số dòng hàng", kind: "num" },
-  { key: "tongSoLuong", label: "Tổng số lượng", kind: "num" },
   { key: "tgtcthue", label: "Tiền chưa thuế", kind: "money" },
   { key: "ttcktmai", label: "Chiết khấu", kind: "money" },
   { key: "tgtthue", label: "Tiền thuế", kind: "money" },

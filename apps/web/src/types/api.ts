@@ -44,8 +44,6 @@ export interface InvoiceListRow extends InvoiceRow {
    * 2026-07-20). Một cấu trúc chung để tên và số lượng không thể lệch nhau. */
   hangHoa: { ten: string | null; sluong: string | null; dvtinh: string | null }[];
   soDongHang: number;
-  /** Tổng số lượng (numeric → chuỗi qua JSON); null khi chưa có dòng hàng. */
-  tongSoLuong: string | null;
 }
 
 export interface InvoiceListResult {

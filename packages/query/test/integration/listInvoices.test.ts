@@ -346,7 +346,6 @@ describe("Danh sách — mỗi mặt hàng đi KÈM số lượng của chính n
       { ten: "Dầu Điêzen", sluong: "20.433", dvtinh: "Lít" },
     ]);
     // Tổng vẫn đúng, nhưng nay là con số RIÊNG chứ không bị hiểu là của mặt hàng đầu.
-    expect(Number(r?.tongSoLuong)).toBe(62.925);
   });
 
   it("hóa đơn chưa có dòng hàng → mảng RỖNG (không null)", async () => {

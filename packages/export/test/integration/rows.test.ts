@@ -93,7 +93,7 @@ describe("U29 — iterateInvoices trả tóm tắt dòng hàng", () => {
     tenantB = await makeTenant(db, "Cty B", "0100000009");
   });
 
-  it("tenHangDau lấy dòng stt NHỎ NHẤT; soDongHang đếm đúng; tongSoLuong cộng đúng", async () => {
+  it("tenHangDau lấy dòng stt NHỎ NHẤT; soDongHang đếm đúng", async () => {
     const id = await seedInvoice(db, tenantA, { shdon: "1" });
     // Gieo LỘN XỘN thứ tự stt để chứng minh có sắp xếp, không phải "dòng insert đầu".
     await seedLine(db, tenantA, id, { stt: 3, ten: "Hàng C", sluong: "1" });
@@ -103,26 +103,28 @@ describe("U29 — iterateInvoices trả tóm tắt dòng hàng", () => {
     const [r] = await collectFull(iterateInvoices(db, tenantA, {}, 10));
     expect(r?.tenHangDau).toBe("Hàng A");
     expect(r?.soDongHang).toBe(3);
-    expect(Number(r?.tongSoLuong)).toBe(7);
   });
 
-  it("giữ phần thập phân của tổng số lượng (xăng dầu — E4)", async () => {
+  it("số lượng từng mặt hàng giữ CHUỖI + đủ thập phân (xăng dầu — E4)", async () => {
     const id = await seedInvoice(db, tenantA, { shdon: "1" });
-    await seedLine(db, tenantA, id, { stt: 1, sluong: "62.925", dvtinh: "Lít" });
-    await seedLine(db, tenantA, id, { stt: 2, sluong: "0.075", dvtinh: "Lít" });
+    await seedLine(db, tenantA, id, { stt: 1, ten: "Xăng", sluong: "62.925", dvtinh: "Lít" });
+    await seedLine(db, tenantA, id, { stt: 2, ten: "Dầu", sluong: "0.075", dvtinh: "Lít" });
 
     const [r] = await collectFull(iterateInvoices(db, tenantA, {}, 10));
-    expect(Number(r?.tongSoLuong)).toBe(63);
-    // Kiểu trả về phải là CHUỖI (numeric → không ép float ở tầng driver).
-    expect(typeof r?.tongSoLuong).toBe("string");
+    expect(r?.hangHoa).toEqual([
+      { ten: "Xăng", sluong: "62.925", dvtinh: "Lít" },
+      { ten: "Dầu", sluong: "0.075", dvtinh: "Lít" },
+    ]);
+    // CHUỖI, không ép float — numeric lớn phải giữ nguyên chính xác.
+    expect(typeof r?.hangHoa[0]?.sluong).toBe("string");
   });
 
-  it("hóa đơn CHƯA có dòng hàng → soDongHang=0, tenHangDau=null, tongSoLuong=null", async () => {
+  it("hóa đơn CHƯA có dòng hàng → soDongHang=0, tenHangDau=null, hangHoa=[]", async () => {
     await seedInvoice(db, tenantA, { shdon: "1" });
     const [r] = await collectFull(iterateInvoices(db, tenantA, {}, 10));
     expect(r?.soDongHang).toBe(0);
     expect(r?.tenHangDau).toBeNull();
-    expect(r?.tongSoLuong).toBeNull();
+    expect(r?.hangHoa).toEqual([]);
   });
 
   // Bẫy drizzle đã ghi ở listInvoices.ts:50-52 — `${hoaDon.id}` render thành "id" TRẦN,
@@ -156,11 +158,10 @@ describe("U29 — iterateInvoices trả tóm tắt dòng hàng", () => {
       const [r] = await collectFull(iterateInvoices(tx, tenantA, {}, 10));
       expect(r?.soDongHang).toBe(1);
       expect(r?.tenHangDau).toBe("Của A");
-      expect(Number(r?.tongSoLuong)).toBe(2);
     });
   });
 
-  it("MỘT NGUỒN SỰ THẬT: iterateInvoices và listInvoices trả cùng 3 số", async () => {
+  it("MỘT NGUỒN SỰ THẬT: iterateInvoices và listInvoices trả cùng tóm tắt", async () => {
     const id1 = await seedInvoice(db, tenantA, { shdon: "1" });
     const id2 = await seedInvoice(db, tenantA, {
       shdon: "2",
@@ -177,8 +178,7 @@ describe("U29 — iterateInvoices trả tóm tắt dòng hàng", () => {
       shdon: string;
       tenHangDau: string | null;
       soDongHang: number;
-      tongSoLuong: string | null;
-    }) => `${r.shdon}|${r.tenHangDau}|${r.soDongHang}|${r.tongSoLuong}`;
+    }) => `${r.shdon}|${r.tenHangDau}|${r.soDongHang}`;
     expect(exported.map(key).sort()).toEqual(listed.rows.map(key).sort());
   });
 });

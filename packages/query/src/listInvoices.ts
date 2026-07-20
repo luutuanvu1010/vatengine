@@ -3,7 +3,7 @@
 // (từ withTenant) cũng thỏa vì kế thừa `PgDatabase`. Chỉ ĐỌC — không gọi GDT.
 //
 // Quyết định chủ dự án 2026-07-17 (thay U23-A "dòng hàng chỉ ở màn chi tiết"): mỗi
-// hàng danh sách mang thêm TÓM TẮT dòng hàng (tenHangDau/soDongHang/tongSoLuong) để
+// hàng danh sách mang thêm TÓM TẮT dòng hàng (hangHoa/soDongHang) để
 // bảng hiện được Tên hàng hóa + Số lượng. 3 subquery scalar / hàng trên trang ≤50 —
 // lọc tenant TƯỜNG MINH trong subquery (multi-tenant.md, cạnh RLS).
 import { hoaDon } from "@vat/db";

@@ -108,7 +108,6 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
     ttcktmai: "60257129",
     hangHoa: [{ ten: "Xăng E10 RON 95", sluong: "62.925", dvtinh: "Lít" }],
     soDongHang: 3,
-    tongSoLuong: "62.925",
   });
 
   it("xml có thẻ cho MỌI cột trong EXPORT_COLUMNS (không sót cột nào)", () => {
@@ -116,7 +115,7 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
     for (const col of EXPORT_COLUMNS) {
       expect(xml, `thiếu thẻ <${col.key}>`).toContain(`<${col.key}>`);
     }
-    expect(EXPORT_COLUMNS.length).toBe(21);
+    expect(EXPORT_COLUMNS.length).toBe(20);
   });
 
   it("xml mang đúng GIÁ TRỊ của 5 cột U29 (không phải thẻ rỗng)", () => {
@@ -126,7 +125,6 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
     expect(xml).toContain("<hangHoa>Xăng E10 RON 95 — 62.925 Lít</hangHoa>");
     expect(xml).toContain("<soDongHang>3</soDongHang>");
     // Giữ đủ phần thập phân (M1) — không làm tròn thành 63.
-    expect(xml).toContain("<tongSoLuong>62.925</tongSoLuong>");
   });
 
   it("xml KHÔNG có thẻ tgia (M3 — đã loại khỏi phạm vi)", () => {
@@ -139,7 +137,6 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
       expect(html, `thiếu nhãn ${col.label}`).toContain(`<th>${col.label}</th>`);
     }
     expect(html).toContain("<td>60257129</td>");
-    expect(html).toContain("<td>62.925</td>");
     expect(html).toContain("<td>Xăng E10 RON 95 — 62.925 Lít</td>");
   });
 });
