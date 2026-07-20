@@ -50,6 +50,17 @@ function exportKey(tenantId: string, id: string): string {
   return `exports/${tenantId}/${id}`;
 }
 
+// U30 — đọc danh sách dòng đã chọn từ body. NGUỒN DUY NHẤT cho cả /exports lẫn /convert:
+// hai route phải hiểu "chọn dòng" y hệt nhau, chép logic sang nơi thứ hai là mời gọi
+// lệch hành vi. Body vắng (client cũ) hoặc không phải JSON → coi như không chọn gì.
+async function docChonDong(c: { req: { json: () => Promise<unknown> } }): Promise<
+  { ok: true; ids?: string[] } | { ok: false }
+> {
+  const rawBody = await c.req.json().catch(() => ({}));
+  const chon = exportSelectionSchema.safeParse(rawBody);
+  return chon.success ? { ok: true, ids: chon.data.ids } : { ok: false };
+}
+
 export function exportsRoutes(deps: AppDeps) {
   const r = new Hono<AppEnv>();
 
@@ -64,13 +75,12 @@ export function exportsRoutes(deps: AppDeps) {
   // đã đọc + parse xong toàn bộ body — body khổng lồ vẫn đốt CPU/RAM của Worker trước đó.
   // 256KB đủ rộng cho ca hợp lệ tối đa (1000 uuid ≈ 40KB) và vẫn chặn sớm mọi thứ vô lý.
   // Không dựa ngầm vào giới hạn mặc định của nền tảng Cloudflare (phát hiện review 2026-07-20).
-  r.use(
-    "/",
-    bodyLimit({
-      maxSize: MAX_BODY_BYTES,
-      onError: (c) => c.json({ error: "payload_too_large" }, 413),
-    }),
-  );
+  const chanBodyLon = bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) => c.json({ error: "payload_too_large" }, 413),
+  });
+  r.use("/", chanBodyLon);
+  r.use("/convert", chanBodyLon);
 
   // POST /exports?format=xlsx|csv&<bộ lọc U6> — tạo file kết xuất (có side effect: ghi
   // R2 + audit) → dùng POST, không GET.
@@ -85,11 +95,9 @@ export function exportsRoutes(deps: AppDeps) {
     const filter = invoiceFilterSchema.safeParse(c.req.query());
     if (!filter.success) return c.json({ error: "bad_request" }, 400);
 
-    // Body có thể vắng hoàn toàn (client cũ) hoặc không phải JSON → coi như không chọn gì.
-    const rawBody = await c.req.json().catch(() => ({}));
-    const chon = exportSelectionSchema.safeParse(rawBody);
-    if (!chon.success) return c.json({ error: "bad_request" }, 400);
-    const ids = chon.data.ids;
+    const chon = await docChonDong(c);
+    if (!chon.ok) return c.json({ error: "bad_request" }, 400);
+    const ids = chon.ids;
 
     // M2 (chốt 2026-07-20): có ids ⇒ BỎ QUA bộ lọc. Lựa chọn cụ thể hơn ý định; giao cả
     // hai sẽ cho file ít hơn con số "đã chọn N" đang hiển thị → mất niềm tin.
@@ -173,6 +181,14 @@ export function exportsRoutes(deps: AppDeps) {
     if (!isExportFormat(format)) return c.json({ error: "bad_request" }, 400);
     const filter = invoiceFilterSchema.safeParse(c.req.query());
     if (!filter.success) return c.json({ error: "bad_request" }, 400);
+
+    // U30b — /convert tôn trọng dòng đã chọn y hệt /exports. Người dùng tick vài hóa đơn
+    // rồi bấm convert phải nhận đúng những dòng đó, không phải cả bộ lọc.
+    const chon = await docChonDong(c);
+    if (!chon.ok) return c.json({ error: "bad_request" }, 400);
+    const ids = chon.ids;
+    const selection = ids ? { ids } : filter.data; // M2: có ids ⇒ bỏ qua bộ lọc
+
     const profile = getProfile(profileId);
 
     const tenantId = c.get("tenantId");
@@ -182,7 +198,7 @@ export function exportsRoutes(deps: AppDeps) {
     const { db, close } = await deps.getDb(c.env);
     try {
       await withTenant(db, tenantId, async (tx) => {
-        const batches = iterateInvoices(tx, tenantId, filter.data);
+        const batches = iterateInvoices(tx, tenantId, selection);
         if (format === "csv") {
           await storage.put(key, accountingCsvStream(profile, batches));
         } else {
@@ -194,7 +210,12 @@ export function exportsRoutes(deps: AppDeps) {
           tenantId,
           hanhDong: "convert",
           doiTuong: profileId,
-          chiTiet: maskSensitive({ key, format, filter: filter.data }),
+          chiTiet: maskSensitive({
+            key,
+            format,
+            filter: ids ? undefined : filter.data,
+            soIdDaChon: ids?.length,
+          }),
         });
       });
     } finally {

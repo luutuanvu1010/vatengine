@@ -160,13 +160,16 @@ export const api = {
       body: ids?.length ? { ids } : undefined,
     });
   },
+  // `ids` cùng hợp đồng với createExport (U30b) — /convert tôn trọng dòng đã chọn y hệt.
   convertExport(
     profile: string,
     format: ExportFormat,
     filter: InvoiceFilter,
+    ids?: string[],
   ): Promise<ConvertResult> {
     return request("POST", "/exports/convert", {
       query: { profile, format, ...filterQuery(filter) },
+      body: ids?.length ? { ids } : undefined,
     });
   },
   downloadExport(id: string): Promise<Blob> {
