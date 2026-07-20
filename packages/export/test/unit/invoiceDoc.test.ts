@@ -106,7 +106,7 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
   const row = makeRow({
     ncnhat: new Date("2026-05-01T10:00:00Z"),
     ttcktmai: "60257129",
-    tenHangDau: "Xăng E10 RON 95",
+    hangHoa: [{ ten: "Xăng E10 RON 95", sluong: "62.925", dvtinh: "Lít" }],
     soDongHang: 3,
     tongSoLuong: "62.925",
   });
@@ -123,7 +123,7 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
     const xml = invoiceToXml(row, []);
     expect(xml).toContain("<ncnhat>2026-05-01 10:00:00</ncnhat>");
     expect(xml).toContain("<ttcktmai>60257129</ttcktmai>");
-    expect(xml).toContain("<tenHangDau>Xăng E10 RON 95</tenHangDau>");
+    expect(xml).toContain("<hangHoa>Xăng E10 RON 95 — 62.925 Lít</hangHoa>");
     expect(xml).toContain("<soDongHang>3</soDongHang>");
     // Giữ đủ phần thập phân (M1) — không làm tròn thành 63.
     expect(xml).toContain("<tongSoLuong>62.925</tongSoLuong>");
@@ -140,7 +140,7 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
     }
     expect(html).toContain("<td>60257129</td>");
     expect(html).toContain("<td>62.925</td>");
-    expect(html).toContain("<td>Xăng E10 RON 95</td>");
+    expect(html).toContain("<td>Xăng E10 RON 95 — 62.925 Lít</td>");
   });
 });
 

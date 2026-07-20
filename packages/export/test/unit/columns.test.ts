@@ -44,6 +44,7 @@ function row(over: Partial<ExportRow> = {}): ExportRow {
     updatedAt: new Date(),
     // Tóm tắt dòng hàng (U29) — nguồn: lineSummarySelect, xem @vat/query.
     tenHangDau: null,
+    hangHoa: [],
     soDongHang: 0,
     tongSoLuong: null,
     ...over,
@@ -62,7 +63,7 @@ describe("EXPORT_COLUMNS (mẫu cột chuẩn)", () => {
       "nbten",
       "nmmst",
       "nmten",
-      "tenHangDau",
+      "hangHoa",
       "soDongHang",
       "tongSoLuong",
       "tgtcthue",
@@ -90,7 +91,7 @@ describe("EXPORT_COLUMNS (mẫu cột chuẩn)", () => {
 
   it("ncnhat là 'date'; tóm tắt dòng hàng là 'num' (số thô, KHÔNG numFmt tiền)", () => {
     expect(EXPORT_COLUMNS.find((c) => c.key === "ncnhat")?.kind).toBe("date");
-    expect(EXPORT_COLUMNS.find((c) => c.key === "tenHangDau")?.kind).toBe("text");
+    expect(EXPORT_COLUMNS.find((c) => c.key === "hangHoa")?.kind).toBe("list");
     expect(EXPORT_COLUMNS.find((c) => c.key === "soDongHang")?.kind).toBe("num");
     expect(EXPORT_COLUMNS.find((c) => c.key === "tongSoLuong")?.kind).toBe("num");
   });
@@ -175,12 +176,14 @@ describe("U29 — tổng số lượng giữ ĐẦY ĐỦ phần thập phân (M
     expect(cellFor(col("soDongHang"), row({ soDongHang: 0 }))).toEqual({ t: "num", v: "0" });
   });
 
-  it("tenHangDau → chuỗi; chưa có dòng hàng → trống", () => {
-    expect(cellFor(col("tenHangDau"), row({ tenHangDau: "Xăng E10 RON 95" }))).toEqual({
-      t: "str",
-      v: "Xăng E10 RON 95",
-    });
-    expect(cellFor(col("tenHangDau"), row({ tenHangDau: null }))).toEqual({ t: "blank" });
+  it("cột hàng hóa: một mặt hàng → một dòng; chưa có dòng hàng → trống", () => {
+    expect(
+      cellFor(
+        col("hangHoa"),
+        row({ hangHoa: [{ ten: "Xăng E10 RON 95", sluong: "40", dvtinh: "Lít" }] }),
+      ),
+    ).toEqual({ t: "str", v: "Xăng E10 RON 95 — 40 Lít" });
+    expect(cellFor(col("hangHoa"), row({ hangHoa: [] }))).toEqual({ t: "blank" });
   });
 });
 
@@ -201,5 +204,43 @@ describe("U29 — chiết khấu (ttcktmai)", () => {
 describe("formatDate", () => {
   it("định dạng UTC ổn định", () => {
     expect(formatDate(new Date("2026-01-02T03:04:05Z"))).toBe("2026-01-02 03:04:05");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Nghiệm thu 2026-07-20 (chọn phương án b): sheet 1 liệt kê ĐỦ mặt hàng kèm số lượng
+// ngay trong ô, thay vì cặp "Tên hàng (dòng đầu)" + "Tổng số lượng" dễ đọc nhầm thành
+// số lượng của riêng mặt hàng đầu.
+// ---------------------------------------------------------------------------
+describe("Cột hàng hóa trong file xuất — liệt kê đủ, kèm số lượng của từng mặt hàng", () => {
+  const hh = [
+    { ten: "Xăng E10 RON 95 Mức 3", sluong: "42.492", dvtinh: "Lít" },
+    { ten: "Dầu Điêzen 0,001S Mức 5", sluong: "20.433", dvtinh: "Lít" },
+  ];
+
+  it("KHÔNG còn cột 'dòng đầu'; có cột hàng hóa liệt kê đủ", () => {
+    expect(EXPORT_COLUMNS.some((c) => c.key === "tenHangDau")).toBe(false);
+    expect(EXPORT_COLUMNS.some((c) => c.key === "hangHoa")).toBe(true);
+  });
+
+  it("mỗi mặt hàng một dòng, kèm số lượng và đơn vị CỦA CHÍNH NÓ", () => {
+    expect(cellFor(col("hangHoa"), row({ hangHoa: hh }))).toEqual({
+      t: "str",
+      v: "Xăng E10 RON 95 Mức 3 — 42.492 Lít\nDầu Điêzen 0,001S Mức 5 — 20.433 Lít",
+    });
+  });
+
+  it("mặt hàng thiếu số lượng vẫn hiện tên (không im lặng bỏ)", () => {
+    expect(
+      cellFor(col("hangHoa"), row({ hangHoa: [{ ten: "Trọn gói", sluong: null, dvtinh: null }] })),
+    ).toEqual({ t: "str", v: "Trọn gói" });
+  });
+
+  it("chưa đồng bộ dòng hàng → ô TRỐNG (không phải chuỗi rỗng giả)", () => {
+    expect(cellFor(col("hangHoa"), row({ hangHoa: [] }))).toEqual({ t: "blank" });
+  });
+
+  it("'Tổng số lượng' vẫn còn — nhưng là cột RIÊNG, nhãn nói rõ là tổng", () => {
+    expect(col("tongSoLuong").label).toContain("Tổng");
   });
 });

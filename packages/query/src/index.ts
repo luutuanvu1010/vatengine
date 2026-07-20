@@ -18,7 +18,7 @@ export {
   type Page,
 } from "./filters";
 export { getInvoiceById, getInvoiceLines, type DongHangHoaRow } from "./getInvoice";
-export { lineSummarySelect, type LineSummary } from "./lineSummary";
+export { lineSummarySelect, type LineSummary, type HangHoaTomTat } from "./lineSummary";
 export {
   listInvoices,
   type HoaDonRow,

@@ -1,6 +1,7 @@
 // Mẫu cột kết xuất chuẩn DUY NHẤT (U7) — port từ MVP `backend/gdt_client.py::EXPORT_COLUMNS`.
 // Nguồn sự thật cho CẢ csv lẫn xlsx (không nhân đôi danh sách cột). ttxly/tthai xuất MÃ số
 // (chốt #3: KHÔNG nhãn tiếng Việt — U6 đã hoãn nhãn, tránh nguồn sự thật thứ hai).
+import type { HangHoaTomTat } from "@vat/query";
 import type { InvoiceLineLike } from "./invoiceDoc";
 import type { ExportRow } from "./rows";
 
@@ -10,7 +11,11 @@ import type { ExportRow } from "./rows";
 //          Ô không bật cờ `money` sẽ không mang s="2", rơi vào numFmt General của
 //          Excel — General hiện đủ phần thập phân (xlsx.ts:107 khai styles).
 // (Nợ kỹ thuật: `int` là tên hẹp cho "số thô"; gộp `int`+`num` để sau — xem BACKLOG.)
-export type ColumnKind = "text" | "date" | "money" | "int" | "num";
+// `list` — liệt kê mọi mặt hàng kèm số lượng CỦA CHÍNH NÓ, mỗi mặt hàng một dòng trong
+// cùng một ô (nghiệm thu 2026-07-20, phương án b). Thay cho cặp cũ "Tên hàng (dòng đầu)"
+// + "Tổng số lượng" đứng cạnh nhau — cặp đó đọc lướt thành "mặt hàng đầu có <tổng> đơn
+// vị", tức SAI thông tin trên hóa đơn nhiều mặt hàng.
+export type ColumnKind = "text" | "date" | "money" | "int" | "num" | "list";
 
 export interface ExportColumn {
   key: keyof ExportRow;
@@ -31,7 +36,7 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = [
   { key: "nbten", label: "Tên người bán", kind: "text" },
   { key: "nmmst", label: "MST người mua", kind: "text" },
   { key: "nmten", label: "Tên người mua", kind: "text" },
-  { key: "tenHangDau", label: "Tên hàng (dòng đầu)", kind: "text" },
+  { key: "hangHoa", label: "Hàng hóa, dịch vụ (số lượng)", kind: "list" },
   { key: "soDongHang", label: "Số dòng hàng", kind: "num" },
   { key: "tongSoLuong", label: "Tổng số lượng", kind: "num" },
   { key: "tgtcthue", label: "Tiền chưa thuế", kind: "money" },
@@ -50,6 +55,15 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = [
 export type ExportCell = { t: "str"; v: string } | { t: "num"; v: string } | { t: "blank" };
 
 const BLANK: ExportCell = { t: "blank" };
+
+/** Một mặt hàng → "Tên — <số lượng> <đơn vị>". Thiếu số lượng thì chỉ còn tên; thiếu đơn
+ * vị thì bỏ đơn vị. KHÔNG bịa "0" khi hóa đơn không khai số lượng. */
+function moTaHangHoa(h: HangHoaTomTat): string {
+  const ten = (h.ten ?? "").trim();
+  if (!ten) return "";
+  if (h.sluong === null || h.sluong === undefined) return ten;
+  return `${ten} — ${h.sluong}${h.dvtinh ? ` ${h.dvtinh}` : ""}`;
+}
 
 /** Định dạng Date → chuỗi UTC ổn định "YYYY-MM-DD HH:mm:ss" (không phụ thuộc múi giờ chạy). */
 export function formatDate(d: Date): string {
@@ -122,6 +136,13 @@ export function lineDetailRenderColumns(): RenderColumn<LineDetailRow>[] {
 /** Chuẩn hóa một ô theo cột + hàng. null/undefined → trống (không giá trị giả). */
 export function cellFor(col: ExportColumn, row: ExportRow): ExportCell {
   const raw = row[col.key];
+  // `list` xử lý TRƯỚC nhánh null: giá trị là MẢNG, và mảng rỗng phải thành ô trống chứ
+  // không phải chuỗi "" — cùng ý nghĩa "chưa đồng bộ dòng hàng" như các cột khác.
+  if (col.kind === "list") {
+    const ds = Array.isArray(raw) ? (raw as HangHoaTomTat[]) : [];
+    const dong = ds.map(moTaHangHoa).filter((x) => x.length > 0);
+    return dong.length === 0 ? BLANK : { t: "str", v: dong.join("\n") };
+  }
   if (raw === null || raw === undefined) return BLANK;
   switch (col.kind) {
     case "date":
