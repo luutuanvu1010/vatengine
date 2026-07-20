@@ -33,7 +33,7 @@ const bigRow: InvoiceListRow = {
   tenHangDau: null,
   soDongHang: 0,
   tongSoLuong: null,
-  tenHangTatCa: [],
+  hangHoa: [],
 };
 
 let fetchMock: { mock: { calls: unknown[][] } };

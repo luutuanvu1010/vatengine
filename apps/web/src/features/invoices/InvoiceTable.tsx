@@ -57,6 +57,22 @@ const dsHang: React.CSSProperties = {
   gap: "2px",
 };
 const mucHang: React.CSSProperties = { lineHeight: "var(--lh-body)" };
+// Cột số lượng: bỏ dấu chấm đầu dòng và canh phải, nhưng GIỮ NGUYÊN thứ tự/khoảng cách
+// dòng của cột tên hàng để hai cột đọc ngang hàng nhau.
+const dsSoLuong: React.CSSProperties = {
+  margin: 0,
+  padding: 0,
+  listStyle: "none",
+  display: "grid",
+  gap: "2px",
+};
+const dongTong: React.CSSProperties = {
+  marginTop: "var(--sp-1)",
+  paddingTop: "var(--sp-1)",
+  borderTop: "1px solid var(--border-subtle)",
+  fontSize: "var(--fs-xs)",
+  color: "var(--text-tertiary)",
+};
 
 // U30 — cột chọn dòng. `selectedIds` là state của TRANG (không localStorage: lựa chọn là
 // dữ liệu tenant, không được sót lại sau khi đổi phiên — multi-tenant.md H-B.3).
@@ -266,14 +282,16 @@ export function InvoiceTable({
                 <div>{r.nmten ?? "—"}</div>
                 <div style={sub}>{r.nmmst ?? "—"}</div>
               </td>
-              {/* Nghiệm thu 2026-07-20: hiện ĐỦ mọi mặt hàng, không rút gọn "+N dòng khác"
-                  — kế toán cần đọc thẳng trên bảng, không phải mở từng hóa đơn. */}
+              {/* Nghiệm thu 2026-07-20: hiện ĐỦ mọi mặt hàng, và mỗi mặt hàng phải nằm
+                  NGANG HÀNG với số lượng của chính nó. Trước đây cột số lượng chỉ có một
+                  con số TỔNG đặt cạnh tên dòng đầu → đọc thành "xăng E10 có 62.925 lít"
+                  trong khi đó là tổng của hai mặt hàng. */}
               <td style={td}>
-                {r.tenHangTatCa.length > 0 ? (
+                {r.hangHoa.length > 0 ? (
                   <ol style={dsHang}>
-                    {r.tenHangTatCa.map((ten, i) => (
-                      <li key={`${r.id}-${i}-${ten}`} style={mucHang}>
-                        {ten}
+                    {r.hangHoa.map((h, i) => (
+                      <li key={`${r.id}-${i}-${h.ten ?? ""}`} style={mucHang}>
+                        {h.ten ?? "—"}
                       </li>
                     ))}
                   </ol>
@@ -281,8 +299,28 @@ export function InvoiceTable({
                   "—"
                 )}
               </td>
-              <td style={tdMoney} className="tabular">
-                {r.tongSoLuong ?? "—"}
+              <td style={tdMoney}>
+                {r.hangHoa.length > 0 ? (
+                  <>
+                    <ol style={dsSoLuong}>
+                      {r.hangHoa.map((h, i) => (
+                        <li key={`${r.id}-sl-${i}-${h.ten ?? ""}`} style={mucHang}>
+                          <span className="tabular">{h.sluong ?? "—"}</span>
+                          {h.dvtinh ? <span style={sub}> {h.dvtinh}</span> : null}
+                        </li>
+                      ))}
+                    </ol>
+                    {/* Tổng chỉ hiện khi có từ 2 mặt hàng, và ghi rõ chữ "Tổng" để không
+                        bị đọc nhầm thành số lượng của một mặt hàng nào đó. */}
+                    {r.hangHoa.length > 1 && r.tongSoLuong ? (
+                      <div style={dongTong}>
+                        Tổng <span className="tabular">{r.tongSoLuong}</span>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  "—"
+                )}
               </td>
               <td style={tdMoney} className="tabular">
                 {formatMoney(r.tgtcthue)}

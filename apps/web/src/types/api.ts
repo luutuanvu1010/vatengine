@@ -40,9 +40,9 @@ export interface InvoiceRow {
 export interface InvoiceListRow extends InvoiceRow {
   /** Tên hàng dòng đầu (stt nhỏ nhất); null khi chưa đồng bộ chi tiết. */
   tenHangDau: string | null;
-  /** TẤT CẢ tên hàng, theo thứ tự stt. Mảng RỖNG khi chưa có dòng hàng
-   * (nghiệm thu 2026-07-20: bảng hiện đủ mặt hàng, không rút gọn "+N dòng khác"). */
-  tenHangTatCa: string[];
+  /** Mọi mặt hàng kèm số lượng + đơn vị CỦA CHÍNH NÓ, theo thứ tự stt (nghiệm thu
+   * 2026-07-20). Một cấu trúc chung để tên và số lượng không thể lệch nhau. */
+  hangHoa: { ten: string | null; sluong: string | null; dvtinh: string | null }[];
   soDongHang: number;
   /** Tổng số lượng (numeric → chuỗi qua JSON); null khi chưa có dòng hàng. */
   tongSoLuong: string | null;

@@ -84,7 +84,7 @@ const ROW: InvoiceListRow = {
   tenHangDau: null,
   soDongHang: 0,
   tongSoLuong: null,
-  tenHangTatCa: [],
+  hangHoa: [],
 };
 
 function mockApi(opts: {

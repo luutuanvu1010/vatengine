@@ -34,7 +34,7 @@ function row(over: Partial<InvoiceListRow>): InvoiceListRow {
     createdAt: "2026-04-03T00:00:00.000Z",
     updatedAt: "2026-04-03T00:00:00.000Z",
     tenHangDau: null,
-    tenHangTatCa: [],
+    hangHoa: [],
     soDongHang: 0,
     tongSoLuong: null,
     ...over,
@@ -73,7 +73,11 @@ describe("Danh sách hóa đơn — cột Hàng hóa, dịch vụ + Số lượn
       row({
         id: "r1",
         tenHangDau: "VW tiêu chuẩn NL",
-        tenHangTatCa: ["VW tiêu chuẩn NL", "Phí giao hàng", "Bao bì"],
+        hangHoa: [
+          { ten: "VW tiêu chuẩn NL", sluong: "1", dvtinh: "cái" },
+          { ten: "Phí giao hàng", sluong: "1", dvtinh: "cái" },
+          { ten: "Bao bì", sluong: "1", dvtinh: "cái" },
+        ],
         soDongHang: 3,
         tongSoLuong: "15",
       }),
@@ -93,7 +97,7 @@ describe("Danh sách hóa đơn — cột Hàng hóa, dịch vụ + Số lượn
       row({
         id: "r1",
         tenHangDau: "Xăng RON 95",
-        tenHangTatCa: ["Xăng RON 95"],
+        hangHoa: [{ ten: "Xăng RON 95", sluong: "1", dvtinh: "cái" }],
         soDongHang: 1,
         tongSoLuong: "40",
       }),

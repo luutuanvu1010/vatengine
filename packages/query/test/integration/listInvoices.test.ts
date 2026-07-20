@@ -321,8 +321,11 @@ describe("U31 — T9b: cách ly tenant giữ nguyên khi có SẮP XẾP theo c�
   });
 });
 
-describe("Danh sách — hiện TẤT CẢ hàng hóa (nghiệm thu 2026-07-20)", () => {
-  // Chủ dự án: bảng phải hiện đủ mọi mặt hàng, không rút gọn thành "+N dòng khác".
+describe("Danh sách — mỗi mặt hàng đi KÈM số lượng của chính nó (nghiệm thu 2026-07-20)", () => {
+  // Lỗi gốc: tên hàng và số lượng đi bằng HAI đường riêng (tenHangDau + tongSoLuong) nên
+  // bảng hiện "Xăng E10" cạnh 62.925 — trong khi 62.925 là TỔNG của hai mặt hàng. Người
+  // đọc hiểu sai rằng riêng xăng E10 có 62.925 lít. Nay tên/số lượng/ĐVT đi CÙNG một
+  // cấu trúc nên không thể lệch nhau.
   let db: Db;
   let tenantA: string;
   const PAGE = { limit: 50, offset: 0 };
@@ -332,28 +335,39 @@ describe("Danh sách — hiện TẤT CẢ hàng hóa (nghiệm thu 2026-07-20)"
     tenantA = await makeTenant(db, "Cty A", "0100000001");
   });
 
-  it("trả đủ tên mọi dòng hàng, theo đúng thứ tự stt", async () => {
+  it("trả từng mặt hàng kèm ĐÚNG số lượng và đơn vị của nó, theo thứ tự stt", async () => {
     const id = await seedInvoice(db, tenantA, { shdon: "1" });
-    await seedLine(db, tenantA, id, { stt: 3, ten: "Hàng C" });
-    await seedLine(db, tenantA, id, { stt: 1, ten: "Hàng A" });
-    await seedLine(db, tenantA, id, { stt: 2, ten: "Hàng B" });
+    await seedLine(db, tenantA, id, { stt: 2, ten: "Dầu Điêzen", sluong: "20.433", dvtinh: "Lít" });
+    await seedLine(db, tenantA, id, { stt: 1, ten: "Xăng E10", sluong: "42.492", dvtinh: "Lít" });
 
     const [r] = (await listInvoices(db, tenantA, {}, PAGE)).rows;
-    expect(r?.tenHangTatCa).toEqual(["Hàng A", "Hàng B", "Hàng C"]);
+    expect(r?.hangHoa).toEqual([
+      { ten: "Xăng E10", sluong: "42.492", dvtinh: "Lít" },
+      { ten: "Dầu Điêzen", sluong: "20.433", dvtinh: "Lít" },
+    ]);
+    // Tổng vẫn đúng, nhưng nay là con số RIÊNG chứ không bị hiểu là của mặt hàng đầu.
+    expect(Number(r?.tongSoLuong)).toBe(62.925);
   });
 
-  it("hóa đơn chưa có dòng hàng → mảng RỖNG (không null, để UI khỏi phải phòng thủ)", async () => {
+  it("hóa đơn chưa có dòng hàng → mảng RỖNG (không null)", async () => {
     await seedInvoice(db, tenantA, { shdon: "2" });
     const [r] = (await listInvoices(db, tenantA, {}, PAGE)).rows;
-    expect(r?.tenHangTatCa).toEqual([]);
+    expect(r?.hangHoa).toEqual([]);
   });
 
-  it("cách ly tenant: không gom tên hàng của tenant khác", async () => {
+  it("cách ly tenant: không gom mặt hàng của tenant khác", async () => {
     const tenantB = await makeTenant(db, "Cty B", "0100000009");
     const id = await seedInvoice(db, tenantA, { shdon: "3" });
-    await seedLine(db, tenantA, id, { stt: 1, ten: "Của A" });
-    await seedLine(db, tenantB, id, { stt: 2, ten: "Của B" });
+    await seedLine(db, tenantA, id, { stt: 1, ten: "Của A", sluong: "1" });
+    await seedLine(db, tenantB, id, { stt: 2, ten: "Của B", sluong: "99" });
     const [r] = (await listInvoices(db, tenantA, {}, PAGE)).rows;
-    expect(r?.tenHangTatCa).toEqual(["Của A"]);
+    expect(r?.hangHoa.map((h) => h.ten)).toEqual(["Của A"]);
+  });
+
+  it("dòng hàng thiếu số lượng vẫn xuất hiện (không im lặng bỏ mặt hàng)", async () => {
+    const id = await seedInvoice(db, tenantA, { shdon: "4" });
+    await seedLine(db, tenantA, id, { stt: 1, ten: "Dịch vụ trọn gói", sluong: null });
+    const [r] = (await listInvoices(db, tenantA, {}, PAGE)).rows;
+    expect(r?.hangHoa).toEqual([{ ten: "Dịch vụ trọn gói", sluong: null, dvtinh: "cái" }]);
   });
 });
