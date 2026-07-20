@@ -2,7 +2,7 @@
 // WASM sạch rồi seed hóa đơn header trực tiếp (không qua sync — U6 chỉ ĐỌC). Offline
 // hoàn toàn, không mạng (testing.md). KHÔNG dữ liệu thật.
 import { PGlite } from "@electric-sql/pglite";
-import { hoaDon, tenants } from "@vat/db";
+import { dongHangHoa, hoaDon, tenants } from "@vat/db";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 
@@ -59,4 +59,29 @@ export async function seedInvoice(
   const row = rows[0];
   if (!row) throw new Error("insert hoa_don không trả về id");
   return row.id;
+}
+
+type DongHangHoaInsert = typeof dongHangHoa.$inferInsert;
+
+/** Gieo một dòng hàng. `tenantId` tường minh để dựng được ca dữ liệu lệch tenant. */
+export async function seedLine(
+  db: Db,
+  tenantId: string,
+  hoaDonId: string,
+  over: Partial<DongHangHoaInsert> = {},
+): Promise<void> {
+  await db.insert(dongHangHoa).values({
+    tenantId,
+    hoaDonId,
+    stt: 1,
+    ten: "Hàng A",
+    dvtinh: "cái",
+    sluong: "1",
+    dgia: "1000",
+    thtien: "1000",
+    ltsuat: "8%",
+    tsuat: "0.08",
+    rawJson: {},
+    ...over,
+  });
 }

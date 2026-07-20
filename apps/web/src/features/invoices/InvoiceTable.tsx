@@ -47,6 +47,17 @@ const tdMoney: React.CSSProperties = {
 };
 const sub: React.CSSProperties = { color: "var(--text-tertiary)", fontSize: "var(--fs-xs)" };
 
+// Danh sách mặt hàng trong ô: đánh số để đọc nhanh khi hóa đơn nhiều dòng, giới hạn bề
+// rộng để cột không kéo dãn cả bảng khi tên hàng dài.
+const dsHang: React.CSSProperties = {
+  margin: 0,
+  paddingLeft: "var(--sp-4)",
+  maxWidth: 320,
+  display: "grid",
+  gap: "2px",
+};
+const mucHang: React.CSSProperties = { lineHeight: "var(--lh-body)" };
+
 // U30 — cột chọn dòng. `selectedIds` là state của TRANG (không localStorage: lựa chọn là
 // dữ liệu tenant, không được sót lại sau khi đổi phiên — multi-tenant.md H-B.3).
 export interface InvoiceSelectionProps {
@@ -255,12 +266,17 @@ export function InvoiceTable({
                 <div>{r.nmten ?? "—"}</div>
                 <div style={sub}>{r.nmmst ?? "—"}</div>
               </td>
+              {/* Nghiệm thu 2026-07-20: hiện ĐỦ mọi mặt hàng, không rút gọn "+N dòng khác"
+                  — kế toán cần đọc thẳng trên bảng, không phải mở từng hóa đơn. */}
               <td style={td}>
-                {r.tenHangDau ? (
-                  <>
-                    <div>{r.tenHangDau}</div>
-                    {r.soDongHang > 1 && <div style={sub}>+{r.soDongHang - 1} dòng khác</div>}
-                  </>
+                {r.tenHangTatCa.length > 0 ? (
+                  <ol style={dsHang}>
+                    {r.tenHangTatCa.map((ten, i) => (
+                      <li key={`${r.id}-${i}-${ten}`} style={mucHang}>
+                        {ten}
+                      </li>
+                    ))}
+                  </ol>
                 ) : (
                   "—"
                 )}

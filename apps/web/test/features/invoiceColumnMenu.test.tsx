@@ -35,6 +35,7 @@ function row(over: Partial<InvoiceListRow>): InvoiceListRow {
     createdAt: "2026-04-03T00:00:00.000Z",
     updatedAt: "2026-04-03T00:00:00.000Z",
     tenHangDau: null,
+    tenHangTatCa: [],
     soDongHang: 0,
     tongSoLuong: null,
     ...over,

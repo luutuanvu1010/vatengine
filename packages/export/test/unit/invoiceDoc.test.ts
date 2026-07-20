@@ -143,3 +143,45 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
     expect(html).toContain("<td>Xăng E10 RON 95</td>");
   });
 });
+
+// ---------------------------------------------------------------------------
+// LỖI LỆCH CỘT (phát hiện khi nghiệm thu 2026-07-20): bảng dòng hàng trong HTML có
+// header VIẾT CỨNG 8 cột trong khi dữ liệu sinh từ LINE_FIELDS (9 trường) → mọi ô từ
+// `ltsuat` trở đi nằm dưới sai tiêu đề, và `tsuatTien` không có tiêu đề nào.
+// Gốc rễ: HAI NGUỒN SỰ THẬT cho cùng một danh sách cột.
+// ---------------------------------------------------------------------------
+describe("invoiceToHtml — bảng dòng hàng không được lệch cột", () => {
+  const line = {
+    stt: 1,
+    ten: "Xăng E10 RON 95",
+    dvtinh: "Lít",
+    sluong: "42.492",
+    dgia: "1000",
+    thtien: "42492",
+    ltsuat: "KCT",
+    tsuat: "0",
+    tsuatTien: "0",
+  };
+
+  const oCua = (html: string, tag: "th" | "td", bang: number) => {
+    const bangs = html.match(/<table>[\s\S]*?<\/table>/g) ?? [];
+    const b = bangs[bang] ?? "";
+    return [...b.matchAll(new RegExp(`<${tag}>(.*?)</${tag}>`, "g"))].map((m) => m[1]);
+  };
+
+  it("số TIÊU ĐỀ khớp số Ô DỮ LIỆU của một dòng hàng", () => {
+    const html = invoiceToHtml(makeRow(), [line]);
+    expect(oCua(html, "th", 1).length).toBe(oCua(html, "td", 1).length);
+  });
+
+  it("giá trị nằm ĐÚNG dưới tiêu đề của nó (mã thuế suất không chui vào cột thuế suất)", () => {
+    const html = invoiceToHtml(makeRow(), [line]);
+    const th = oCua(html, "th", 1);
+    const td = oCua(html, "td", 1);
+    const tai = (nhan: string) => td[th.indexOf(nhan)];
+    expect(tai("Tên")).toBe("Xăng E10 RON 95");
+    expect(tai("Mã thuế suất")).toBe("KCT");
+    expect(tai("Thuế suất")).toBe("0");
+    expect(tai("Tiền thuế")).toBe("0");
+  });
+});

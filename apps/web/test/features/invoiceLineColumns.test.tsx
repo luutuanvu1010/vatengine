@@ -34,6 +34,7 @@ function row(over: Partial<InvoiceListRow>): InvoiceListRow {
     createdAt: "2026-04-03T00:00:00.000Z",
     updatedAt: "2026-04-03T00:00:00.000Z",
     tenHangDau: null,
+    tenHangTatCa: [],
     soDongHang: 0,
     tongSoLuong: null,
     ...over,
@@ -64,18 +65,39 @@ describe("Danh sách hóa đơn — cột Hàng hóa, dịch vụ + Số lượn
     vi.restoreAllMocks();
   });
 
-  it("HĐ nhiều dòng: hiện tên dòng đầu + '+N' + tổng số lượng", async () => {
-    mockList([row({ id: "r1", tenHangDau: "VW tiêu chuẩn NL", soDongHang: 2, tongSoLuong: "15" })]);
+  // ĐỔI HÀNH VI 2026-07-20 (nghiệm thu): trước đây ô chỉ hiện tên dòng đầu + "+N dòng
+  // khác". Chủ dự án bác bỏ: kế toán cần đọc ĐỦ mặt hàng thẳng trên bảng, không phải mở
+  // từng hóa đơn. Test cũ canh hành vi rút gọn nay được thay bằng test canh hiển thị đủ.
+  it("HĐ nhiều dòng: hiện ĐỦ mọi tên hàng, KHÔNG rút gọn '+N dòng khác'", async () => {
+    mockList([
+      row({
+        id: "r1",
+        tenHangDau: "VW tiêu chuẩn NL",
+        tenHangTatCa: ["VW tiêu chuẩn NL", "Phí giao hàng", "Bao bì"],
+        soDongHang: 3,
+        tongSoLuong: "15",
+      }),
+    ]);
     renderWithProviders(<InvoicesPage />);
     expect(await screen.findByText("VW tiêu chuẩn NL")).toBeTruthy();
-    expect(screen.getByText("+1 dòng khác")).toBeTruthy();
+    expect(screen.getByText("Phí giao hàng")).toBeTruthy();
+    expect(screen.getByText("Bao bì")).toBeTruthy();
+    expect(screen.queryByText(/\+\d+ dòng khác/)).toBeNull();
     expect(screen.getByText("15")).toBeTruthy();
     expect(screen.getByText("Hàng hóa, dịch vụ")).toBeTruthy();
     expect(screen.getByText("Số lượng")).toBeTruthy();
   });
 
-  it("HĐ một dòng: chỉ tên hàng, KHÔNG có '+N'", async () => {
-    mockList([row({ id: "r1", tenHangDau: "Xăng RON 95", soDongHang: 1, tongSoLuong: "40" })]);
+  it("HĐ một dòng: hiện đúng một tên hàng", async () => {
+    mockList([
+      row({
+        id: "r1",
+        tenHangDau: "Xăng RON 95",
+        tenHangTatCa: ["Xăng RON 95"],
+        soDongHang: 1,
+        tongSoLuong: "40",
+      }),
+    ]);
     renderWithProviders(<InvoicesPage />);
     expect(await screen.findByText("Xăng RON 95")).toBeTruthy();
     expect(screen.queryByText(/\+\d+ dòng khác/)).toBeNull();

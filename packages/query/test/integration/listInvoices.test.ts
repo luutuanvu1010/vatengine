@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { invoiceFilterSchema } from "../../src/filters";
 import { listInvoices } from "../../src/listInvoices";
 import { summarizeInvoices } from "../../src/summarize";
-import { type Db, freshDb, makeTenant, seedInvoice } from "../helpers";
+import { type Db, freshDb, makeTenant, seedInvoice, seedLine } from "../helpers";
 
 const PAGE = { limit: 50, offset: 0 };
 
@@ -318,5 +318,42 @@ describe("U31 — T9b: cách ly tenant giữ nguyên khi có SẮP XẾP theo c�
       expect(r.rows.map((x) => x.shdon)).toEqual(["A1"]);
       expect(r.total).toBe(1);
     });
+  });
+});
+
+describe("Danh sách — hiện TẤT CẢ hàng hóa (nghiệm thu 2026-07-20)", () => {
+  // Chủ dự án: bảng phải hiện đủ mọi mặt hàng, không rút gọn thành "+N dòng khác".
+  let db: Db;
+  let tenantA: string;
+  const PAGE = { limit: 50, offset: 0 };
+
+  beforeEach(async () => {
+    db = await freshDb();
+    tenantA = await makeTenant(db, "Cty A", "0100000001");
+  });
+
+  it("trả đủ tên mọi dòng hàng, theo đúng thứ tự stt", async () => {
+    const id = await seedInvoice(db, tenantA, { shdon: "1" });
+    await seedLine(db, tenantA, id, { stt: 3, ten: "Hàng C" });
+    await seedLine(db, tenantA, id, { stt: 1, ten: "Hàng A" });
+    await seedLine(db, tenantA, id, { stt: 2, ten: "Hàng B" });
+
+    const [r] = (await listInvoices(db, tenantA, {}, PAGE)).rows;
+    expect(r?.tenHangTatCa).toEqual(["Hàng A", "Hàng B", "Hàng C"]);
+  });
+
+  it("hóa đơn chưa có dòng hàng → mảng RỖNG (không null, để UI khỏi phải phòng thủ)", async () => {
+    await seedInvoice(db, tenantA, { shdon: "2" });
+    const [r] = (await listInvoices(db, tenantA, {}, PAGE)).rows;
+    expect(r?.tenHangTatCa).toEqual([]);
+  });
+
+  it("cách ly tenant: không gom tên hàng của tenant khác", async () => {
+    const tenantB = await makeTenant(db, "Cty B", "0100000009");
+    const id = await seedInvoice(db, tenantA, { shdon: "3" });
+    await seedLine(db, tenantA, id, { stt: 1, ten: "Của A" });
+    await seedLine(db, tenantB, id, { stt: 2, ten: "Của B" });
+    const [r] = (await listInvoices(db, tenantA, {}, PAGE)).rows;
+    expect(r?.tenHangTatCa).toEqual(["Của A"]);
   });
 });

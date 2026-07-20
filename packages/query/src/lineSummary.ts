@@ -20,6 +20,15 @@ export function lineSummarySelect(tenantId: string) {
     tenHangDau: sql<string | null>`(select d.ten from ${dongHangHoa} d
       where d.hoadon_id = hoa_don.id and d.tenant_id = ${tenantId}
       order by d.stt asc nulls last, d.id asc limit 1)`,
+    /** TẤT CẢ tên hàng của hóa đơn, theo thứ tự stt (quyết định chủ dự án 2026-07-20:
+     * bảng danh sách phải hiện đủ mặt hàng, không rút gọn "+N dòng khác").
+     * `coalesce(..., '{}')` để hóa đơn chưa có dòng hàng trả MẢNG RỖNG chứ không null —
+     * UI khỏi phải phòng thủ hai kiểu giá trị cho cùng một ý nghĩa "không có gì". */
+    tenHangTatCa: sql<
+      string[]
+    >`coalesce((select array_agg(d.ten order by d.stt asc nulls last, d.id asc)
+      from ${dongHangHoa} d
+      where d.hoadon_id = hoa_don.id and d.tenant_id = ${tenantId} and d.ten is not null), '{}')`,
     soDongHang: sql<number>`(select count(*)::int from ${dongHangHoa} d
       where d.hoadon_id = hoa_don.id and d.tenant_id = ${tenantId})`,
     /** Tổng `sluong` — numeric giữ CHUỖI (không ép float), giữ nguyên phần thập phân
@@ -29,9 +38,11 @@ export function lineSummarySelect(tenantId: string) {
   };
 }
 
-/** Ba trường tóm tắt mà `lineSummarySelect` bổ sung vào một hàng hóa đơn. */
+/** Các trường tóm tắt mà `lineSummarySelect` bổ sung vào một hàng hóa đơn. */
 export interface LineSummary {
   tenHangDau: string | null;
+  /** Tất cả tên hàng, theo thứ tự stt. Mảng RỖNG khi chưa có dòng hàng. */
+  tenHangTatCa: string[];
   soDongHang: number;
   tongSoLuong: string | null;
 }

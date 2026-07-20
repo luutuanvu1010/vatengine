@@ -37,17 +37,23 @@ function cellText(row: ExportRow, key: (typeof EXPORT_COLUMNS)[number]["key"]): 
   return cell.t === "blank" ? "" : cell.v;
 }
 
-const LINE_FIELDS: Array<keyof InvoiceLineLike> = [
-  "stt",
-  "ten",
-  "dvtinh",
-  "sluong",
-  "dgia",
-  "thtien",
-  "ltsuat",
-  "tsuat",
-  "tsuatTien",
+// NGUỒN DUY NHẤT của cột dòng hàng: trường + nhãn đi CẶP. Trước đây header HTML viết cứng
+// tách rời danh sách trường ⇒ hai nguồn sự thật, và chúng đã trôi lệch thật (8 nhãn / 9
+// trường): "Thuế suất" hiện mã thuế suất, "Tiền thuế" hiện thuế suất, tiền thuế dòng rơi
+// vào cột không tiêu đề. Thêm trường mới ở đây là nhãn tự đi theo, không thể quên.
+const LINE_COLUMNS: ReadonlyArray<readonly [keyof InvoiceLineLike, string]> = [
+  ["stt", "STT"],
+  ["ten", "Tên"],
+  ["dvtinh", "ĐVT"],
+  ["sluong", "SL"],
+  ["dgia", "Đơn giá"],
+  ["thtien", "Thành tiền"],
+  ["ltsuat", "Mã thuế suất"],
+  ["tsuat", "Thuế suất"],
+  ["tsuatTien", "Tiền thuế"],
 ];
+
+const LINE_FIELDS: Array<keyof InvoiceLineLike> = LINE_COLUMNS.map(([f]) => f);
 
 function lineValue(line: InvoiceLineLike, field: keyof InvoiceLineLike): string {
   const v = line[field];
@@ -79,9 +85,8 @@ export function invoiceToHtml(row: ExportRow, lines: InvoiceLineLike[]): string 
     (col) =>
       `<tr><th>${escapeHtml(col.label)}</th><td>${escapeHtml(cellText(row, col.key))}</td></tr>`,
   ).join("");
-  const lineHeader =
-    "<tr><th>STT</th><th>Tên</th><th>ĐVT</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th>" +
-    "<th>Thuế suất</th><th>Tiền thuế</th></tr>";
+  // Sinh từ LINE_COLUMNS — cùng nguồn với LINE_FIELDS dựng ô dữ liệu, nên không thể lệch.
+  const lineHeader = `<tr>${LINE_COLUMNS.map(([, nhan]) => `<th>${escapeHtml(nhan)}</th>`).join("")}</tr>`;
   const lineRows = lines
     .map(
       (line) =>
