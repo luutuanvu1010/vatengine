@@ -18,11 +18,20 @@ import {
   resolveLoginLockConfig,
 } from "../src/loginLimiter";
 import { hashPassword } from "../src/password";
+import {
+  type SignupLimitConfig,
+  type SignupState,
+  checkAndRecordSignup,
+  initialSignupState,
+  refundSignup,
+  resolveSignupLimitConfig,
+} from "../src/signupLimiter";
 import type {
   AnyDb,
   BackfillTrackerClient,
   Env,
   LoginLimiterClient,
+  SignupLimiterClient,
   StorageHandle,
 } from "../src/types";
 
@@ -118,6 +127,69 @@ export function makeLoginLimiterFactory(cfg: LoginLockConfig = resolveLoginLockC
   });
 }
 
+/** U17b (QĐ-2, Finding 1) — factory limiter đăng ký GIẢ in-memory (dùng logic thuần
+ * checkAndRecordSignup NGUYÊN TỬ + Date.now()) để test route /dang-ky. Trạng thái giữ theo
+ * key (IP) trong Map. Không truyền cfg → mặc định (never-chặn trong các test không liên
+ * quan). Dùng SEQUENTIAL (await từng lượt) — KHÔNG mô phỏng round-trip DO thật nên KHÔNG
+ * dùng để test đua đồng thời (xem makeRacySignupLimiterFactory bên dưới cho việc đó). */
+export function makeSignupLimiterFactory(cfg: SignupLimitConfig = resolveSignupLimitConfig({})) {
+  const states = new Map<string, SignupState>();
+  const get = (key: string) => states.get(key) ?? initialSignupState();
+  return (_env: Env, key: string): SignupLimiterClient => ({
+    checkAndRecord: async () => {
+      const outcome = checkAndRecordSignup(get(key), Date.now(), cfg);
+      states.set(key, outcome.state);
+      return outcome.token === undefined
+        ? { gate: outcome.gate }
+        : { gate: outcome.gate, token: outcome.token };
+    },
+    refund: async (token: number) => {
+      states.set(key, refundSignup(get(key), token));
+    },
+  });
+}
+
+/** U17b (QĐ-2, Finding 1 — TOCTOU) — factory limiter đăng ký GIẢ mô phỏng ĐÚNG đặc tính một
+ * Durable Object THẬT: mỗi lệnh gọi (checkAndRecord/refund) tới "DO" của MỘT key được XẾP
+ * HÀNG + xử lý TUẦN TỰ (input-gating thật — một fetch() chạy trọn vẹn trước fetch() kế), có
+ * độ trễ round-trip giả lập (`delayMs`, mặc định 5ms). Khác `makeSignupLimiterFactory`
+ * (đồng bộ-thực-chất, không mô phỏng độ trễ mạng) — dùng khi bài test cần bắn nhiều request
+ * ĐỒNG THỜI (Promise.all) và cần một double đáng tin cậy để phơi ra (hoặc xác nhận đã vá)
+ * lỗi đua, bất kể PGlite trong máy chạy nhanh/chậm thế nào. */
+export function makeRacySignupLimiterFactory(
+  cfg: SignupLimitConfig = resolveSignupLimitConfig({}),
+  delayMs = 5,
+) {
+  const states = new Map<string, SignupState>();
+  const queues = new Map<string, Promise<unknown>>();
+  const enqueue = <T>(key: string, task: () => Promise<T>): Promise<T> => {
+    const prev = queues.get(key) ?? Promise.resolve();
+    const next = prev.then(task, task);
+    queues.set(
+      key,
+      next.catch(() => {}),
+    );
+    return next;
+  };
+  const get = (key: string) => states.get(key) ?? initialSignupState();
+  return (_env: Env, key: string): SignupLimiterClient => ({
+    checkAndRecord: () =>
+      enqueue(key, async () => {
+        await new Promise((r) => setTimeout(r, delayMs));
+        const outcome = checkAndRecordSignup(get(key), Date.now(), cfg);
+        states.set(key, outcome.state);
+        return outcome.token === undefined
+          ? { gate: outcome.gate }
+          : { gate: outcome.gate, token: outcome.token };
+      }),
+    refund: (token: number) =>
+      enqueue(key, async () => {
+        await new Promise((r) => setTimeout(r, delayMs));
+        states.set(key, refundSignup(get(key), token));
+      }),
+  });
+}
+
 /** U22 — factory tracker backfill GIẢ in-memory dùng ĐÚNG logic thuần initDef/readDef
  * (như DO thật): store-once idempotent + cách ly tenant. Trạng thái theo backfillId. */
 export function makeBackfillTrackerFactory() {
@@ -134,14 +206,15 @@ export function makeBackfillTrackerFactory() {
 }
 
 /** Tiêm db PGlite + R2 giả + transport GDT giả + limiter giả + tracker giả vào createApp
- * (close = noop). storage/transport/loginLimiter/backfillTracker tùy chọn; mặc định
- * factory giả — test cần đối chiếu trạng thái truyền factory riêng phơi store. */
+ * (close = noop). storage/transport/loginLimiter/backfillTracker/signupLimiter tùy chọn;
+ * mặc định factory giả — test cần đối chiếu trạng thái truyền factory riêng phơi store. */
 export function injectDb(
   db: Db,
   storage: FakeStorage = makeStorage(),
   transport: GdtTransport = makeTransport(),
   getLoginLimiter = makeLoginLimiterFactory(),
   getBackfillTracker = makeBackfillTrackerFactory(),
+  getSignupLimiter = makeSignupLimiterFactory(),
 ) {
   return {
     getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }),
@@ -149,6 +222,7 @@ export function injectDb(
     getTransport: () => transport,
     getLoginLimiter,
     getBackfillTracker,
+    getSignupLimiter,
   };
 }
 

@@ -271,3 +271,39 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 **Nguồn phát hiện:** phiên chẩn đoán 2026-07-18 (bằng chứng `lan_dong_bo` production),
 đối chiếu `docs/plans/U28-plan.md` (phiên song song cùng ngày, nhánh
 `claude/fix-subrequest-breaker`).
+
+### [2026-07-20] Không có nhật ký audit cho lượt đăng ký bị từ chối (`/dang-ky`)
+
+- **Trạng thái:** Đề xuất — chưa triển khai. Phát hiện trong review chéo U17b.
+- **Bối cảnh/bằng chứng:** `apps/api/src/routes/dangKy.ts` chỉ ghi `audit_log` (hành động `dang_ky`) khi request THÀNH CÔNG (201, trong cùng transaction `withTenant`). Các nhánh 400 (`bad_request`/`chua_dong_y_dieu_khoan`/`email_khong_hop_le`/`mst_khong_hop_le`), 409 (`da_ton_tai`), và 429 (`qua_nhieu_yeu_cau`) đều KHÔNG ghi gì. Cảnh báo khi chạm ngưỡng limiter (`signupLimiterDO.ts` dòng ~47-49, `signup_rate_limited`) cố ý CHỈ log `at` (thời điểm) — không kèm IP, theo đúng nguyên tắc `security.md` (không log PII/IP tràn lan). Gốc ràng buộc: `audit_log.tenant_id` là `NOT NULL` + RLS (`packages/db/src/schema/auditLog.ts`) — một lượt đăng ký thất bại không có tenant nào để gắn.
+- **Rủi ro nếu bỏ qua:** không có bằng chứng pháp lý để điều tra dò quét/lạm dụng `/dang-ky` — đúng lúc ADR-0006 (rủi ro dò danh bạ MST/email) xác nhận việc dò quét này khả thi về kỹ thuật. Không biết được ai/khi nào/bao nhiêu lượt đã thử dò trước khi bị limiter chặn.
+- **Đề xuất hướng xử lý:** cần một thiết kế riêng, không phải vá nhanh — hoặc (a) một nhật ký KHÔNG gắn tenant, tái dùng bảng `audit_log_admin` đã có sẵn cho hành động xuyên-tenant (`U17-plan.md` QĐ-6) thay vì tạo bảng thứ ba, hoặc (b) Cloudflare Analytics Engine (định lượng, không cần khóa ngoại tenant). Route sang U18 (đơn vị kế tiếp chạm audit xuyên-tenant).
+- **Mức ưu tiên đề xuất:** Trung bình (không chặn vận hành, nhưng là khoảng trống điều tra sự cố).
+- **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
+
+### [2026-07-20] `SignupLimiter` fail-open khi thiếu binding — rủi ro triển khai, không phải lỗi hiện tại
+
+- **Trạng thái:** Ghi nhận rủi ro — không hành động ngay, giám sát qua smoke test bắt buộc.
+- **Bối cảnh/bằng chứng:** `signupLimiterClient()` (`apps/api/src/signupLimiterDO.ts` dòng ~72-82): nếu `ns` (namespace `SIGNUP_LIMITER`) là `undefined`, trả về client giả luôn `chan:false` — KHÔNG chặn gì, không có token để hoàn (`refund` no-op). Đây là khuôn giống hệt `loginLimiterDO.ts` fail-open đã có tiền lệ trong dự án — hợp lý cho khóa đăng nhập (một lớp trong nhiều lớp phòng thủ của `/auth`), nhưng RỦI RO HƠN ở đây vì `/dang-ky` là **cổng ghi công khai duy nhất** và `SignupLimiter` là **lớp chống lạm dụng DUY NHẤT** của nó — không có lớp thứ hai. Binding + migration tag `v5` (`apps/api/wrangler.jsonc` dòng ~59) hiện ĐÃ khai báo đúng, nên đây KHÔNG phải lỗi đang tồn tại — mà là rủi ro nếu triển khai sai thứ tự (deploy thiếu binding) hoặc rollback về bản trước `v5`.
+- **Rủi ro nếu bỏ qua:** một lần cấu hình sai hoặc rollback sẽ ÂM THẦM cho phép tạo tenant `cho_duyet` không giới hạn — chỉ lộ ra qua một dòng `console.warn` (`signup_limiter_unavailable`), không có cảnh báo chủ động nào theo dõi log này realtime.
+- **Đề xuất hướng xử lý:** không đổi code — hạ tầng hiện đã đúng. Bắt buộc smoke test đường 429 (bấm liên tiếp vượt ngưỡng từ cùng IP, xác nhận lượt vượt ngưỡng trả 429) SAU MỖI lần deploy `apps/api`, không chỉ smoke test `/health` hay đường 201. Cân nhắc, khi tới lượt, một cảnh báo chủ động (không chỉ log) khi limiter fail-open lặp lại.
+- **Mức ưu tiên đề xuất:** Trung bình — không sửa code, chỉ là kỷ luật vận hành (đưa vào checklist deploy).
+- **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
+
+### [2026-07-20] `/dang-ky` không xác minh quyền sở hữu email lẫn MST — U18 phải biết khi duyệt
+
+- **Trạng thái:** Đề xuất — cần được phản ánh trong spec U18, chưa triển khai.
+- **Bối cảnh/bằng chứng:** `apps/api/src/routes/dangKy.ts` chấp nhận bất kỳ `email` hợp dạng (qua `validateEmailDangKy` — chỉ lọc dạng/alias/miền dùng-1-lần/allowlist đuôi, KHÔNG xác minh chủ sở hữu hộp thư) và bất kỳ `mst` đúng 10/13 chữ số (KHÔNG đối chiếu với cơ quan thuế hay bất kỳ nguồn xác thực nào). Cổng kiểm soát thật duy nhất là bước duyệt thủ công của Admin ở U18 (`tenants.trang_thai: cho_duyet → active`).
+- **Rủi ro nếu bỏ qua:** nếu spec U18 không nói rõ điều này, người duyệt (Admin) có thể ngầm định "email hiển thị trong hồ sơ chờ duyệt là email thật của MST đó" — sai. Một địa chỉ email giả mạo/gần giống (lookalike) đăng ký kèm MST thật của người khác có thể bị duyệt nhầm nếu Admin không được cảnh báo rằng email CHƯA XÁC MINH.
+- **Đề xuất hướng xử lý:** khi viết spec U18 (`docs/plans/U18-plan.md`), ghi rõ trong màn duyệt: email hiển thị là **CHƯA XÁC MINH** (chưa có bước gửi email/xác nhận liên kết) — Admin cần tự đối chiếu thông tin doanh nghiệp (vd tra cứu MST công khai) trước khi duyệt, không chỉ tin theo dữ liệu người đăng ký tự khai.
+- **Mức ưu tiên đề xuất:** Cao (ảnh hưởng trực tiếp bước quyết định duyệt/từ chối của U18 — cần vào spec trước khi U18 code, không phải vá sau).
+- **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
+
+### [2026-07-20] CHƯA KIỂM CHỨNG — nguyên tử hóa `checkAndRecordSignup` dựa vào input-gating của Durable Object, chưa chạy trên `workerd` thật
+
+- **Trạng thái:** CHƯA KIỂM CHỨNG (nhãn bắt buộc theo Hiến pháp — nguyên tắc bằng chứng).
+- **Bối cảnh/bằng chứng:** Bản vá TOCTOU (commit `7b43790`, F1 — gộp check+record thành một `checkAndRecordSignup` nguyên tử, xem `apps/api/src/signupLimiter.ts` + `signupLimiterDO.ts`) dựa vào tiền đề: input-gating của Durable Object đảm bảo không lệnh gọi nào khác xen được vào giữa đọc và ghi của MỘT `fetch()`. Tiền đề này đã được kiểm chứng bằng test đối kháng (RED-PROOF: 12/12 lượt lọt ngưỡng trước khi vá, xanh sau khi vá) — NHƯNG test chạy trên **mô hình in-memory trung thực** (fake DO trong test harness), KHÔNG chạy trên runtime `workerd` thật. `signupLimiterDO.ts` dòng 3-4 tự ghi chú "KHÔNG test-cover (cần runtime DO thật...)" — đúng quy ước hiện có của dự án (`loginLimiterDO.ts` cũng nằm ngoài phủ test theo cách tương tự), không phải sơ suất riêng của U17b.
+- **Rủi ro nếu bỏ qua:** nếu hành vi input-gating thật của `workerd` sai khác mô hình giả lập (ví dụ ở biên: timeout, eviction, hibernation giữa chừng một `fetch()`), lỗ hổng TOCTOU đã vá có thể **tái xuất hiện** mà không có test nào bắt được, vì bài test hiện tại không chạm runtime thật.
+- **Đề xuất hướng xử lý:** khi có cơ hội (không chặn deploy U17b) — thêm một phép kiểm chứng chạy trên `workerd` thật (`wrangler dev --remote` hoặc `vitest-pool-workers` nếu đủ độ trung thực DO) bắn N request đồng thời vào một `SignupLimiter` DO thật, đo lại đúng kịch bản RED-PROOF (N request, ngưỡng thấp, đếm số lượt lọt) để xác nhận input-gating thật khớp mô hình. Tới khi có bằng chứng đó, tiếp tục dán nhãn CHƯA KIỂM CHỨNG mọi nơi tiền đề này được viện dẫn.
+- **Mức ưu tiên đề xuất:** Thấp–Trung bình (tiền đề input-gating nằm trong tài liệu chính thức Cloudflare, khả năng sai thấp — nhưng theo Hiến pháp, "đã có trong tài liệu" không tự động là "đã kiểm chứng" khi áp cho một cơ chế bảo mật cụ thể).
+- **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.

@@ -2,8 +2,8 @@
 // getTableConfig, KHÔNG cần DB. Bắt các luật mô hình hóa của Hiến pháp/Luật:
 // tenant_id NOT NULL mọi bảng nghiệp vụ; khóa tự nhiên 6 trường đúng thứ tự;
 // KHÔNG cột mật khẩu thô; raw_json JSONB; thuế suất dòng giữ kép.
-import { getTableName } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { SQL, getTableName, is } from "drizzle-orm";
+import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { HOA_DON_NATURAL_KEY, HOA_DON_NATURAL_KEY_CONSTRAINT } from "../../src/naturalKey";
 import {
@@ -152,10 +152,23 @@ describe("U4 lược đồ — ràng buộc mô hình hóa (unit, offline)", () 
     expect(pw?.notNull, "password_hash nullable (không chặn hàng cũ)").toBe(false);
 
     // Email UNIQUE toàn cục (không kèm tenant_id) — login xảy ra trước khi biết tenant.
+    // U17b (Task 5b, F4) — chỉ mục PHẢI là BIỂU THỨC lower(email), KHÔNG PHẢI cột "email"
+    // trần: byte-exact để "Boss@Corp.vn" và "BOSS@CORP.VN" lọt qua như hai người khác nhau
+    // (migration 0010_email_khong_phan_biet_hoa_thuong.sql thay chỉ mục cũ bằng đúng cái
+    // này trên DB thật — test này khoá lại HÌNH DẠNG khai báo Drizzle khớp migration đó).
     const emailIdx = cfg.indexes.find((i) => i.config.name === "nguoi_dung_email_unique");
     expect(emailIdx, "phải có unique index nguoi_dung_email_unique").toBeDefined();
     expect(emailIdx?.config.unique).toBe(true);
-    expect(emailIdx?.config.columns.map((c) => ("name" in c ? c.name : ""))).toEqual(["email"]);
+    const emailIdxCol = emailIdx?.config.columns[0];
+    expect(emailIdx?.config.columns).toHaveLength(1);
+    expect(
+      emailIdxCol && "name" in emailIdxCol,
+      "cột chỉ mục PHẢI là biểu thức SQL, không phải cột email trần (mới lại byte-exact)",
+    ).toBe(false);
+    expect(is(emailIdxCol, SQL), "cột chỉ mục phải là một SQL expression").toBe(true);
+    const emailIdxSql = new PgDialect().sqlToQuery(emailIdxCol as SQL).sql;
+    expect(emailIdxSql.toLowerCase()).toContain("lower(");
+    expect(emailIdxSql).toContain('"email"');
 
     const vaiTro = cfg.columns.find((c) => c.name === "vai_tro");
     expect(vaiTro?.default, "vai_tro default = ke_toan (vai ít quyền nhất)").toBe("ke_toan");
