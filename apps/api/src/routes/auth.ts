@@ -154,13 +154,20 @@ export function authRoutes(deps: AppDeps) {
         // login_fail_chua_duyet (để soi được lý do thật khi tra audit), còn lại (sai mật
         // khẩu / vai không hợp lệ) vẫn that_bai như cũ. KHÔNG đổi mã lỗi HTTP (vẫn 401 gọn,
         // vẫn qua đúng một settle() off-critical-path).
+        //
+        // ĐÍNH CHÍNH 2026-07-20 (chủ dự án duyệt, xem docs/plans/U17b-plan-thuc-thi.md
+        // Task 4) — gate đổi từ `row?.password_hash && ...` sang `row && ...`. Bản cũ dùng
+        // password_hash làm điều kiện "tenant có thật", nhưng tenant tự đăng ký qua
+        // POST /dang-ky luôn có password_hash NULL (đặt mật khẩu là việc của luồng sau) ⇒
+        // `row?.password_hash` LUÔN false cho đúng quần thể mà login_fail_chua_duyet được
+        // sinh ra để phục vụ — nhánh audit này không bao giờ ghi được, và hoàn toàn KHÔNG
+        // audit nào được ghi (kể cả that_bai) cho người dùng tự đăng ký. "Tenant có thật"
+        // đúng nghĩa là `row` tồn tại (email khớp một hàng — auditLogin() đã cần
+        // row.tenant_id/row.id), không phụ thuộc có mật khẩu hay chưa. KHÔNG đổi mã lỗi
+        // HTTP, KHÔNG đổi vị trí trong biểu thức 401 hay đường settle() off-critical-path.
         const hanhDong =
-          row?.password_hash && row.tenant_trang_thai !== "active"
-            ? "login_fail_chua_duyet"
-            : "that_bai";
-        const audit = row?.password_hash
-          ? auditLogin(db, row.tenant_id, row.id, hanhDong)
-          : undefined;
+          row && row.tenant_trang_thai !== "active" ? "login_fail_chua_duyet" : "that_bai";
+        const audit = row ? auditLogin(db, row.tenant_id, row.id, hanhDong) : undefined;
         await settle(audit);
         return c.json({ error: "unauthorized" }, 401);
       }

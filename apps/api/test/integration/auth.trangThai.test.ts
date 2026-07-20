@@ -2,7 +2,7 @@
 // Tenant chưa duyệt / bị khoá / bị từ chối KHÔNG được đăng nhập, và phải nhận ĐÚNG mã lỗi
 // giống hệt sai mật khẩu — nếu khác, kẻ tấn công phân biệt được "tenant này có thật, đang
 // chờ duyệt" với "không tồn tại", tức rò thông tin.
-import { auditLog, tenants } from "@vat/db";
+import { auditLog, nguoiDung, tenants } from "@vat/db";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -107,4 +107,69 @@ describe("POST /auth/login — cổng trạng thái tenant (U17b)", () => {
     // Không có bản ghi thành công nào (ket_qua=thanh_cong) cho tenant chưa duyệt.
     expect(rows.some((a) => JSON.stringify(a.chiTiet).includes("thanh_cong"))).toBe(false);
   });
+});
+
+// U17b — LỖ HỔNG AUDIT ĐO ĐƯỢC (báo cáo 2026-07-20, xem đính chính docs/plans/
+// U17b-plan-thuc-thi.md Task 4): tenant tạo qua POST /dang-ky (luồng THẬT) luôn có
+// `password_hash IS NULL` (dangKy.ts — đặt mật khẩu là việc của luồng sau, ngoài U17b).
+// Test `auth.trangThai.test.ts` ở TRÊN chỉ đi qua vì `seedUser` gán một mật khẩu thật —
+// một quần thể `seedUser` KHÔNG BAO GIỜ tự sinh ra qua đăng ký công khai, nên test đó
+// KHÔNG bắt được lỗ hổng: gate cũ `row?.password_hash && trang_thai !== "active"` luôn
+// FALSE cho người dùng tự đăng ký (password_hash null) ⇒ nhánh audit
+// `login_fail_chua_duyet` không bao giờ ghi được cho đúng quần thể nó được sinh ra để
+// phục vụ. Test này đi ĐÚNG đường thật: đăng ký công khai → chưa duyệt → login → phải
+// ghi được `login_fail_chua_duyet`.
+describe("POST /auth/login — tenant tự đăng ký qua POST /dang-ky thật (KHÔNG seedUser)", () => {
+  let db: Db;
+  let app: ReturnType<typeof createApp>;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    app = createApp(injectDb(db));
+  });
+
+  it("tenant tự đăng ký (password_hash NULL) đang chờ duyệt + login → 401 + ghi audit login_fail_chua_duyet", async () => {
+    const email = "chu.tu.dang.ky@congty.vn";
+    const signUpRes = await app.request(
+      "/dang-ky",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "CF-Connecting-IP": "203.0.113.55" },
+        body: JSON.stringify({
+          email,
+          tenDoanhNghiep: "Công ty Tự Đăng Ký",
+          mst: "0100000077",
+          dongYDieuKhoan: true,
+        }),
+      },
+      makeEnv(),
+    );
+    expect(signUpRes.status).toBe(201);
+
+    const [user] = await db.select().from(nguoiDung).where(eq(nguoiDung.email, email));
+    expect(user).toBeDefined();
+    expect(user?.passwordHash).toBeNull();
+    const tenantId = user?.tenantId as string;
+
+    const loginRes = await login(email, "bat-ky-mat-khau-nao");
+    expect(loginRes.status).toBe(401);
+    expect(loginRes.headers.get("Set-Cookie")).toBeNull();
+
+    const rows = await db.select().from(auditLog).where(eq(auditLog.tenantId, tenantId));
+    const loginAudit = rows.find((a) => a.hanhDong === "dang_nhap_saas");
+    expect(loginAudit).toBeDefined();
+    expect(JSON.stringify(loginAudit?.chiTiet)).toMatch(/login_fail_chua_duyet/);
+  });
+
+  function login(email: string, password: string) {
+    return app.request(
+      "/auth/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      },
+      makeEnv(),
+    );
+  }
 });
