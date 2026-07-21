@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "../components/layout/AppLayout";
 import { PageHeader } from "../components/layout/PageHeader";
 import { AboutPage } from "../features/about/AboutPage";
+import { DangKyPage } from "../features/auth/DangKyPage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { useAuth } from "../features/auth/auth-context";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
@@ -63,10 +64,23 @@ function LoginRoute() {
   return <LoginPage />;
 }
 
+/** U20 — Guard cho trang Đăng ký. Cùng khuôn `LoginRoute`: chờ dò phiên xong mới quyết,
+ * để người đang có phiên không thấy form loé lên rồi bị đá đi (C8c). */
+function DangKyRoute() {
+  const { status } = useAuth();
+  if (status === "checking") return <DangKiemTraPhien />;
+  if (status === "authed") return <Navigate to="/" replace />;
+  return <DangKyPage />;
+}
+
 export function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
+      {/* U20 — Đăng ký công khai. NGOÀI ProtectedLayout: khách chưa có tài khoản thì
+          đương nhiên chưa có phiên. Người ĐANG đăng nhập vào đây thì đá về app — họ đã
+          có tài khoản rồi, form đăng ký chỉ gây bối rối. */}
+      <Route path="/dang-ky" element={<DangKyRoute />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="invoices" element={<InvoicesPage />} />

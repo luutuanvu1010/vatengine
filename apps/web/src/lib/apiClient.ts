@@ -139,6 +139,22 @@ export const api = {
   login(email: string, password: string): Promise<{ ok: true }> {
     return request("POST", "/auth/login", { body: { email, password } });
   },
+  /**
+   * U20 — Đăng ký công khai. KHÔNG cần phiên (khách chưa có tài khoản).
+   *
+   * Tenant sinh ra ở trạng thái `cho_duyet` và CHƯA đăng nhập được cho tới khi super-admin
+   * duyệt trong Cổng Admin (U18). Hệ thống hiện KHÔNG gửi email nào cho khách — hạ tầng
+   * email thuộc U24, chưa tồn tại — nên UI không được hứa "sẽ gửi email thông báo".
+   */
+  dangKy(body: {
+    email: string;
+    tenDoanhNghiep: string;
+    mst: string;
+    dongYDieuKhoan: boolean;
+  }): Promise<{ ok: true; trangThai: "cho_duyet" }> {
+    return request("POST", "/dang-ky", { body });
+  },
+
   // C4 — đăng xuất THẬT: chỉ server mới xoá được cookie HttpOnly. Bỏ bước này thì
   // "Đăng xuất" chỉ dọn state phía client, cookie vẫn sống và phiên vẫn dùng được.
   logout(): Promise<{ ok: true }> {
