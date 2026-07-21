@@ -11,3 +11,7 @@ export const DONATION_ADD_INFO = "Ung ho VATEngine";
 
 /** Mức gợi ý (đồng). Nút "Số khác" cho phép nhập tùy ý. */
 export const DONATION_TIERS = [10000, 50000, 100000, 500000] as const;
+
+/** Ẩn khối Đóng góp trên trang Giới thiệu (quyết định chủ dự án 2026-07-21). Đổi thành
+ * true để bật lại — không xóa DonationQr.tsx/vietqr.ts hay test liên quan. */
+export const SHOW_DONATION = false;
