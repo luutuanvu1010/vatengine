@@ -299,6 +299,16 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 - **Mức ưu tiên đề xuất:** Cao (ảnh hưởng trực tiếp bước quyết định duyệt/từ chối của U18 — cần vào spec trước khi U18 code, không phải vá sau).
 - **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
 
+### [2026-07-21] U19 còn thiếu: panel chi tiết doanh nghiệp + form sửa metadata
+
+- **Trạng thái:** Ghi nợ có ý thức — chủ dự án chốt 2026-07-21 ship U19 ở mức hiện tại để gỡ chỗ kẹt duyệt tenant trước. **Đề xuất làm CÙNG U21**, không làm riêng.
+- **Bối cảnh:** `docs/plans/U19-plan.md` §3/§4 liệt kê `TenantDetail.tsx` (panel xem người dùng của tenant, lịch sử `lan_dong_bo`, trạng thái hạn token GDT) và form sửa metadata. Backend đã sẵn sàng từ U18: `GET /admin/tenants/:id` (`admin_chi_tiet_tenant`) trả đủ dữ liệu, `PATCH /admin/tenants/:id` nhận `ten`/`goi_dich_vu`/`ghi_chu`, và `adminApi.suaMetadata` + `adminApi.chiTietTenant` đã có trong `apps/admin/src/lib/adminApiClient.ts` — chỉ thiếu tầng UI.
+- **Ảnh hưởng hiện tại:** KHÔNG chặn việc chính. Chủ dự án vẫn duyệt/từ chối/khóa/mở khóa/cấp lại mật khẩu được, vẫn xem được nhật ký. Thiếu phần "nhìn sâu vào một doanh nghiệp" và sửa tên/gói (hiện phải sửa bằng SQL tay nếu cần).
+- **Vì sao đề xuất gộp với U21:** U21 (dashboard giám sát) tiêu thụ đúng cùng tập dữ liệu — trạng thái token GDT sắp hết hạn, lịch sử đồng bộ, sức khỏe theo tenant. Dựng `TenantDetail` riêng bây giờ nhiều khả năng phải viết lại khi U21 định hình cách trình bày các chỉ số đó.
+- **Lưu ý ràng buộc khi làm:** form sửa metadata **KHÔNG được có ô email và ô MST** — `admin_sua_metadata_tenant` (migration 0011) không nhận hai trường đó, và backend trả 400 nếu gửi lên. Email là danh tính đăng nhập, MST là khoá tự nhiên (U23-D: 1 MST ↔ 1 tenant); cả hai đáng là thao tác riêng có audit riêng.
+- **Mức ưu tiên đề xuất:** Trung bình — làm khi tới U21.
+- **Nguồn phát hiện:** Chốt phạm vi U19, 2026-07-21.
+
 ### [2026-07-21] Khoá tenant KHÔNG cắt phiên khách đang sống — nút "Khoá" của U18 trễ tới 8 giờ
 
 - **Trạng thái:** Ghi nợ có ý thức — chủ dự án chốt 2026-07-21 KHÔNG xử lý ở U18 (hiện mới 1 tài khoản, rủi ro thật gần bằng 0). Phải xử lý TRƯỚC khi có khách hàng thật thứ hai.
