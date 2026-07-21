@@ -93,6 +93,22 @@ export const adminApi = {
     return request("POST", "/admin/auth/login", { body: { email, password } });
   },
 
+  /**
+   * Dò phiên. SPA không đọc được cookie HttpOnly nên sau khi tải lại trang đây là cách
+   * DUY NHẤT biết phiên còn sống hay không: 200 = còn, 401 = chưa/hết.
+   *
+   * KHÔNG dùng cờ trong localStorage thay cho lời gọi này: cờ và cookie sẽ lệch nhau ngay
+   * lần đầu cookie hết hạn — UI tưởng đang đăng nhập, mọi request trả 401.
+   */
+  docPhien(): Promise<{ id: string }> {
+    return request("GET", "/admin/auth/me");
+  },
+
+  /** Đăng xuất THẬT — chỉ server xoá được cookie HttpOnly. Bỏ bước này thì phiên vẫn sống. */
+  dangXuat(): Promise<{ ok: true }> {
+    return request("POST", "/admin/auth/logout");
+  },
+
   lietKeTenant(params: {
     trangThai?: TrangThaiTenant | undefined;
     q?: string | undefined;
