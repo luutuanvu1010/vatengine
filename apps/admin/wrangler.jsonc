@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // U19 — Cổng Admin: SPA React+Vite trên Worker Static Assets, subdomain TÁCH khỏi app
+  // khách (chốt 2026-07-15). Origin khác ⇒ cookie phiên admin và cookie khách nằm ở hai
+  // hũ riêng, không thể lẫn — đây là lý do chọn app riêng thay vì route /admin.
+  "name": "vat-admin",
+  "main": "worker.ts",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    // Worker chạy TRƯỚC assets → cổng allowlist /api/admin/* không bị SPA-fallback nuốt.
+    "run_worker_first": true
+  },
+  // Dùng CHUNG vat-api với app khách — U19 không có backend riêng, chỉ một mặt UI khác
+  // + token khác (U19-plan §2b). Proxy nội bộ qua service binding, không qua internet.
+  "services": [{ "binding": "API", "service": "vat-api" }],
+  "routes": [{ "pattern": "adminvatengine.tourdao.vn", "custom_domain": true }]
+  //
+  // HẠ TẦNG BẮT BUỘC KHI DEPLOY (nợ bàn giao từ U18, QĐ-4 / COMMERCIAL-LAYER P5):
+  // gắn **Cloudflare Zero Trust (Access)** cho hostname này. Đó là lớp THÊM ở biên —
+  // KHÔNG thay `requireSuperAdmin`, vốn phải tự đứng vững khi không có gì phía trước.
+}
