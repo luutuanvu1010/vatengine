@@ -18,7 +18,16 @@ vi.mock("../../src/password", async (importOriginal) => {
 import { createApp } from "../../src/app";
 import { verifyPassword } from "../../src/password";
 import { SESSION_COOKIE } from "../../src/session";
-import { type Db, freshDb, injectDb, makeEnv, makeTenant, seedUser } from "../helpers";
+import {
+  type Db,
+  freshDb,
+  injectDb,
+  makeEnv,
+  makeTenant,
+  seedUser,
+  stubTurnstile,
+  voiCaptcha,
+} from "../helpers";
 
 const verifySpy = vi.mocked(verifyPassword);
 
@@ -32,6 +41,7 @@ describe("POST /auth/login — cổng trạng thái tenant (U17b)", () => {
   let tenantA: string;
 
   beforeEach(async () => {
+    stubTurnstile();
     verifySpy.mockClear();
     db = await freshDb();
     app = createApp(injectDb(db));
@@ -49,7 +59,7 @@ describe("POST /auth/login — cổng trạng thái tenant (U17b)", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(voiCaptcha({ email, password })),
       },
       makeEnv(),
     );
@@ -124,6 +134,7 @@ describe("POST /auth/login — tenant tự đăng ký qua POST /dang-ky thật (
   let app: ReturnType<typeof createApp>;
 
   beforeEach(async () => {
+    stubTurnstile();
     db = await freshDb();
     app = createApp(injectDb(db));
   });
@@ -135,12 +146,14 @@ describe("POST /auth/login — tenant tự đăng ký qua POST /dang-ky thật (
       {
         method: "POST",
         headers: { "content-type": "application/json", "CF-Connecting-IP": "203.0.113.55" },
-        body: JSON.stringify({
-          email,
-          tenDoanhNghiep: "Công ty Tự Đăng Ký",
-          mst: "0100000077",
-          dongYDieuKhoan: true,
-        }),
+        body: JSON.stringify(
+          voiCaptcha({
+            email,
+            tenDoanhNghiep: "Công ty Tự Đăng Ký",
+            mst: "0100000077",
+            dongYDieuKhoan: true,
+          }),
+        ),
       },
       makeEnv(),
     );
@@ -167,7 +180,7 @@ describe("POST /auth/login — tenant tự đăng ký qua POST /dang-ky thật (
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(voiCaptcha({ email, password })),
       },
       makeEnv(),
     );

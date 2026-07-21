@@ -64,7 +64,17 @@ export function dangKyRoutes(deps: AppDeps) {
 
     // Đọc body MỘT LẦN ở đây rồi truyền xuống: một Request chỉ đọc được body một lần, mà
     // cả cổng captcha lẫn `xuLyDangKy` đều cần nó.
-    const body = await c.req.json().catch(() => null);
+    //
+    // Cú pháp JSON hỏng được trả lời TRƯỚC cổng captcha, và trả đúng `bad_request` như hợp
+    // đồng có từ U17b. Nếu để cổng captcha đáp trước, mọi body hỏng sẽ nhận `thieu_captcha`
+    // — vừa sai nguyên nhân vừa khiến người tích hợp đi tìm nhầm chỗ. Đổi thứ tự ở đây KHÔNG
+    // nới phòng thủ: `JSON.parse` không chạm DB, không chạm mạng, không tạo trạng thái nào.
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "bad_request" }, 400);
+    }
     const token = (body as Record<string, unknown> | null)?.[TURNSTILE_FIELD];
 
     // `CF-Connecting-IP` do CHÍNH biên Cloudflare ghi (client không giả mạo được). Ở đây nó
@@ -83,7 +93,11 @@ export function dangKyRoutes(deps: AppDeps) {
       return c.json({ error: kq.ly_do }, 400);
     }
 
-    return await xuLyDangKy(c, deps, body);
+    // BÓC token ra khỏi body trước khi chuyển tiếp: `dangKySchema` dùng `.strict()` nên
+    // một khoá lạ sẽ bị từ chối thành `bad_request`. Token captcha là dữ liệu TẦNG VẬN
+    // CHUYỂN, không phải dữ liệu nghiệp vụ — nó không có việc gì trong schema đăng ký.
+    const { [TURNSTILE_FIELD]: _bo, ...bodyNghiepVu } = (body ?? {}) as Record<string, unknown>;
+    return await xuLyDangKy(c, deps, body === null ? null : bodyNghiepVu);
   });
 
   return r;

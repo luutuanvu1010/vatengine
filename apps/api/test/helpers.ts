@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sign } from "hono/jwt";
+import { vi } from "vitest";
 import { signAdminToken } from "../src/admin/adminAuth";
 import { type BackfillDef, initDef, readDef } from "../src/backfillTracker";
 import { hashPassword } from "../src/password";
@@ -23,6 +24,12 @@ export const TEST_SECRET = "test-jwt-secret-u6";
 // sẽ đỏ hàng loạt với lý do khó đoán. Giữ hai hằng số khác nhau ngay tại nguồn.
 export const TEST_ADMIN_SECRET = "test-admin-jwt-secret-u18";
 
+// U33 — Turnstile trong test. Secret giả: `makeEnv` đặt sẵn để test KHÔNG rơi vào nhánh
+// 503 `captcha_chua_cau_hinh` (fail-closed) — nhánh đó có test riêng, không phải mặc định.
+export const TEST_TURNSTILE_SECRET = "0xTEST_TURNSTILE_SECRET";
+/** Token giả gửi kèm mọi request tới /dang-ky và /auth/login trong test. */
+export const TEST_TURNSTILE_TOKEN = "token-turnstile-gia-cho-test";
+
 // U14 — KEK test hợp lệ (32 byte zero, base64). KHÔNG dùng ngoài test (security.md).
 export const TEST_KEK = btoa(String.fromCharCode(...new Uint8Array(32)));
 
@@ -33,6 +40,7 @@ export function makeEnv(over: Partial<Env> = {}): Env {
     ENVIRONMENT: "test",
     JWT_SECRET: TEST_SECRET,
     ADMIN_JWT_SECRET: TEST_ADMIN_SECRET,
+    TURNSTILE_SECRET_KEY: TEST_TURNSTILE_SECRET,
     // HYPERDRIVE/RAW không dùng khi getDb/getStorage được tiêm — cast dummy ở ranh giới test.
     HYPERDRIVE: {} as Hyperdrive,
     RAW: {} as R2Bucket,
@@ -109,9 +117,13 @@ export function makeBackfillTrackerFactory() {
   });
 }
 
-/** Tiêm db PGlite + R2 giả + transport GDT giả + limiter giả + tracker giả vào createApp
- * (close = noop). storage/transport/loginLimiter/backfillTracker/signupLimiter tùy chọn;
- * mặc định factory giả — test cần đối chiếu trạng thái truyền factory riêng phơi store. */
+/** Tiêm db PGlite + R2 giả + transport GDT giả + tracker giả vào createApp (close = noop).
+ * storage/transport/backfillTracker tùy chọn; mặc định factory giả — test cần đối chiếu
+ * trạng thái thì truyền factory riêng có phơi store.
+ *
+ * U33 — hai tham số limiter (vị trí 4 và 6 cũ) đã bị gỡ cùng SignupLimiter/LoginLimiter,
+ * làm `getBackfillTracker` dịch từ vị trí 5 về 4. Đây là bẫy của tham số theo VỊ TRÍ: chỗ
+ * gọi cũ không lỗi cú pháp, chỉ lặng lẽ rơi mất factory và test đọc phải store rỗng. */
 export function injectDb(
   db: Db,
   storage: FakeStorage = makeStorage(),
@@ -221,6 +233,40 @@ export async function tokenFor(
   // role: null (ca test token THIẾU vai) → bỏ khỏi payload (sign JSON-hóa, rớt undefined).
   if (payload.role === null) payload.role = undefined;
   return sign(payload, TEST_SECRET, "HS256");
+}
+
+/**
+ * U33 — Giả lập Cloudflare siteverify cho test.
+ *
+ * BẮT BUỘC ở mọi test chạm `/dang-ky` hoặc `/auth/login`: sau khi U33 gỡ limiter, hai
+ * route đó gọi RA NGOÀI tới `challenges.cloudflare.com` để xác minh token. Không stub thì
+ * test đi ra internet thật — chậm, không ổn định, và vi phạm `testing.md` ("không để test
+ * phụ thuộc mạng thật").
+ *
+ * Chỉ chặn ĐÚNG URL của siteverify; mọi `fetch` khác đi qua như thường, để không vô tình
+ * che mất một lời gọi mạng mà test đang muốn quan sát.
+ */
+export function stubTurnstile(
+  ketQua: { success: boolean; "error-codes"?: string[] } = { success: true },
+): void {
+  const that = globalThis.fetch;
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("/turnstile/v0/siteverify")) {
+      return new Response(JSON.stringify(ketQua), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return that(input as RequestInfo, init);
+  });
+}
+
+/** Chèn token Turnstile vào body của request tới `/dang-ky` hoặc `/auth/login`.
+ * Widget thật tự chèn trường này khi form được gửi; test phải làm thay. */
+export function voiCaptcha<T extends Record<string, unknown>>(
+  body: T,
+): T & { "cf-turnstile-response": string } {
+  return { ...body, "cf-turnstile-response": TEST_TURNSTILE_TOKEN };
 }
 
 export function bearer(token: string): { Authorization: string } {

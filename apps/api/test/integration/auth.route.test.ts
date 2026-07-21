@@ -15,6 +15,8 @@ import {
   makeTenant,
   seedInvoice,
   seedUser,
+  stubTurnstile,
+  voiCaptcha,
 } from "../helpers";
 
 /** Trích token phiên từ Set-Cookie (test đóng vai trình duyệt) — C2. */
@@ -28,6 +30,7 @@ describe("POST /auth/login (integration, PGlite)", () => {
   let tenantA: string;
 
   beforeEach(async () => {
+    stubTurnstile();
     db = await freshDb();
     app = createApp(injectDb(db));
     tenantA = await makeTenant(db, "Cty A", "0100000001");
@@ -41,7 +44,7 @@ describe("POST /auth/login (integration, PGlite)", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(voiCaptcha({ email, password })),
       },
       makeEnv(),
     );
@@ -102,7 +105,7 @@ describe("POST /auth/login (integration, PGlite)", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "ke.toan@a.vn" }),
+        body: JSON.stringify(voiCaptcha({ email: "ke.toan@a.vn" })),
       },
       makeEnv(),
     );

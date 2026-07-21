@@ -21,9 +21,10 @@ import {
   freshDb,
   injectDb,
   makeEnv,
-  makeLoginLimiterFactory,
   makeTenant,
   seedUser,
+  stubTurnstile,
+  voiCaptcha,
 } from "../helpers";
 
 const verifySpy = vi.mocked(verifyPassword);
@@ -35,6 +36,7 @@ describe("POST /auth/login — gia cố (H-A.5a)", () => {
   let userId: string;
 
   beforeEach(async () => {
+    stubTurnstile();
     verifySpy.mockClear();
     db = await freshDb();
     app = createApp(injectDb(db));
@@ -48,7 +50,7 @@ describe("POST /auth/login — gia cố (H-A.5a)", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(voiCaptcha({ email, password })),
       },
       makeEnv(),
     );
@@ -86,7 +88,7 @@ describe("POST /auth/login — gia cố (H-A.5a)", () => {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify(voiCaptcha({ email, password })),
           },
           makeEnv(),
           ctx as unknown as ExecutionContext,
@@ -155,7 +157,7 @@ describe("POST /auth/login — gia cố (H-A.5a)", () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "x@a.vn", password: "p" }),
+          body: JSON.stringify(voiCaptcha({ email: "x@a.vn", password: "p" })),
         },
         makeEnv(),
       );
@@ -165,56 +167,51 @@ describe("POST /auth/login — gia cố (H-A.5a)", () => {
     });
   });
 
-  describe("khóa per-account (lockout — H-A.5b)", () => {
-    // App với limiter ngưỡng THẤP (khóa sau 3 lần) để test nhanh; state riêng mỗi app.
-    function appWithLimiter(maxFailures = 3) {
-      const factory = makeLoginLimiterFactory({ maxFailures, windowMs: 60_000, lockoutMs: 60_000 });
-      return createApp({ ...injectDb(db), getLoginLimiter: factory });
-    }
+  // U33/QĐ-11 — khối này TRƯỚC ĐÂY kiểm LoginLimiter: N lần sai → 429 + Retry-After, khoá
+  // theo từng email, đăng nhập đúng thì reset đếm. Toàn bộ cơ chế đã chuyển sang WAF
+  // Cloudflare + Turnstile. Khối được ĐẢO CHIỀU chứ không xoá, vì hai lý do:
+  //   1. Mất một lớp phòng thủ phải là khẳng định CÓ CHỦ Ý, đọc được từ chính test.
+  //   2. Hai tính chất dưới đây KHÔNG do limiter tạo ra và vẫn phải đúng sau khi gỡ nó —
+  //      trung lập enumeration, và không khoá oan người dùng thật.
+  //
+  // ⚠️ ĐÁNH ĐỔI (đã ghi ở sổ chương trình): chống dò mật khẩu giờ nằm HOÀN TOÀN ngoài mã
+  // này. Turnstile bị tắt hoặc WAF cấu hình sai ⇒ không còn lớp nào ở tầng ứng dụng chặn dò.
+  describe("QĐ-11 — không còn khoá per-account ở tầng ứng dụng", () => {
     function loginOn(a: ReturnType<typeof createApp>, email: string, password: string) {
       return a.request(
         "/auth/login",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify(voiCaptcha({ email, password })),
         },
         makeEnv(),
       );
     }
 
-    it("N lần sai (user thật) → lần kế bị KHÓA 429 + Retry-After", async () => {
-      const a = appWithLimiter(3);
-      for (let i = 0; i < 3; i++) {
-        expect((await loginOn(a, "ke.toan@a.vn", "sai")).status).toBe(401);
-      }
-      const locked = await loginOn(a, "ke.toan@a.vn", "sai");
-      expect(locked.status).toBe(429);
-      expect(locked.headers.get("Retry-After")).toBeTruthy();
-      expect(await locked.json()).toEqual({ error: "too_many_attempts" });
+    it("sai 20 lần liên tiếp vẫn 401 — không lần nào thành 429", async () => {
+      const a = createApp(injectDb(db));
+      const ma: number[] = [];
+      for (let i = 0; i < 20; i++) ma.push((await loginOn(a, "ke.toan@a.vn", "sai")).status);
+      expect(ma).toEqual(Array(20).fill(401));
     });
 
-    it("enumeration-neutral: email KHÔNG tồn tại cũng khóa sau N lần (429, không lộ tồn tại)", async () => {
-      const a = appWithLimiter(3);
-      for (let i = 0; i < 3; i++) await loginOn(a, "khong-ton-tai@x.vn", "sai");
-      expect((await loginOn(a, "khong-ton-tai@x.vn", "sai")).status).toBe(429);
+    it("sai nhiều lần KHÔNG chặn chính chủ đăng nhập đúng ngay sau đó", async () => {
+      const a = createApp(injectDb(db));
+      for (let i = 0; i < 10; i++) await loginOn(a, "ke.toan@a.vn", "sai");
+      expect((await loginOn(a, "ke.toan@a.vn", "mat-khau-dung")).status).toBe(200);
     });
 
-    it("đăng nhập ĐÚNG reset đếm → không bị khóa oan", async () => {
-      const a = appWithLimiter(3);
-      await loginOn(a, "ke.toan@a.vn", "sai");
-      await loginOn(a, "ke.toan@a.vn", "sai");
-      expect((await loginOn(a, "ke.toan@a.vn", "mat-khau-dung")).status).toBe(200); // reset
-      for (let i = 0; i < 3; i++) await loginOn(a, "ke.toan@a.vn", "sai");
-      expect((await loginOn(a, "ke.toan@a.vn", "sai")).status).toBe(429); // mới khóa lại
-    });
-
-    it("khóa theo TỪNG email — email khác KHÔNG bị vạ lây", async () => {
-      const a = appWithLimiter(3);
-      for (let i = 0; i < 4; i++) await loginOn(a, "ke.toan@a.vn", "sai"); // khóa email này
-      expect((await loginOn(a, "ke.toan@a.vn", "sai")).status).toBe(429);
-      // email khác chưa chạm ngưỡng → vẫn xử lý bình thường (401), KHÔNG 429.
-      expect((await loginOn(a, "khac@a.vn", "gi-do")).status).toBe(401);
+    it("trung lập enumeration: email CÓ THẬT và email KHÔNG tồn tại trả lời giống hệt nhau", async () => {
+      // Tính chất này trước đây được kiểm gián tiếp qua "email lạ cũng bị khoá". Limiter mất
+      // đi thì phải kiểm TRỰC TIẾP, nếu không nó lặng lẽ hết được bảo vệ bởi bất kỳ test nào.
+      const a = createApp(injectDb(db));
+      const co = await loginOn(a, "ke.toan@a.vn", "sai");
+      const khong = await loginOn(a, "khong-ton-tai@x.vn", "sai");
+      expect(co.status).toBe(khong.status);
+      expect(await co.json()).toEqual(await khong.json());
+      expect(co.headers.get("Set-Cookie")).toBeNull();
+      expect(khong.headers.get("Set-Cookie")).toBeNull();
     });
   });
 });

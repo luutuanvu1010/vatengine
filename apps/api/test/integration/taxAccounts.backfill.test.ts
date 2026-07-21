@@ -118,7 +118,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     const t = await makeTenant(db, "DN A", "0100000001");
     const acc = await seedTaxAccount(db, t, { username: "0311772540", ...VALID_TOKEN });
     const { factory, store } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await post(
       app,
       acc,
@@ -135,7 +135,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     const acc = await seedTaxAccount(db, t, { username: "0311772540", ...VALID_TOKEN });
     const { queue, batches } = fakeQueue();
     const { factory, store } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
 
     const res = await post(
       app,
@@ -186,7 +186,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
 
     const { queue, batches } = fakeQueue();
     const { factory } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await post(
       app,
       acc,
@@ -210,7 +210,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     }
     const { queue, batches } = fakeQueue();
     const { factory, store } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await post(
       app,
       acc,
@@ -230,7 +230,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     const accA = await seedTaxAccount(db, a, { username: "0311772540", ...VALID_TOKEN });
     const { queue, batches } = fakeQueue();
     const { factory } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await post(
       app,
       accA,
@@ -250,7 +250,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     });
     const { queue, batches } = fakeQueue();
     const { factory } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await post(
       app,
       acc,
@@ -294,7 +294,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
       },
     } as unknown as Queue<SyncJobMessage>;
     const { factory, store } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await post(
       app,
       acc,

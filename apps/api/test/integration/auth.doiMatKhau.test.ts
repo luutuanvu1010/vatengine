@@ -17,7 +17,9 @@ import {
   makeEnv,
   makeTenant,
   seedSuperAdmin,
+  stubTurnstile,
   tokenFor,
+  voiCaptcha,
 } from "../helpers";
 
 const EMAIL_KHACH = "chu.cty@congty.vn";
@@ -30,6 +32,7 @@ describe("Vòng đời mật khẩu tạm", () => {
   let tokenAdmin: string;
 
   beforeEach(async () => {
+    stubTurnstile();
     db = await freshDb();
     app = createApp(injectDb(db));
     tenantId = await makeTenant(db, "Cty Chờ Duyệt", "0100000001");
@@ -58,7 +61,7 @@ describe("Vòng đời mật khẩu tạm", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: EMAIL_KHACH, password }),
+        body: JSON.stringify(voiCaptcha({ email: EMAIL_KHACH, password })),
       },
       makeEnv(),
     );
@@ -97,7 +100,9 @@ describe("Vòng đời mật khẩu tạm", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "binh.thuong@b.vn", password: "mat-khau-cua-toi" }),
+        body: JSON.stringify(
+          voiCaptcha({ email: "binh.thuong@b.vn", password: "mat-khau-cua-toi" }),
+        ),
       },
       makeEnv(),
     );
@@ -230,6 +235,7 @@ describe("GET /admin/audit", () => {
   let tenantId: string;
 
   beforeEach(async () => {
+    stubTurnstile();
     db = await freshDb();
     app = createApp(injectDb(db));
     tenantId = await makeTenant(db, "Cty A", "0100000001");

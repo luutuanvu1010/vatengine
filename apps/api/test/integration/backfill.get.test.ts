@@ -112,7 +112,7 @@ describe("GET /backfill/:id — theo dõi tiến độ (U22 B6)", () => {
       directions: ["purchase", "sold"],
       createdAtMs: 1,
     });
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
 
     const res = await get(
       app,
@@ -162,7 +162,7 @@ describe("GET /backfill/:id — theo dõi tiến độ (U22 B6)", () => {
       directions: ["purchase"],
       createdAtMs: createdAt,
     });
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const env = makeEnv({ BACKFILL_TRACKER: {} as DurableObjectNamespace });
 
     const res1 = await get(app, BFID, t, env);
@@ -190,7 +190,7 @@ describe("GET /backfill/:id — theo dõi tiến độ (U22 B6)", () => {
   it("backfillId không tồn tại → 404", async () => {
     const t = await makeTenant(db, "DN A", "0100000001");
     const { factory } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await get(
       app,
       BFID,
@@ -212,7 +212,7 @@ describe("GET /backfill/:id — theo dõi tiến độ (U22 B6)", () => {
       directions: ["purchase", "sold"],
       createdAtMs: 1,
     });
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
 
     // Hỏi dưới ngữ cảnh tenant B → 404 (def thuộc tenant A).
     const res = await get(
@@ -227,7 +227,7 @@ describe("GET /backfill/:id — theo dõi tiến độ (U22 B6)", () => {
   it("id không phải UUID → 400", async () => {
     const t = await makeTenant(db, "DN A", "0100000001");
     const { factory } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await get(
       app,
       "khong-phai-uuid",
@@ -240,7 +240,7 @@ describe("GET /backfill/:id — theo dõi tiến độ (U22 B6)", () => {
   it("thiếu binding BACKFILL_TRACKER → 503", async () => {
     const t = await makeTenant(db, "DN A", "0100000001");
     const { factory } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, factory));
+    const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await get(app, BFID, t, makeEnv());
     expect(res.status).toBe(503);
   });

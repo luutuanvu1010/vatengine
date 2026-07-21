@@ -14,7 +14,9 @@ import {
   makeTenant,
   seedInvoice,
   seedUser,
+  stubTurnstile,
   tokenFor,
+  voiCaptcha,
 } from "../helpers";
 
 /** Trích giá trị cookie phiên từ header Set-Cookie (test đóng vai trình duyệt). */
@@ -34,6 +36,7 @@ describe("Phiên bằng cookie HttpOnly (ADR-0003 Amendment #1)", () => {
   let tenantA: string;
 
   beforeEach(async () => {
+    stubTurnstile();
     db = await freshDb();
     app = createApp(injectDb(db));
     tenantA = await makeTenant(db, "Cty A", "0100000001");
@@ -48,7 +51,7 @@ describe("Phiên bằng cookie HttpOnly (ADR-0003 Amendment #1)", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "ke.toan@a.vn", password: "mat-khau-dung" }),
+        body: JSON.stringify(voiCaptcha({ email: "ke.toan@a.vn", password: "mat-khau-dung" })),
       },
       makeEnv(),
     );

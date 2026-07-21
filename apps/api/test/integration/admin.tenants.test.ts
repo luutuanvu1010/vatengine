@@ -16,7 +16,9 @@ import {
   makeEnv,
   makeTenant,
   seedSuperAdmin,
+  stubTurnstile,
   tokenFor,
+  voiCaptcha,
 } from "../helpers";
 
 const EMAIL_ADMIN = "chu@vatengine.vn";
@@ -28,6 +30,7 @@ describe("🔴 requireSuperAdmin — cổng vào miền quản trị", () => {
   let tenantA: string;
 
   beforeEach(async () => {
+    stubTurnstile();
     db = await freshDb();
     app = createApp(injectDb(db));
     tenantA = await makeTenant(db, "Cty A", "0100000001");
@@ -84,6 +87,7 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
   let tenantActive: string;
 
   beforeEach(async () => {
+    stubTurnstile();
     db = await freshDb();
     app = createApp(injectDb(db));
     adminId = await seedSuperAdmin(db, EMAIL_ADMIN, MK_ADMIN);
@@ -151,7 +155,9 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "chu.cty@congty.vn", password: body.mat_khau_tam }),
+        body: JSON.stringify(
+          voiCaptcha({ email: "chu.cty@congty.vn", password: body.mat_khau_tam }),
+        ),
       },
       makeEnv(),
     );
@@ -193,7 +199,7 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "chu.cty@congty.vn", password: mat_khau_tam }),
+          body: JSON.stringify(voiCaptcha({ email: "chu.cty@congty.vn", password: mat_khau_tam })),
         },
         makeEnv(),
       );
@@ -300,7 +306,7 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "chu.cty@congty.vn", password: mk }),
+          body: JSON.stringify(voiCaptcha({ email: "chu.cty@congty.vn", password: mk })),
         },
         makeEnv(),
       );
