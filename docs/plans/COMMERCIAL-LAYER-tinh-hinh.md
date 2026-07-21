@@ -19,7 +19,7 @@
 | **U20** | Đăng ký khách + đổi mật khẩu + Cài đặt pháp lý + font | ✅ merged (PR #30) | ✅ **live (2026-07-21)** — smoke đầu-cuối 10/10 |
 | **U21** | Dashboard giám sát | ⬜ chưa bắt đầu | ❌ |
 | **U24** | Hạ tầng email (AWS SES) + quên mật khẩu | ⬜ chưa bắt đầu | ❌ |
-| **U33** | Gỡ rate-limit tầng ứng dụng → Turnstile | 🟡 **ĐANG DỞ** — lõi xong, test đỏ | ❌ |
+| **U33** | Gỡ rate-limit tầng ứng dụng → Turnstile | ✅ **XONG** — lint/test xanh, đã deploy 22-07 | ✅ |
 
 **Chuỗi nghiệp vụ hiện tại — chỗ nào đã thông, chỗ nào chưa:**
 
@@ -103,7 +103,7 @@ Bài học đắt nhất của phiên. Các thao tác ghi của admin viết dư
 
 *(giữ lại để thấy lộ trình đã đi tới đâu)*
 
-### Bước 1b — U33: gỡ rate-limit → Turnstile ← **ĐANG Ở ĐÂY**
+### Bước 1b — U33: gỡ rate-limit → Turnstile ✅ **XONG 2026-07-22**
 Chủ dự án chốt 2026-07-21. Chặn bởi: cần Site Key + Secret Key của Turnstile.
 
 ### ~~Bước 1 cũ — Đóng U20 (2 khối còn lại) rồi **deploy**~~
@@ -136,39 +136,39 @@ Không xếp lịch cứng; kích hoạt theo mốc ở §5. Riêng "test CI dư
 
 ---
 
-## 8. 🟡 U33 đang dở — điểm dừng phiên 2026-07-21
+## 8. ✅ U33 đã xong và đã LIVE — 2026-07-22
 
-Nhánh **`feat/u33-turnstile`**, commit cuối `8be6fd3` (**WIP, `make lint` và `make test` ĐỎ**). Chưa push, chưa deploy. Production đang chạy U20 bình thường, không có gì hỏng.
+Nhánh **`feat/u33-turnstile`**, commit `5cbef98`. **`make lint` = 0, `make test` = 0** (11/11 workspace).
+Đã deploy: `vat-api` version `db57bdde`, `vat-web` version `73eff2d5`.
 
-### Đã xong
-- `apps/api/src/turnstile.ts` — xác minh server-side, **14 test unit xanh**. Hợp đồng lấy từ tài liệu Cloudflare (tra 2026-07-21), không phải trí nhớ.
-- `routes/dangKy.ts` + `routes/auth.ts` — thay limiter bằng cổng Turnstile, fail-closed.
-- Xoá `loginLimiter{,DO}.ts`, `signupLimiter{,DO}.ts` + 2 test unit của chúng.
-- Dọn `types.ts`, `index.ts`, `test/helpers.ts`.
+### Kiểm chứng trên production (curl thật, 2026-07-22)
+| Ca | Kết quả |
+|---|---|
+| CSP trang khách | `script-src` + `frame-src` có `challenges.cloudflare.com`; `connect-src` vẫn `'self'` |
+| `POST /api/auth/login` không kèm captcha | `400 {"error":"thieu_captcha"}` |
+| `POST /api/dang-ky` không kèm captcha | `400 {"error":"thieu_captcha"}` |
+| `POST /api/dang-ky` với token **bịa** | `400 {"error":"captcha_sai"}` — không lọt |
+| Bundle production | chứa đúng site key + URL script Turnstile |
 
-### Còn lại — theo thứ tự nên làm
+⚠️ **CHƯA kiểm chứng:** widget có **hiện ra và giải được** trên trình duyệt thật hay không. Vì thiết kế fail-closed, widget không hiện ⇒ **không ai đăng nhập được**. Công cụ tự động không chụp được trang (không đạt `document_idle` — đặc trưng của trang có iframe Turnstile). **Phải có người mở `https://vatengine.tourdao.vn/login` và đăng nhập thật một lần.**
 
-**① Helper test dùng chung (làm TRƯỚC — nó gỡ phần lớn màu đỏ).**
-~25 test gọi `/dang-ky` và `/auth/login` **không kèm token Turnstile** nên giờ bị cổng captcha chặn, và route sẽ cố gọi ra `challenges.cloudflare.com` **thật** trong test. Cách sạch: **một** helper trong `test/helpers.ts` vừa stub `fetch` tới `siteverify` vừa chèn `cf-turnstile-response` vào body — sửa một chỗ thay vì hai mươi lăm.
+### Hai lỗi thật do chạy test bắt được (không phải lỗi test)
+1. **`dangKySchema` dùng `.strict()`** nên token nằm lại trong body bị từ chối là khoá lạ ⇒ **mọi** đăng ký hợp lệ trả 400. Sửa: bóc `cf-turnstile-response` khỏi body trước khi validate.
+2. **JSON hỏng bị cổng captcha đáp trước** ⇒ trả `thieu_captcha` thay vì `bad_request` (hồi quy hợp đồng U17b). Sửa: parse trước, cổng captcha sau — `JSON.parse` không chạm DB nên đổi thứ tự không nới phòng thủ.
 
-**② Viết lại 9 test kiểm hành vi vừa gỡ.**
-- `auth.hardening.test.ts` dòng ~186/197/203/212 — 4 ca lockout.
-- `dangKy.test.ts` dòng ~167/313/343/378/419 — rate-limit, TOCTOU, thiếu `CF-Connecting-IP`, và 2 ca refund.
+### Một lỗi thật do CHÍNH việc gỡ limiter gây ra, ở chỗ không ai ngờ
+`test/helpers.ts::injectDb` truyền tham số theo **VỊ TRÍ**. Gỡ 2 tham số limiter làm `getBackfillTracker` dịch từ vị trí 5 về 4 ⇒ **13 chỗ gọi lặng lẽ rơi mất factory** ⇒ 19 test backfill đỏ vì một lý do chẳng liên quan gì tới Turnstile. Không có lỗi cú pháp nào. Bộ test đã bắt được — đó là bằng chứng lưới an toàn còn hoạt động, nên chỉ sửa chỗ gọi chứ không đổi sang tham số dạng object (ngoài phạm vi U33).
 
-⚠️ **Không xoá cho xong.** Thay bằng ca khẳng định hành vi MỚI: *"đăng nhập sai 20 lần liên tiếp vẫn trả 401, không còn khoá"*. Nếu chỉ xoá, người sau sẽ không biết việc mất lockout là **có chủ ý** (QĐ-11) hay là hồi quy.
-Ghi chú: ca `khong_xac_dinh_duoc_ip` (503 khi thiếu `CF-Connecting-IP`) **không còn đúng** — cổng Turnstile không cần IP để hoạt động, IP chỉ là dữ liệu phụ giúp Cloudflare chấm điểm.
+### 🔴 NỢ MỞ RA TỪ CHÍNH U33 — phải trả trước khi nhận khách trả phí
+**Rule rate-limit WAF ở tầng zone Cloudflare là TIỀN ĐỀ CHƯA ĐƯỢC KIỂM CHỨNG.** QĐ-11 chuyển toàn bộ việc chặn nhịp sang đó, nhưng **không có gì trong kho này chứng minh rule ấy tồn tại** — không test nào chạm tới được, và chưa ai mở Dashboard xác nhận. Nếu rule không có:
+- mật khẩu tạm **6 chữ số** (10^6 khả năng, hạn 72h) chỉ còn Turnstile che, **không còn khoá theo tài khoản**;
+- `matKhauTam.ts` được thiết kế với **ba** ràng buộc bù "thiếu một là hỏng cả lập luận", nay chỉ còn **một**.
 
-**③ Frontend.** Widget ở `DangKyPage` + `LoginPage`; script `https://challenges.cloudflare.com/turnstile/v0/api.js`; đặt trong `<form>` thì tự sinh input ẩn `cf-turnstile-response`. Site key qua `VITE_TURNSTILE_SITE_KEY`.
-
-**④ 🔴 Nới CSP `apps/web/worker.ts`** — `script-src` và `frame-src` thêm `https://challenges.cloudflare.com`. **KHÔNG nới `apps/admin`** (đã sau Access, giữ bề mặt hẹp).
-Đây là điểm hỏng-CÂM: thiếu bước này widget không hiện và **không báo lỗi rõ ràng**.
-
-**⑤ 🔴 `wrangler.jsonc`** — bỏ binding `LOGIN_LIMITER`/`SIGNUP_LIMITER` **và khai `deleted_classes`** cho hai Durable Object. Xoá class DO mà không khai `deleted_classes` thì **deploy sẽ lỗi**.
-
-**⑥ Deploy.** `wrangler secret put TURNSTILE_SECRET_KEY`; build `apps/web` với `VITE_TURNSTILE_SITE_KEY`. Hai khoá đã có sẵn trong `packages/db/.dev.vars`.
+Việc cần làm: vào Cloudflare Dashboard → Security → WAF → Rate limiting rules, xác nhận (hoặc tạo) rule cho `/api/auth/login` và `/api/dang-ky`, rồi **ghi lại bằng chứng** vào đây. Đã ghi cảnh báo tại chỗ trong `apps/api/src/admin/matKhauTam.ts`.
 
 ### Dọn sau khi xong
-`cau_hinh_he_thong.dangky_max_moi_ip_gio` (=5) trên production **không còn ai đọc**. Xoá hàng để không ai tưởng nó còn tác dụng.
+- `cau_hinh_he_thong.dangky_max_moi_ip_gio` (=5) trên production **không còn ai đọc**. Xoá hàng để không ai tưởng nó còn tác dụng. **CHƯA LÀM.**
+- `.github/workflows/ci.yml:11` còn liệt kê nhánh `main` đã xoá. **CHƯA LÀM.**
 
 ### Bài học rút ra ngay tại đây
 Kế hoạch U33 §5 liệt kê "21 file bị đụng" — đúng về **file nguồn**, nhưng **không tính hệ quả lên bộ test**. Gỡ một cổng nằm ở đầu hai route công khai làm đỏ mọi test đi qua hai route đó, kể cả những test chẳng liên quan gì tới cổng ấy. Lần sau, khi lập kế hoạch cho việc gỡ/thêm một **middleware ở đầu route**, phải đếm luôn số test đi qua route đó — không chỉ số file chứa tên module bị gỡ.
