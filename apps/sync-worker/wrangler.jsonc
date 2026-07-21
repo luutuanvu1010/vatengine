@@ -6,6 +6,15 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
+  // BẢO MẬT (H-B.6): worker này chạy bằng Cron + Queue, KHÔNG cần URL công khai. Endpoint
+  // quản trị `POST /dlq/replay` (phát lại job DLQ) phải sau Cloudflare Access (security.md
+  // "khu quản trị dùng Cloudflare Access"). TẮT `*.workers.dev` (giống vat-api) + đưa lên
+  // hostname trong zone tourdao.vn để Access chặn được (Access không bảo vệ *.workers.dev).
+  // Bật Access cho `vat-sync-admin.tourdao.vn/dlq/*` NGAY sau deploy — trước đó endpoint
+  // vẫn công khai ở hostname này (blast-radius thấp: ép tenantId + RLS, chỉ replay job hỏng).
+  "workers_dev": false,
+  "routes": [{ "pattern": "vat-sync-admin.tourdao.vn", "custom_domain": true }],
+
   // Job đồng bộ nền có thể chạy dài (phân trang nhiều kỳ) — nâng trần CPU.
   // Cron wall-time 15' / CPU 15' nếu chu kỳ ≥ 1h (ADR-0001 §3).
   // BẬT LẠI 2026-07-18: chủ dự án đã nâng **Workers Paid**, đúng điều kiện mà ghi chú
