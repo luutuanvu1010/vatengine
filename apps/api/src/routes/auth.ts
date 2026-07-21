@@ -8,7 +8,7 @@
 // UNIQUE toàn cục nên một email định danh đúng một người dùng.
 import { maskSensitive } from "@vat/crypto";
 import { auditLog, nguoiDung, withTenant } from "@vat/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { requireTenant, signToken } from "../auth";
@@ -294,7 +294,13 @@ export function authRoutes(deps: AppDeps) {
         tx
           .select({ hash: nguoiDung.passwordHash, hetHan: nguoiDung.matKhauTamHetHan })
           .from(nguoiDung)
-          .where(eq(nguoiDung.id, userId)),
+          // Lọc `tenant_id` TƯỜNG MINH bên cạnh RLS — multi-tenant.md: "RLS là lớp phòng
+          // thủ THỨ HAI, không thay thế cho lọc tường minh ở tầng ứng dụng". Không khai
+          // thác được nếu thiếu (cả `userId` lẫn `tenantId` đều đến từ CÙNG một JWT do
+          // server ký, kẻ gọi không làm chúng lệch tenant nhau được), nhưng thiếu thì RLS
+          // thành lớp DUY NHẤT — và RLS chỉ còn tác dụng chừng nào role app vẫn
+          // NOBYPASSRLS. Đúng loại phụ thuộc ngầm mà luật dự án cấm dựa vào một mình.
+          .where(and(eq(nguoiDung.id, userId), eq(nguoiDung.tenantId, tenantId))),
       );
       const row = rows[0];
       if (!row?.hash || !(await verifyPassword(mat_khau_hien_tai, row.hash))) {
@@ -316,7 +322,8 @@ export function authRoutes(deps: AppDeps) {
             // Xoá hạn: mật khẩu này do chính người dùng đặt, không còn là mật khẩu tạm.
             matKhauTamHetHan: null,
           })
-          .where(eq(nguoiDung.id, userId)),
+          // Cùng lý do như truy vấn đọc ở trên: hai lớp, không một.
+          .where(and(eq(nguoiDung.id, userId), eq(nguoiDung.tenantId, tenantId))),
       );
       await auditLogin(db, tenantId, userId, "doi_mat_khau");
       return c.json({ ok: true });
