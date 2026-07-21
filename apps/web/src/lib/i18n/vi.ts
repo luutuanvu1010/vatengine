@@ -19,7 +19,7 @@ export const vi = {
   navExports: "Kết xuất & Convert",
   navTaxAccounts: "Kết nối tài khoản thuế",
   navSettings: "Cài đặt chung",
-  navAbout: "Giới thiệu & Ủng hộ",
+  navAbout: "Giới thiệu & Hỗ trợ",
   logout: "Đăng xuất",
 } as const;
 
