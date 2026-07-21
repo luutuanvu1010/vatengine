@@ -25,6 +25,14 @@
 
 **Nhánh `main` đã xoá (2026-07-21)** và PR #1 đã đóng. Kiểm chứng trước khi xoá: nhánh mặc định của kho **đã là** `feat/cloudflare-stack-u0`; `main` chậm 229 commit và có **0 commit** mà trunk không có — tập con thuần tuý. Không thứ gì đọc nó (CI chỉ liệt kê phòng hờ; `"main"` trong `wrangler.jsonc` là đường dẫn file entry, không phải nhánh git). SHA cuối của `main` phòng khi cần khôi phục: `e598ac8f9158454aae0091b72a265a2e41c451ad`.
 
+**Dọn nhánh remote (2026-07-21):** từ **29 xuống 4**. Xoá 26 nhánh chứng minh được là đã merge trọn (0 commit riêng so với trunk). **Giữ lại 2** không chứng minh được: `claude/u23-unit-execution-59b6aa` (13 commit riêng) và `feat/u27-clean` (4 commit riêng) — nội dung của chúng *có vẻ* đã vào trunk qua squash-merge (kiểm: `disconnect`, `InvoiceExportButtons`, `FilterBar` đều có trong trunk) nhưng diff ba-chấm vẫn khác, và tôi không chứng minh được tương đương trọn vẹn. Giữ lại không tốn gì; xoá nhầm thì mất.
+
+⚠️ Bài học khi dọn: lần kiểm đầu tôi soi **worktree** mà không soi **nhánh remote**, nên tưởng 3 commit U23 mồ côi và tạo nhánh `archive/…` để neo. Thực ra chúng nằm sẵn trên `claude/u23-unit-execution-59b6aa`. Nhánh archive đã xoá vì thừa. **Kiểm "có mất gì không" phải soi CẢ worktree, nhánh cục bộ, VÀ nhánh remote** — thiếu một chỗ là kết luận sai.
+
+**`feat/u33-turnstile` đã push** — trước đó công việc U33 chỉ tồn tại trên một ổ đĩa.
+
+⚠️ **Nợ nhỏ:** `.github/workflows/ci.yml` dòng 11 vẫn liệt kê nhánh `main` vốn đã bị xoá: `branches: [main, feat/cloudflare-stack-u0]`. Vô hại (push vào nhánh không tồn tại thì không xảy ra) nhưng nên dọn khi làm bước đổi tên trunk.
+
 🔜 **Việc còn lại, để một phiên RIÊNG:** đổi tên trunk `feat/cloudflare-stack-u0` → `main`. Đây là tên nhánh tính năng dính lại rồi thành nhánh chính — nguồn nhầm lẫn thật sự, không phải `main`. Chi phí đã đo: **29 dòng / 21 file** trong `docs/`, **2 dòng** trong `.github/`, **0 dòng** mã nguồn. GitHub có chức năng đổi tên nhánh sẵn (tự chuyển hướng liên kết cũ, tự đổi base của PR đang mở).
 Lý do tách phiên riêng: đổi tên nhánh mặc định chạm vào mọi thứ **ngoài** phiên làm việc — bookmark, clone khác, thư mục đang mở, thói quen gõ lệnh. Chủ dự án chốt "chậm và chắc": mỗi lần một biến số.
 
