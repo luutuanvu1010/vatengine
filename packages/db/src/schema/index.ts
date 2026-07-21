@@ -8,5 +8,6 @@ export * from "./goiDichVu";
 export * from "./hoaDon";
 export * from "./lanDongBo";
 export * from "./nguoiDung";
+export * from "./quanTriHeThong";
 export * from "./taiKhoanThue";
 export * from "./tenants";

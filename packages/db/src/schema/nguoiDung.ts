@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { tenantIsolationPolicy } from "./_rls";
 import { tenants } from "./tenants";
 
@@ -25,6 +25,14 @@ export const nguoiDung = pgTable(
     email: text("email").notNull(),
     passwordHash: text("password_hash"),
     vaiTro: text("vai_tro").notNull().default("ke_toan"),
+    // U18 (migration 0011) — buộc đổi mật khẩu ở lần đăng nhập kế tiếp. Bật khi super-admin
+    // duyệt tenant hoặc reset mật khẩu (sinh mật khẩu tạm 6 số); tắt ở POST /auth/doi-mat-khau.
+    // U17-plan §123 hẹn đặt sẵn cột này ở U17 nhưng U17 đã bỏ — U18 tự thêm.
+    phaiDoiMatKhau: boolean("phai_doi_mat_khau").notNull().default(false),
+    // Hạn của mật khẩu TẠM. 6 chữ số chỉ có 10^6 không gian nên hết-hạn là một trong ba
+    // điều kiện bù bắt buộc (cùng "buộc đổi" + rate-limit login) — xem U18-plan §103.
+    // NULL = mật khẩu do chính người dùng đặt, không hết hạn.
+    matKhauTamHetHan: timestamp("mat_khau_tam_het_han", { withTimezone: true }),
     ngayTao: timestamp("ngay_tao", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
