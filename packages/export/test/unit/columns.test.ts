@@ -63,7 +63,6 @@ describe("EXPORT_COLUMNS (mẫu cột chuẩn)", () => {
       "nmmst",
       "nmten",
       "hangHoa",
-      "soDongHang",
       "tgtcthue",
       "ttcktmai",
       "tgtthue",
@@ -90,7 +89,6 @@ describe("EXPORT_COLUMNS (mẫu cột chuẩn)", () => {
   it("ncnhat là 'date'; tóm tắt dòng hàng là 'num' (số thô, KHÔNG numFmt tiền)", () => {
     expect(EXPORT_COLUMNS.find((c) => c.key === "ncnhat")?.kind).toBe("date");
     expect(EXPORT_COLUMNS.find((c) => c.key === "hangHoa")?.kind).toBe("list");
-    expect(EXPORT_COLUMNS.find((c) => c.key === "soDongHang")?.kind).toBe("num");
   });
 
   it("ttxly/tthai là 'int' (MÃ số) — không có cột nhãn tiếng Việt", () => {
@@ -155,9 +153,8 @@ describe("cellFor — chuẩn hóa ô (không ép float)", () => {
 describe("U29 — tổng số lượng giữ ĐẦY ĐỦ phần thập phân (M1)", () => {
   // E4: 32/48.134 dòng có sluong thập phân, max scale 3 — "62.925 Lít" dầu Điêzen.
   // Áp numFmt tiền "#,##0" sẽ hiện "63" ⇒ SAI số lượng trên hóa đơn nhiên liệu.
-  it("soDongHang → ô số; hóa đơn chưa có dòng hàng → '0'", () => {
-    expect(cellFor(col("soDongHang"), row({ soDongHang: 3 }))).toEqual({ t: "num", v: "3" });
-    expect(cellFor(col("soDongHang"), row({ soDongHang: 0 }))).toEqual({ t: "num", v: "0" });
+  it("KHÔNG còn cột 'Số dòng hàng' (2026-07-21 — file phẳng, không cần đếm dòng)", () => {
+    expect(EXPORT_COLUMNS.some((c) => c.key === "soDongHang")).toBe(false);
   });
 
   it("cột hàng hóa: một mặt hàng → một dòng; chưa có dòng hàng → trống", () => {

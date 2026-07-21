@@ -117,11 +117,10 @@ export function exportsRoutes(deps: AppDeps) {
         // CSV/xml.zip/html.zip: stream thẳng vào R2 (không giữ cả file trong RAM). XLSX:
         // gom (bản chất zip) nhưng tiêu thụ generator lô-by-lô, không nạp cả tập ORM cùng lúc.
         if (format === "csv") {
-          // Khối hóa đơn + khối "Chi tiết dòng hàng" (U23-B): hai generator độc lập trên CÙNG
-          // bộ lọc — khối 1 duyệt hết trước, khối 2 duyệt lại + fetchLines lô-by-lô.
-          const invoiceBatches = iterateInvoices(tx, tenantId, selection);
-          const lineBatches = iterateInvoices(tx, tenantId, selection);
-          await storage.put(key, csvStreamWithLines(invoiceBatches, lineBatches, fetchLines));
+          // MỘT sheet phẳng (2026-07-21): mỗi mặt hàng một dòng, kèm đủ ngữ cảnh hóa đơn.
+          // Một pass qua generator hóa đơn + fetchLines lô-by-lô.
+          const batches = iterateInvoices(tx, tenantId, selection);
+          await storage.put(key, csvStreamWithLines(batches, fetchLines));
         } else if (format === "xml.zip" || format === "html.zip") {
           const batches = iterateInvoices(tx, tenantId, selection);
           const render =

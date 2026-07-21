@@ -86,9 +86,9 @@ describe("REST /exports (integration, PGlite + R2 giả)", () => {
     expect(dl.status).toBe(200);
     expect(dl.headers.get("content-type")).toContain("text/csv");
     const lines = csvLines(new Uint8Array(await dl.arrayBuffer()));
-    expect(invoiceSection(lines).length).toBe(3); // header + 2 hóa đơn của A
-    // Có khối "Chi tiết dòng hàng" (U23-B) — kể cả khi các hóa đơn chưa có dòng hàng.
-    expect(lines).toContain("Chi tiết dòng hàng");
+    // Sheet phẳng (2026-07-21): header + 1 dòng cho mỗi hóa đơn chưa có dòng hàng.
+    // 2 hóa đơn của A, chưa seed dòng hàng ⇒ header + 2 = 3 dòng.
+    expect(lines.length).toBe(3);
     // KHÔNG lẫn dữ liệu B.
     expect(lines.join("\n")).not.toContain("9999999999");
     expect(lines.join("\n")).not.toContain("999999");
@@ -152,7 +152,7 @@ describe("REST /exports (integration, PGlite + R2 giả)", () => {
     expect(invoiceSection(csvLines(new Uint8Array(await dl.arrayBuffer()))).length).toBe(2); // header + 1
   });
 
-  it("U23-B: xlsx có sheet 'Chi tiết dòng hàng' chứa dòng hàng của A (khóa shdon), KHÔNG lẫn B", async () => {
+  it("sheet phẳng: chứa dòng hàng của A (kèm số HĐ), KHÔNG lẫn dòng của B (cách ly tenant)", async () => {
     // Seed một hóa đơn A + một hóa đơn B, mỗi cái một dòng hàng.
     const invA = await seedInvoice(db, tenantA, { shdon: "77" });
     await db.insert(dongHangHoa).values({
@@ -189,12 +189,13 @@ describe("REST /exports (integration, PGlite + R2 giả)", () => {
     const { url } = (await (await createExport(token, "format=xlsx")).json()) as { url: string };
     const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
     const zip = unzipSync(new Uint8Array(await dl.arrayBuffer()));
-    expect(dec.decode(zip["xl/workbook.xml"])).toContain("Chi tiết dòng hàng");
-    const sheet2 = dec.decode(zip["xl/worksheets/sheet2.xml"]);
-    expect(sheet2).toContain("Dịch vụ A");
-    expect(sheet2).toContain("77"); // shdon liên kết về hóa đơn
+    // MỘT sheet phẳng — KHÔNG còn sheet2.
+    expect(zip["xl/worksheets/sheet2.xml"]).toBeUndefined();
+    const sheet1 = dec.decode(zip["xl/worksheets/sheet1.xml"] as Uint8Array);
+    expect(sheet1).toContain("Dịch vụ A");
+    expect(sheet1).toContain("77"); // số HĐ trên dòng hàng
     // Cách ly tenant: dòng hàng của B KHÔNG lọt vào file của A.
-    expect(sheet2).not.toContain("Dịch vụ B bí mật");
+    expect(sheet1).not.toContain("Dịch vụ B bí mật");
   });
 
   it("CÁCH LY: A không tải được object của B (key mang tiền tố tenant) → 404", async () => {
