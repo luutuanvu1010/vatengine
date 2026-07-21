@@ -4,9 +4,11 @@
 import { PGlite } from "@electric-sql/pglite";
 import { hoaDon, nguoiDung, taiKhoanThue, tenants } from "@vat/db";
 import type { GdtTransport } from "@vat/gdt-client";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sign } from "hono/jwt";
+import { signAdminToken } from "../src/admin/adminAuth";
 import { type BackfillDef, initDef, readDef } from "../src/backfillTracker";
 import {
   type LoginLockConfig,
@@ -18,11 +20,20 @@ import {
   resolveLoginLockConfig,
 } from "../src/loginLimiter";
 import { hashPassword } from "../src/password";
+import {
+  type SignupLimitConfig,
+  type SignupState,
+  checkAndRecordSignup,
+  initialSignupState,
+  refundSignup,
+  resolveSignupLimitConfig,
+} from "../src/signupLimiter";
 import type {
   AnyDb,
   BackfillTrackerClient,
   Env,
   LoginLimiterClient,
+  SignupLimiterClient,
   StorageHandle,
 } from "../src/types";
 
@@ -30,6 +41,11 @@ import type {
 const MIGRATIONS = new URL("../../../packages/db/migrations", import.meta.url).pathname;
 
 export const TEST_SECRET = "test-jwt-secret-u6";
+
+// U18 — secret miền admin. PHẢI khác TEST_SECRET, nếu không `kiemTraCauHinhAdmin` trả
+// `trung_secret_khach` và mọi route /admin/* thành 503 (đúng thiết kế fail-closed) — test
+// sẽ đỏ hàng loạt với lý do khó đoán. Giữ hai hằng số khác nhau ngay tại nguồn.
+export const TEST_ADMIN_SECRET = "test-admin-jwt-secret-u18";
 
 // U14 — KEK test hợp lệ (32 byte zero, base64). KHÔNG dùng ngoài test (security.md).
 export const TEST_KEK = btoa(String.fromCharCode(...new Uint8Array(32)));
@@ -40,6 +56,7 @@ export function makeEnv(over: Partial<Env> = {}): Env {
   return {
     ENVIRONMENT: "test",
     JWT_SECRET: TEST_SECRET,
+    ADMIN_JWT_SECRET: TEST_ADMIN_SECRET,
     // HYPERDRIVE/RAW không dùng khi getDb/getStorage được tiêm — cast dummy ở ranh giới test.
     HYPERDRIVE: {} as Hyperdrive,
     RAW: {} as R2Bucket,
@@ -118,6 +135,69 @@ export function makeLoginLimiterFactory(cfg: LoginLockConfig = resolveLoginLockC
   });
 }
 
+/** U17b (QĐ-2, Finding 1) — factory limiter đăng ký GIẢ in-memory (dùng logic thuần
+ * checkAndRecordSignup NGUYÊN TỬ + Date.now()) để test route /dang-ky. Trạng thái giữ theo
+ * key (IP) trong Map. Không truyền cfg → mặc định (never-chặn trong các test không liên
+ * quan). Dùng SEQUENTIAL (await từng lượt) — KHÔNG mô phỏng round-trip DO thật nên KHÔNG
+ * dùng để test đua đồng thời (xem makeRacySignupLimiterFactory bên dưới cho việc đó). */
+export function makeSignupLimiterFactory(cfg: SignupLimitConfig = resolveSignupLimitConfig({})) {
+  const states = new Map<string, SignupState>();
+  const get = (key: string) => states.get(key) ?? initialSignupState();
+  return (_env: Env, key: string): SignupLimiterClient => ({
+    checkAndRecord: async () => {
+      const outcome = checkAndRecordSignup(get(key), Date.now(), cfg);
+      states.set(key, outcome.state);
+      return outcome.token === undefined
+        ? { gate: outcome.gate }
+        : { gate: outcome.gate, token: outcome.token };
+    },
+    refund: async (token: number) => {
+      states.set(key, refundSignup(get(key), token));
+    },
+  });
+}
+
+/** U17b (QĐ-2, Finding 1 — TOCTOU) — factory limiter đăng ký GIẢ mô phỏng ĐÚNG đặc tính một
+ * Durable Object THẬT: mỗi lệnh gọi (checkAndRecord/refund) tới "DO" của MỘT key được XẾP
+ * HÀNG + xử lý TUẦN TỰ (input-gating thật — một fetch() chạy trọn vẹn trước fetch() kế), có
+ * độ trễ round-trip giả lập (`delayMs`, mặc định 5ms). Khác `makeSignupLimiterFactory`
+ * (đồng bộ-thực-chất, không mô phỏng độ trễ mạng) — dùng khi bài test cần bắn nhiều request
+ * ĐỒNG THỜI (Promise.all) và cần một double đáng tin cậy để phơi ra (hoặc xác nhận đã vá)
+ * lỗi đua, bất kể PGlite trong máy chạy nhanh/chậm thế nào. */
+export function makeRacySignupLimiterFactory(
+  cfg: SignupLimitConfig = resolveSignupLimitConfig({}),
+  delayMs = 5,
+) {
+  const states = new Map<string, SignupState>();
+  const queues = new Map<string, Promise<unknown>>();
+  const enqueue = <T>(key: string, task: () => Promise<T>): Promise<T> => {
+    const prev = queues.get(key) ?? Promise.resolve();
+    const next = prev.then(task, task);
+    queues.set(
+      key,
+      next.catch(() => {}),
+    );
+    return next;
+  };
+  const get = (key: string) => states.get(key) ?? initialSignupState();
+  return (_env: Env, key: string): SignupLimiterClient => ({
+    checkAndRecord: () =>
+      enqueue(key, async () => {
+        await new Promise((r) => setTimeout(r, delayMs));
+        const outcome = checkAndRecordSignup(get(key), Date.now(), cfg);
+        states.set(key, outcome.state);
+        return outcome.token === undefined
+          ? { gate: outcome.gate }
+          : { gate: outcome.gate, token: outcome.token };
+      }),
+    refund: (token: number) =>
+      enqueue(key, async () => {
+        await new Promise((r) => setTimeout(r, delayMs));
+        states.set(key, refundSignup(get(key), token));
+      }),
+  });
+}
+
 /** U22 — factory tracker backfill GIẢ in-memory dùng ĐÚNG logic thuần initDef/readDef
  * (như DO thật): store-once idempotent + cách ly tenant. Trạng thái theo backfillId. */
 export function makeBackfillTrackerFactory() {
@@ -134,14 +214,15 @@ export function makeBackfillTrackerFactory() {
 }
 
 /** Tiêm db PGlite + R2 giả + transport GDT giả + limiter giả + tracker giả vào createApp
- * (close = noop). storage/transport/loginLimiter/backfillTracker tùy chọn; mặc định
- * factory giả — test cần đối chiếu trạng thái truyền factory riêng phơi store. */
+ * (close = noop). storage/transport/loginLimiter/backfillTracker/signupLimiter tùy chọn;
+ * mặc định factory giả — test cần đối chiếu trạng thái truyền factory riêng phơi store. */
 export function injectDb(
   db: Db,
   storage: FakeStorage = makeStorage(),
   transport: GdtTransport = makeTransport(),
   getLoginLimiter = makeLoginLimiterFactory(),
   getBackfillTracker = makeBackfillTrackerFactory(),
+  getSignupLimiter = makeSignupLimiterFactory(),
 ) {
   return {
     getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }),
@@ -149,6 +230,7 @@ export function injectDb(
     getTransport: () => transport,
     getLoginLimiter,
     getBackfillTracker,
+    getSignupLimiter,
   };
 }
 
@@ -236,7 +318,13 @@ export async function tokenFor(
   tenantId: string | undefined,
   extra: Record<string, unknown> = {},
 ): Promise<string> {
-  const payload: Record<string, unknown> = { role: "quan_tri", ...extra };
+  // U18 — `sub` mặc định để route cần "chính tôi" (POST /auth/doi-mat-khau) dùng được
+  // token test. Ghi đè bằng `extra.sub` khi test cần đúng id một người dùng đã seed.
+  const payload: Record<string, unknown> = {
+    role: "quan_tri",
+    sub: crypto.randomUUID(),
+    ...extra,
+  };
   if (tenantId !== undefined) payload.tenant_id = tenantId;
   // role: null (ca test token THIẾU vai) → bỏ khỏi payload (sign JSON-hóa, rớt undefined).
   if (payload.role === null) payload.role = undefined;
@@ -245,4 +333,36 @@ export async function tokenFor(
 
 export function bearer(token: string): { Authorization: string } {
   return { Authorization: `Bearer ${token}` };
+}
+
+/** U18 — Seed một super-admin với mật khẩu băm PBKDF2 THẬT (qua đúng hàm route dùng) →
+ * integration test đi trọn vòng hash→verify như đăng nhập thật.
+ *
+ * Ghi thẳng bằng SQL chứ không qua Drizzle insert: bảng `quan_tri_he_thong` cố ý KHÔNG
+ * được GRANT gì cho role app (0011), nên "đường ghi hợp lệ" duy nhất ở production là
+ * script seed chạy dưới role migrate. PGlite chạy superuser nên câu này chạy được — đó là
+ * đúng vai trò nó mô phỏng. */
+export async function seedSuperAdmin(
+  db: Db,
+  email: string,
+  password: string,
+  trangThai = "active",
+): Promise<string> {
+  const hash = await hashPassword(password);
+  const r = await db.execute(sql`
+    INSERT INTO quan_tri_he_thong (email, password_hash, ten, trang_thai)
+    VALUES (${email}, ${hash}, 'Chủ dự án', ${trangThai})
+    RETURNING id`);
+  const id = r.rows[0]?.id;
+  if (typeof id !== "string") throw new Error("insert quan_tri_he_thong không trả về id");
+  return id;
+}
+
+/** U18 — Ký token miền admin cho test. Mặc định dùng TEST_ADMIN_SECRET; truyền secret
+ * khác để dựng ca "token ký bằng khoá sai". */
+export async function adminTokenFor(
+  sub: string,
+  secret: string = TEST_ADMIN_SECRET,
+): Promise<string> {
+  return signAdminToken(sub, secret);
 }

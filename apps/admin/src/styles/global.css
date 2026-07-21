@@ -1,0 +1,72 @@
+/* U19 — Giao diện Cổng Admin.
+ *
+ * NHẬN DIỆN TRỰC QUAN KHÁC HẲN APP KHÁCH (R5, U19-plan §3) — không phải để đẹp mà để
+ * chống lỗi thao tác: chủ dự án có thể mở cả hai tab cùng lúc, và một thao tác "Khóa"
+ * bấm nhầm trong ngữ cảnh tưởng là app khách sẽ cắt truy cập của một doanh nghiệp thật.
+ * Nền tối + dải cảnh báo ở đầu trang khiến hai môi trường không thể nhầm trong nháy mắt.
+ */
+:root {
+  --nen: #0f172a;
+  --nen-noi: #1e293b;
+  --nen-noi-2: #334155;
+  --chu: #e2e8f0;
+  --chu-mo: #94a3b8;
+  --vien: #334155;
+  --nhan: #f59e0b; /* Hổ phách = "khu vực quản trị", không dùng ở app khách. */
+  --nguy: #ef4444;
+  --tot: #22c55e;
+  --cho: #eab308;
+  /* Body 16px — yêu cầu nhất quán của chủ dự án (U19-plan §6). */
+  --fs-base: 16px;
+  --fs-sm: 14px;
+  --ban-kinh: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Be Vietnam Pro", system-ui, sans-serif;
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  background: var(--nen);
+  color: var(--chu);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--ban-kinh);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+input,
+select {
+  font: inherit;
+  border-radius: var(--ban-kinh);
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--vien);
+}
+th {
+  color: var(--chu-mo);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* Tương phản đủ cho focus bàn phím — khu vực quản trị phải dùng được không cần chuột. */
+:focus-visible {
+  outline: 2px solid var(--nhan);
+  outline-offset: 2px;
+}

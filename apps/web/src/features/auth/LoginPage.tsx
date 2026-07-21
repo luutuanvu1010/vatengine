@@ -2,6 +2,7 @@
 // DỰNG SẴN CHỖ nhưng chưa nối (backend A3/A4 tách unit sau — U15-buoc4 §4) → đánh dấu
 // "(sắp có)", không giả vờ hoạt động. KHÔNG log mật khẩu; không bí mật ở client.
 import { type FormEvent, useState } from "react";
+import { Link } from "react-router-dom";
 import { Brand } from "../../components/Brand";
 import { Alert, Button, TextField } from "../../components/ui/primitives";
 import { ApiError } from "../../lib/apiClient";
@@ -157,6 +158,18 @@ export function LoginPage() {
             Sản phẩm đang trong giai đoạn <strong>thử nghiệm</strong> — miễn phí cho doanh nghiệp
             nhỏ. Dữ liệu mỗi doanh nghiệp được cách ly riêng.
           </Alert>
+
+          {/* U20 §3 — Gợi ý TĨNH, luôn hiện, KHÔNG suy ra từ phản hồi đăng nhập.
+              /auth/login cố ý trả 401 gọn cho CẢ sai-mật-khẩu lẫn chưa-được-duyệt (chống
+              dò tài khoản, U17b). Nếu UI đoán "tài khoản của bạn chưa được duyệt" từ một
+              mã 401, nó vừa đoán sai vừa phá chính cơ chế mà backend dựng lên để không rò
+              thông tin. Vì vậy thông điệp này tách hẳn khỏi kết quả đăng nhập. */}
+          <p style={{ fontSize: "var(--fs-base)", lineHeight: 1.6, margin: 0 }}>
+            Nếu bạn vừa đăng ký, tài khoản cần được duyệt trước khi đăng nhập được.
+          </p>
+          <p style={{ fontSize: "var(--fs-base)", margin: 0 }}>
+            Chưa có tài khoản? <Link to="/dang-ky">Đăng ký</Link>
+          </p>
         </form>
       </div>
 
@@ -229,11 +242,14 @@ export function LoginPage() {
                 >
                   {fact.title}
                 </div>
+                {/* QĐ-9 (U20) — VĂN BẢN ĐỂ ĐỌC, không phải nhãn phụ. Chính chỗ này là
+                    thứ chủ dự án Inspect ra khi báo "chữ nhỏ khó đọc": 13px cộng opacity
+                    0.9 trên nền màu thương hiệu. Nâng --fs-base và bỏ làm mờ — tương phản
+                    đủ mới đọc hết được đoạn, không chỉ liếc qua. */}
                 <p
                   style={{
                     margin: 0,
-                    opacity: 0.9,
-                    fontSize: "var(--fs-sm)",
+                    fontSize: "var(--fs-base)",
                     lineHeight: "var(--lh-body)",
                   }}
                 >

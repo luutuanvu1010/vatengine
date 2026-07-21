@@ -21,12 +21,18 @@ interface AuthValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   applyMe: (me: MeResponse) => void;
+  /** U20 — true khi đang dùng mật khẩu TẠM do quản trị viên cấp (U18 cấp khi duyệt
+   * hoặc reset). Chỉ để NHẮC ở trang Cài đặt — chủ dự án chốt KHÔNG chặn đường
+   * (2026-07-21). Đặt lại false sau khi đổi mật khẩu thành công. */
+  dangDungMatKhauTam: boolean;
+  daDoiMatKhau: () => void;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("checking");
+  const [dangDungMatKhauTam, setDangDungMatKhauTam] = useState(false);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -93,7 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearInvoiceFilter();
         // Không nhận token ở đây — server đặt cookie (C2). Phiên coi như thiết lập được
         // khi /me ngay sau đó gọi thành công.
-        await api.login(inputEmail, password);
+        const kq = await api.login(inputEmail, password);
+        // Cờ chỉ đến từ PHẢN HỒI ĐĂNG NHẬP — `/me` không mang nó. Vì vậy nếu người dùng
+        // tải lại trang, cờ mất và lời nhắc biến mất; chấp nhận được vì đây là nhắc nhở,
+        // không phải cổng chặn. Muốn bền qua reload thì phải thêm trường vào `/me`.
+        setDangDungMatKhauTam(kq.phai_doi_mat_khau === true);
         try {
           const profile = await api.getMe();
           setMe(profile);
@@ -118,8 +128,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       applyMe(next: MeResponse) {
         setMe(next);
       },
+      dangDungMatKhauTam,
+      daDoiMatKhau() {
+        setDangDungMatKhauTam(false);
+      },
     }),
-    [status, me, email, queryClient],
+    [status, me, email, queryClient, dangDungMatKhauTam],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

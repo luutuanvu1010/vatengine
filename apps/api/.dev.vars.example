@@ -13,3 +13,10 @@ JWT_SECRET="doi-thanh-khoa-bi-mat-manh-cho-dev"
 # U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Sinh: openssl rand -base64 32
 # Local: đặt ở .dev.vars (đã .gitignore). Production: wrangler secret put TOKEN_KEK
 TOKEN_KEK=REPLACE_WITH_BASE64_32BYTE_KEK
+
+# U18 — Khóa ký token SUPER-ADMIN (Cổng Admin). BẮT BUỘC KHÁC JWT_SECRET: đây là lớp
+# tách chính giữa miền khách và miền quản trị. Đặt trùng nhau thì mọi route /admin/*
+# trả 503 (requireSuperAdmin fail-closed), không phải chạy tiếp với một lớp phòng thủ.
+# Sinh: openssl rand -hex 32
+# Prod: `wrangler secret put ADMIN_JWT_SECRET`
+ADMIN_JWT_SECRET="doi-thanh-khoa-KHAC-jwt-secret-cho-dev"

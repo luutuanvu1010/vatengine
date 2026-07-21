@@ -17,6 +17,26 @@
   // U6: Postgres qua Hyperdrive. Thay "id" bằng id thật khi deploy
   // (`wrangler hyperdrive create`). Dev local: đặt WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
   // trong .dev.vars (KHÔNG commit chuỗi kết nối — security.md).
+  // ⚠️ CACHE HYPERDRIVE PHẢI GIỮ TẮT — ĐỪNG BẬT LẠI.
+  //
+  // SỰ CỐ THẬT 2026-07-21 (production, U18): route admin diễn đạt mọi thao tác GHI dưới
+  // dạng `SELECT ... FROM admin_*(...)` — vì chúng là hàm SECURITY DEFINER. Với bất kỳ lớp
+  // nào phân tích SQL, những câu đó trông y hệt truy vấn ĐỌC, nên Hyperdrive cache chúng.
+  // Hậu quả đo được: bấm "Duyệt" lần thứ hai trả 200 kèm mật khẩu tạm MỚI thay vì 409 —
+  // tức chốt chặn TOCTOU của máy trạng thái bị vô hiệu, và mật khẩu vừa đọc cho khách chết
+  // im lặng. Nhật ký ghi hai lần `duyet_tenant {cu:"cho_duyet"}` cách nhau 2 giây, trong
+  // khi giữa hai lần đó khách đã đăng nhập được (tức tenant đang `active`).
+  //
+  // Đã tắt bằng: `wrangler hyperdrive update <id> --caching-disabled` (2026-07-21).
+  // KIỂM CHỨNG sau khi tắt: cùng phép thử → lần 2 trả đúng 409; đọc danh sách khớp DB tức thì.
+  //
+  // Bật lại là lỗi quay về, ÂM THẦM. Và chi phí của việc tắt gần bằng 0: mọi truy vấn có
+  // lưu lượng thật (hóa đơn/kết xuất/đối chiếu) đã chạy trong `withTenant` — tức trong
+  // transaction — nên vốn KHÔNG được cache. Thứ duy nhất cache từng áp vào là đường quản
+  // trị và `auth_lookup_user` ở /auth/login: đúng hai chỗ cần dữ liệu tươi nhất.
+  //
+  // Muốn bật lại thì trước đó phải bọc mọi lời gọi ghi vào `db.transaction(...)` và chứng
+  // minh bằng phép thử "Duyệt hai lần → 409".
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "1011ff82e7154531883f0f2e62d344f0" }],
 
   // U7: R2 lưu file kết xuất (xlsx/csv). Tạo bucket lúc deploy:
@@ -36,11 +56,13 @@
   // H-A.5b — Durable Object khóa đăng nhập per-account (lockout chống brute-force, lớp
   // app bổ sung WAF per-IP ở edge). Trạng thái nhỏ theo email → SQLite-backed DO.
   // H-A.5b — DO khóa đăng nhập; U22 — DO BackfillTracker (1 DO / backfillId, giữ danh
-  // sách tháng của một backfill; trạng thái nhỏ → SQLite-backed DO).
+  // sách tháng của một backfill; trạng thái nhỏ → SQLite-backed DO). U17b (QĐ-2) — DO
+  // SignupLimiter đếm lượt đăng ký công khai theo IP (trạng thái nhỏ → SQLite-backed DO).
   "durable_objects": {
     "bindings": [
       { "name": "LOGIN_LIMITER", "class_name": "LoginLimiter" },
-      { "name": "BACKFILL_TRACKER", "class_name": "BackfillTracker" }
+      { "name": "BACKFILL_TRACKER", "class_name": "BackfillTracker" },
+      { "name": "SIGNUP_LIMITER", "class_name": "SignupLimiter" }
     ]
   },
   // KHÔI PHỤC sau sự cố 2026-07-16: một phiên deploy nhầm code cũ (thiếu H-A.5b) rồi áp
@@ -48,11 +70,13 @@
   // tạo lại class (SQLite namespace mới, chỉ mất bộ đếm lockout tạm). GIỮ nguyên v1/v2 theo
   // thứ tự (Cloudflare legacy migrations = lịch sử cộng dồn, không sửa tag cũ). v4 (U22):
   // THÊM class mới BackfillTracker — thuần cộng dồn, KHÔNG đụng tag cũ (an toàn, khác v2).
+  // v5 (U17b QĐ-2): THÊM class mới SignupLimiter — cũng thuần cộng dồn, KHÔNG đụng tag cũ.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["LoginLimiter"] },
     { "tag": "v2", "deleted_classes": ["LoginLimiter"] },
     { "tag": "v3", "new_sqlite_classes": ["LoginLimiter"] },
-    { "tag": "v4", "new_sqlite_classes": ["BackfillTracker"] }
+    { "tag": "v4", "new_sqlite_classes": ["BackfillTracker"] },
+    { "tag": "v5", "new_sqlite_classes": ["SignupLimiter"] }
   ]
 
   // H-A.5b — ngưỡng khóa đăng nhập (KHÔNG nhạy cảm; bỏ trống → mặc định loginLimiter.ts:
@@ -66,4 +90,9 @@
   // `apps/sync-worker` — KHÔNG gộp vào API stateless này. Xem apps/sync-worker/wrangler.jsonc.
   //
   // JWT_SECRET (khóa ký JWT nội bộ) nạp qua `wrangler secret put JWT_SECRET` — security.md.
+  //
+  // U18 — ADMIN_JWT_SECRET (khóa ký token super-admin) nạp qua
+  // `wrangler secret put ADMIN_JWT_SECRET`. PHẢI KHÁC JWT_SECRET: trùng nhau ⇒ hai miền
+  // token gộp làm một và requireSuperAdmin trả 503 cho toàn bộ /admin/* (fail-closed,
+  // có test). Không khai ở "vars" — đây là bí mật (security.md).
 }

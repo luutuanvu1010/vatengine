@@ -10,6 +10,7 @@ import { api } from "../../lib/apiClient";
 import { formatDateVN } from "../../lib/format";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
 import type { Role, TaxAccountView } from "../../types/api";
+import { OrgIdentity } from "../about/OrgIdentity";
 import { useAuth } from "../auth/auth-context";
 
 /** Trạng thái kết nối GDT suy từ danh sách tài khoản thuế: ĐÃ kết nối nếu có ít nhất một
@@ -111,6 +112,9 @@ export function DashboardPage() {
           ) : null}
         </div>
       </div>
+
+      {/* U32 — danh tính pháp nhân: nội dung phụ trợ, đặt SAU phần hành động. */}
+      <OrgIdentity />
     </div>
   );
 }

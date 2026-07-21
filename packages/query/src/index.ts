@@ -4,12 +4,21 @@ export {
   INVOICE_DIRECTIONS,
   INVOICE_SOURCES,
   buildWhere,
+  MAX_EXPORT_IDS,
+  exportSelectionSchema,
+  buildOrderBy,
+  sortSchema,
+  SORT_BY_VALUES,
   invoiceFilterSchema,
   pageSchema,
+  type InvoiceSelection,
+  type InvoiceSort,
+  type SortBy,
   type InvoiceFilter,
   type Page,
 } from "./filters";
 export { getInvoiceById, getInvoiceLines, type DongHangHoaRow } from "./getInvoice";
+export { lineSummarySelect, type LineSummary, type HangHoaTomTat } from "./lineSummary";
 export {
   listInvoices,
   type HoaDonRow,

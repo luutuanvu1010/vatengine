@@ -64,6 +64,27 @@
       "when": 1785000000000,
       "tag": "0008_dong_bo_that_bai",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785100000000,
+      "tag": "0009_auth_lookup_trang_thai",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785200000000,
+      "tag": "0010_email_khong_phan_biet_hoa_thuong",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785300000000,
+      "tag": "0011_super_admin",
+      "breakpoints": true
     }
   ]
 }

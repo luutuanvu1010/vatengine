@@ -68,7 +68,7 @@ describe("U23-B — cách ly tenant khi kết xuất dòng hàng (integration)",
     const bytes = await toXlsxWithLinesFromBatches(iterateInvoices(db, tenantA, NO_FILTER), (ids) =>
       fetchLinesForInvoices(db, tenantA, ids),
     );
-    const detail = readXlsx(bytes, 2);
+    const detail = readXlsx(bytes, 1);
     const values = detail.rows.flatMap((r) => r.map((c) => c.value));
     expect(values).toContain("Hàng A công khai");
     expect(values).not.toContain("Hàng B bí mật");
@@ -83,19 +83,15 @@ describe("U23-B — cách ly tenant khi kết xuất dòng hàng (integration)",
     await seedLine(db, tenantB, invB, "Hàng B bí mật");
 
     const text = await drain(
-      csvStreamWithLines(
-        iterateInvoices(db, tenantA, NO_FILTER),
-        iterateInvoices(db, tenantA, NO_FILTER),
-        (ids) => fetchLinesForInvoices(db, tenantA, ids),
+      csvStreamWithLines(iterateInvoices(db, tenantA, NO_FILTER), (ids) =>
+        fetchLinesForInvoices(db, tenantA, ids),
       ),
     );
     expect(text).toContain("Hàng A công khai");
     expect(text).not.toContain("Hàng B bí mật");
     const grid = parseCsv(text);
-    const hdrIdx = grid.findIndex(
-      (r) => r[0] === LINE_HEADERS[0] && r.length === LINE_HEADERS.length,
-    );
-    const lineRows = grid.slice(hdrIdx + 1).filter((r) => r.length === LINE_HEADERS.length);
-    expect(lineRows.length).toBe(1);
+    expect(grid[0]).toEqual(LINE_HEADERS); // header dòng đầu
+    const lineRows = grid.slice(1).filter((r) => r.length === LINE_HEADERS.length);
+    expect(lineRows.length).toBe(1); // chỉ 1 dòng hàng của A
   });
 });
