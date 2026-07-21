@@ -9,7 +9,7 @@
 // lượng super-admin đếm trên đầu ngón tay.
 import { sql } from "drizzle-orm";
 import { Hono } from "hono";
-import { setCookie } from "hono/cookie";
+import { deleteCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import {
   ADMIN_SESSION_COOKIE,
@@ -122,6 +122,23 @@ export function adminAuthRoutes(deps: AppDeps) {
   // id — `admin_lookup` tra theo email), tức một migration nữa và một cửa BYPASSRLS nữa,
   // cho một dòng chữ trên header. Không đáng: mỗi cửa mở thêm là bề mặt phải review vĩnh viễn.
   r.get("/me", requireSuperAdmin, (c) => c.json({ id: c.get("adminId") }));
+
+  // POST /admin/auth/logout — BẮT BUỘC, không phải tuỳ chọn. Khi phiên nằm trong cookie
+  // HttpOnly, JS ở Cổng Admin KHÔNG xoá được nó; "Đăng xuất" chỉ dọn state phía client sẽ
+  // để cookie sống tiếp đủ 2 giờ và request kế tiếp vẫn được xác thực — tức KHÔNG thực sự
+  // đăng xuất. Chỉ server mới xoá được (bài học C4, xem apps/api/src/session.ts).
+  //
+  // KHÔNG gác `requireSuperAdmin`: đăng xuất phải luôn thành công, kể cả khi cookie đã hết
+  // hạn hoặc hỏng — bắt xác thực thì người mang cookie hỏng sẽ mắc kẹt không xoá được nó.
+  // Idempotent: gọi nhiều lần vẫn 200.
+  r.post("/logout", (c) => {
+    deleteCookie(c, ADMIN_SESSION_COOKIE, {
+      path: "/",
+      secure: new URL(c.req.url).protocol === "https:",
+      sameSite: "Strict",
+    });
+    return c.json({ ok: true });
+  });
 
   return r;
 }
