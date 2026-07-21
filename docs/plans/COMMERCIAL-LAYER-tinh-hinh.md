@@ -23,7 +23,10 @@
 - PR #19 (vá bảo mật `/dlq/replay`) mở từ 19/07 → đã kiểm chứng Access **đang gác thật** (`302`) rồi merge.
 - Ba commit tài liệu U23 mồ côi (không nhánh, không PR) → neo vào `archive/u23-handoff-2026-07-16` trước khi xoá worktree, nếu không `gc` sẽ dọn mất.
 
-⚠️ **PR #1 vẫn mở**: `feat/cloudflare-stack-u0` → **`main`**, +38.037 dòng, từ 15/07. `main` là nhánh **đã bỏ hoang** (CI ghi rõ chậm 159 commit). Cần chủ dự án quyết đóng hay merge — chưa xử lý.
+**Nhánh `main` đã xoá (2026-07-21)** và PR #1 đã đóng. Kiểm chứng trước khi xoá: nhánh mặc định của kho **đã là** `feat/cloudflare-stack-u0`; `main` chậm 229 commit và có **0 commit** mà trunk không có — tập con thuần tuý. Không thứ gì đọc nó (CI chỉ liệt kê phòng hờ; `"main"` trong `wrangler.jsonc` là đường dẫn file entry, không phải nhánh git). SHA cuối của `main` phòng khi cần khôi phục: `e598ac8f9158454aae0091b72a265a2e41c451ad`.
+
+🔜 **Việc còn lại, để một phiên RIÊNG:** đổi tên trunk `feat/cloudflare-stack-u0` → `main`. Đây là tên nhánh tính năng dính lại rồi thành nhánh chính — nguồn nhầm lẫn thật sự, không phải `main`. Chi phí đã đo: **29 dòng / 21 file** trong `docs/`, **2 dòng** trong `.github/`, **0 dòng** mã nguồn. GitHub có chức năng đổi tên nhánh sẵn (tự chuyển hướng liên kết cũ, tự đổi base của PR đang mở).
+Lý do tách phiên riêng: đổi tên nhánh mặc định chạm vào mọi thứ **ngoài** phiên làm việc — bookmark, clone khác, thư mục đang mở, thói quen gõ lệnh. Chủ dự án chốt "chậm và chắc": mỗi lần một biến số.
 
 ⚠️ **Nếu đổi tên thư mục kho gốc lần nữa:** mỗi worktree lưu đường dẫn **tuyệt đối** tới kho, và kho lưu ngược lại. Đổi tên xong phải chạy `git worktree repair <đường-dẫn-worktree>` từ kho gốc, nếu không mọi worktree đứt liên kết.
 
