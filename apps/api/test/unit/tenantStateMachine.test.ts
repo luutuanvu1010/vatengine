@@ -13,6 +13,7 @@ import {
   TRANG_THAI_TENANT,
   type TrangThaiTenant,
   chuyenTrangThai,
+  chuyenTuHanhDong,
 } from "../../src/admin/tenantStateMachine";
 
 // Bảng chân lý ĐẦY ĐỦ — nguồn đối chiếu độc lập với hiện thực (viết tay từ sơ đồ trong
@@ -60,6 +61,24 @@ describe("chuyenTrangThai — máy trạng thái vòng đời tenant (U18)", () 
       for (const tu of TRANG_THAI_TENANT) {
         expect(chuyenTrangThai(tu, hanhDong)).not.toBe(tu);
       }
+    }
+  });
+
+  it("chuyenTuHanhDong suy đúng cặp (nguồn, đích) — nền của UPDATE nguyên tử ở route", () => {
+    expect(chuyenTuHanhDong("duyet")).toEqual({ tu: "cho_duyet", den: "active" });
+    expect(chuyenTuHanhDong("tu_choi")).toEqual({ tu: "cho_duyet", den: "tu_choi" });
+    expect(chuyenTuHanhDong("khoa")).toEqual({ tu: "active", den: "khoa" });
+    expect(chuyenTuHanhDong("mo_khoa")).toEqual({ tu: "khoa", den: "active" });
+  });
+
+  it("chuyenTuHanhDong khớp ĐÚNG bảng chân lý — không có nguồn hợp lệ thứ hai nào bị bỏ sót", () => {
+    // Nếu ai đó thêm một ô hợp lệ nữa cho cùng một hành động (vd cho phép duyệt lại từ
+    // 'tu_choi'), `chuyenTuHanhDong` sẽ âm thầm chỉ thấy ô ĐẦU TIÊN và route sẽ mất một
+    // đường chuyển mà không ai biết. Test này bắt đúng ca đó.
+    for (const hanhDong of HANH_DONG_ADMIN) {
+      const nguonHopLe = TRANG_THAI_TENANT.filter((t) => chuyenTrangThai(t, hanhDong) !== null);
+      expect({ hanhDong, soNguon: nguonHopLe.length }).toEqual({ hanhDong, soNguon: 1 });
+      expect(chuyenTuHanhDong(hanhDong).tu).toBe(nguonHopLe[0]);
     }
   });
 

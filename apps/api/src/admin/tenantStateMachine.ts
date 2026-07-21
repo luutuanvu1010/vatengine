@@ -47,6 +47,26 @@ export function chuyenTrangThai(
   return o ? o[2] : null;
 }
 
+/**
+ * Trạng thái NGUỒN và ĐÍCH của một hành động. Mỗi hành động chỉ hợp lệ từ ĐÚNG MỘT trạng
+ * thái nguồn (xem `CHUYEN_HOP_LE`), nên cặp này suy được từ riêng hành động.
+ *
+ * VÌ SAO QUAN TRỌNG: route không cần đọc trạng thái hiện tại rồi mới ghi — nó gọi thẳng
+ * `admin_doi_trang_thai_tenant(id, tu, den)` với `WHERE trang_thai = tu`. Một câu UPDATE
+ * NGUYÊN TỬ, không có khe hở đọc-rồi-ghi. Hai super-admin bấm "Duyệt" cùng lúc thì người
+ * thứ hai cập nhật 0 hàng và nhận 409, thay vì cả hai cùng đọc 'cho_duyet' rồi cùng ghi.
+ */
+export function chuyenTuHanhDong(hanhDong: HanhDongAdmin): {
+  tu: TrangThaiTenant;
+  den: TrangThaiTenant;
+} {
+  const o = CHUYEN_HOP_LE.find(([, hd]) => hd === hanhDong);
+  // Không thể xảy ra khi `hanhDong` đã qua `laHanhDongAdmin` — nhưng ném rõ ràng còn hơn
+  // trả undefined rồi dựng ra một câu UPDATE thiếu điều kiện.
+  if (!o) throw new Error(`hành động không có trong máy trạng thái: ${hanhDong}`);
+  return { tu: o[0], den: o[2] };
+}
+
 /** Ép kiểu có kiểm tra cho giá trị đọc từ DB / path param. Dùng ở ranh giới route. */
 export function laTrangThaiTenant(v: unknown): v is TrangThaiTenant {
   return typeof v === "string" && (TRANG_THAI_TENANT as readonly string[]).includes(v);
