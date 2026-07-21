@@ -299,6 +299,22 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 - **Mức ưu tiên đề xuất:** Cao (ảnh hưởng trực tiếp bước quyết định duyệt/từ chối của U18 — cần vào spec trước khi U18 code, không phải vá sau).
 - **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
 
+### [2026-07-21] KHÔNG XOÁ ĐƯỢC TENANT — trigger append-only của `audit_log` chặn cascade. Ảnh hưởng quyền xoá dữ liệu (NĐ 13/2023)
+
+- **Trạng thái:** Phát hiện khi dọn tenant smoke sau deploy U20. Chưa xử lý.
+- **Bối cảnh/bằng chứng (ĐO ĐƯỢC, không suy đoán):** `DELETE FROM tenants WHERE mst='9999999902'` trên production ném lỗi:
+  `error: audit_log là append-only: không được DELETE (security.md)` — `P0001`, từ `audit_log_no_mutate()`, phát sinh bởi `DELETE FROM ONLY "public"."audit_log" WHERE tenant_id = $1` tức **cascade** của FK. Chạy dưới role migrate/owner vẫn bị chặn, đúng thiết kế của trigger (0002).
+- **Vì sao đây là mâu thuẫn thật, không phải lỗi:** hai ràng buộc đều đúng và đang húc nhau. (a) `security.md`: *"Audit log không được ghi đè, chỉ append"* — nhật ký phải bất biến để có giá trị pháp lý. (b) Hiến pháp: tuân thủ **NĐ 13/2023** về dữ liệu cá nhân, trong đó có quyền **yêu cầu xoá dữ liệu**. Hiện (a) chặn (b) một cách tuyệt đối: **không tenant nào từng phát sinh audit có thể bị xoá khỏi hệ thống.**
+- **Rủi ro nếu bỏ qua:** khi một doanh nghiệp khách yêu cầu xoá tài khoản và dữ liệu, hệ thống **không thực hiện được** bằng bất kỳ thao tác nào — kể cả chủ dự án với quyền cao nhất. Đây là rủi ro pháp lý, không phải bất tiện vận hành. Hiện chưa lộ vì mới có 1 khách thật.
+- **Đề xuất hướng xử lý (chưa chốt — cần quyết định ở tầng kiến trúc, KHÔNG tự quyết khi code):**
+  - **A.** Xoá mềm: `tenants.trang_thai='da_xoa'` + xoá dữ liệu nghiệp vụ (hóa đơn, dòng hàng, tài khoản thuế), GIỮ audit. Nhật ký còn nguyên nhưng chỉ còn id không quy được về người — có thể đủ cho NĐ13 nếu audit không chứa dữ liệu cá nhân.
+  - **B.** Cho phép xoá audit theo tenant qua một hàm `SECURITY DEFINER` hẹp, có ghi vào `audit_log_admin` rằng đã xoá. Phá tính bất biến, nhưng có vết.
+  - **C.** Tách audit sang nơi lưu trữ khác khi tenant bị xoá (archive), rồi mới xoá hàng.
+  - Cần đối chiếu NĐ 13/2023 xem audit log có nằm trong phạm vi "dữ liệu cá nhân phải xoá" hay thuộc ngoại lệ lưu trữ theo nghĩa vụ pháp luật.
+- **Hệ quả vận hành ngay:** tenant smoke **không xoá được**, chỉ vô hiệu hoá bằng `trang_thai='khoa'`. Trên production hiện có 3 tenant smoke ở tình trạng này (`9999999999`, `9999999901`, `9999999902`).
+- **Mức ưu tiên đề xuất:** **Cao** — phải có câu trả lời TRƯỚC khi nhận khách hàng trả phí, vì đây là cam kết pháp lý chứ không phải tính năng.
+- **Nguồn phát hiện:** Dọn dẹp sau smoke test deploy U20, 2026-07-21.
+
 ### [2026-07-21] U19 còn thiếu: panel chi tiết doanh nghiệp + form sửa metadata
 
 - **Trạng thái:** Ghi nợ có ý thức — chủ dự án chốt 2026-07-21 ship U19 ở mức hiện tại để gỡ chỗ kẹt duyệt tenant trước. **Đề xuất làm CÙNG U21**, không làm riêng.
