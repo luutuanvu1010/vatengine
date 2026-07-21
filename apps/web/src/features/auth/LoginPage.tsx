@@ -1,9 +1,10 @@
 // S0 — Đăng nhập nội bộ (email + mật khẩu SaaS). "Ghi nhớ đăng nhập" + "Quên mật khẩu?"
 // DỰNG SẴN CHỖ nhưng chưa nối (backend A3/A4 tách unit sau — U15-buoc4 §4) → đánh dấu
 // "(sắp có)", không giả vờ hoạt động. KHÔNG log mật khẩu; không bí mật ở client.
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Brand } from "../../components/Brand";
+import { Turnstile, type TurnstileHandle } from "../../components/Turnstile";
 import { Alert, Button, TextField } from "../../components/ui/primitives";
 import { ApiError } from "../../lib/apiClient";
 import { vi } from "../../lib/i18n/vi";
@@ -32,6 +33,16 @@ const LOGIN_FACTS: ReadonlyArray<{ title: string; desc: string }> = [
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
+    // U33 — cổng Turnstile trả 400 cho captcha hỏng, TRÙNG mã với "thiếu email/mật khẩu".
+    // Phân biệt bằng `code` chứ không bằng status, nếu không người dùng nhập đủ email và
+    // mật khẩu vẫn bị bảo là "nhập email và mật khẩu hợp lệ" — chỉ dẫn sai chỗ cần sửa.
+    if (err.code === "thieu_captcha" || err.code === "captcha_sai")
+      return "Chưa qua được bước kiểm tra bảo mật. Vui lòng thực hiện lại ô xác minh.";
+    if (err.code === "het_han")
+      return "Ô xác minh bảo mật đã hết hạn. Vui lòng xác minh lại rồi đăng nhập.";
+    // Lỗi cấu hình phía máy chủ (secret sai/thiếu) — 503, không phải lỗi người dùng.
+    if (err.code === "cau_hinh_sai" || err.code === "captcha_chua_cau_hinh")
+      return "Hệ thống tạm thời chưa tiếp nhận được đăng nhập. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.";
     if (err.status === 401) return "Email hoặc mật khẩu không đúng.";
     if (err.status === 400) return "Vui lòng nhập email và mật khẩu hợp lệ.";
     if (err.status === 0) return vi.networkError;
@@ -47,15 +58,22 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (captcha === null) return;
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(email, password, captcha);
     } catch (err) {
       setError(errorMessage(err));
+      // Token dùng một lần — sai mật khẩu lần đầu là chuyện thường, và nếu không xin token
+      // mới thì lần gõ đúng ngay sau đó vẫn hỏng. Đúng cái bẫy khiến người dùng tin là
+      // mật khẩu của mình sai trong khi thực ra captcha đã tiêu.
+      captchaRef.current?.reset();
     } finally {
       setSubmitting(false);
     }
@@ -150,7 +168,9 @@ export function LoginPage() {
             </span>
           </div>
 
-          <Button type="submit" disabled={submitting}>
+          <Turnstile ref={captchaRef} onToken={setCaptcha} />
+
+          <Button type="submit" disabled={submitting || captcha === null}>
             {submitting ? "Đang đăng nhập…" : "Đăng nhập"}
           </Button>
 

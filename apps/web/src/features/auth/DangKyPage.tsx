@@ -6,9 +6,10 @@
 // nó từ trình duyệt — backend có cổng mà chưa ai làm cánh cửa.
 //
 // Route CÔNG KHAI, đặt ngang `/login`, ngoài `ProtectedLayout`.
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Brand } from "../../components/Brand";
+import { Turnstile, type TurnstileHandle } from "../../components/Turnstile";
 import { Alert, Button, Card, TextField } from "../../components/ui/primitives";
 import { ApiError, api } from "../../lib/apiClient";
 import { vi } from "../../lib/i18n/vi";
@@ -33,10 +34,18 @@ export function thongDiepLoiDangKy(err: unknown): string {
       return "Bạn cần tích ô cam kết ủy quyền trước khi gửi đăng ký.";
     case "da_ton_tai":
       return "Email hoặc mã số thuế này đã được đăng ký. Nếu đây là doanh nghiệp của bạn, hãy đăng nhập hoặc liên hệ hỗ trợ.";
-    case "qua_nhieu_yeu_cau":
-      return "Có quá nhiều lượt đăng ký từ mạng của bạn. Vui lòng thử lại sau ít phút.";
-    case "khong_xac_dinh_duoc_ip":
-      return "Hệ thống tạm thời chưa tiếp nhận được yêu cầu. Vui lòng thử lại sau ít phút.";
+    // U33 — 4 mã của cổng Turnstile. `thieu_captcha`/`captcha_sai`/`het_han` là việc người
+    // dùng TỰ xử lý được (giải lại), nên câu chữ phải nói đúng thao tác đó. `cau_hinh_sai`
+    // là lỗi của MÁY CHỦ (secret sai) — không được đổ cho người dùng "thử lại", vì thử bao
+    // nhiêu lần cũng hỏng cho tới khi bên vận hành sửa.
+    case "thieu_captcha":
+    case "captcha_sai":
+      return "Chưa qua được bước kiểm tra bảo mật. Vui lòng thực hiện lại ô xác minh bên dưới.";
+    case "het_han":
+      return "Ô xác minh bảo mật đã hết hạn. Vui lòng xác minh lại rồi gửi.";
+    case "cau_hinh_sai":
+    case "captcha_chua_cau_hinh":
+      return "Hệ thống tạm thời chưa tiếp nhận được đăng ký. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.";
     case "bad_request":
       return "Thông tin chưa hợp lệ. Vui lòng kiểm tra lại các ô đã nhập.";
     default:
@@ -75,6 +84,8 @@ export function DangKyPage() {
   const [tenDoanhNghiep, setTenDoanhNghiep] = useState("");
   const [mst, setMst] = useState("");
   const [dongY, setDongY] = useState(false);
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
   const [dangGui, setDangGui] = useState(false);
   const [loi, setLoi] = useState<string | null>(null);
   const [xong, setXong] = useState(false);
@@ -83,23 +94,38 @@ export function DangKyPage() {
   // backend (U17b) — nó lọc miền email dùng-một-lần, alias `+`, và rate-limit theo IP,
   // những thứ client không thể và không nên tự quyết.
   const mstHopLe = MST_RE.test(mst.trim());
+  // `captcha !== null` nằm trong điều kiện gửi ⇒ widget hỏng hoặc chưa giải thì nút khoá.
+  // Fail-closed cùng chiều với backend (503 khi thiếu secret): không có đường nào để form
+  // này gửi đi mà thiếu token.
   const guiDuoc =
-    email.trim() !== "" && tenDoanhNghiep.trim() !== "" && mstHopLe && dongY && !dangGui;
+    email.trim() !== "" &&
+    tenDoanhNghiep.trim() !== "" &&
+    mstHopLe &&
+    dongY &&
+    captcha !== null &&
+    !dangGui;
 
   async function guiForm(e: FormEvent) {
     e.preventDefault();
     setLoi(null);
+    if (captcha === null) return;
     setDangGui(true);
     try {
-      await api.dangKy({
-        email: email.trim(),
-        tenDoanhNghiep: tenDoanhNghiep.trim(),
-        mst: mst.trim(),
-        dongYDieuKhoan: dongY,
-      });
+      await api.dangKy(
+        {
+          email: email.trim(),
+          tenDoanhNghiep: tenDoanhNghiep.trim(),
+          mst: mst.trim(),
+          dongYDieuKhoan: dongY,
+        },
+        captcha,
+      );
       setXong(true);
     } catch (err) {
       setLoi(thongDiepLoiDangKy(err));
+      // Token vừa tiêu. KHÔNG đặt lại thì lần gửi thứ hai mang token đã dùng và luôn hỏng
+      // với `het_han` — người dùng sửa đúng lỗi của mình mà vẫn không gửi được.
+      captchaRef.current?.reset();
     } finally {
       setDangGui(false);
     }
@@ -194,6 +220,8 @@ export function DangKyPage() {
                   nêu trên, và đồng ý với chính sách sử dụng &amp; bảo mật của VATEngine.
                 </span>
               </label>
+
+              <Turnstile ref={captchaRef} onToken={setCaptcha} />
 
               {loi && <Alert tone="danger">{loi}</Alert>}
 

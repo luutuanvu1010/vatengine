@@ -15,13 +15,26 @@ interface Env {
 // (→ script-src 'self', không nới lỏng); inline `style=` của React (→ style-src
 // 'unsafe-inline'); captcha `<img src="data:image/svg+xml…">` (→ img-src data:);
 // gọi API same-origin `/api` (→ connect-src 'self'). Chặt phần còn lại.
+//
+// U33 — NỚI ĐÚNG HAI CHỈ THỊ cho Cloudflare Turnstile, không hơn:
+//   script-src: tải `challenges.cloudflare.com/turnstile/v0/api.js`
+//   frame-src : widget tự dựng một <iframe> tới cùng máy chủ đó
+// `frame-src` trước đây không được liệt kê nên rơi về `default-src 'self'` — thiếu nó thì
+// script tải được nhưng ô xác minh không bao giờ hiện, và vì fail-closed, KHÔNG AI đăng ký
+// hay đăng nhập được. Không nới `connect-src`: iframe là origin riêng, lưu lượng xác minh
+// của nó không chịu CSP của trang này.
+//
+// Nới ở ĐÂY (cổng khách) và CHỈ ở đây. `apps/admin` không có Turnstile — nó nằm sau
+// Cloudflare Access — nên CSP của nó giữ nguyên chặt.
+const NGUON_TURNSTILE = "https://challenges.cloudflare.com";
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  `script-src 'self' ${NGUON_TURNSTILE}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
   "connect-src 'self'",
+  `frame-src ${NGUON_TURNSTILE}`,
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'none'",

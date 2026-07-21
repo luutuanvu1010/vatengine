@@ -70,7 +70,7 @@ describe("apiClient", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(jsonResponse(200, { ok: true }));
-    const res = (await api.login("a@b.vn", "pw")) as Record<string, unknown>;
+    const res = (await api.login("a@b.vn", "pw", "token-captcha-gia")) as Record<string, unknown>;
     expect(res.token).toBeUndefined();
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(init.credentials).toBe("same-origin");

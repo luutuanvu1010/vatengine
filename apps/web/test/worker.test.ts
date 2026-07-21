@@ -62,6 +62,20 @@ describe("front-door worker — security header", () => {
     expect(csp).not.toMatch(/script-src[^;]*'unsafe-inline'/);
   });
 
+  // U33 — CSP là chỗ lỗi Turnstile biểu hiện tệ nhất: script bị chặn ⇒ không có token ⇒
+  // component fail-closed ⇒ KHÔNG AI đăng ký hay đăng nhập được, mà trên trang chỉ thấy
+  // một ô trống. Hai chỉ thị dưới đây phải cùng có mặt; thiếu `frame-src` là ca dễ sót
+  // nhất vì nó vốn không được liệt kê và im lặng rơi về `default-src 'self'`.
+  it("CSP cho phép Turnstile ĐÚNG hai chỗ cần: script-src và frame-src", async () => {
+    const res = await worker.fetch(new Request("https://vatengine.example/"), mockEnv());
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toMatch(/script-src[^;]*https:\/\/challenges\.cloudflare\.com/);
+    expect(csp).toMatch(/frame-src[^;]*https:\/\/challenges\.cloudflare\.com/);
+    // Nới ĐÚNG hai chỗ đó thôi — `connect-src` vẫn phải khoá về 'self' (iframe Turnstile là
+    // origin riêng, lưu lượng xác minh của nó không chịu CSP của trang này).
+    expect(csp).toMatch(/connect-src 'self'(;|$)/);
+  });
+
   // ADR-0003 Amendment #1 §A.7 — mắt xích DUY NHẤT của thiết kế cookie chưa được kiểm
   // chứng khi soạn ADR: `Set-Cookie` do vat-api phát phải đi XUYÊN front-door tới trình
   // duyệt. `withSecurityHeaders` dựng lại `new Response(res.body, res)`, và nếu bước đó

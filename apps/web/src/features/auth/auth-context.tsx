@@ -18,7 +18,7 @@ interface AuthValue {
   status: AuthStatus;
   me: MeResponse | null;
   email: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, captcha: string) => Promise<void>;
   logout: () => void;
   applyMe: (me: MeResponse) => void;
   /** U20 — true khi đang dùng mật khẩu TẠM do quản trị viên cấp (U18 cấp khi duyệt
@@ -93,13 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       me,
       email,
-      async login(inputEmail, password) {
+      async login(inputEmail, password, captcha) {
         // Xóa mọi tàn dư phiên trước TRƯỚC khi nạp dữ liệu tenant mới.
         queryClient.clear();
         clearInvoiceFilter();
         // Không nhận token ở đây — server đặt cookie (C2). Phiên coi như thiết lập được
         // khi /me ngay sau đó gọi thành công.
-        const kq = await api.login(inputEmail, password);
+        const kq = await api.login(inputEmail, password, captcha);
         // Cờ chỉ đến từ PHẢN HỒI ĐĂNG NHẬP — `/me` không mang nó. Vì vậy nếu người dùng
         // tải lại trang, cờ mất và lời nhắc biến mất; chấp nhận được vì đây là nhắc nhở,
         // không phải cổng chặn. Muốn bền qua reload thì phải thêm trường vào `/me`.

@@ -55,15 +55,11 @@
 
   // H-A.5b — Durable Object khóa đăng nhập per-account (lockout chống brute-force, lớp
   // app bổ sung WAF per-IP ở edge). Trạng thái nhỏ theo email → SQLite-backed DO.
-  // H-A.5b — DO khóa đăng nhập; U22 — DO BackfillTracker (1 DO / backfillId, giữ danh
-  // sách tháng của một backfill; trạng thái nhỏ → SQLite-backed DO). U17b (QĐ-2) — DO
-  // SignupLimiter đếm lượt đăng ký công khai theo IP (trạng thái nhỏ → SQLite-backed DO).
+  // U22 — DO BackfillTracker (1 DO / backfillId, giữ danh sách tháng của một backfill;
+  // trạng thái nhỏ → SQLite-backed DO). Đây là DO DUY NHẤT còn lại của worker này sau U33:
+  // LoginLimiter và SignupLimiter đã bị gỡ cùng toàn bộ rate-limit tầng ứng dụng (QĐ-11).
   "durable_objects": {
-    "bindings": [
-      { "name": "LOGIN_LIMITER", "class_name": "LoginLimiter" },
-      { "name": "BACKFILL_TRACKER", "class_name": "BackfillTracker" },
-      { "name": "SIGNUP_LIMITER", "class_name": "SignupLimiter" }
-    ]
+    "bindings": [{ "name": "BACKFILL_TRACKER", "class_name": "BackfillTracker" }]
   },
   // KHÔI PHỤC sau sự cố 2026-07-16: một phiên deploy nhầm code cũ (thiếu H-A.5b) rồi áp
   // delete-class (v2) → DO LoginLimiter đang chạy bị xoá. Worker LIVE đã áp v1+v2. Thêm v3
@@ -71,17 +67,28 @@
   // thứ tự (Cloudflare legacy migrations = lịch sử cộng dồn, không sửa tag cũ). v4 (U22):
   // THÊM class mới BackfillTracker — thuần cộng dồn, KHÔNG đụng tag cũ (an toàn, khác v2).
   // v5 (U17b QĐ-2): THÊM class mới SignupLimiter — cũng thuần cộng dồn, KHÔNG đụng tag cũ.
+  //
+  // v6 (U33/QĐ-11): XOÁ HẲN LoginLimiter + SignupLimiter. Mã của hai class đã bị gỡ khỏi
+  // src/index.ts, nên nếu chỉ xoá binding mà KHÔNG khai deleted_classes thì `wrangler deploy`
+  // từ chối ("class không còn được export"). Đây là tag `deleted_classes` thứ hai trong lịch
+  // sử file này — tag đầu (v2) chính là sự cố 2026-07-16. Khác biệt then chốt so với lần đó:
+  // v2 xoá một class mà mã VẪN CÒN dùng (deploy nhầm bản cũ rồi áp delete), còn v6 xoá class
+  // mà mã đã chủ động bỏ. Mất mát: các bộ đếm lockout/đăng ký đang sống — chấp nhận được,
+  // chúng là trạng thái tạm và cơ chế đọc chúng cũng không còn nữa.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["LoginLimiter"] },
     { "tag": "v2", "deleted_classes": ["LoginLimiter"] },
     { "tag": "v3", "new_sqlite_classes": ["LoginLimiter"] },
     { "tag": "v4", "new_sqlite_classes": ["BackfillTracker"] },
-    { "tag": "v5", "new_sqlite_classes": ["SignupLimiter"] }
+    { "tag": "v5", "new_sqlite_classes": ["SignupLimiter"] },
+    { "tag": "v6", "deleted_classes": ["LoginLimiter", "SignupLimiter"] }
   ]
 
-  // H-A.5b — ngưỡng khóa đăng nhập (KHÔNG nhạy cảm; bỏ trống → mặc định loginLimiter.ts:
-  // 10 lần sai / 15' → khóa 15'). Tinh chỉnh theo môi trường.
-  // "vars" thêm: LOGIN_MAX_FAILURES / LOGIN_WINDOW_MS / LOGIN_LOCKOUT_MS.
+  // U33 — TURNSTILE_SECRET_KEY (secret key của Turnstile) nạp qua
+  // `wrangler secret put TURNSTILE_SECRET_KEY`. THIẾU nó thì cả /dang-ky lẫn /auth/login
+  // trả 503 (fail-closed có chủ ý, QĐ-11): sau khi gỡ rate-limit, captcha là lớp bảo vệ
+  // duy nhất còn lại nên cấu hình sai KHÔNG được âm thầm mở cổng. Không khai ở "vars" —
+  // đây là bí mật (security.md). Site key (công khai) nằm ở apps/web lúc build.
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình

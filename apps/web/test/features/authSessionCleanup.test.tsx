@@ -20,7 +20,7 @@ function LogoutHarness() {
 function LoginHarness() {
   const { login } = useAuth();
   return (
-    <button type="button" onClick={() => login("b@moi.vn", "matkhau")}>
+    <button type="button" onClick={() => login("b@moi.vn", "matkhau", "token-captcha-gia")}>
       vao
     </button>
   );

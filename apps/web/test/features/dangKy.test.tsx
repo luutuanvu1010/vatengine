@@ -11,6 +11,7 @@ import { DangKyPage, thongDiepLoiDangKy } from "../../src/features/auth/DangKyPa
 import { ApiError } from "../../src/lib/apiClient";
 import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
+import { TOKEN_TURNSTILE_TEST } from "../helpers/turnstile";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -89,6 +90,10 @@ describe("Gửi đăng ký", () => {
       tenDoanhNghiep: "Công ty TNHH ABC",
       mst: "0101234567",
       dongYDieuKhoan: true,
+      // U33 — tên trường phải khớp TỪNG KÝ TỰ với hằng TURNSTILE_FIELD mà backend đọc
+      // (apps/api/src/turnstile.ts). Đây là chỗ duy nhất trong test cả hai phía gặp nhau,
+      // nên gõ thẳng chuỗi chứ không import hằng: nếu một phía đổi tên, ca này phải ĐỎ.
+      "cf-turnstile-response": TOKEN_TURNSTILE_TEST,
     });
   });
 
@@ -157,18 +162,21 @@ describe("Màn chờ duyệt", () => {
   });
 });
 
-describe("🔴 Ánh xạ ĐỦ 7 mã lỗi của backend", () => {
-  // Spec U20 chỉ liệt kê 4 mã; `apps/api/src/routes/dangKy.ts` thật sự trả 7. Bảng này
-  // đối chiếu với backend, không với spec — thiếu một mã là người dùng nhận "Có lỗi xảy
+describe("🔴 Ánh xạ ĐỦ 8 mã lỗi của backend", () => {
+  // Spec U20 chỉ liệt kê 4 mã; `apps/api/src/routes/dangKy.ts` thật sự trả 8 sau U33. Bảng
+  // này đối chiếu với backend, không với spec — thiếu một mã là người dùng nhận "Có lỗi xảy
   // ra" và không biết phải sửa gì.
   it.each([
     ["email_khong_hop_le", 400, /email doanh nghiệp, Gmail hoặc Yahoo/i],
     ["mst_khong_hop_le", 400, /10 hoặc 13 chữ số/i],
     ["chua_dong_y_dieu_khoan", 400, /tích ô cam kết/i],
     ["da_ton_tai", 409, /đã được đăng ký/i],
-    ["qua_nhieu_yeu_cau", 429, /thử lại sau ít phút/i],
-    ["khong_xac_dinh_duoc_ip", 503, /thử lại sau ít phút/i],
     ["bad_request", 400, /kiểm tra lại các ô/i],
+    // U33 — 4 mã của cổng Turnstile, thay cho `qua_nhieu_yeu_cau`/`khong_xac_dinh_duoc_ip`.
+    ["thieu_captcha", 400, /ô xác minh/i],
+    ["captcha_sai", 400, /ô xác minh/i],
+    ["het_han", 400, /hết hạn/i],
+    ["captcha_chua_cau_hinh", 503, /liên hệ hỗ trợ/i],
   ])("%s → thông điệp riêng, nói được việc cần làm", (code, status, mong) => {
     expect(thongDiepLoiDangKy(new ApiError(status, code))).toMatch(mong);
   });
@@ -176,6 +184,16 @@ describe("🔴 Ánh xạ ĐỦ 7 mã lỗi của backend", () => {
   it("lỗi mạng → thông điệp mạng, không phải 'có lỗi xảy ra'", () => {
     expect(thongDiepLoiDangKy(new ApiError(0, "network_error"))).toMatch(/kết nối|mạng/i);
   });
+
+  // U33/QĐ-11 — hai mã `qua_nhieu_yeu_cau` và `khong_xac_dinh_duoc_ip` đã CHẾT cùng
+  // SignupLimiter. Giữ một ca khẳng định điều đó: nếu ai đó thêm lại câu "thử lại sau ít
+  // phút" cho hai mã này, nghĩa là rate-limit tầng ứng dụng đang bò về — ca này sẽ ĐỎ.
+  it.each(["qua_nhieu_yeu_cau", "khong_xac_dinh_duoc_ip"])(
+    "%s — mã đã chết sau U33: KHÔNG còn thông điệp riêng, rơi về thông điệp chung",
+    (code) => {
+      expect(thongDiepLoiDangKy(new ApiError(429, code))).not.toMatch(/thử lại sau ít phút/i);
+    },
+  );
 
   it("mã lạ (backend thêm sau này) → không vỡ, rơi về thông điệp chung", () => {
     expect(thongDiepLoiDangKy(new ApiError(400, "mot_ma_moi_toanh"))).toBeTruthy();

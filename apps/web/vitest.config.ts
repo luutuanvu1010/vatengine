@@ -10,6 +10,10 @@ export default defineConfig({
     environment: "jsdom",
     globals: false,
     setupFiles: ["./test/setup.ts"],
+    // U33 — site key Turnstile là dữ liệu CÔNG KHAI (nằm sẵn trong HTML mọi khách tải về),
+    // không phải bí mật; giá trị giả ở đây chỉ để component chịu render trong jsdom. Thiếu
+    // biến này thì component fail-closed và mọi test đi qua form đăng nhập/đăng ký sẽ đỏ.
+    env: { VITE_TURNSTILE_SITE_KEY: "0xSITE_KEY_GIA_CHO_TEST" },
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     coverage: {
       provider: "v8",

@@ -5,8 +5,19 @@
 // bắt buộc, thiếu một là hỏng cả lập luận (U18-plan §103):
 //   1. HẾT HẠN 72h — `hanMatKhauTam` ở dưới; login kiểm `mat_khau_tam_het_han`.
 //   2. BUỘC ĐỔI ở lần đăng nhập đầu — cờ `phai_doi_mat_khau`, gỡ ở POST /auth/doi-mat-khau.
-//   3. RATE-LIMIT login — tái dùng LOGIN_LIMITER (DO khoá per-account, H-A.5b) đã có sẵn;
-//      không dựng limiter thứ hai.
+//   3. RATE-LIMIT login — LOGIN_LIMITER (DO khoá per-account, H-A.5b).
+//
+// ⚠️ HAI TRONG BA RÀNG BUỘC ĐÓ KHÔNG CÒN (ghi lại thay vì lặng lẽ sửa cho êm):
+//   - QĐ-7 (2026-07-21) bỏ BUỘC ĐỔI lần đầu — cờ `phai_doi_mat_khau` giờ chỉ để NHẮC ở
+//     trang Cài đặt, không chặn đường.
+//   - QĐ-11 (2026-07-21, U33) gỡ LOGIN_LIMITER cùng toàn bộ rate-limit tầng ứng dụng.
+// Còn lại đúng một: hạn 72h. Chặn dò 10^6 khả năng giờ nằm HOÀN TOÀN ngoài mã này —
+// Turnstile buộc mỗi lượt thử phải có token riêng, và giới hạn nhịp là rule WAF ở tầng
+// zone Cloudflare. Rule đó là TIỀN ĐỀ CHƯA ĐƯỢC KIỂM CHỨNG TRONG KHO NÀY: không test nào
+// ở đây chạm tới nó được. Nợ đã ghi ở `docs/plans/COMMERCIAL-LAYER-tinh-hinh.md` §5.
+// Muốn phục hồi lập luận gốc mà không dựng lại limiter: rút số chữ số xuống còn ít giá
+// trị đoán được hơn thì không được (ngược mục tiêu dễ đọc), nên hướng đúng là rút NGẮN hạn
+// (72h → vài giờ) hoặc chuyển sang mã dùng-một-lần theo liên kết khi U24 có hạ tầng email.
 //
 // QĐ-1 (2026-07-21): mật khẩu này KHÔNG gửi qua email (hạ tầng email thuộc U24). Nó được
 // trả về đúng MỘT LẦN trong phản hồi của thao tác duyệt/reset, qua HTTPS, sau

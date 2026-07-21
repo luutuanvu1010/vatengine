@@ -138,8 +138,18 @@ export const api = {
   // Auth nội bộ. Thành công → server đặt cookie phiên; body KHÔNG mang token (C2).
   // U20 — `phai_doi_mat_khau` CHỈ có mặt khi bằng true (U18 giữ hợp đồng cũ `{ok:true}`
   // cho người dùng bình thường, nên đây là optional chứ không phải luôn có).
-  login(email: string, password: string): Promise<{ ok: true; phai_doi_mat_khau?: boolean }> {
-    return request("POST", "/auth/login", { body: { email, password } });
+  // U33 — `captcha` là token Turnstile, gửi dưới ĐÚNG tên trường mà backend đọc
+  // (`cf-turnstile-response`, hằng TURNSTILE_FIELD ở apps/api/src/turnstile.ts). Đổi tên
+  // trường ở một trong hai phía mà không đổi phía kia sẽ làm mọi lượt đăng nhập trả 400
+  // `thieu_captcha` — nên tên này là hợp đồng, không phải chi tiết nội bộ.
+  login(
+    email: string,
+    password: string,
+    captcha: string,
+  ): Promise<{ ok: true; phai_doi_mat_khau?: boolean }> {
+    return request("POST", "/auth/login", {
+      body: { email, password, "cf-turnstile-response": captcha },
+    });
   },
 
   /** U20 §4 — Đổi mật khẩu. ĐÒI mật khẩu hiện tại: chỉ dựa vào cookie phiên thì một phiên
@@ -157,13 +167,16 @@ export const api = {
    * duyệt trong Cổng Admin (U18). Hệ thống hiện KHÔNG gửi email nào cho khách — hạ tầng
    * email thuộc U24, chưa tồn tại — nên UI không được hứa "sẽ gửi email thông báo".
    */
-  dangKy(body: {
-    email: string;
-    tenDoanhNghiep: string;
-    mst: string;
-    dongYDieuKhoan: boolean;
-  }): Promise<{ ok: true; trangThai: "cho_duyet" }> {
-    return request("POST", "/dang-ky", { body });
+  dangKy(
+    body: {
+      email: string;
+      tenDoanhNghiep: string;
+      mst: string;
+      dongYDieuKhoan: boolean;
+    },
+    captcha: string,
+  ): Promise<{ ok: true; trangThai: "cho_duyet" }> {
+    return request("POST", "/dang-ky", { body: { ...body, "cf-turnstile-response": captcha } });
   },
 
   // C4 — đăng xuất THẬT: chỉ server mới xoá được cookie HttpOnly. Bỏ bước này thì
