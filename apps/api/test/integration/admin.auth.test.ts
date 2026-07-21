@@ -241,3 +241,47 @@ describe("GET /admin/auth/me — dò phiên cho Cổng Admin", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("POST /admin/auth/logout", () => {
+  let db: Db;
+  let app: ReturnType<typeof createApp>;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    app = createApp(injectDb(db));
+    await seedSuperAdmin(db, EMAIL, MAT_KHAU);
+  });
+
+  async function dangNhapLayCookie(): Promise<string> {
+    const res = await app.request(
+      "/admin/auth/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: EMAIL, password: MAT_KHAU }),
+      },
+      makeEnv(),
+    );
+    return (res.headers.get("Set-Cookie") ?? "").split(";")[0] as string;
+  }
+
+  it("🔴 xoá cookie phiên THẬT — sau đăng xuất, cookie cũ không dùng được nữa", async () => {
+    const cookie = await dangNhapLayCookie();
+    expect(
+      (await app.request("/admin/auth/me", { headers: { Cookie: cookie } }, makeEnv())).status,
+    ).toBe(200);
+
+    const out = await app.request("/admin/auth/logout", { method: "POST" }, makeEnv());
+    expect(out.status).toBe(200);
+    // Server phải phát Set-Cookie xoá — chỉ server mới làm được với cookie HttpOnly.
+    const xoa = out.headers.get("Set-Cookie") ?? "";
+    expect(xoa).toContain(`${ADMIN_SESSION_COOKIE}=`);
+    expect(xoa).toMatch(/Max-Age=0|Expires=/i);
+  });
+
+  it("gọi khi CHƯA đăng nhập vẫn 200 (idempotent — không để ai kẹt với cookie hỏng)", async () => {
+    const res = await app.request("/admin/auth/logout", { method: "POST" }, makeEnv());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+});
