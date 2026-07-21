@@ -12,9 +12,12 @@ const nhan: React.CSSProperties = {
   letterSpacing: "0.04em",
 };
 
+// QĐ-9 (U20) — `--fs-base`, KHÔNG `--fs-sm`. Đây là văn bản để ĐỌC (tên pháp nhân, MST,
+// địa chỉ), không phải nhãn phụ. Gốc của phàn nàn "chữ nhỏ khó đọc" chính là `--fs-sm`
+// (13px) bị dùng cho nội dung đọc; nhãn `nhan` phía trên giữ `--fs-xs` vì nó ĐÚNG là nhãn.
 const than: React.CSSProperties = {
   margin: 0,
-  fontSize: "var(--fs-sm)",
+  fontSize: "var(--fs-base)",
   lineHeight: "var(--lh-body)",
   color: "var(--text-secondary)",
 };
@@ -33,6 +36,8 @@ export function OrgIdentity() {
         {/* Địa chỉ dùng <address> — phần tử ngữ nghĩa cho thông tin liên hệ của pháp nhân. */}
         <address style={{ ...than, fontStyle: "normal" }}>
           <span style={{ color: "var(--text-tertiary)" }}>Địa chỉ: </span>
+          MST: {ORG.mst}
+          <br />
           {ORG.diaChi}
         </address>
 

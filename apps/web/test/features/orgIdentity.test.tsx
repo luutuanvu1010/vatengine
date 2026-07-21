@@ -50,11 +50,19 @@ describe("U32 — hằng số pháp nhân (nguồn sự thật duy nhất)", () 
   });
 
   // Chống bịa: những trường KHÔNG được chủ dự án cung cấp thì không được tự chế ra.
-  it("KHÔNG tự chế mã số thuế / điện thoại / email pháp nhân", () => {
+  //
+  // CẬP NHẬT 2026-07-21 (U20): `mst` nay ĐƯỢC PHÉP — chủ dự án viết số này trong
+  // `docs/plans/U20-plan.md` §5 và xác nhận trực tiếp khi U20 cần hiện thông tin tác giả.
+  // Tức điều kiện của cổng đã đổi ("chưa có thì để trống" → nay đã có), KHÔNG phải cổng bị
+  // nới lỏng. `dienThoai`/`email` vẫn CẤM: chủ dự án chưa cung cấp.
+  it("KHÔNG tự chế điện thoại / email pháp nhân (mst đã được cung cấp)", () => {
     const keys = Object.keys(ORG);
-    expect(keys).not.toContain("mst");
     expect(keys).not.toContain("dienThoai");
     expect(keys).not.toContain("email");
+  });
+
+  it("mst đúng giá trị chủ dự án xác nhận", () => {
+    expect(ORG.mst).toBe("4201969169");
   });
 });
 
