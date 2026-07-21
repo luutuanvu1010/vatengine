@@ -19,7 +19,7 @@
 | **U20** | Đăng ký khách + đổi mật khẩu + Cài đặt pháp lý + font | ✅ merged (PR #30) | ✅ **live (2026-07-21)** — smoke đầu-cuối 10/10 |
 | **U21** | Dashboard giám sát | ⬜ chưa bắt đầu | ❌ |
 | **U24** | Hạ tầng email (AWS SES) + quên mật khẩu | ⬜ chưa bắt đầu | ❌ |
-| **U33** | Gỡ rate-limit tầng ứng dụng → Turnstile | 📋 kế hoạch xong | ❌ |
+| **U33** | Gỡ rate-limit tầng ứng dụng → Turnstile | 🟡 **ĐANG DỞ** — lõi xong, test đỏ | ❌ |
 
 **Chuỗi nghiệp vụ hiện tại — chỗ nào đã thông, chỗ nào chưa:**
 
@@ -133,3 +133,42 @@ Không xếp lịch cứng; kích hoạt theo mốc ở §5. Riêng "test CI dư
 3. **Sau mỗi sự cố production: dừng, cập nhật §2/§4/§5 trước khi code tiếp.** Sự cố luôn đổi một giả định nào đó — code tiếp ngay là code trên giả định cũ.
 4. **Bổ sung ngược vào đơn vị trước** (như U19 → U18) được phép, nhưng phải ghi vào §2 rằng mốc "xong" đã dịch.
 5. **Cổng kiểm chứng không được nối bằng `&&` từ lệnh in ra màn hình.** Chạy `make lint && make test` rồi mới commit — kiểm mã thoát của *chính nó*, không phải của `echo`.
+
+---
+
+## 8. 🟡 U33 đang dở — điểm dừng phiên 2026-07-21
+
+Nhánh **`feat/u33-turnstile`**, commit cuối `8be6fd3` (**WIP, `make lint` và `make test` ĐỎ**). Chưa push, chưa deploy. Production đang chạy U20 bình thường, không có gì hỏng.
+
+### Đã xong
+- `apps/api/src/turnstile.ts` — xác minh server-side, **14 test unit xanh**. Hợp đồng lấy từ tài liệu Cloudflare (tra 2026-07-21), không phải trí nhớ.
+- `routes/dangKy.ts` + `routes/auth.ts` — thay limiter bằng cổng Turnstile, fail-closed.
+- Xoá `loginLimiter{,DO}.ts`, `signupLimiter{,DO}.ts` + 2 test unit của chúng.
+- Dọn `types.ts`, `index.ts`, `test/helpers.ts`.
+
+### Còn lại — theo thứ tự nên làm
+
+**① Helper test dùng chung (làm TRƯỚC — nó gỡ phần lớn màu đỏ).**
+~25 test gọi `/dang-ky` và `/auth/login` **không kèm token Turnstile** nên giờ bị cổng captcha chặn, và route sẽ cố gọi ra `challenges.cloudflare.com` **thật** trong test. Cách sạch: **một** helper trong `test/helpers.ts` vừa stub `fetch` tới `siteverify` vừa chèn `cf-turnstile-response` vào body — sửa một chỗ thay vì hai mươi lăm.
+
+**② Viết lại 9 test kiểm hành vi vừa gỡ.**
+- `auth.hardening.test.ts` dòng ~186/197/203/212 — 4 ca lockout.
+- `dangKy.test.ts` dòng ~167/313/343/378/419 — rate-limit, TOCTOU, thiếu `CF-Connecting-IP`, và 2 ca refund.
+
+⚠️ **Không xoá cho xong.** Thay bằng ca khẳng định hành vi MỚI: *"đăng nhập sai 20 lần liên tiếp vẫn trả 401, không còn khoá"*. Nếu chỉ xoá, người sau sẽ không biết việc mất lockout là **có chủ ý** (QĐ-11) hay là hồi quy.
+Ghi chú: ca `khong_xac_dinh_duoc_ip` (503 khi thiếu `CF-Connecting-IP`) **không còn đúng** — cổng Turnstile không cần IP để hoạt động, IP chỉ là dữ liệu phụ giúp Cloudflare chấm điểm.
+
+**③ Frontend.** Widget ở `DangKyPage` + `LoginPage`; script `https://challenges.cloudflare.com/turnstile/v0/api.js`; đặt trong `<form>` thì tự sinh input ẩn `cf-turnstile-response`. Site key qua `VITE_TURNSTILE_SITE_KEY`.
+
+**④ 🔴 Nới CSP `apps/web/worker.ts`** — `script-src` và `frame-src` thêm `https://challenges.cloudflare.com`. **KHÔNG nới `apps/admin`** (đã sau Access, giữ bề mặt hẹp).
+Đây là điểm hỏng-CÂM: thiếu bước này widget không hiện và **không báo lỗi rõ ràng**.
+
+**⑤ 🔴 `wrangler.jsonc`** — bỏ binding `LOGIN_LIMITER`/`SIGNUP_LIMITER` **và khai `deleted_classes`** cho hai Durable Object. Xoá class DO mà không khai `deleted_classes` thì **deploy sẽ lỗi**.
+
+**⑥ Deploy.** `wrangler secret put TURNSTILE_SECRET_KEY`; build `apps/web` với `VITE_TURNSTILE_SITE_KEY`. Hai khoá đã có sẵn trong `packages/db/.dev.vars`.
+
+### Dọn sau khi xong
+`cau_hinh_he_thong.dangky_max_moi_ip_gio` (=5) trên production **không còn ai đọc**. Xoá hàng để không ai tưởng nó còn tác dụng.
+
+### Bài học rút ra ngay tại đây
+Kế hoạch U33 §5 liệt kê "21 file bị đụng" — đúng về **file nguồn**, nhưng **không tính hệ quả lên bộ test**. Gỡ một cổng nằm ở đầu hai route công khai làm đỏ mọi test đi qua hai route đó, kể cả những test chẳng liên quan gì tới cổng ấy. Lần sau, khi lập kế hoạch cho việc gỡ/thêm một **middleware ở đầu route**, phải đếm luôn số test đi qua route đó — không chỉ số file chứa tên module bị gỡ.
