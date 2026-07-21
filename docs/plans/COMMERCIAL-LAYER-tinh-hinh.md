@@ -16,19 +16,20 @@
 | **U17b** | `POST /dang-ky` + cổng trạng thái tenant + SignupLimiter | ✅ merged | ✅ live (2026-07-20) |
 | **U18** | Admin API — super-admin, 8 hàm xuyên-tenant, vòng đời tenant | ✅ merged (PR #27) | ✅ live (migration 0011, 2026-07-21) |
 | **U19** | Cổng Admin `adminvatengine.tourdao.vn` | ✅ merged (PR #28) | ✅ live (2026-07-21) — **~85%** |
-| **U20** | Đăng ký khách + Cài đặt pháp lý + font | 🟡 **2/4 khối**, chưa merge | ❌ |
+| **U20** | Đăng ký khách + đổi mật khẩu + Cài đặt pháp lý + font | ✅ merged (PR #30) | ✅ **live (2026-07-21)** — smoke đầu-cuối 10/10 |
 | **U21** | Dashboard giám sát | ⬜ chưa bắt đầu | ❌ |
 | **U24** | Hạ tầng email (AWS SES) + quên mật khẩu | ⬜ chưa bắt đầu | ❌ |
+| **U33** | Gỡ rate-limit tầng ứng dụng → Turnstile | 📋 kế hoạch xong | ❌ |
 
 **Chuỗi nghiệp vụ hiện tại — chỗ nào đã thông, chỗ nào chưa:**
 
 ```
-khách vào web ──[U20 W1 ✅ chưa deploy]──▶ cho_duyet ──[U19 ✅ live]──▶ active
-                                                                          │
-                          [U20 W2 ✅ chưa deploy] đổi mật khẩu ◀──────────┘
+khách vào web ──[U20 ✅ live]──▶ cho_duyet ──[U19 ✅ live]──▶ active
+                                                                │
+                    [U20 ✅ live] tự đổi mật khẩu ◀────────────┘
 ```
 
-Nghĩa là: **trên production hôm nay khách vẫn CHƯA tự đăng ký được.** U20 W1+W2 đã viết xong và test xanh nhưng còn nằm trên nhánh. Đây là khoảng cách quan trọng nhất giữa "đã làm" và "dùng được".
+**Chuỗi onboard đã thông toàn tuyến trên production** (kiểm chứng 2026-07-21, smoke đầu-cuối 10/10 ca). Khách tự đăng ký, chủ dự án duyệt trong Cổng Admin, khách đăng nhập bằng mã 6 số rồi tự đặt mật khẩu riêng. Không còn khúc nào phải làm tay.
 
 ---
 
@@ -88,7 +89,9 @@ Bài học đắt nhất của phiên. Các thao tác ghi của admin viết dư
 | Khoá tenant không cắt phiên đang sống (trễ 8h) | Trung bình → **Cao** | **Ngay khi có khách trả phí đầu tiên** |
 | Không có test CI dưới role Postgres non-superuser thật | Trung bình | Trước khi lớp thương mại đón khách thật |
 | Mã vẫn diễn đạt thao tác ghi bằng `SELECT fn()` | Thấp (đã bù bằng tắt cache) | Nếu ai muốn bật lại cache Hyperdrive |
-| Service token Access chưa dùng được | Thấp | Khi cần tự động hoá smoke test deploy |
+| ~~Service token Access chưa dùng được~~ | — | ✅ đã xong 2026-07-21 |
+| 🔴 **Không xoá được tenant** — trigger append-only của `audit_log` chặn cascade | **Cao** | **Trước khi nhận khách trả phí.** Mâu thuẫn thật giữa `security.md` (audit bất biến) và NĐ 13/2023 (quyền xoá dữ liệu). Ba hướng đã ghi ở BACKLOG, **chưa chốt** — quyết định tầng kiến trúc |
+| Mật khẩu tạm 6 số chỉ còn **1/3** điều kiện bù sau QĐ-7 + QĐ-11 | Trung bình | Nếu thấy cần siết: đổi sang chuỗi dài hơn, hoặc rút hạn 72h |
 
 ---
 
@@ -96,7 +99,14 @@ Bài học đắt nhất của phiên. Các thao tác ghi của admin viết dư
 
 **Nguyên tắc sắp thứ tự:** ưu tiên thứ **rút ngắn khoảng cách giữa "đã làm" và "khách dùng được"**, rồi mới tới thứ làm sản phẩm đầy đủ hơn.
 
-### Bước 1 — Đóng U20 (2 khối còn lại) rồi **deploy**
+### ~~Bước 1 — Đóng U20 rồi deploy~~ ✅ XONG 2026-07-21
+
+*(giữ lại để thấy lộ trình đã đi tới đâu)*
+
+### Bước 1b — U33: gỡ rate-limit → Turnstile ← **ĐANG Ở ĐÂY**
+Chủ dự án chốt 2026-07-21. Chặn bởi: cần Site Key + Secret Key của Turnstile.
+
+### ~~Bước 1 cũ — Đóng U20 (2 khối còn lại) rồi **deploy**~~
 `W3` Cài đặt 4 card (chứa cam kết ủy quyền MST + chính sách bảo mật — **điều kiện pháp lý để nhận khách thật**) · `W4` rà `--fs-sm`.
 
 *Vì sao trước tiên:* U20 W1+W2 đã xong nhưng nằm trên nhánh. **Trên production khách vẫn chưa đăng ký được.** Đây là khoảng cách lớn nhất giữa công sức đã bỏ ra và giá trị thực nhận.
