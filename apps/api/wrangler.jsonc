@@ -17,6 +17,26 @@
   // U6: Postgres qua Hyperdrive. Thay "id" bằng id thật khi deploy
   // (`wrangler hyperdrive create`). Dev local: đặt WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
   // trong .dev.vars (KHÔNG commit chuỗi kết nối — security.md).
+  // ⚠️ CACHE HYPERDRIVE PHẢI GIỮ TẮT — ĐỪNG BẬT LẠI.
+  //
+  // SỰ CỐ THẬT 2026-07-21 (production, U18): route admin diễn đạt mọi thao tác GHI dưới
+  // dạng `SELECT ... FROM admin_*(...)` — vì chúng là hàm SECURITY DEFINER. Với bất kỳ lớp
+  // nào phân tích SQL, những câu đó trông y hệt truy vấn ĐỌC, nên Hyperdrive cache chúng.
+  // Hậu quả đo được: bấm "Duyệt" lần thứ hai trả 200 kèm mật khẩu tạm MỚI thay vì 409 —
+  // tức chốt chặn TOCTOU của máy trạng thái bị vô hiệu, và mật khẩu vừa đọc cho khách chết
+  // im lặng. Nhật ký ghi hai lần `duyet_tenant {cu:"cho_duyet"}` cách nhau 2 giây, trong
+  // khi giữa hai lần đó khách đã đăng nhập được (tức tenant đang `active`).
+  //
+  // Đã tắt bằng: `wrangler hyperdrive update <id> --caching-disabled` (2026-07-21).
+  // KIỂM CHỨNG sau khi tắt: cùng phép thử → lần 2 trả đúng 409; đọc danh sách khớp DB tức thì.
+  //
+  // Bật lại là lỗi quay về, ÂM THẦM. Và chi phí của việc tắt gần bằng 0: mọi truy vấn có
+  // lưu lượng thật (hóa đơn/kết xuất/đối chiếu) đã chạy trong `withTenant` — tức trong
+  // transaction — nên vốn KHÔNG được cache. Thứ duy nhất cache từng áp vào là đường quản
+  // trị và `auth_lookup_user` ở /auth/login: đúng hai chỗ cần dữ liệu tươi nhất.
+  //
+  // Muốn bật lại thì trước đó phải bọc mọi lời gọi ghi vào `db.transaction(...)` và chứng
+  // minh bằng phép thử "Duyệt hai lần → 409".
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "1011ff82e7154531883f0f2e62d344f0" }],
 
   // U7: R2 lưu file kết xuất (xlsx/csv). Tạo bucket lúc deploy:

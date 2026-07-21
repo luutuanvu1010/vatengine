@@ -1,5 +1,7 @@
 # Kế hoạch — Lớp thương mại (Commercial Layer) gắn vào toàn engine
 
+> 📍 **Tình hình hiện tại, sổ quyết định, sổ nợ và lộ trình: [`COMMERCIAL-LAYER-tinh-hinh.md`](COMMERCIAL-LAYER-tinh-hinh.md)** (cập nhật 2026-07-21). File này giữ CHIẾN LƯỢC (làm gì, vì sao); file kia trả lời ĐANG Ở ĐÂU và LÀM GÌ TIẾP.
+
 > Trạng thái: **⬜ KẾ HOẠCH — CHƯA HIỆN THỰC.** Đây là **cụm đơn vị U17–U21**, nối tiếp sau U14 (login/token GDT), U15 (Frontend SPA), U16 (Giới thiệu & Ủng hộ). Lớp này biến engine kỹ thuật thành **sản phẩm SaaS phát hành được**: cổng đăng ký, duyệt khách, **Cổng Admin toàn diện** (quản lý thành viên + dashboard giám sát) trên `adminvatengine.tourdao.vn`, thông tin pháp lý & thương hiệu.
 >
 > **Hạ tầng mới phát sinh (chốt 2026-07-15):** ① App admin riêng `apps/admin` (subdomain `adminvatengine.tourdao.vn`). ② **Gửi email giao dịch** (mật khẩu tạm 6 số khi duyệt) — provider CHƯA KIỂM CHỨNG, phải probe (U18 §6). ③ Endpoint stats rẻ cho dashboard (U18/U21).

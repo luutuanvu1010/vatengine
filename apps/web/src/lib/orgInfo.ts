@@ -12,6 +12,10 @@
 export const ORG = {
   sanPham: "VATEngine",
   congTy: "Công ty TNHH Tour Đảo",
+  /** MST pháp nhân. NGUỒN (không suy đoán): chủ dự án viết trong `docs/plans/U20-plan.md`
+   * §5 Card 3, và khớp bản ghi tenant `Công ty TNHH Tour Đảo` trên production. Bổ sung
+   * 2026-07-21 khi U20 cần hiện thông tin tác giả phần mềm. */
+  mst: "4201969169",
   diaChi: "19 Đường B2, khu đô thị Vĩnh Điềm Trung, Phường Tây Nha Trang, Tỉnh Khánh Hoà",
   /** Ghi chú hạ tầng — khớp ADR-0001 (toàn bộ chạy trên hệ sinh thái Cloudflare). */
   haTang: "Hạ tầng được bảo mật và phục vụ trên nền tảng Cloudflare",

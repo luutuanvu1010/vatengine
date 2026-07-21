@@ -136,9 +136,36 @@ function filterQuery(f: InvoiceFilter, p?: Page): Record<string, string | number
 // --- Bề mặt gõ kiểu (đúng hợp đồng apps/api) ---------------------------------------
 export const api = {
   // Auth nội bộ. Thành công → server đặt cookie phiên; body KHÔNG mang token (C2).
-  login(email: string, password: string): Promise<{ ok: true }> {
+  // U20 — `phai_doi_mat_khau` CHỈ có mặt khi bằng true (U18 giữ hợp đồng cũ `{ok:true}`
+  // cho người dùng bình thường, nên đây là optional chứ không phải luôn có).
+  login(email: string, password: string): Promise<{ ok: true; phai_doi_mat_khau?: boolean }> {
     return request("POST", "/auth/login", { body: { email, password } });
   },
+
+  /** U20 §4 — Đổi mật khẩu. ĐÒI mật khẩu hiện tại: chỉ dựa vào cookie phiên thì một phiên
+   * bị chiếm (máy bỏ quên, XSS chưa vá) đổi được mật khẩu và khoá vĩnh viễn chủ tài khoản
+   * ra ngoài. Đổi thành công cũng xoá hạn của mật khẩu tạm ở backend. */
+  doiMatKhau(matKhauHienTai: string, matKhauMoi: string): Promise<{ ok: true }> {
+    return request("POST", "/auth/doi-mat-khau", {
+      body: { mat_khau_hien_tai: matKhauHienTai, mat_khau_moi: matKhauMoi },
+    });
+  },
+  /**
+   * U20 — Đăng ký công khai. KHÔNG cần phiên (khách chưa có tài khoản).
+   *
+   * Tenant sinh ra ở trạng thái `cho_duyet` và CHƯA đăng nhập được cho tới khi super-admin
+   * duyệt trong Cổng Admin (U18). Hệ thống hiện KHÔNG gửi email nào cho khách — hạ tầng
+   * email thuộc U24, chưa tồn tại — nên UI không được hứa "sẽ gửi email thông báo".
+   */
+  dangKy(body: {
+    email: string;
+    tenDoanhNghiep: string;
+    mst: string;
+    dongYDieuKhoan: boolean;
+  }): Promise<{ ok: true; trangThai: "cho_duyet" }> {
+    return request("POST", "/dang-ky", { body });
+  },
+
   // C4 — đăng xuất THẬT: chỉ server mới xoá được cookie HttpOnly. Bỏ bước này thì
   // "Đăng xuất" chỉ dọn state phía client, cookie vẫn sống và phiên vẫn dùng được.
   logout(): Promise<{ ok: true }> {
