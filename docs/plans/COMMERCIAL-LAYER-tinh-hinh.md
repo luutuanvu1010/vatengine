@@ -76,6 +76,7 @@ Bài học đắt nhất của phiên. Các thao tác ghi của admin viết dư
 | **QĐ-8** | Câu chữ pháp lý nói **đúng hành vi thật**: lưu token GDT **đã mã hoá**, không lưu mật khẩu thuế thô | 21-07 | Dùng ở U20 W3 |
 | **QĐ-9** | Giữ `--fs-base: 16px`; chỉ sửa chỗ lạm dụng `--fs-sm` ở **văn bản đọc** | 21-07 | U20 W4 |
 | **QĐ-10** | **Tắt cache Hyperdrive**, không bọc transaction | 21-07 | ⚠️ Mã vẫn diễn đạt ghi bằng `SELECT fn()`. **Bật lại cache = lỗi quay về, im lặng** |
+| **QĐ-11** | **Gỡ toàn bộ rate-limit tầng ứng dụng** (`SignupLimiter` + `LoginLimiter`), thay bằng WAF Cloudflare + **Turnstile** ở Đăng ký và Đăng nhập | 21-07 | ⚠️ WAF chặn theo **IP**, `LoginLimiter` chặn theo **TÀI KHOẢN** — không thay thế nhau. Hệ quả: mật khẩu tạm 6 số **chỉ còn 1/3 điều kiện bù** (hạn 72h); QĐ-7 đã bỏ "buộc đổi". Đánh đổi được nêu rõ và chủ dự án chọn có ý thức. Xem `U33-plan-thuc-thi.md` §2 |
 
 ---
 
