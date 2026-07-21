@@ -242,11 +242,14 @@ export function LoginPage() {
                 >
                   {fact.title}
                 </div>
+                {/* QĐ-9 (U20) — VĂN BẢN ĐỂ ĐỌC, không phải nhãn phụ. Chính chỗ này là
+                    thứ chủ dự án Inspect ra khi báo "chữ nhỏ khó đọc": 13px cộng opacity
+                    0.9 trên nền màu thương hiệu. Nâng --fs-base và bỏ làm mờ — tương phản
+                    đủ mới đọc hết được đoạn, không chỉ liếc qua. */}
                 <p
                   style={{
                     margin: 0,
-                    opacity: 0.9,
-                    fontSize: "var(--fs-sm)",
+                    fontSize: "var(--fs-base)",
                     lineHeight: "var(--lh-body)",
                   }}
                 >

@@ -94,11 +94,14 @@ export function DonationQr() {
         }}
       >
         <QRCodeSVG value={payload} size={220} marginSize={2} title={`Mã QR ủng hộ ${BANK_NAME}`} />
+        {/* QĐ-9 (U20) — dòng này chứa TÊN NGÂN HÀNG và SỐ TÀI KHOẢN, thứ người dùng
+            phải đọc chính xác để chuyển khoản. 13px + màu tertiary là chỗ dễ nhìn nhầm
+            chữ số nhất trên toàn app; đọc sai một số là tiền đi nhầm chỗ. */}
         <figcaption
           style={{
             textAlign: "center",
-            fontSize: "var(--fs-sm)",
-            color: "var(--text-tertiary)",
+            fontSize: "var(--fs-base)",
+            color: "var(--text-secondary)",
             lineHeight: "var(--lh-body)",
           }}
         >
