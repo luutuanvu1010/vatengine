@@ -136,8 +136,19 @@ function filterQuery(f: InvoiceFilter, p?: Page): Record<string, string | number
 // --- Bề mặt gõ kiểu (đúng hợp đồng apps/api) ---------------------------------------
 export const api = {
   // Auth nội bộ. Thành công → server đặt cookie phiên; body KHÔNG mang token (C2).
-  login(email: string, password: string): Promise<{ ok: true }> {
+  // U20 — `phai_doi_mat_khau` CHỈ có mặt khi bằng true (U18 giữ hợp đồng cũ `{ok:true}`
+  // cho người dùng bình thường, nên đây là optional chứ không phải luôn có).
+  login(email: string, password: string): Promise<{ ok: true; phai_doi_mat_khau?: boolean }> {
     return request("POST", "/auth/login", { body: { email, password } });
+  },
+
+  /** U20 §4 — Đổi mật khẩu. ĐÒI mật khẩu hiện tại: chỉ dựa vào cookie phiên thì một phiên
+   * bị chiếm (máy bỏ quên, XSS chưa vá) đổi được mật khẩu và khoá vĩnh viễn chủ tài khoản
+   * ra ngoài. Đổi thành công cũng xoá hạn của mật khẩu tạm ở backend. */
+  doiMatKhau(matKhauHienTai: string, matKhauMoi: string): Promise<{ ok: true }> {
+    return request("POST", "/auth/doi-mat-khau", {
+      body: { mat_khau_hien_tai: matKhauHienTai, mat_khau_moi: matKhauMoi },
+    });
   },
   /**
    * U20 — Đăng ký công khai. KHÔNG cần phiên (khách chưa có tài khoản).

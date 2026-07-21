@@ -6,6 +6,7 @@ import { Alert, Card } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { labelRole } from "../../lib/rbac";
 import { useAuth } from "../auth/auth-context";
+import { DoiMatKhauCard } from "./DoiMatKhauCard";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -155,6 +156,10 @@ export function SettingsPage() {
           </div>
         ) : null}
       </Card>
+
+      {/* U20 §4 — Đổi mật khẩu. Đặt ngay sau hồ sơ doanh nghiệp: người vừa được duyệt và
+          đang cầm mật khẩu tạm sẽ thấy nó mà không phải cuộn tìm. */}
+      <DoiMatKhauCard />
 
       <Alert tone="info">
         VATEngine đang trong giai đoạn thử nghiệm — miễn phí cho doanh nghiệp nhỏ. Dữ liệu mỗi doanh
