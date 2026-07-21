@@ -4,9 +4,11 @@
 import { PGlite } from "@electric-sql/pglite";
 import { hoaDon, nguoiDung, taiKhoanThue, tenants } from "@vat/db";
 import type { GdtTransport } from "@vat/gdt-client";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sign } from "hono/jwt";
+import { signAdminToken } from "../src/admin/adminAuth";
 import { type BackfillDef, initDef, readDef } from "../src/backfillTracker";
 import {
   type LoginLockConfig,
@@ -40,6 +42,11 @@ const MIGRATIONS = new URL("../../../packages/db/migrations", import.meta.url).p
 
 export const TEST_SECRET = "test-jwt-secret-u6";
 
+// U18 — secret miền admin. PHẢI khác TEST_SECRET, nếu không `kiemTraCauHinhAdmin` trả
+// `trung_secret_khach` và mọi route /admin/* thành 503 (đúng thiết kế fail-closed) — test
+// sẽ đỏ hàng loạt với lý do khó đoán. Giữ hai hằng số khác nhau ngay tại nguồn.
+export const TEST_ADMIN_SECRET = "test-admin-jwt-secret-u18";
+
 // U14 — KEK test hợp lệ (32 byte zero, base64). KHÔNG dùng ngoài test (security.md).
 export const TEST_KEK = btoa(String.fromCharCode(...new Uint8Array(32)));
 
@@ -49,6 +56,7 @@ export function makeEnv(over: Partial<Env> = {}): Env {
   return {
     ENVIRONMENT: "test",
     JWT_SECRET: TEST_SECRET,
+    ADMIN_JWT_SECRET: TEST_ADMIN_SECRET,
     // HYPERDRIVE/RAW không dùng khi getDb/getStorage được tiêm — cast dummy ở ranh giới test.
     HYPERDRIVE: {} as Hyperdrive,
     RAW: {} as R2Bucket,
@@ -310,7 +318,13 @@ export async function tokenFor(
   tenantId: string | undefined,
   extra: Record<string, unknown> = {},
 ): Promise<string> {
-  const payload: Record<string, unknown> = { role: "quan_tri", ...extra };
+  // U18 — `sub` mặc định để route cần "chính tôi" (POST /auth/doi-mat-khau) dùng được
+  // token test. Ghi đè bằng `extra.sub` khi test cần đúng id một người dùng đã seed.
+  const payload: Record<string, unknown> = {
+    role: "quan_tri",
+    sub: crypto.randomUUID(),
+    ...extra,
+  };
   if (tenantId !== undefined) payload.tenant_id = tenantId;
   // role: null (ca test token THIẾU vai) → bỏ khỏi payload (sign JSON-hóa, rớt undefined).
   if (payload.role === null) payload.role = undefined;
@@ -319,4 +333,36 @@ export async function tokenFor(
 
 export function bearer(token: string): { Authorization: string } {
   return { Authorization: `Bearer ${token}` };
+}
+
+/** U18 — Seed một super-admin với mật khẩu băm PBKDF2 THẬT (qua đúng hàm route dùng) →
+ * integration test đi trọn vòng hash→verify như đăng nhập thật.
+ *
+ * Ghi thẳng bằng SQL chứ không qua Drizzle insert: bảng `quan_tri_he_thong` cố ý KHÔNG
+ * được GRANT gì cho role app (0011), nên "đường ghi hợp lệ" duy nhất ở production là
+ * script seed chạy dưới role migrate. PGlite chạy superuser nên câu này chạy được — đó là
+ * đúng vai trò nó mô phỏng. */
+export async function seedSuperAdmin(
+  db: Db,
+  email: string,
+  password: string,
+  trangThai = "active",
+): Promise<string> {
+  const hash = await hashPassword(password);
+  const r = await db.execute(sql`
+    INSERT INTO quan_tri_he_thong (email, password_hash, ten, trang_thai)
+    VALUES (${email}, ${hash}, 'Chủ dự án', ${trangThai})
+    RETURNING id`);
+  const id = r.rows[0]?.id;
+  if (typeof id !== "string") throw new Error("insert quan_tri_he_thong không trả về id");
+  return id;
+}
+
+/** U18 — Ký token miền admin cho test. Mặc định dùng TEST_ADMIN_SECRET; truyền secret
+ * khác để dựng ca "token ký bằng khoá sai". */
+export async function adminTokenFor(
+  sub: string,
+  secret: string = TEST_ADMIN_SECRET,
+): Promise<string> {
+  return signAdminToken(sub, secret);
 }

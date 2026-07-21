@@ -299,6 +299,29 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 - **Mức ưu tiên đề xuất:** Cao (ảnh hưởng trực tiếp bước quyết định duyệt/từ chối của U18 — cần vào spec trước khi U18 code, không phải vá sau).
 - **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
 
+### [2026-07-21] Khoá tenant KHÔNG cắt phiên khách đang sống — nút "Khoá" của U18 trễ tới 8 giờ
+
+- **Trạng thái:** Ghi nợ có ý thức — chủ dự án chốt 2026-07-21 KHÔNG xử lý ở U18 (hiện mới 1 tài khoản, rủi ro thật gần bằng 0). Phải xử lý TRƯỚC khi có khách hàng thật thứ hai.
+- **Bối cảnh/bằng chứng:** ĐO ĐƯỢC, không phải suy đoán (test tạm chạy thật trong phiên U18, đã xoá sau khi kết luận): khách đăng nhập thật → nhận cookie phiên TTL 8h (`TOKEN_TTL_SEC`, `apps/api/src/auth.ts`) → super-admin gọi `POST /admin/tenants/:id/khoa` → DB đổi `trang_thai='khoa'`, 200 OK → khách dùng **đúng cookie cũ** gọi `GET /invoices` → **200, đọc đủ hóa đơn**. Nguyên nhân: `requireTenant` (`apps/api/src/auth.ts:42-76`) chỉ verify chữ ký + `exp`, KHÔNG tra lại `tenants.trang_thai`. Cổng trạng thái U17b/U18 chỉ tồn tại ở `/auth/login` (`routes/auth.ts`) nên chặn **đăng nhập mới**, không thu hồi phiên đang chạy. Đã grep `invoices.ts`/`me.ts`/`exports.ts`/`reconcile.ts`/`taxAccounts.ts` — không route nào kiểm lại.
+- **Vì sao test U18 không bắt được:** `admin.tenants.test.ts` có ca "Khóa → khách KHÔNG đăng nhập được nữa" — ĐÚNG nhưng chỉ thử **đăng nhập lại**, không thử token còn sống. Điểm mù của chính người viết; phát hiện ra nhờ pass red-team độc lập.
+- **Rủi ro nếu bỏ qua:** nút "Khoá" tồn tại để cắt truy cập KHẨN (tài khoản bị chiếm, gian lận, chấm dứt hợp đồng). Trễ tới 8 tiếng làm nó gần như vô hiệu đúng trong kịch bản nó sinh ra để phục vụ. Về câu chữ spec (`U18-plan.md` §5: "khóa → chặn login ngay") thì hiện thực KHÔNG sai — nhưng ý nghĩa nghiệp vụ thì hụt.
+- **Đề xuất hướng xử lý — 4 hướng đã cân, đề xuất C tách thành ĐƠN VỊ RIÊNG:**
+  - **A.** Tra `trang_thai` mỗi request trong `requireTenant`. Cắt tức thì, nhưng `requireTenant` chạy TRƯỚC khi route mở kết nối DB ⇒ phải mở thêm một kết nối cho MỌI request khách. Ở mục tiêu 100k tenant là chi phí thật trên đường găng.
+  - **B.** Hạ `TOKEN_TTL_SEC` 8h → 1h. Một dòng, không thêm chi phí/request, nhưng chỉ **thu hẹp** cửa sổ chứ không đóng.
+  - **C. (đề xuất)** Đưa điều kiện `trang_thai='active'` vào chính RLS policy (`packages/db/src/schema/_rls.ts`). Thi hành ở tầng DB, không thêm truy vấn ứng dụng nào, tenant bị khoá thấy 0 hàng ở MỌI bảng. Đúng bài toán nhất — nhưng bán kính ảnh hưởng lớn (đụng policy của tất cả bảng) nên KHÔNG được nhét vào cuối một đơn vị đã đóng phạm vi; cần đơn vị riêng + đo chi phí subquery trong policy trước khi chốt.
+  - **D.** Chấp nhận + ghi nợ. ← đang ở đây.
+- **Mức ưu tiên đề xuất:** Trung bình bây giờ, **Cao ngay khi có khách hàng trả phí đầu tiên ngoài chủ dự án**.
+- **Nguồn phát hiện:** Pass red-team cách ly tenant, review chéo U18, 2026-07-21.
+
+### [2026-07-21] Không có test tự động nào chạy dưới role Postgres non-superuser thật — RLS FORCE chỉ được kiểm bằng tay
+
+- **Trạng thái:** Ghi nhận khoảng trống bằng chứng. Không phải lỗi đang tồn tại.
+- **Bối cảnh/bằng chứng:** Toàn bộ test integration dùng **PGlite**, vốn chạy dưới **superuser** — superuser bỏ qua RLS kể cả `FORCE`, và bỏ qua mọi kiểm tra GRANT. Nghĩa là bộ test KHÔNG thi hành được lớp phòng thủ thứ hai mà `multi-tenant.md` đặt ra. Dự án đã bù một phần bằng kiểm **catalog** (`packages/db/test/integration/superAdmin.test.ts` dùng `has_table_privilege`/`has_function_privilege`/`pg_policy`/`pg_proc.proowner` — đúng bất kể ai truy vấn), nhưng đó là kiểm *khai báo*, không phải kiểm *thi hành*. Bằng chứng duy nhất cho "RLS FORCE thực sự chặn role app" là lần kiểm tay trên Neon ghi ở đầu `0001` (dòng 60-65) và `0011` — **không tái lập tự động, không chạy lại mỗi PR**.
+- **Rủi ro nếu bỏ qua:** một migration tương lai gỡ nhầm `FORCE ROW LEVEL SECURITY`, đổi owner bảng, hoặc provision role app sai thuộc tính (`BYPASSRLS`) sẽ KHÔNG bị bộ test bắt được — chỉ lộ ra ở lần kiểm tay kế tiếp, hoặc không bao giờ. Đây đúng loại "giả định chưa kiểm chứng đã hoá thành chốt" mà Hiến pháp cảnh báo.
+- **Đề xuất hướng xử lý:** một job CI (chạy theo lịch, không chặn PR — như `contract`/`coverage-apps` hiện có) dựng Postgres thật trong container, áp toàn bộ migration, chạy `packages/db/provisioning/app-role.sql` để tạo role app đúng thuộc tính, rồi khẳng định: (a) role app đọc bảng của tenant khác ra 0 hàng, (b) role app KHÔNG SELECT được `quan_tri_he_thong`, (c) role app GỌI ĐƯỢC cả 8 hàm `admin_*`. Ca (c) quan trọng ngang hai ca đầu — nó bắt đúng lỗi mà `0009` đã gây ra trên production.
+- **Mức ưu tiên đề xuất:** Trung bình — không chặn U19, nhưng nên có trước khi lớp thương mại (U17–U21) đón khách thật.
+- **Nguồn phát hiện:** Pass red-team cách ly tenant, review chéo U18, 2026-07-21.
+
 ### [2026-07-20] CHƯA KIỂM CHỨNG — nguyên tử hóa `checkAndRecordSignup` dựa vào input-gating của Durable Object, chưa chạy trên `workerd` thật
 
 - **Trạng thái:** CHƯA KIỂM CHỨNG (nhãn bắt buộc theo Hiến pháp — nguyên tắc bằng chứng).

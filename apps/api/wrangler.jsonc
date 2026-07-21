@@ -70,4 +70,9 @@
   // `apps/sync-worker` — KHÔNG gộp vào API stateless này. Xem apps/sync-worker/wrangler.jsonc.
   //
   // JWT_SECRET (khóa ký JWT nội bộ) nạp qua `wrangler secret put JWT_SECRET` — security.md.
+  //
+  // U18 — ADMIN_JWT_SECRET (khóa ký token super-admin) nạp qua
+  // `wrangler secret put ADMIN_JWT_SECRET`. PHẢI KHÁC JWT_SECRET: trùng nhau ⇒ hai miền
+  // token gộp làm một và requireSuperAdmin trả 503 cho toàn bộ /admin/* (fail-closed,
+  // có test). Không khai ở "vars" — đây là bí mật (security.md).
 }

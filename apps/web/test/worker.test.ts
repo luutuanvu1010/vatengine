@@ -113,3 +113,85 @@ describe("front-door worker — security header", () => {
     expect(seenPath).toBe("/auth/login");
   });
 });
+
+// ── U18 — cửa khách KHÔNG dẫn tới miền quản trị ────────────────────────────────────
+//
+// `apps/api` không có route công khai; đường duy nhất tới nó là service binding của
+// front-door NÀY, và front-door đứng trên hostname của KHÁCH. Không chặn ở đây thì
+// `https://vatengine.tourdao.vn/api/admin/auth/login` phơi đường đăng nhập super-admin
+// ra Internet — Cloudflare Access của U19 gắn trên subdomain riêng, KHÔNG che hostname này.
+describe("front-door worker — chặn /api/admin/* (U18)", () => {
+  /** Env ghi lại xem API worker có bị gọi tới hay không. */
+  function spyEnv() {
+    const goi: string[] = [];
+    const env = mockEnv(async (r: Request) => {
+      goi.push(new URL(r.url).pathname);
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    return { env, goi };
+  }
+
+  const DUONG_ADMIN = [
+    "/api/admin",
+    "/api/admin/auth/login",
+    "/api/admin/tenants",
+    "/api/admin/tenants/3f2504e0-4f89-11d3-9a0c-0305e82c3301/duyet",
+    "/api/admin/audit",
+  ];
+
+  for (const p of DUONG_ADMIN) {
+    it(`${p} → 404 và KHÔNG chạm tới API worker`, async () => {
+      const { env, goi } = spyEnv();
+      const res = await worker.fetch(new Request(`https://vatengine.example${p}`), env);
+      expect(res.status).toBe(404);
+      // Điều kiện thật: request không được PHÁT tới miền quản trị. Chỉ kiểm mã 404 thì
+      // một bản vá hỏng (proxy đi rồi mới trả 404) vẫn xanh.
+      expect(goi).toEqual([]);
+    });
+  }
+
+  it("POST cũng bị chặn, không chỉ GET", async () => {
+    const { env, goi } = spyEnv();
+    const res = await worker.fetch(
+      new Request("https://vatengine.example/api/admin/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "chu@vatengine.vn", password: "doan-bua" }),
+      }),
+      env,
+    );
+    expect(res.status).toBe(404);
+    expect(goi).toEqual([]);
+  });
+
+  it("KHÔNG chặn nhầm đường khách có tiền tố giống (vd /api/administrator-ish)", async () => {
+    // `startsWith("/api/admin/")` + so bằng "/api/admin" — không được nuốt nhầm một route
+    // khách tương lai bắt đầu bằng cùng chuỗi ký tự.
+    const { env, goi } = spyEnv();
+    const res = await worker.fetch(
+      new Request("https://vatengine.example/api/administrator-ish"),
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(goi).toEqual(["/administrator-ish"]);
+  });
+
+  it("route khách bình thường vẫn xuyên proxy như cũ (không hồi quy)", async () => {
+    const { env, goi } = spyEnv();
+    const res = await worker.fetch(
+      new Request("https://vatengine.example/api/auth/login", { method: "POST" }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(goi).toEqual(["/auth/login"]);
+  });
+
+  it("phản hồi 404 vẫn mang đủ security header", async () => {
+    const { env } = spyEnv();
+    const res = await worker.fetch(new Request("https://vatengine.example/api/admin"), env);
+    expectSecurityHeaders(res);
+  });
+});

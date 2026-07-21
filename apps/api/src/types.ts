@@ -14,6 +14,11 @@ export interface Env extends LoginLockEnv, SignupLimitEnv {
   HYPERDRIVE: Hyperdrive;
   // Khóa ký JWT NỘI BỘ của SaaS (KHÔNG phải token thuế). Workers Secret — security.md.
   JWT_SECRET: string;
+  // U18 — Khóa ký token SUPER-ADMIN. PHẢI khác `JWT_SECRET`: đây là lớp tách chính giữa
+  // miền khách và miền quản trị (adminAuth.ts). Optional ở kiểu vì môi trường chưa cấu
+  // hình vẫn phải khởi chạy được — nhưng khi thiếu/trùng thì mọi route /admin/* trả 503
+  // (requireSuperAdmin), KHÔNG chạy tiếp với một lớp phòng thủ duy nhất.
+  ADMIN_JWT_SECRET?: string;
   // R2: lưu file kết xuất (U7) — không giữ file lớn trong RAM Worker (ADR-0001).
   RAW: R2Bucket;
   // U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
@@ -47,7 +52,20 @@ export interface Env extends LoginLockEnv, SignupLimitEnv {
 // requireRole gác route. Cả hai do requireTenant xác minh và đặt vào context.
 export type AppEnv = {
   Bindings: Env;
-  Variables: { tenantId: string; role: Role };
+  // `userId` optional có chủ ý — xem chú thích tại auth.ts: token phát trước U18 không
+  // mang `sub`. Route cần nó phải tự kiểm, không được giả định luôn có.
+  Variables: { tenantId: string; role: Role; userId?: string };
+};
+
+// U18 — Context của route `/admin/*`. TÁCH HẲN khỏi AppEnv, và đó là chủ ý: `Variables`
+// ở đây KHÔNG có `tenantId`, nên bất kỳ code nào trong nhánh admin lỡ viết `c.get(
+// "tenantId")` sẽ hỏng ở `tsc` chứ không âm thầm nhận `undefined` rồi dựng ra một truy
+// vấn thiếu điều kiện lọc tenant. Ranh giới cách ly được ép bằng KIỂU, không chỉ bằng ý
+// thức người viết. `adminId` = `sub` của token admin, dùng làm `nguoi_thuc_hien` trong
+// audit_log_admin.
+export type AdminEnv = {
+  Bindings: Env;
+  Variables: { adminId: string };
 };
 
 // Db route dùng: một PgDatabase bất kỳ (pg/Hyperdrive khi chạy; PGlite khi test).
