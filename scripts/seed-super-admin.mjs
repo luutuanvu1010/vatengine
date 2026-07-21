@@ -64,6 +64,42 @@ async function main() {
     process.exit(1);
   }
 
+  // ── CHẶN GIÁ TRỊ MẪU ────────────────────────────────────────────────────────────────
+  // SỰ CỐ THẬT 2026-07-21: hướng dẫn deploy đưa lệnh mẫu dạng
+  //   ADMIN_EMAIL='email-cua-ban@...' ADMIN_PASSWORD='<mật khẩu ≥12 ký tự>'
+  // và nó được sao chép nguyên văn rồi chạy thẳng lên production. Kết quả: một tài khoản
+  // quyền cao nhất toàn hệ thống, mật khẩu là chuỗi placeholder ghi công khai trong tài
+  // liệu, trên một Cổng Admin đang mở ra Internet. Cổng `length < 12` KHÔNG bắt được vì
+  // chuỗi mẫu dài 21 ký tự.
+  //
+  // Bài học: khi một giá trị mẫu vẫn "hợp lệ" về mặt hình thức, việc kiểm hình thức là vô
+  // dụng. Phải nhận diện chính hình dạng của placeholder.
+  const dauHieuMau = [
+    /[<>]/, // <mật khẩu ...>, <your-password>
+    /\.\.\./, // email-cua-ban@...
+    /^(thay|doi|change|replace|your|yourname|example|placeholder|todo)/i,
+    /(REPLACE_WITH|CHANGE_ME|TODO|XXX)/i,
+  ];
+  for (const [nhan, giaTri] of [
+    ["ADMIN_EMAIL", email],
+    ["ADMIN_PASSWORD", password],
+  ]) {
+    if (dauHieuMau.some((re) => re.test(giaTri))) {
+      console.error(
+        `${nhan} trông như GIÁ TRỊ MẪU chưa thay (chứa <>, "...", hoặc từ khoá placeholder).
+Đây là danh tính quyền cao nhất của toàn hệ thống — script từ chối tạo.
+Nhập giá trị THẬT rồi chạy lại.`,
+      );
+      process.exit(1);
+    }
+  }
+
+  // Email phải có dạng dùng được thật (còn nhận được thư), không chỉ "có ký tự @".
+  if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
+    console.error(`ADMIN_EMAIL không phải địa chỉ hợp lệ: ${email}`);
+    process.exit(1);
+  }
+
   // Import động: `pg` chỉ cần khi thực sự chạy seed, không cần khi test import hàm băm.
   const { default: pg } = await import("pg");
   const client = new pg.Client({ connectionString: DATABASE_URL });
