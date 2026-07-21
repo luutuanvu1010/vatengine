@@ -318,7 +318,13 @@ export async function tokenFor(
   tenantId: string | undefined,
   extra: Record<string, unknown> = {},
 ): Promise<string> {
-  const payload: Record<string, unknown> = { role: "quan_tri", ...extra };
+  // U18 — `sub` mặc định để route cần "chính tôi" (POST /auth/doi-mat-khau) dùng được
+  // token test. Ghi đè bằng `extra.sub` khi test cần đúng id một người dùng đã seed.
+  const payload: Record<string, unknown> = {
+    role: "quan_tri",
+    sub: crypto.randomUUID(),
+    ...extra,
+  };
   if (tenantId !== undefined) payload.tenant_id = tenantId;
   // role: null (ca test token THIẾU vai) → bỏ khỏi payload (sign JSON-hóa, rớt undefined).
   if (payload.role === null) payload.role = undefined;

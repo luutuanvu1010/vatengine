@@ -92,9 +92,9 @@ export function adminTenantsRoutes(deps: AppDeps) {
     if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
     const { db, close } = await deps.getDb(c.env);
     try {
-      const res = (await db.execute(
-        sql`select * from admin_chi_tiet_tenant(${id}::uuid)`,
-      )) as { rows: Array<Record<string, unknown>> };
+      const res = (await db.execute(sql`select * from admin_chi_tiet_tenant(${id}::uuid)`)) as {
+        rows: Array<Record<string, unknown>>;
+      };
       const row = res.rows[0];
       if (!row) return c.json({ error: "not_found" }, 404);
       return c.json(row);
@@ -122,9 +122,9 @@ export function adminTenantsRoutes(deps: AppDeps) {
         // 0 hàng có hai nguyên nhân: tenant không tồn tại, hoặc đang ở trạng thái khác.
         // Phân biệt bằng một truy vấn CHỈ trên đường lỗi để trả đúng 404 vs 409 — Cổng
         // Admin cần phân biệt được "gõ nhầm id" với "ai đó vừa đổi trạng thái trước bạn".
-        const ton = (await db.execute(
-          sql`select id from admin_chi_tiet_tenant(${id}::uuid)`,
-        )) as { rows: unknown[] };
+        const ton = (await db.execute(sql`select id from admin_chi_tiet_tenant(${id}::uuid)`)) as {
+          rows: unknown[];
+        };
         return ton.rows.length === 0
           ? c.json({ error: "not_found" }, 404)
           : c.json({ error: "chuyen_trang_thai_khong_hop_le", tu_mong_doi: tu }, 409);

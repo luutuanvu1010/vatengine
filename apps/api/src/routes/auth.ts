@@ -7,15 +7,27 @@
 // (owner BYPASSRLS, bề mặt hẹp — chỉ trả trường xác thực; xem migration 0001). Email
 // UNIQUE toàn cục nên một email định danh đúng một người dùng.
 import { maskSensitive } from "@vat/crypto";
-import { auditLog, withTenant } from "@vat/db";
-import { sql } from "drizzle-orm";
+import { auditLog, nguoiDung, withTenant } from "@vat/db";
+import { eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { signToken } from "../auth";
-import { verifyPassword } from "../password";
+import { requireTenant, signToken } from "../auth";
+import { hashPassword, resolvePbkdf2Iterations, verifyPassword } from "../password";
 import { isRole } from "../rbac";
 import { clearSessionCookie, setSessionCookie } from "../session";
 import type { AnyDb, AppDeps, AppEnv } from "../types";
+
+// U18 — độ dài tối thiểu mật khẩu người dùng tự đặt. 8 ký tự: mật khẩu này KHÔNG có cửa
+// sổ hết hạn như mật khẩu tạm 6 số, nên nó phải tự đứng vững. Ràng buộc đặt ở đây vì đây
+// hiện là đường DUY NHẤT người dùng tự đặt mật khẩu; U24 (quên mật khẩu) sẽ dùng lại.
+const MAT_KHAU_TOI_THIEU = 8;
+
+const doiMatKhauSchema = z
+  .object({
+    mat_khau_hien_tai: z.string().min(1),
+    mat_khau_moi: z.string().min(MAT_KHAU_TOI_THIEU),
+  })
+  .strict();
 
 const loginSchema = z.object({
   email: z.string().min(1),
@@ -39,7 +51,15 @@ async function auditLogin(
   // U17b: thêm "login_fail_chua_duyet" — tenant tồn tại nhưng chưa active (cho_duyet/
   // khoa/tu_choi). hanhDong (audit_log.hanh_dong) VẪN LUÔN "dang_nhap_saas"; giá trị này
   // chỉ nằm trong chi_tiet.ket_qua, không đổi mã lỗi HTTP trả về (vẫn 401 gọn).
-  ketQua: "thanh_cong" | "that_bai" | "login_fail_chua_duyet",
+  // U18: thêm "login_fail_mat_khau_tam_het_han" (mật khẩu ĐÚNG nhưng quá hạn 72h) và
+  // "doi_mat_khau". Cả hai vẫn ghi dưới hanh_dong="dang_nhap_saas" như các giá trị trước
+  // — chỉ nằm trong chi_tiet.ket_qua, không đổi hình dạng bảng audit_log.
+  ketQua:
+    | "thanh_cong"
+    | "that_bai"
+    | "login_fail_chua_duyet"
+    | "login_fail_mat_khau_tam_het_han"
+    | "doi_mat_khau",
 ): Promise<void> {
   await withTenant(db, tenantId, async (tx) => {
     await tx.insert(auditLog).values({
@@ -175,6 +195,42 @@ export function authRoutes(deps: AppDeps) {
       // Đăng nhập đúng → reset bộ đếm khóa (không phạt oan phiên sau).
       await limiter.recordSuccess();
 
+      // ── U18 — CỔNG MẬT KHẨU TẠM ────────────────────────────────────────────────────
+      // Mật khẩu tạm 6 chữ số (cấp khi super-admin duyệt/reset) chỉ có 10^6 không gian;
+      // "hết hạn 72h" là một trong ba điều kiện bù bắt buộc khiến đánh đổi đó còn an
+      // toàn (U18-plan §103, xem admin/matKhauTam.ts).
+      //
+      // ĐẶT Ở ĐÂY — SAU biểu thức 401, KHÔNG gộp vào trong nó — và đó là chủ ý ngược với
+      // cổng trạng thái U17b ở trên. Lý do: cổng này cần một truy vấn phụ mà chỉ chạy
+      // được khi đã biết `tenant_id`, tức chỉ khi email CÓ THẬT. Gộp vào biểu thức 401 sẽ
+      // làm nhánh email-có-thật tốn thêm một round-trip DB so với nhánh email-không-tồn-
+      // tại — tái tạo đúng lỗ rò enumeration qua timing mà H-A.5a đã bịt.
+      //
+      // Rò còn lại, đã cân nhắc và chấp nhận: người ĐÃ biết mật khẩu đúng có thể phân
+      // biệt "hết hạn" với "còn hạn" qua độ trễ. Nhưng họ cũng phân biệt được bằng chính
+      // mã trạng thái (401 vs 200) — timing không thêm thông tin gì mới.
+      //
+      // Truy vấn chạy trong withTenant ⇒ đi qua RLS bình thường, KHÔNG cần thêm hàm
+      // SECURITY DEFINER nào. Đây chính là lý do 0011 không phải đụng auth_lookup_user()
+      // (xem đầu file migration): tránh DROP+CREATE trên hàm gánh toàn bộ đường đăng nhập.
+      const co = await withTenant(db, row.tenant_id, (tx) =>
+        tx
+          .select({
+            phaiDoi: nguoiDung.phaiDoiMatKhau,
+            hetHan: nguoiDung.matKhauTamHetHan,
+          })
+          .from(nguoiDung)
+          .where(eq(nguoiDung.id, row.id)),
+      );
+      const coMatKhauTam = co[0];
+      if (coMatKhauTam?.hetHan && coMatKhauTam.hetHan.getTime() <= Date.now()) {
+        // Mật khẩu ĐÚNG nhưng đã quá hạn ⇒ vẫn 401 gọn. Khách phải xin super-admin cấp
+        // lại (POST /admin/tenants/:id/reset-mat-khau). KHÔNG recordFailure: mật khẩu gõ
+        // đúng nên đây không phải tín hiệu dò mật khẩu, không được tính vào khoá tài khoản.
+        await settle(auditLogin(db, row.tenant_id, row.id, "login_fail_mat_khau_tam_het_han"));
+        return c.json({ error: "unauthorized" }, 401);
+      }
+
       const token = await signToken(
         { tenantId: row.tenant_id, role: row.vai_tro, sub: row.id },
         c.env.JWT_SECRET,
@@ -184,7 +240,10 @@ export function authRoutes(deps: AppDeps) {
       // body. Trả trong body thì JS lại cầm được token ⇒ triệt tiêu toàn bộ lợi ích
       // chống XSS-exfil của HttpOnly. Đây là điểm dễ vô hiệu hoá cả thiết kế nhất.
       setSessionCookie(c, token);
-      return c.json({ ok: true });
+      // U18 — cờ buộc đổi mật khẩu. CHỈ có mặt khi bằng true, không phải luôn luôn: hợp
+      // đồng phản hồi của người dùng bình thường giữ NGUYÊN `{ok:true}` như trước U18, nên
+      // không đơn vị nào đang chạy phải sửa theo. Frontend (U20) đọc theo giá trị thật.
+      return c.json(coMatKhauTam?.phaiDoi ? { ok: true, phai_doi_mat_khau: true } : { ok: true });
     } catch (e) {
       // Lỗi TRƯỚC settle (lookup/verify/signToken) → đóng kết nối rồi ném (app.onError lo).
       await closeOnce();
@@ -202,6 +261,68 @@ export function authRoutes(deps: AppDeps) {
   r.post("/logout", (c) => {
     clearSessionCookie(c);
     return c.json({ ok: true });
+  });
+
+  // POST /auth/doi-mat-khau — U18 (QĐ-2). Đóng lỗ hổng mà chính U18 mở ra: super-admin
+  // cấp mật khẩu TẠM 6 chữ số, và nếu không có đường đổi thì nó thành mật khẩu VĨNH VIỄN
+  // — sụp điều kiện bù "buộc đổi lần đầu" (matKhauTam.ts). U20 làm phần UI ép màn đổi;
+  // đây là backend, thuộc phạm vi U18.
+  //
+  // ĐÒI MẬT KHẨU HIỆN TẠI, không chỉ dựa vào phiên đang đăng nhập: nếu chỉ cần cookie
+  // hợp lệ, một phiên bị chiếm (máy bỏ quên, XSS chưa vá) đổi được mật khẩu và khoá
+  // vĩnh viễn chủ tài khoản ra ngoài. Xác thực lại biến việc đó thành bất khả thi nếu
+  // kẻ chiếm phiên không biết mật khẩu.
+  r.post("/doi-mat-khau", requireTenant, async (c) => {
+    const userId = c.get("userId");
+    // Token cũ (trước U18) không mang `sub` ⇒ không xác định được "chính tôi" là ai.
+    // Đăng nhập lại là đủ để có token mới có `sub`.
+    if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+    const parsed = doiMatKhauSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "bad_request" }, 400);
+    const { mat_khau_hien_tai, mat_khau_moi } = parsed.data;
+    if (mat_khau_moi === mat_khau_hien_tai) {
+      // Đổi sang chính nó sẽ tắt cờ `phai_doi_mat_khau` mà không đổi gì thật — biến bước
+      // buộc-đổi thành hình thức. Từ chối tường minh.
+      return c.json({ error: "mat_khau_moi_trung_hien_tai" }, 400);
+    }
+
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const rows = await withTenant(db, tenantId, (tx) =>
+        tx
+          .select({ hash: nguoiDung.passwordHash, hetHan: nguoiDung.matKhauTamHetHan })
+          .from(nguoiDung)
+          .where(eq(nguoiDung.id, userId)),
+      );
+      const row = rows[0];
+      if (!row?.hash || !(await verifyPassword(mat_khau_hien_tai, row.hash))) {
+        return c.json({ error: "unauthorized" }, 401);
+      }
+      // Mật khẩu tạm đã quá hạn thì KHÔNG được dùng làm chìa để đặt mật khẩu vĩnh viễn —
+      // nếu không, cửa sổ 72h trở nên vô nghĩa với bất kỳ ai còn giữ token cũ.
+      if (row.hetHan && row.hetHan.getTime() <= Date.now()) {
+        return c.json({ error: "unauthorized" }, 401);
+      }
+
+      const hashMoi = await hashPassword(mat_khau_moi, resolvePbkdf2Iterations(c.env));
+      await withTenant(db, tenantId, (tx) =>
+        tx
+          .update(nguoiDung)
+          .set({
+            passwordHash: hashMoi,
+            phaiDoiMatKhau: false,
+            // Xoá hạn: mật khẩu này do chính người dùng đặt, không còn là mật khẩu tạm.
+            matKhauTamHetHan: null,
+          })
+          .where(eq(nguoiDung.id, userId)),
+      );
+      await auditLogin(db, tenantId, userId, "doi_mat_khau");
+      return c.json({ ok: true });
+    } finally {
+      await close();
+    }
   });
 
   return r;

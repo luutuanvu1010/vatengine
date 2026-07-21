@@ -103,7 +103,7 @@ cho_duyet ──duyet──▶ active ──khoa──▶ khoa ──mo-khoa─�
 ## 4. Test viết trước (TDD)
 
 **`unit`**
-1. `tenantStateMachine` — mọi cặp (từ, tới): 6 hợp lệ pass, còn lại reject. Bảng đầy đủ, không mẫu.
+1. `tenantStateMachine` — mọi cặp (từ, tới) trong **toàn bộ 16 ô** (4 hành động × 4 trạng thái). *(Đính chính khi hiện thực: bản kế hoạch viết "6 chuyển hợp lệ" là SAI — đếm lại từ sơ đồ §3 chỉ có **4**: `cho_duyet→active`, `cho_duyet→tu_choi`, `active→khoa`, `khoa→active`. Test khẳng định đúng con số 4 để một đường chuyển thứ năm không lọt vào im lặng.)*
 2. Token khách verify bằng `ADMIN_JWT_SECRET` → **fail**; token admin verify bằng `JWT_SECRET` → **fail**.
 3. Token admin **không có** `tenant_id` ⇒ kể cả khi ép hai secret bằng nhau, `requireTenant` vẫn 401.
 4. Mật khẩu tạm 6 số sinh từ `crypto.getRandomValues`, phân phối đều 000000–999999, **không** `Math.random`.

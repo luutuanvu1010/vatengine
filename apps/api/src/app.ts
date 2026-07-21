@@ -4,6 +4,7 @@
 import { maskSensitive } from "@vat/crypto";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { adminAuditRoutes } from "./routes/admin/audit";
 import { adminAuthRoutes } from "./routes/admin/auth";
 import { adminTenantsRoutes } from "./routes/admin/tenants";
 import { authRoutes } from "./routes/auth";
@@ -62,6 +63,7 @@ export function createApp(deps: AppDeps) {
   // tự gắn requireSuperAdmin bên trong router của chúng.
   app.route("/admin/auth", adminAuthRoutes(deps));
   app.route("/admin/tenants", adminTenantsRoutes(deps));
+  app.route("/admin/audit", adminAuditRoutes(deps));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
 

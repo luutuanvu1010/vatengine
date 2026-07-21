@@ -4,15 +4,13 @@
 // fail-closed thì vẫn phải chạy: thiếu/trùng `ADMIN_JWT_SECRET` ⇒ 503, không phát token.
 //
 // KHÔNG có endpoint tạo super-admin. Chủ ý, ghi rõ ở U18-plan §45: danh tính chủ phần mềm
-// chỉ sinh ra qua `scripts/seed-super-admin.ts` chạy tay dưới role migrate. Một endpoint
+// chỉ sinh ra qua `scripts/seed-super-admin.mjs` chạy tay dưới role migrate. Một endpoint
 // "đăng ký admin" — dù gác kỹ đến đâu — là bề mặt tấn công không có lý do tồn tại khi số
 // lượng super-admin đếm trên đầu ngón tay.
 import { sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { z } from "zod";
-import { verifyPassword } from "../../password";
-import type { AdminEnv, AppDeps } from "../../types";
 import {
   ADMIN_SESSION_COOKIE,
   ADMIN_TOKEN_TTL_SEC,
@@ -20,6 +18,8 @@ import {
   signAdminToken,
 } from "../../admin/adminAuth";
 import { ghiAuditAdmin } from "../../admin/auditAdmin";
+import { verifyPassword } from "../../password";
+import type { AdminEnv, AppDeps } from "../../types";
 
 const loginSchema = z.object({ email: z.string(), password: z.string() }).strict();
 
@@ -67,7 +67,10 @@ export function adminAuthRoutes(deps: AppDeps) {
 
       // LUÔN chạy đúng một verify PBKDF2 trước khi rẽ nhánh — chi phí đồng nhất dù email
       // có tồn tại hay không.
-      const matKhauDung = await verifyPassword(parsed.data.password, row?.password_hash ?? DUMMY_HASH);
+      const matKhauDung = await verifyPassword(
+        parsed.data.password,
+        row?.password_hash ?? DUMMY_HASH,
+      );
 
       // Gộp mọi điều kiện vào MỘT biểu thức 401 có chủ ý: tách thành `if` riêng cho
       // "bị khoá" sẽ trả về sớm trước verify và làm nhánh đó phản hồi nhanh hơn đo được

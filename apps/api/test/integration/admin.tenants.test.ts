@@ -203,16 +203,16 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
     );
     expect((await login()).status).toBe(401);
 
-    expect(
-      (await goi(`/admin/tenants/${tenantChoDuyet}/mo-khoa`, { method: "POST" })).status,
-    ).toBe(200);
+    expect((await goi(`/admin/tenants/${tenantChoDuyet}/mo-khoa`, { method: "POST" })).status).toBe(
+      200,
+    );
     expect((await login()).status).toBe(200);
   });
 
   it("Từ chối: cho_duyet → tu_choi, và tu_choi là trạng thái CUỐI", async () => {
-    expect(
-      (await goi(`/admin/tenants/${tenantChoDuyet}/tu-choi`, { method: "POST" })).status,
-    ).toBe(200);
+    expect((await goi(`/admin/tenants/${tenantChoDuyet}/tu-choi`, { method: "POST" })).status).toBe(
+      200,
+    );
     // Không hành động nào đưa tenant đã bị chối từ đi tiếp — kể cả duyệt lại.
     for (const hd of ["duyet", "khoa", "mo-khoa", "tu-choi"]) {
       const res = await goi(`/admin/tenants/${tenantChoDuyet}/${hd}`, { method: "POST" });
@@ -226,7 +226,9 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ tu_mong_doi: "cho_duyet" });
 
-    const r = await db.execute(sql`select trang_thai from tenants where id = ${tenantActive}::uuid`);
+    const r = await db.execute(
+      sql`select trang_thai from tenants where id = ${tenantActive}::uuid`,
+    );
     expect(r.rows[0]?.trang_thai).toBe("active");
   });
 

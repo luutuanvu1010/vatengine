@@ -224,8 +224,10 @@ describe("0011 — hành vi các cửa hẹp", () => {
       SELECT p.proname, p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public' AND p.proname LIKE 'admin\\_%'`);
     for (const row of r.rows) {
-      expect({ ham: row.proname, chamHoaDon: /\bhoa_don\b|\bdong_hang_hoa\b/.test(String(row.prosrc)) })
-        .toEqual({ ham: row.proname, chamHoaDon: false });
+      expect({
+        ham: row.proname,
+        chamHoaDon: /\bhoa_don\b|\bdong_hang_hoa\b/.test(String(row.prosrc)),
+      }).toEqual({ ham: row.proname, chamHoaDon: false });
     }
   });
 

@@ -52,7 +52,9 @@ export interface Env extends LoginLockEnv, SignupLimitEnv {
 // requireRole gác route. Cả hai do requireTenant xác minh và đặt vào context.
 export type AppEnv = {
   Bindings: Env;
-  Variables: { tenantId: string; role: Role };
+  // `userId` optional có chủ ý — xem chú thích tại auth.ts: token phát trước U18 không
+  // mang `sub`. Route cần nó phải tự kiểm, không được giả định luôn có.
+  Variables: { tenantId: string; role: Role; userId?: string };
 };
 
 // U18 — Context của route `/admin/*`. TÁCH HẲN khỏi AppEnv, và đó là chủ ý: `Variables`
