@@ -4,17 +4,30 @@ import { describe, expect, it } from "vitest";
 import { AboutPage } from "../../src/features/about/AboutPage";
 import { renderWithProviders } from "../helpers/renderApp";
 
-describe("Trang Giới thiệu & Ủng hộ (U16)", () => {
-  it("hiện mục đích + 2 phần góp ý/đóng góp", () => {
+describe("Trang Giới thiệu & Hỗ trợ (U16b)", () => {
+  it("hiện tiêu đề mới + mục đích phần mềm", () => {
     renderWithProviders(<AboutPage />);
-    expect(screen.getByRole("heading", { name: "Giới thiệu & Ủng hộ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Giới thiệu & Hỗ trợ" })).toBeInTheDocument();
     expect(screen.getByText(/tiết kiệm cả chi phí phần mềm/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Góp ý/ })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Đóng góp/ })).toBeInTheDocument();
-    expect(screen.getByText(/Cảm ơn bạn đã đồng hành/)).toBeInTheDocument();
   });
 
-  it("nút Zalo/WhatsApp: đúng liên kết, mở tab mới, chống tabnabbing", () => {
+  it("FAQ: bấm câu hỏi → câu trả lời hiện, aria-expanded đổi", async () => {
+    renderWithProviders(<AboutPage />);
+    const question = screen.getByRole("button", {
+      name: /Phần mềm có lưu mật khẩu tài khoản thuế của tôi không/,
+    });
+    expect(question).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(question);
+    expect(question).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(/không lưu mật khẩu thô/i)).toBeInTheDocument();
+  });
+
+  it("Lịch sử cập nhật: hiện phiên bản mới nhất", () => {
+    renderWithProviders(<AboutPage />);
+    expect(screen.getByText(/v1\.5/)).toBeInTheDocument();
+  });
+
+  it("nút Zalo/WhatsApp: đúng liên kết, mở tab mới, chống tabnabbing + giờ hỗ trợ", () => {
     renderWithProviders(<AboutPage />);
     const zalo = screen.getByRole("link", { name: /Zalo/ });
     const wa = screen.getByRole("link", { name: /WhatsApp/ });
@@ -22,36 +35,12 @@ describe("Trang Giới thiệu & Ủng hộ (U16)", () => {
     expect(wa).toHaveAttribute("href", "https://wa.me/84989929373");
     expect(zalo).toHaveAttribute("target", "_blank");
     expect(zalo.getAttribute("rel")).toContain("noopener");
+    expect(screen.getByText(/08:00 – 17:00/)).toBeInTheDocument();
   });
 
-  it("mặc định mức 50.000 → QR chứa số tiền tương ứng", () => {
+  it("Đóng góp: khối QR KHÔNG render khi SHOW_DONATION tắt", () => {
     renderWithProviders(<AboutPage />);
-    const fig = screen.getByTestId("donation-qr");
-    expect(fig.getAttribute("data-payload")).toContain("540550000");
-    expect(screen.getByText(/Số tiền: 50\.000 ₫/)).toBeInTheDocument();
-  });
-
-  it("chọn mức khác → QR đổi tương ứng", async () => {
-    renderWithProviders(<AboutPage />);
-    await userEvent.click(screen.getByRole("button", { name: /100\.000/ }));
-    expect(screen.getByTestId("donation-qr").getAttribute("data-payload")).toContain("5406100000");
-  });
-
-  it("Số khác: nhập số tiền tùy ý → QR cập nhật; rỗng → QR tĩnh", async () => {
-    renderWithProviders(<AboutPage />);
-    await userEvent.click(screen.getByRole("button", { name: "Số khác" }));
-    // rỗng → tĩnh (01=11)
-    expect(
-      (screen.getByTestId("donation-qr").getAttribute("data-payload") ?? "").slice(6, 12),
-    ).toBe("010211");
-    await userEvent.type(screen.getByLabelText(/Nhập số tiền/), "25000");
-    expect(screen.getByTestId("donation-qr").getAttribute("data-payload")).toContain("540525000");
-  });
-
-  it("Số khác: ký tự không phải số bị loại, chỉ chữ số vào QR", async () => {
-    renderWithProviders(<AboutPage />);
-    await userEvent.click(screen.getByRole("button", { name: "Số khác" }));
-    await userEvent.type(screen.getByLabelText(/Nhập số tiền/), "1a2b3c000");
-    expect(screen.getByTestId("donation-qr").getAttribute("data-payload")).toContain("5406123000");
+    expect(screen.queryByTestId("donation-qr")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /100\.000/ })).not.toBeInTheDocument();
   });
 });

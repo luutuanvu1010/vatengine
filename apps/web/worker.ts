@@ -44,6 +44,29 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
+      // U18 — CỬA KHÁCH KHÔNG DẪN TỚI MIỀN QUẢN TRỊ.
+      //
+      // `apps/api` không có route công khai (`workers_dev:false`, không `routes`) nên chỉ
+      // tới được qua service binding NÀY. Hệ quả dễ bỏ sót: front-door đang đứng trên
+      // hostname của KHÁCH (`vatengine.tourdao.vn`), nên nếu không chặn ở đây thì
+      // `https://vatengine.tourdao.vn/api/admin/auth/login` đi thẳng tới đường đăng nhập
+      // super-admin — công khai, không lớp nào phía trước.
+      //
+      // Cloudflare Access (P5) được chốt cho Cổng Admin, nhưng nó gắn trên subdomain
+      // RIÊNG của U19 (`adminvatengine.tourdao.vn`); nó KHÔNG chi phối hostname khách.
+      // Vì vậy việc đóng cửa này phải nằm ở đây, trong code, chứ không ở cấu hình biên:
+      // fail-closed kể cả khi một rule WAF bị sửa nhầm hoặc chưa kịp tạo.
+      //
+      // 404 (không phải 403): với người dùng của cửa này, `/admin/*` đơn giản là không
+      // tồn tại — không xác nhận cho ai rằng có một miền quản trị đang ở phía sau.
+      if (url.pathname === "/api/admin" || url.pathname.startsWith("/api/admin/")) {
+        return withSecurityHeaders(
+          new Response(JSON.stringify({ error: "not_found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
       // Bóc `/api` rồi chuyển tiếp: `/api/auth/login` → vat-api thấy `/auth/login`.
       const target = new URL(request.url);
       target.pathname = url.pathname.replace(/^\/api/, "") || "/";

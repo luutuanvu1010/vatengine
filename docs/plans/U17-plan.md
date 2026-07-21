@@ -229,7 +229,7 @@ Sau khi tích hợp QĐ-5..9, U17 nặng ~3 đơn vị — vi phạm kỷ luật
 | Đơn vị | Nội dung | Phụ thuộc |
 |---|---|---|
 | **U17a** ✅ **XONG 2026-07-19** | §3.1 migration `0007` (3 bảng mới, backfill+FK, RLS/GRANT tay) · `clampInt`/`clampNumber` · phân giải config DB→env→`DEFAULT_*` · §3.5 `getGioiHanTkThue` theo gói · nhãn gói ở `GET /me` + `SettingsPage` | — |
-| **U17b** | §3.2 `POST /dang-ky` · `SignupLimiter` + wrangler `v5` · §3.4 `validateEmailDangKy` · §3.3 cổng trạng thái login + sửa `auth_lookup_user` | U17a |
+| **U17b** ✅ **CODE XONG 2026-07-20 — CHƯA DEPLOY** (xem §7c) | §3.2 `POST /dang-ky` · `SignupLimiter` + wrangler `v5` · §3.4 `validateEmailDangKy` · §3.3 cổng trạng thái login + sửa `auth_lookup_user` | U17a |
 | **U17c** | §3.6 middleware rate-limit `/invoices` `/exports` `/reconcile`, ngưỡng đọc từ gói | U17a |
 
 Mỗi đơn vị: một nhánh, một PR, qua `make lint` + `make test` + review chéo trước khi sang đơn vị kế. **U17a xong là nền cho "Admin sửa ngưỡng" đã đủ** (đường ghi vẫn thuộc U18).
@@ -258,6 +258,30 @@ Có nhãn nào ngoài `free` ⇒ **DỪNG**, quyết định ánh xạ gói trư
 2. Mở đọc bằng `FOR SELECT TO <role_admin>` riêng — tuyệt đối không phải role phục vụ khách.
 3. `cau_hinh_he_thong` **PUBLIC-readable, không mã hoá — cấm chứa bí mật**. Nên thành một dòng luật trong `.claude/rules/security.md`.
 4. **Núm chưa nối dây:** `gh_*` và `dangky_max_moi_ip_gio` chưa có consumer production nào. Nếu U18 hiện chúng lên bảng điều khiển trước khi nối dây, admin sẽ tin mình đã siết chống-lạm-dụng trong khi không đổi gì — **bảo đảm an toàn giả**.
+
+## 7c. U17b — kết quả kiểm chứng thật (2026-07-20)
+
+Nhánh `feat/u17b-dang-ky-cong-khai` (worktree `/Users/tuanbao/Documents/Projects/vat-u17`), tới commit `7b43790`. Phần **hiện thực code** của §3.2/§3.3/§3.4 đã xong: `POST /dang-ky`, `SignupLimiter` (logic thuần + DO + wrangler tag `v5`), `validateEmailDangKy`, cổng trạng thái ở `POST /auth/login` (đọc `tenant_trang_thai` từ `auth_lookup_user()` đã sửa).
+
+**Đo lại 2026-07-20 (không suy đoán):**
+- `make lint` — sạch, cả 10 workspace (`tsc --noEmit`), không lỗi.
+- `make test` — **exit 0**, tổng **145 file test / 958 test xanh** trên toàn repo; riêng `@vat/api` (nơi chứa `dangKy.test.ts`, `auth.hardening.test.ts`, `signupLimiter.test.ts`): **36 file / 260 test xanh**.
+- Review chéo: **hai lượt độc lập** trên nhánh này đã chạy, đều phát hiện rủi ro thật (không phải lỗi chức năng) — xử lý bằng ADR-0006 (chấp nhận rủi ro dò danh bạ) và 4 mục `docs/BACKLOG-y-tuong-va-de-xuat.md` [2026-07-20] (audit lượt bị từ chối, limiter fail-open, email/MST chưa xác minh, input-gating DO CHƯA KIỂM CHỨNG trên `workerd` thật). Không có finding chặn deploy còn mở ở tầng chức năng.
+
+**⛔ CHƯA DEPLOY LÊN PRODUCTION.** Migration `0009` (`auth_lookup_trang_thai`) và `0010` (`email_khong_phan_biet_hoa_thuong`) **đã viết, đã test dưới PGlite, NHƯNG chưa `make migrate` trên Neon production** — trạng thái này khác XONG-và-đã-lên-production của U17a/U22/U23/U27. Đừng đọc mục "CODE XONG" ở bảng §7 thành "đã chạy trên production".
+
+### Hai yêu cầu thứ tự deploy (đọc trước khi deploy đơn vị này — không chỉ đọc lướt)
+
+1. **`make migrate` PHẢI chạy TRƯỚC khi deploy `apps/api`.** `POST /auth/login` (`apps/api/src/routes/auth.ts` dòng ~131) nay `SELECT ... tenant_trang_thai FROM auth_lookup_user(...)` — cột này chỉ tồn tại sau migration `0009` (DROP+CREATE lại hàm `auth_lookup_user`, xem `packages/db/migrations/0009_auth_lookup_trang_thai.sql`). Deploy `apps/api` trước khi migrate ⇒ **mọi lượt đăng nhập trả 500** ngay lập tức (hàm cũ không có cột đó, lỗi ở tầng SQL).
+2. **Migration `0010` cố ý fail loudly nếu đã có ≥2 email chỉ khác hoa/thường trong production.** Đây là hành vi THIẾT KẾ (xem chú thích trong file migration), không phải lỗi — migration RAISE EXCEPTION và rollback sạch (không để lại trạng thái nửa vời) thay vì tự ý gộp/xoá dữ liệu thay vận hành viên. **Vận hành viên phải chạy câu lệnh dò này trước `make migrate` và tự xử lý tay nếu có kết quả** (đổi email hoặc gộp tenant có chủ đích):
+   ```sql
+   SELECT lower(email) AS email_thuong, array_agg(email) AS bien_the,
+          array_agg(id) AS id_lien_quan, count(*) AS so_luong
+   FROM nguoi_dung GROUP BY lower(email) HAVING count(*) > 1;
+   ```
+   Có hàng nào trả về ⇒ **DỪNG**, không chạy `make migrate` cho tới khi xử lý xong — nếu không, `0010` tự chặn lại đúng lúc `make migrate` chạy (transaction rollback), nhưng tốt hơn là biết trước thay vì để migration thất bại giữa một lượt deploy.
+
+Sau khi migrate xong, smoke test **đúng đường `POST /dang-ky` và `POST /auth/login`** (không chỉ `/health`) — kế thừa đúng ghi chú vận hành đã có ở §8 cho U17a, mở rộng thêm cho hai route mới của U17b.
 
 ## 8. Vận hành
 

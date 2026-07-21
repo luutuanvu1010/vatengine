@@ -155,3 +155,117 @@ describe("REST /exports/convert (integration, PGlite + R2 giả)", () => {
     expect(res.status).toBe(401);
   });
 });
+
+// U30b — /convert phải TÔN TRỌNG dòng đã chọn, y hệt /exports. Nếu không, người dùng
+// tick vài hóa đơn rồi bấm nút convert sẽ nhận file theo bộ lọc — sai kỳ vọng, âm thầm.
+// Cùng hợp đồng: body JSON tùy chọn { ids }, có ids ⇒ bỏ qua bộ lọc (M2).
+describe("REST /exports/convert — chọn dòng bằng ids (U30b)", () => {
+  let db: Db;
+  let storage: FakeStorage;
+  let app: ReturnType<typeof createApp>;
+  let tenantA: string;
+  let tenantB: string;
+  let idA1: string;
+  let idA2: string;
+  let idB1: string;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    storage = makeStorage();
+    app = createApp(injectDb(db, storage));
+    tenantA = await makeTenant(db, "Cty A", "0100000001");
+    tenantB = await makeTenant(db, "Cty B", "0100000009");
+    idA1 = await seedInvoice(db, tenantA, { shdon: "1", chieu: "purchase" });
+    idA2 = await seedInvoice(db, tenantA, {
+      shdon: "2",
+      chieu: "sold",
+      tdlap: new Date("2026-04-15T10:00:00Z"),
+    });
+    idB1 = await seedInvoice(db, tenantB, { shdon: "1", nbmst: "9999999999" });
+  });
+
+  async function convert(token: string, query: string, body?: unknown) {
+    return app.request(
+      `/exports/convert?${query}`,
+      {
+        method: "POST",
+        headers: body ? { ...bearer(token), "content-type": "application/json" } : bearer(token),
+        body: body ? JSON.stringify(body) : undefined,
+      },
+      makeEnv(),
+    );
+  }
+
+  async function dataLines(token: string, res: Response): Promise<string[]> {
+    const { url } = (await res.json()) as { url: string };
+    const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
+    return csvLines(new Uint8Array(await dl.arrayBuffer())).slice(1); // bỏ header
+  }
+
+  it("KHÔNG body → convert theo bộ lọc như cũ (tương thích ngược)", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await convert(token, "profile=reference&format=csv");
+    expect(res.status).toBe(201);
+    expect((await dataLines(token, res)).length).toBe(2);
+  });
+
+  it("có ids → chỉ convert đúng các hóa đơn đã chọn", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await convert(token, "profile=reference&format=csv", { ids: [idA2] });
+    expect(res.status).toBe(201);
+    expect((await dataLines(token, res)).length).toBe(1);
+  });
+
+  it("có ids thì BỎ QUA bộ lọc (M2, nhất quán với /exports)", async () => {
+    const token = await tokenFor(tenantA);
+    // chieu=purchase sẽ loại idA2 (sold) NẾU bộ lọc còn được áp.
+    const res = await convert(token, "profile=reference&format=csv&chieu=purchase", {
+      ids: [idA2],
+    });
+    expect(res.status).toBe(201);
+    expect((await dataLines(token, res)).length).toBe(1);
+  });
+
+  // CRITICAL (multi-tenant.md)
+  it("tenant A gửi id của tenant B → file RỖNG, không rò dữ liệu B", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await convert(token, "profile=reference&format=csv", { ids: [idB1] });
+    expect(res.status).toBe(201);
+    const { url } = (await res.json()) as { url: string };
+    const dl = await app.request(url, { headers: bearer(token) }, makeEnv());
+    const txt = dec.decode(new Uint8Array(await dl.arrayBuffer()));
+    expect(csvLines(new TextEncoder().encode(txt)).length).toBe(1); // chỉ header
+    expect(txt).not.toContain("9999999999");
+  });
+
+  it("ids không phải uuid → 400", async () => {
+    const token = await tokenFor(tenantA);
+    expect((await convert(token, "profile=reference&format=csv", { ids: ["x"] })).status).toBe(400);
+  });
+
+  it("vượt trần 1000 id → 400, KHÔNG ghi R2", async () => {
+    const token = await tokenFor(tenantA);
+    const truoc = storage.map.size;
+    const res = await convert(token, "profile=reference&format=csv", {
+      ids: Array.from({ length: 1001 }, () => idA1),
+    });
+    expect(res.status).toBe(400);
+    expect(storage.map.size).toBe(truoc);
+  });
+
+  it("body vượt trần kích thước → 413 (bodyLimit áp cho CẢ /convert)", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await convert(token, "profile=reference&format=csv", {
+      ids: ["x".repeat(2_000_000)],
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it("audit 'convert' ghi soIdDaChon khi có chọn dòng", async () => {
+    const token = await tokenFor(tenantA);
+    await convert(token, "profile=reference&format=csv", { ids: [idA1, idA2] });
+    const rows = await withTenant(db, tenantA, (tx) => tx.select().from(auditLog));
+    const cv = rows.filter((r) => r.hanhDong === "convert");
+    expect(cv[0]?.chiTiet).toMatchObject({ soIdDaChon: 2 });
+  });
+});

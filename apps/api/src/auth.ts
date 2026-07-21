@@ -66,5 +66,11 @@ export const requireTenant: MiddlewareHandler<AppEnv> = async (c, next) => {
 
   c.set("tenantId", tenantId);
   c.set("role", role);
+  // U18 — id người dùng (`sub`) vào context để route cần "chính tôi" (POST
+  // /auth/doi-mat-khau) không phải suy ra từ tenant + vai (vốn không xác định duy nhất
+  // một người). Đặt CÓ ĐIỀU KIỆN, KHÔNG bắt buộc: token hợp lệ phát trước U18 — và các
+  // token dựng trong test cũ — không có `sub`, ép bắt buộc ở đây sẽ vô hiệu hoá chúng
+  // giữa chừng. Route nào cần `userId` thì tự từ chối khi thiếu.
+  if (isUuid(payload.sub)) c.set("userId", payload.sub);
   await next();
 };

@@ -4,8 +4,12 @@
 import { maskSensitive } from "@vat/crypto";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { adminAuditRoutes } from "./routes/admin/audit";
+import { adminAuthRoutes } from "./routes/admin/auth";
+import { adminTenantsRoutes } from "./routes/admin/tenants";
 import { authRoutes } from "./routes/auth";
 import { backfillRoutes } from "./routes/backfill";
+import { dangKyRoutes } from "./routes/dangKy";
 import { exportsRoutes } from "./routes/exports";
 import { invoicesRoutes } from "./routes/invoices";
 import { meRoutes } from "./routes/me";
@@ -31,6 +35,10 @@ export function createApp(deps: AppDeps) {
 
   // U8: phát hành token — NGOÀI requireTenant (login xảy ra trước khi có token/tenant).
   app.route("/auth", authRoutes(deps));
+  // U17b (Task 5): cổng đăng ký công khai — NGOÀI requireTenant (public, chưa có tenant).
+  // Tenant tạo ra ở trạng thái cho_duyet, bị cổng trạng thái ở /auth/login chặn tới khi
+  // Admin duyệt (U18).
+  app.route("/dang-ky", dangKyRoutes(deps));
 
   // A1 (U15): hồ sơ tenant + vai — đọc-only, sau requireTenant (cả 3 vai).
   app.route("/me", meRoutes(deps));
@@ -44,6 +52,18 @@ export function createApp(deps: AppDeps) {
   app.route("/tax-accounts", taxAccountsRoutes(deps));
   // U22 B6: theo dõi tiến độ backfill (GET /backfill/:id) — đọc-only, sau requireTenant.
   app.route("/backfill", backfillRoutes(deps));
+
+  // ── U18: MIỀN SUPER-ADMIN ────────────────────────────────────────────────────────────
+  // Nhánh này TÁCH HOÀN TOÀN khỏi mọi thứ ở trên: token khác secret, cookie khác tên,
+  // middleware khác (`requireSuperAdmin`, KHÔNG phải `requireTenant`), context khác kiểu
+  // (`AdminEnv` không có `tenantId` nên code nhánh admin không thể vô tình dựng truy vấn
+  // "theo tenant hiện tại" — sai kiểu ở `tsc`).
+  //
+  // /admin/auth/login NGOÀI requireSuperAdmin (đây là nơi phát token). Các nhánh còn lại
+  // tự gắn requireSuperAdmin bên trong router của chúng.
+  app.route("/admin/auth", adminAuthRoutes(deps));
+  app.route("/admin/tenants", adminTenantsRoutes(deps));
+  app.route("/admin/audit", adminAuditRoutes(deps));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
 

@@ -2,6 +2,7 @@
 // dựng để đóng gói xml.zip/html.zip. Escape ký tự đặc biệt (chống phá cấu trúc file khi
 // tên người bán/mua chứa "&", "<", ">" — dữ liệu từ GDT, bên thứ ba, không tin cậy).
 import { describe, expect, it } from "vitest";
+import { EXPORT_COLUMNS } from "../../src/columns";
 import { invoiceFileStem, invoiceToHtml, invoiceToXml } from "../../src/invoiceDoc";
 import type { ExportRow } from "../../src/rows";
 
@@ -92,5 +93,90 @@ describe("invoiceFileStem", () => {
 
   it("loại ký tự không hợp lệ trong tên file (vd '/')", () => {
     expect(invoiceFileStem(makeRow({ khhdon: "C26/TAA", shdon: "1/2" }))).toBe("C26_TAA-1_2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T11 (U29 §4) — xml/html phải mang ĐỦ cột sau khi EXPORT_COLUMNS nở 16 → 21.
+// Vì sao cần canh riêng: invoiceToXml/invoiceToHtml lặp EXPORT_COLUMNS ĐỘNG, nên
+// chúng "tự xanh" khi thêm cột — test cũ vẫn qua mà không chứng minh gì về cột mới.
+// Ca dưới đây canh cả tính ĐỦ (mọi key có thẻ) lẫn GIÁ TRỊ thật của 5 cột U29.
+// ---------------------------------------------------------------------------
+describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)", () => {
+  const row = makeRow({
+    ncnhat: new Date("2026-05-01T10:00:00Z"),
+    ttcktmai: "60257129",
+    hangHoa: [{ ten: "Xăng E10 RON 95", sluong: "62.925", dvtinh: "Lít" }],
+  });
+
+  it("xml có thẻ cho MỌI cột trong EXPORT_COLUMNS (không sót cột nào)", () => {
+    const xml = invoiceToXml(row, []);
+    for (const col of EXPORT_COLUMNS) {
+      expect(xml, `thiếu thẻ <${col.key}>`).toContain(`<${col.key}>`);
+    }
+    expect(EXPORT_COLUMNS.length).toBe(19);
+  });
+
+  it("xml mang đúng GIÁ TRỊ của 5 cột U29 (không phải thẻ rỗng)", () => {
+    const xml = invoiceToXml(row, []);
+    expect(xml).toContain("<ncnhat>2026-05-01 10:00:00</ncnhat>");
+    expect(xml).toContain("<ttcktmai>60257129</ttcktmai>");
+    expect(xml).toContain("<hangHoa>Xăng E10 RON 95 — 62.925</hangHoa>");
+    // Giữ đủ phần thập phân (M1) — không làm tròn thành 63.
+  });
+
+  it("xml KHÔNG có thẻ tgia (M3 — đã loại khỏi phạm vi)", () => {
+    expect(invoiceToXml(row, [])).not.toContain("<tgia>");
+  });
+
+  it("html có nhãn + giá trị của 5 cột U29", () => {
+    const html = invoiceToHtml(row, []);
+    for (const col of EXPORT_COLUMNS) {
+      expect(html, `thiếu nhãn ${col.label}`).toContain(`<th>${col.label}</th>`);
+    }
+    expect(html).toContain("<td>60257129</td>");
+    expect(html).toContain("<td>Xăng E10 RON 95 — 62.925</td>");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LỖI LỆCH CỘT (phát hiện khi nghiệm thu 2026-07-20): bảng dòng hàng trong HTML có
+// header VIẾT CỨNG 8 cột trong khi dữ liệu sinh từ LINE_FIELDS (9 trường) → mọi ô từ
+// `ltsuat` trở đi nằm dưới sai tiêu đề, và `tsuatTien` không có tiêu đề nào.
+// Gốc rễ: HAI NGUỒN SỰ THẬT cho cùng một danh sách cột.
+// ---------------------------------------------------------------------------
+describe("invoiceToHtml — bảng dòng hàng không được lệch cột", () => {
+  const line = {
+    stt: 1,
+    ten: "Xăng E10 RON 95",
+    dvtinh: "Lít",
+    sluong: "42.492",
+    dgia: "1000",
+    thtien: "42492",
+    ltsuat: "KCT",
+    tsuat: "0",
+    tsuatTien: "0",
+  };
+
+  const oCua = (html: string, tag: "th" | "td", bang: number) => {
+    const bangs = html.match(/<table>[\s\S]*?<\/table>/g) ?? [];
+    const b = bangs[bang] ?? "";
+    return [...b.matchAll(new RegExp(`<${tag}>(.*?)</${tag}>`, "g"))].map((m) => m[1]);
+  };
+
+  it("số TIÊU ĐỀ khớp số Ô DỮ LIỆU của một dòng hàng", () => {
+    const html = invoiceToHtml(makeRow(), [line]);
+    expect(oCua(html, "th", 1).length).toBe(oCua(html, "td", 1).length);
+  });
+
+  it("giá trị nằm ĐÚNG dưới tiêu đề của nó (mã thuế suất không chui vào cột thuế suất)", () => {
+    const html = invoiceToHtml(makeRow(), [line]);
+    const th = oCua(html, "th", 1);
+    const td = oCua(html, "td", 1);
+    const tai = (nhan: string) => td[th.indexOf(nhan)];
+    expect(tai("Tên")).toBe("Xăng E10 RON 95");
+    expect(tai("Mã thuế suất")).toBe("KCT");
+    expect(tai("Thuế suất")).toBe("0");
+    expect(tai("Tiền thuế")).toBe("0");
   });
 });

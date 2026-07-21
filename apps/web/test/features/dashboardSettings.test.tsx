@@ -155,8 +155,16 @@ describe("Cài đặt chung (B6)", () => {
     expect(await screen.findByText("Mã số thuế")).toBeInTheDocument();
     expect(screen.getByText("4201568932")).toBeInTheDocument();
     expect(screen.getByText("Miễn phí")).toBeInTheDocument();
-    // Không có địa chỉ bịa (tenants chưa có cột dia_chi).
-    expect(screen.queryByText(/đường B2/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("Địa chỉ")).not.toBeInTheDocument();
+    // Không có địa chỉ bịa TRONG HỒ SƠ TENANT — bảng `tenants` chưa có cột `dia_chi`, nên
+    // bất kỳ địa chỉ nào hiện ở đây đều là bịa và người dùng sẽ hiểu đó là địa chỉ CỦA HỌ.
+    //
+    // THU HẸP 2026-07-21 (U20): trang Cài đặt nay còn hiển thị danh tính TÁC GIẢ phần mềm
+    // (`OrgIdentity`, gồm địa chỉ của Công ty TNHH Tour Đảo) — thông tin do chủ dự án cung
+    // cấp, nằm ở khối riêng có tiêu đề rõ ràng. Vì vậy cổng này soi ĐÚNG hồ sơ tenant thay
+    // vì cả trang; nếu vẫn cấm toàn trang thì nó chặn nhầm một thông tin hợp lệ.
+    const hoSoTenant = (await screen.findByText("Mã số thuế")).closest("dl");
+    expect(hoSoTenant, "không tìm thấy danh sách hồ sơ tenant").not.toBeNull();
+    expect(hoSoTenant?.textContent ?? "").not.toMatch(/đường B2/i);
+    expect(hoSoTenant?.textContent ?? "").not.toMatch(/Địa chỉ/i);
   });
 });

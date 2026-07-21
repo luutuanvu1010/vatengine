@@ -1,12 +1,12 @@
 // U7 unit — encoder CSV (csv.ts). Đọc lại: đúng header + số bản ghi + tiền nguyên bản +
 // escape RFC-4180 + BOM UTF-8 (để Excel mở đúng tiếng Việt). Offline.
-import type { HoaDonRow } from "@vat/query";
 import { describe, expect, it } from "vitest";
 import { EXPORT_COLUMNS } from "../../src/columns";
 import { csvStream, toCsv } from "../../src/csv";
+import type { ExportRow } from "../../src/rows";
 import { parseCsv, utf8 } from "../helpers";
 
-async function* batchesOf(rows: HoaDonRow[], size: number): AsyncGenerator<HoaDonRow[]> {
+async function* batchesOf(rows: ExportRow[], size: number): AsyncGenerator<ExportRow[]> {
   for (let i = 0; i < rows.length; i += size) yield rows.slice(i, i + size);
 }
 
@@ -28,7 +28,7 @@ async function drain(stream: ReadableStream<Uint8Array>): Promise<string> {
   return utf8.decode(merged);
 }
 
-function row(over: Partial<HoaDonRow> = {}): HoaDonRow {
+function row(over: Partial<ExportRow> = {}): ExportRow {
   return {
     id: "00000000-0000-0000-0000-000000000001",
     tenantId: "00000000-0000-0000-0000-0000000000aa",
@@ -54,8 +54,10 @@ function row(over: Partial<HoaDonRow> = {}): HoaDonRow {
     rawJson: {},
     createdAt: new Date(),
     updatedAt: new Date(),
+    tenHangDau: null,
+    soDongHang: 0,
     ...over,
-  } as HoaDonRow;
+  } as ExportRow;
 }
 
 describe("toCsv", () => {

@@ -1,6 +1,7 @@
 // H-B.4 — Fan-out job đồng bộ nền: chia lô gửi hàng đợi, giãn tải theo tenant, và
 // ánh xạ outcome → hành động hàng đợi (tách backpressure khỏi lỗi thật). THUẦN LOGIC,
 // không phụ thuộc runtime Cloudflare → test offline. Áp dụng ở wiring index.ts.
+import type { VatSyncQueueMessage } from "@vat/sync";
 import type { JobOutcome } from "./types";
 
 // Giới hạn một lần `Queue.sendBatch` (Cloudflare Queues): ≤100 message VÀ ≤256KB tổng.
@@ -85,6 +86,22 @@ export function consumerAction(
     case "retry":
       return { type: "retry" };
   }
+}
+
+/** H-B.6 (b) — khi egress GEO_BLOCKED, hoãn job thay vì đập GDT. DƯỚI trần → reenqueue
+ * message MỚI mang bpAttempt+1 + delay (ack, KHÔNG tính max_retries); ĐẠT trần → retry
+ * THẬT (tính max_retries → rơi DLQ) để có ĐIỂM DỪNG khi chặn kéo dài (spec §4). */
+export function blockedAction(
+  body: VatSyncQueueMessage,
+  opts: { backpressureDelaySeconds: number; maxBackpressure: number },
+): QueueAction {
+  const bpAttempt = body.bpAttempt ?? 0;
+  if (bpAttempt >= opts.maxBackpressure) return { type: "retry" };
+  return {
+    type: "reenqueue",
+    delaySeconds: opts.backpressureDelaySeconds,
+    bpAttempt: bpAttempt + 1,
+  };
 }
 
 // Cấu hình fan-out tinh chỉnh qua env (vars wrangler; KHÔNG nhạy cảm) — giống mẫu

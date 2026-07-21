@@ -307,3 +307,139 @@ bị 429 chặn (xem mục 2026-07-18 phía trên). Hai hành vi còn lại đã
 **ĐẠT**: (a) chọn Mua vào/Bán ra ẩn đúng ô MST; (b) nút Xuất Excel/CSV hiện với vai đủ quyền.
 
 **Nguồn phát hiện:** phiên thực thi U27 (2026-07-18 → 19).
+
+### [2026-07-20] Không có nhật ký audit cho lượt đăng ký bị từ chối (`/dang-ky`)
+
+- **Trạng thái:** Đề xuất — chưa triển khai. Phát hiện trong review chéo U17b.
+- **Bối cảnh/bằng chứng:** `apps/api/src/routes/dangKy.ts` chỉ ghi `audit_log` (hành động `dang_ky`) khi request THÀNH CÔNG (201, trong cùng transaction `withTenant`). Các nhánh 400 (`bad_request`/`chua_dong_y_dieu_khoan`/`email_khong_hop_le`/`mst_khong_hop_le`), 409 (`da_ton_tai`), và 429 (`qua_nhieu_yeu_cau`) đều KHÔNG ghi gì. Cảnh báo khi chạm ngưỡng limiter (`signupLimiterDO.ts` dòng ~47-49, `signup_rate_limited`) cố ý CHỈ log `at` (thời điểm) — không kèm IP, theo đúng nguyên tắc `security.md` (không log PII/IP tràn lan). Gốc ràng buộc: `audit_log.tenant_id` là `NOT NULL` + RLS (`packages/db/src/schema/auditLog.ts`) — một lượt đăng ký thất bại không có tenant nào để gắn.
+- **Rủi ro nếu bỏ qua:** không có bằng chứng pháp lý để điều tra dò quét/lạm dụng `/dang-ky` — đúng lúc ADR-0006 (rủi ro dò danh bạ MST/email) xác nhận việc dò quét này khả thi về kỹ thuật. Không biết được ai/khi nào/bao nhiêu lượt đã thử dò trước khi bị limiter chặn.
+- **Đề xuất hướng xử lý:** cần một thiết kế riêng, không phải vá nhanh — hoặc (a) một nhật ký KHÔNG gắn tenant, tái dùng bảng `audit_log_admin` đã có sẵn cho hành động xuyên-tenant (`U17-plan.md` QĐ-6) thay vì tạo bảng thứ ba, hoặc (b) Cloudflare Analytics Engine (định lượng, không cần khóa ngoại tenant). Route sang U18 (đơn vị kế tiếp chạm audit xuyên-tenant).
+- **Mức ưu tiên đề xuất:** Trung bình (không chặn vận hành, nhưng là khoảng trống điều tra sự cố).
+- **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
+
+### [2026-07-20] `SignupLimiter` fail-open khi thiếu binding — rủi ro triển khai, không phải lỗi hiện tại
+
+- **Trạng thái:** Ghi nhận rủi ro — không hành động ngay, giám sát qua smoke test bắt buộc.
+- **Bối cảnh/bằng chứng:** `signupLimiterClient()` (`apps/api/src/signupLimiterDO.ts` dòng ~72-82): nếu `ns` (namespace `SIGNUP_LIMITER`) là `undefined`, trả về client giả luôn `chan:false` — KHÔNG chặn gì, không có token để hoàn (`refund` no-op). Đây là khuôn giống hệt `loginLimiterDO.ts` fail-open đã có tiền lệ trong dự án — hợp lý cho khóa đăng nhập (một lớp trong nhiều lớp phòng thủ của `/auth`), nhưng RỦI RO HƠN ở đây vì `/dang-ky` là **cổng ghi công khai duy nhất** và `SignupLimiter` là **lớp chống lạm dụng DUY NHẤT** của nó — không có lớp thứ hai. Binding + migration tag `v5` (`apps/api/wrangler.jsonc` dòng ~59) hiện ĐÃ khai báo đúng, nên đây KHÔNG phải lỗi đang tồn tại — mà là rủi ro nếu triển khai sai thứ tự (deploy thiếu binding) hoặc rollback về bản trước `v5`.
+- **Rủi ro nếu bỏ qua:** một lần cấu hình sai hoặc rollback sẽ ÂM THẦM cho phép tạo tenant `cho_duyet` không giới hạn — chỉ lộ ra qua một dòng `console.warn` (`signup_limiter_unavailable`), không có cảnh báo chủ động nào theo dõi log này realtime.
+- **Đề xuất hướng xử lý:** không đổi code — hạ tầng hiện đã đúng. Bắt buộc smoke test đường 429 (bấm liên tiếp vượt ngưỡng từ cùng IP, xác nhận lượt vượt ngưỡng trả 429) SAU MỖI lần deploy `apps/api`, không chỉ smoke test `/health` hay đường 201. Cân nhắc, khi tới lượt, một cảnh báo chủ động (không chỉ log) khi limiter fail-open lặp lại.
+- **Mức ưu tiên đề xuất:** Trung bình — không sửa code, chỉ là kỷ luật vận hành (đưa vào checklist deploy).
+- **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
+
+### [2026-07-20] `/dang-ky` không xác minh quyền sở hữu email lẫn MST — U18 phải biết khi duyệt
+
+- **Trạng thái:** Đề xuất — cần được phản ánh trong spec U18, chưa triển khai.
+- **Bối cảnh/bằng chứng:** `apps/api/src/routes/dangKy.ts` chấp nhận bất kỳ `email` hợp dạng (qua `validateEmailDangKy` — chỉ lọc dạng/alias/miền dùng-1-lần/allowlist đuôi, KHÔNG xác minh chủ sở hữu hộp thư) và bất kỳ `mst` đúng 10/13 chữ số (KHÔNG đối chiếu với cơ quan thuế hay bất kỳ nguồn xác thực nào). Cổng kiểm soát thật duy nhất là bước duyệt thủ công của Admin ở U18 (`tenants.trang_thai: cho_duyet → active`).
+- **Rủi ro nếu bỏ qua:** nếu spec U18 không nói rõ điều này, người duyệt (Admin) có thể ngầm định "email hiển thị trong hồ sơ chờ duyệt là email thật của MST đó" — sai. Một địa chỉ email giả mạo/gần giống (lookalike) đăng ký kèm MST thật của người khác có thể bị duyệt nhầm nếu Admin không được cảnh báo rằng email CHƯA XÁC MINH.
+- **Đề xuất hướng xử lý:** khi viết spec U18 (`docs/plans/U18-plan.md`), ghi rõ trong màn duyệt: email hiển thị là **CHƯA XÁC MINH** (chưa có bước gửi email/xác nhận liên kết) — Admin cần tự đối chiếu thông tin doanh nghiệp (vd tra cứu MST công khai) trước khi duyệt, không chỉ tin theo dữ liệu người đăng ký tự khai.
+- **Mức ưu tiên đề xuất:** Cao (ảnh hưởng trực tiếp bước quyết định duyệt/từ chối của U18 — cần vào spec trước khi U18 code, không phải vá sau).
+- **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
+
+### [2026-07-21] KHÔNG XOÁ ĐƯỢC TENANT — trigger append-only của `audit_log` chặn cascade. Ảnh hưởng quyền xoá dữ liệu (NĐ 13/2023)
+
+- **Trạng thái:** Phát hiện khi dọn tenant smoke sau deploy U20. Chưa xử lý.
+- **Bối cảnh/bằng chứng (ĐO ĐƯỢC, không suy đoán):** `DELETE FROM tenants WHERE mst='9999999902'` trên production ném lỗi:
+  `error: audit_log là append-only: không được DELETE (security.md)` — `P0001`, từ `audit_log_no_mutate()`, phát sinh bởi `DELETE FROM ONLY "public"."audit_log" WHERE tenant_id = $1` tức **cascade** của FK. Chạy dưới role migrate/owner vẫn bị chặn, đúng thiết kế của trigger (0002).
+- **Vì sao đây là mâu thuẫn thật, không phải lỗi:** hai ràng buộc đều đúng và đang húc nhau. (a) `security.md`: *"Audit log không được ghi đè, chỉ append"* — nhật ký phải bất biến để có giá trị pháp lý. (b) Hiến pháp: tuân thủ **NĐ 13/2023** về dữ liệu cá nhân, trong đó có quyền **yêu cầu xoá dữ liệu**. Hiện (a) chặn (b) một cách tuyệt đối: **không tenant nào từng phát sinh audit có thể bị xoá khỏi hệ thống.**
+- **Rủi ro nếu bỏ qua:** khi một doanh nghiệp khách yêu cầu xoá tài khoản và dữ liệu, hệ thống **không thực hiện được** bằng bất kỳ thao tác nào — kể cả chủ dự án với quyền cao nhất. Đây là rủi ro pháp lý, không phải bất tiện vận hành. Hiện chưa lộ vì mới có 1 khách thật.
+- **Đề xuất hướng xử lý (chưa chốt — cần quyết định ở tầng kiến trúc, KHÔNG tự quyết khi code):**
+  - **A.** Xoá mềm: `tenants.trang_thai='da_xoa'` + xoá dữ liệu nghiệp vụ (hóa đơn, dòng hàng, tài khoản thuế), GIỮ audit. Nhật ký còn nguyên nhưng chỉ còn id không quy được về người — có thể đủ cho NĐ13 nếu audit không chứa dữ liệu cá nhân.
+  - **B.** Cho phép xoá audit theo tenant qua một hàm `SECURITY DEFINER` hẹp, có ghi vào `audit_log_admin` rằng đã xoá. Phá tính bất biến, nhưng có vết.
+  - **C.** Tách audit sang nơi lưu trữ khác khi tenant bị xoá (archive), rồi mới xoá hàng.
+  - Cần đối chiếu NĐ 13/2023 xem audit log có nằm trong phạm vi "dữ liệu cá nhân phải xoá" hay thuộc ngoại lệ lưu trữ theo nghĩa vụ pháp luật.
+- **Hệ quả vận hành ngay:** tenant smoke **không xoá được**, chỉ vô hiệu hoá bằng `trang_thai='khoa'`. Trên production hiện có 3 tenant smoke ở tình trạng này (`9999999999`, `9999999901`, `9999999902`).
+- **Mức ưu tiên đề xuất:** **Cao** — phải có câu trả lời TRƯỚC khi nhận khách hàng trả phí, vì đây là cam kết pháp lý chứ không phải tính năng.
+- **Nguồn phát hiện:** Dọn dẹp sau smoke test deploy U20, 2026-07-21.
+
+### [2026-07-21] U19 còn thiếu: panel chi tiết doanh nghiệp + form sửa metadata
+
+- **Trạng thái:** Ghi nợ có ý thức — chủ dự án chốt 2026-07-21 ship U19 ở mức hiện tại để gỡ chỗ kẹt duyệt tenant trước. **Đề xuất làm CÙNG U21**, không làm riêng.
+- **Bối cảnh:** `docs/plans/U19-plan.md` §3/§4 liệt kê `TenantDetail.tsx` (panel xem người dùng của tenant, lịch sử `lan_dong_bo`, trạng thái hạn token GDT) và form sửa metadata. Backend đã sẵn sàng từ U18: `GET /admin/tenants/:id` (`admin_chi_tiet_tenant`) trả đủ dữ liệu, `PATCH /admin/tenants/:id` nhận `ten`/`goi_dich_vu`/`ghi_chu`, và `adminApi.suaMetadata` + `adminApi.chiTietTenant` đã có trong `apps/admin/src/lib/adminApiClient.ts` — chỉ thiếu tầng UI.
+- **Ảnh hưởng hiện tại:** KHÔNG chặn việc chính. Chủ dự án vẫn duyệt/từ chối/khóa/mở khóa/cấp lại mật khẩu được, vẫn xem được nhật ký. Thiếu phần "nhìn sâu vào một doanh nghiệp" và sửa tên/gói (hiện phải sửa bằng SQL tay nếu cần).
+- **Vì sao đề xuất gộp với U21:** U21 (dashboard giám sát) tiêu thụ đúng cùng tập dữ liệu — trạng thái token GDT sắp hết hạn, lịch sử đồng bộ, sức khỏe theo tenant. Dựng `TenantDetail` riêng bây giờ nhiều khả năng phải viết lại khi U21 định hình cách trình bày các chỉ số đó.
+- **Lưu ý ràng buộc khi làm:** form sửa metadata **KHÔNG được có ô email và ô MST** — `admin_sua_metadata_tenant` (migration 0011) không nhận hai trường đó, và backend trả 400 nếu gửi lên. Email là danh tính đăng nhập, MST là khoá tự nhiên (U23-D: 1 MST ↔ 1 tenant); cả hai đáng là thao tác riêng có audit riêng.
+- **Mức ưu tiên đề xuất:** Trung bình — làm khi tới U21.
+- **Nguồn phát hiện:** Chốt phạm vi U19, 2026-07-21.
+
+### [2026-07-21] Khoá tenant KHÔNG cắt phiên khách đang sống — nút "Khoá" của U18 trễ tới 8 giờ
+
+- **Trạng thái:** Ghi nợ có ý thức — chủ dự án chốt 2026-07-21 KHÔNG xử lý ở U18 (hiện mới 1 tài khoản, rủi ro thật gần bằng 0). Phải xử lý TRƯỚC khi có khách hàng thật thứ hai.
+- **Bối cảnh/bằng chứng:** ĐO ĐƯỢC, không phải suy đoán (test tạm chạy thật trong phiên U18, đã xoá sau khi kết luận): khách đăng nhập thật → nhận cookie phiên TTL 8h (`TOKEN_TTL_SEC`, `apps/api/src/auth.ts`) → super-admin gọi `POST /admin/tenants/:id/khoa` → DB đổi `trang_thai='khoa'`, 200 OK → khách dùng **đúng cookie cũ** gọi `GET /invoices` → **200, đọc đủ hóa đơn**. Nguyên nhân: `requireTenant` (`apps/api/src/auth.ts:42-76`) chỉ verify chữ ký + `exp`, KHÔNG tra lại `tenants.trang_thai`. Cổng trạng thái U17b/U18 chỉ tồn tại ở `/auth/login` (`routes/auth.ts`) nên chặn **đăng nhập mới**, không thu hồi phiên đang chạy. Đã grep `invoices.ts`/`me.ts`/`exports.ts`/`reconcile.ts`/`taxAccounts.ts` — không route nào kiểm lại.
+- **Vì sao test U18 không bắt được:** `admin.tenants.test.ts` có ca "Khóa → khách KHÔNG đăng nhập được nữa" — ĐÚNG nhưng chỉ thử **đăng nhập lại**, không thử token còn sống. Điểm mù của chính người viết; phát hiện ra nhờ pass red-team độc lập.
+- **Rủi ro nếu bỏ qua:** nút "Khoá" tồn tại để cắt truy cập KHẨN (tài khoản bị chiếm, gian lận, chấm dứt hợp đồng). Trễ tới 8 tiếng làm nó gần như vô hiệu đúng trong kịch bản nó sinh ra để phục vụ. Về câu chữ spec (`U18-plan.md` §5: "khóa → chặn login ngay") thì hiện thực KHÔNG sai — nhưng ý nghĩa nghiệp vụ thì hụt.
+- **Đề xuất hướng xử lý — 4 hướng đã cân, đề xuất C tách thành ĐƠN VỊ RIÊNG:**
+  - **A.** Tra `trang_thai` mỗi request trong `requireTenant`. Cắt tức thì, nhưng `requireTenant` chạy TRƯỚC khi route mở kết nối DB ⇒ phải mở thêm một kết nối cho MỌI request khách. Ở mục tiêu 100k tenant là chi phí thật trên đường găng.
+  - **B.** Hạ `TOKEN_TTL_SEC` 8h → 1h. Một dòng, không thêm chi phí/request, nhưng chỉ **thu hẹp** cửa sổ chứ không đóng.
+  - **C. (đề xuất)** Đưa điều kiện `trang_thai='active'` vào chính RLS policy (`packages/db/src/schema/_rls.ts`). Thi hành ở tầng DB, không thêm truy vấn ứng dụng nào, tenant bị khoá thấy 0 hàng ở MỌI bảng. Đúng bài toán nhất — nhưng bán kính ảnh hưởng lớn (đụng policy của tất cả bảng) nên KHÔNG được nhét vào cuối một đơn vị đã đóng phạm vi; cần đơn vị riêng + đo chi phí subquery trong policy trước khi chốt.
+  - **D.** Chấp nhận + ghi nợ. ← đang ở đây.
+- **Mức ưu tiên đề xuất:** Trung bình bây giờ, **Cao ngay khi có khách hàng trả phí đầu tiên ngoài chủ dự án**.
+- **Nguồn phát hiện:** Pass red-team cách ly tenant, review chéo U18, 2026-07-21.
+
+### [2026-07-21] Không có test tự động nào chạy dưới role Postgres non-superuser thật — RLS FORCE chỉ được kiểm bằng tay
+
+- **Trạng thái:** Ghi nhận khoảng trống bằng chứng. Không phải lỗi đang tồn tại.
+- **Bối cảnh/bằng chứng:** Toàn bộ test integration dùng **PGlite**, vốn chạy dưới **superuser** — superuser bỏ qua RLS kể cả `FORCE`, và bỏ qua mọi kiểm tra GRANT. Nghĩa là bộ test KHÔNG thi hành được lớp phòng thủ thứ hai mà `multi-tenant.md` đặt ra. Dự án đã bù một phần bằng kiểm **catalog** (`packages/db/test/integration/superAdmin.test.ts` dùng `has_table_privilege`/`has_function_privilege`/`pg_policy`/`pg_proc.proowner` — đúng bất kể ai truy vấn), nhưng đó là kiểm *khai báo*, không phải kiểm *thi hành*. Bằng chứng duy nhất cho "RLS FORCE thực sự chặn role app" là lần kiểm tay trên Neon ghi ở đầu `0001` (dòng 60-65) và `0011` — **không tái lập tự động, không chạy lại mỗi PR**.
+- **Rủi ro nếu bỏ qua:** một migration tương lai gỡ nhầm `FORCE ROW LEVEL SECURITY`, đổi owner bảng, hoặc provision role app sai thuộc tính (`BYPASSRLS`) sẽ KHÔNG bị bộ test bắt được — chỉ lộ ra ở lần kiểm tay kế tiếp, hoặc không bao giờ. Đây đúng loại "giả định chưa kiểm chứng đã hoá thành chốt" mà Hiến pháp cảnh báo.
+- **Đề xuất hướng xử lý:** một job CI (chạy theo lịch, không chặn PR — như `contract`/`coverage-apps` hiện có) dựng Postgres thật trong container, áp toàn bộ migration, chạy `packages/db/provisioning/app-role.sql` để tạo role app đúng thuộc tính, rồi khẳng định: (a) role app đọc bảng của tenant khác ra 0 hàng, (b) role app KHÔNG SELECT được `quan_tri_he_thong`, (c) role app GỌI ĐƯỢC cả 8 hàm `admin_*`. Ca (c) quan trọng ngang hai ca đầu — nó bắt đúng lỗi mà `0009` đã gây ra trên production.
+- **Mức ưu tiên đề xuất:** Trung bình — không chặn U19, nhưng nên có trước khi lớp thương mại (U17–U21) đón khách thật.
+- **Nguồn phát hiện:** Pass red-team cách ly tenant, review chéo U18, 2026-07-21.
+
+### [2026-07-20] CHƯA KIỂM CHỨNG — nguyên tử hóa `checkAndRecordSignup` dựa vào input-gating của Durable Object, chưa chạy trên `workerd` thật
+
+- **Trạng thái:** CHƯA KIỂM CHỨNG (nhãn bắt buộc theo Hiến pháp — nguyên tắc bằng chứng).
+- **Bối cảnh/bằng chứng:** Bản vá TOCTOU (commit `7b43790`, F1 — gộp check+record thành một `checkAndRecordSignup` nguyên tử, xem `apps/api/src/signupLimiter.ts` + `signupLimiterDO.ts`) dựa vào tiền đề: input-gating của Durable Object đảm bảo không lệnh gọi nào khác xen được vào giữa đọc và ghi của MỘT `fetch()`. Tiền đề này đã được kiểm chứng bằng test đối kháng (RED-PROOF: 12/12 lượt lọt ngưỡng trước khi vá, xanh sau khi vá) — NHƯNG test chạy trên **mô hình in-memory trung thực** (fake DO trong test harness), KHÔNG chạy trên runtime `workerd` thật. `signupLimiterDO.ts` dòng 3-4 tự ghi chú "KHÔNG test-cover (cần runtime DO thật...)" — đúng quy ước hiện có của dự án (`loginLimiterDO.ts` cũng nằm ngoài phủ test theo cách tương tự), không phải sơ suất riêng của U17b.
+- **Rủi ro nếu bỏ qua:** nếu hành vi input-gating thật của `workerd` sai khác mô hình giả lập (ví dụ ở biên: timeout, eviction, hibernation giữa chừng một `fetch()`), lỗ hổng TOCTOU đã vá có thể **tái xuất hiện** mà không có test nào bắt được, vì bài test hiện tại không chạm runtime thật.
+- **Đề xuất hướng xử lý:** khi có cơ hội (không chặn deploy U17b) — thêm một phép kiểm chứng chạy trên `workerd` thật (`wrangler dev --remote` hoặc `vitest-pool-workers` nếu đủ độ trung thực DO) bắn N request đồng thời vào một `SignupLimiter` DO thật, đo lại đúng kịch bản RED-PROOF (N request, ngưỡng thấp, đếm số lượt lọt) để xác nhận input-gating thật khớp mô hình. Tới khi có bằng chứng đó, tiếp tục dán nhãn CHƯA KIỂM CHỨNG mọi nơi tiền đề này được viện dẫn.
+- **Mức ưu tiên đề xuất:** Thấp–Trung bình (tiền đề input-gating nằm trong tài liệu chính thức Cloudflare, khả năng sai thấp — nhưng theo Hiến pháp, "đã có trong tài liệu" không tự động là "đã kiểm chứng" khi áp cho một cơ chế bảo mật cụ thể).
+- **Nguồn phát hiện:** Review chéo phiên U17b, 2026-07-20.
+
+---
+
+## `dvtte` trống ở 100% hóa đơn `sco` — nghi lỗ hổng ánh xạ tầng adapter
+
+**Phát hiện:** 2026-07-20, khi khảo sát production để lập `docs/plans/U29-plan.md` (§8b-E1).
+
+**Bằng chứng (Neon production, 1 tenant, 22.350 hóa đơn, truy vấn chỉ-đọc):**
+
+| `nguon` | số HĐ | có `dvtte` | có khóa `tgia` trong `raw_json` |
+|---|---|---|---|
+| `sco` (purchase + sold) | 22.229 | **0** | **0** |
+| `normal` (purchase) | 121 | **121 = 100%** | **121 = 100%** |
+
+Hai trường `dvtte`/`tgia` hiện diện ở **100%** hóa đơn `normal` và **0%** hóa đơn `sco`.
+Trùng khít con số 121 ở cả hai cột ⇒ không phải ngẫu nhiên: **họ endpoint `/sco-query/`
+không trả hai trường này**, không phải "hóa đơn máy tính tiền không có đơn vị tiền tệ".
+
+**Vì sao đáng lưu:** cột "Tiền tệ" đã có trong `EXPORT_COLUMNS` từ U7 nên file kết xuất
+hiện **trống 99,5%** ở cột đó. Đây là lỗi **có sẵn từ trước**, không do U29 gây ra, nhưng
+U29 là lúc phát hiện ra nó.
+
+**Câu hỏi cần quyết ở tầng adapter (KHÔNG tự quyết ở tầng export):** adapter có nên mặc
+định `sco → dvtte = 'VND'` không? Hóa đơn máy tính tiền gần như chắc chắn là nội địa —
+nhưng **"gần như chắc chắn" không phải bằng chứng** (Hiến pháp §"Nguyên tắc bằng chứng").
+Cần kiểm chứng từ nguồn sơ cấp (tài liệu GDT hoặc phản hồi thật của `/sco-query/`) trước
+khi điền giá trị mặc định vào dữ liệu người dùng.
+
+## `tgia` (tỷ giá) — đã LOẠI khỏi U29, kèm điều kiện mở lại
+
+**Quyết định chủ dự án 2026-07-20:** không thêm cột tỷ giá vào file kết xuất
+("không cần thiết"). Là lựa chọn YAGNI hợp lệ — production **0 hóa đơn `dvtte≠'VND'`**,
+79 giá trị `tgia` khác null thì **toàn bộ = 1**, phương sai bằng 0 ⇒ cột sẽ không mang
+thông tin nào, và không có mẫu nào để kiểm chứng ngữ nghĩa tỷ giá-ngoại tệ.
+
+**Điều kiện mở lại (đừng để mất dấu):** sự *hiện diện* của `tgia` do `nguon='normal'`
+quyết định 100%, không do nghiệp vụ — tenant này là cây xăng, 99,5% `sco`, nên hồ sơ
+**bất thường**. Một tenant B2B/xuất nhập khẩu dùng chủ yếu hóa đơn `normal` sẽ có trường
+này đầy đủ. ⇒ Khi xuất hiện tenant đầu tiên có `dvtte≠'VND'`: kiểm chứng
+`raw_json->>'tgia'` bằng dữ liệu thật, rồi mới thêm cột.
+
+## Nợ tên: `ColumnKind` có cả `int` lẫn `num`
+
+U29 thêm `num` ("số có thể thập phân, không numFmt") cạnh `int` ("số nguyên thô") trong
+`packages/export/src/columns.ts`. Hai kind này hiện **cùng hành vi** (`{t:"num"}`, không
+áp `#,##0`) — tách ra chỉ để `int` không nói dối trên cột thập phân. Đáng gộp thành một
+kind duy nhất khi có dịp chạm vào file đó; không đáng một commit riêng.
+
+**Ưu tiên đề xuất:** Thấp (nợ tên, không ảnh hưởng hành vi).
+
+**Nguồn phát hiện:** `docs/plans/U29-plan.md` §8b + §9 (M1/M3).
