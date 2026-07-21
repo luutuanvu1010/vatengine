@@ -115,7 +115,7 @@ cho_duyet ──duyet──▶ active ──khoa──▶ khoa ──mo-khoa─�
 8. **🔴 BẤT BIẾN CÁCH LY (điều kiện xong bắt buộc):** dựng 2 tenant có hóa đơn. Sau khi `0011` đã mở con đường admin, token **khách** của tenant A gọi `/invoices`, `/exports`, `/me` → **vẫn chỉ thấy dữ liệu A**. Ca này là lý do tồn tại của cả bộ test U18.
 9. Duyệt: `cho_duyet` → `active`, sau đó khách **login được** (nối U17b `auth.trangThai.test.ts`). Khóa → login **401 ngay**. Mở → login lại được.
 10. Chuyển sai (`active` → duyet, `tu_choi` → khoa, …) → **409**, DB không đổi.
-11. `PATCH /admin/tenants/:id` sửa được `ten`/email/`goi_dich_vu`; gửi `mst` → **400**, MST trong DB **không đổi**.
+11. `PATCH /admin/tenants/:id` sửa được `ten`/`goi_dich_vu`/`ghi_chu`; gửi `mst` → **400**, MST trong DB **không đổi**. *(Đính chính: bản kế hoạch viết sửa được cả `email`. Hiện thực **không** làm — `admin_sua_metadata_tenant` không có tham số email và `patchSchema` không có khoá đó. Đây là **thu hẹp** bề mặt so với kế hoạch, không phải nới; giữ nguyên vì đổi email tài khoản chính chạm tới danh tính đăng nhập, đáng là thao tác riêng có audit riêng chứ không lẫn vào PATCH metadata.)*
 12. Mọi thao tác ghi đúng 1 hàng `audit_log_admin` (ai / hành động / tenant đích / cũ→mới). **Không** hàng nào chứa mật khẩu tạm hay `password_hash`.
 13. `GET /admin/tenants/:id` trả trạng thái token GDT dạng `{con_han|sap_het|het_han, token_het_han}` — **assert phản hồi không chứa token thô** (suy từ `token_het_han` đã lưu ở U14).
 14. `POST /auth/doi-mat-khau` tắt cờ `phai_doi_mat_khau`; mật khẩu tạm cũ sau đó **không** login được.
@@ -166,11 +166,29 @@ cho_duyet ──duyet──▶ active ──khoa──▶ khoa ──mo-khoa─�
 
 **Mặc định (a)** — cùng nghi thức đã có, không để mật khẩu chạm lịch sử migration, không mở endpoint công khai nào (khớp `U18-plan.md` §45: *"không endpoint tạo super-admin công khai"*). Quyết định vận hành, đảo được: nếu chủ dự án không tự chạy được lệnh Node với `DATABASE_URL` của Neon, đổi sang (b) mà không ảnh hưởng phần còn lại của U18. **Không chặn việc code.**
 
+### QĐ-5 — Rate-limit & tường lửa: **do hạ tầng Cloudflare đảm nhiệm** (chốt 2026-07-21)
+
+Chủ dự án chốt: không thêm rate-limit ở tầng ứng dụng cho `POST /admin/auth/login` và `POST /auth/doi-mat-khau`. WAF / Rate Limiting Rules của Cloudflare lo phần này.
+
+⚠️ **Ghi chú kỹ thuật để người sau biết đây là lựa chọn có ý thức, không phải bỏ sót:** WAF giới hạn theo **IP**, còn `LOGIN_LIMITER` (H-A.5b) khoá theo **tài khoản**. Hai thứ không thay thế nhau — một cuộc credential-stuffing phân tán qua nhiều IP nhắm vào MỘT tài khoản sẽ lọt qua giới hạn theo IP. Dự án đã từng kết luận per-IP là không đủ cho đường đăng nhập khách; lập luận đó áp dụng cho đường admin ở mức cao hơn, vì đây là danh tính duy nhất có quyền xuyên-tenant. Nếu sau này mở Cổng Admin cho nhiều super-admin, cân nhắc lại.
+
 ### QĐ-4 — Bảo vệ tầng biên: **Cloudflare Zero Trust (Access)**, không 2FA app-level
 
 `COMMERCIAL-LAYER-plan.md:38` (P5) chốt: v1.0 bảo vệ subdomain admin bằng **Cloudflare Access**, 2FA app-level để giai đoạn sau. ⇒ U18 **không** làm 2FA/TOTP. Nhưng Access là lớp **biên**, không thay thế `requireSuperAdmin` — nếu route `/admin/*` mount chung Worker API với route khách (đang là vậy), Access **không** che được chúng. Hai hệ quả ghi vào DoD:
 - `requireSuperAdmin` phải tự đứng vững **giả định không có Access phía trước** (fail-closed, test #6).
 - Việc gắn Access cho `adminvatengine.tourdao.vn` là **hạ tầng của U19** (khi `apps/admin` ra đời), không phải U18. U18 ghi nợ này vào bàn giao U19.
+
+**🔴 ĐÍNH CHÍNH KHI HIỆN THỰC (2026-07-21) — lập luận trên có một lỗ, đã vá:** hai gạch đầu dòng ấy vẫn đúng, nhưng chúng bỏ qua việc `/admin/*` **chui ra ngoài qua cửa của khách**. Đo được: `apps/api` không có route công khai (`workers_dev:false`, không `routes`) nên chỉ tới được qua service binding của `apps/web` — mà `apps/web` đứng trên `vatengine.tourdao.vn`, tức **hostname của khách**, và nó proxy `/api/*` sau khi bóc tiền tố. Hệ quả: `https://vatengine.tourdao.vn/api/admin/auth/login` đi thẳng tới đường đăng nhập super-admin, công khai, không lớp nào phía trước — Access gắn trên subdomain riêng của U19 không chi phối hostname này.
+
+**Vá:** `apps/web/worker.ts` chặn `/api/admin/*` → 404, **không** proxy. Chặn trong code chứ không bằng rule WAF (chủ dự án chọn phương án A, 2026-07-21): fail-closed kể cả khi cấu hình biên bị sửa nhầm hoặc chưa kịp tạo. Trả 404 chứ không 403 để không xác nhận với ai rằng có một miền quản trị phía sau. Test khẳng định request **không được phát tới** API worker — chỉ kiểm mã 404 thì một bản vá hỏng (proxy đi rồi mới trả 404) vẫn xanh.
+
+### QĐ-6 — Khoá tenant KHÔNG cắt phiên đang sống: **ghi nợ, không xử lý ở U18** (chốt 2026-07-21)
+
+Đo được (test tạm, đã xoá sau khi kết luận): khách đăng nhập thật → super-admin `POST /khoa` → khách dùng **đúng cookie cũ** vẫn `GET /invoices` → **200, đọc đủ hóa đơn**. `requireTenant` chỉ verify chữ ký + `exp`, không tra lại `tenants.trang_thai`; cổng trạng thái chỉ nằm ở `/auth/login` nên chặn đăng nhập mới chứ không thu hồi phiên. Trễ tối đa = `TOKEN_TTL_SEC` = **8 giờ**.
+
+Test B5 "Khóa → khách KHÔNG đăng nhập được nữa" **đúng nhưng không đủ** — chỉ thử đăng nhập lại, không thử token còn sống. Điểm mù của người viết; pass red-team độc lập bắt được.
+
+Chủ dự án chốt **không xử lý ở U18** (hiện mới 1 tài khoản). Bốn hướng đã cân (A tra mỗi request / B hạ TTL / C đưa `active` vào RLS policy / D ghi nợ) nằm ở `docs/BACKLOG-y-tuong-va-de-xuat.md` mục *[2026-07-21] Khoá tenant KHÔNG cắt phiên khách đang sống*. Đề xuất khi tới lượt: **C, tách thành đơn vị riêng** — nó sửa RLS của mọi bảng nên không được nhét vào cuối một đơn vị đã đóng phạm vi.
 
 ---
 
