@@ -18,6 +18,7 @@ import {
   signAdminToken,
 } from "../../admin/adminAuth";
 import { ghiAuditAdmin } from "../../admin/auditAdmin";
+import { requireSuperAdmin } from "../../admin/requireSuperAdmin";
 import { verifyPassword } from "../../password";
 import type { AdminEnv, AppDeps } from "../../types";
 
@@ -110,6 +111,17 @@ export function adminAuthRoutes(deps: AppDeps) {
       await close();
     }
   });
+
+  // GET /admin/auth/me — DÒ PHIÊN. Cổng Admin không đọc được cookie HttpOnly nên sau khi
+  // tải lại trang nó không có cách nào tự biết phiên còn sống hay không; endpoint này là
+  // câu trả lời (200 = còn, 401 = hết). Cùng vai trò `GET /me` đang phục vụ app khách.
+  //
+  // CỐ Ý KHÔNG CHẠM DB: `requireSuperAdmin` đã xác minh chữ ký + hạn + `aud` của token,
+  // nên bản thân việc request đi tới được handler này ĐÃ là câu trả lời. Tra thêm
+  // `quan_tri_he_thong` chỉ để lấy email/tên sẽ cần một hàm SECURITY DEFINER MỚI (tra theo
+  // id — `admin_lookup` tra theo email), tức một migration nữa và một cửa BYPASSRLS nữa,
+  // cho một dòng chữ trên header. Không đáng: mỗi cửa mở thêm là bề mặt phải review vĩnh viễn.
+  r.get("/me", requireSuperAdmin, (c) => c.json({ id: c.get("adminId") }));
 
   return r;
 }

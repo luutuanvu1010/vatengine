@@ -17,6 +17,7 @@ import {
   injectDb,
   makeEnv,
   seedSuperAdmin,
+  tokenFor,
 } from "../helpers";
 
 const EMAIL = "chu@vatengine.vn";
@@ -193,5 +194,50 @@ describe("🔴 Cổng cấu hình fail-closed (R3) — /admin/* từ chối ph�
     const env = makeEnv();
     env.ADMIN_JWT_SECRET = TEST_ADMIN_SECRET;
     expect((await login(env)).status).toBe(200);
+  });
+});
+
+describe("GET /admin/auth/me — dò phiên cho Cổng Admin", () => {
+  let db: Db;
+  let app: ReturnType<typeof createApp>;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    app = createApp(injectDb(db));
+    await seedSuperAdmin(db, EMAIL, MAT_KHAU);
+  });
+
+  it("có cookie phiên hợp lệ → 200 kèm id admin", async () => {
+    const login = await app.request(
+      "/admin/auth/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: EMAIL, password: MAT_KHAU }),
+      },
+      makeEnv(),
+    );
+    const cookie = (login.headers.get("Set-Cookie") ?? "").split(";")[0] as string;
+
+    const res = await app.request("/admin/auth/me", { headers: { Cookie: cookie } }, makeEnv());
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { id: string }).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+    });
+  });
+
+  it("không có phiên → 401 (đây chính là tín hiệu 'chưa đăng nhập' của SPA)", async () => {
+    const res = await app.request("/admin/auth/me", {}, makeEnv());
+    expect(res.status).toBe(401);
+  });
+
+  it("🔴 cookie phiên KHÁCH không dùng được — trả 401 như không có gì", async () => {
+    const tokenKhach = await tokenFor("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+    const res = await app.request(
+      "/admin/auth/me",
+      { headers: { Cookie: `vat_session=${tokenKhach}` } },
+      makeEnv(),
+    );
+    expect(res.status).toBe(401);
   });
 });
