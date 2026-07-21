@@ -15,6 +15,7 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
 import { validateEmailDangKy } from "../lib/validateEmailDangKy";
+import { TURNSTILE_FIELD, kiemTraCauHinhTurnstile, xacMinhTurnstile } from "../turnstile";
 import type { AppDeps, AppEnv } from "../types";
 
 // MST 10 hoặc 13 chữ số (giá trị verbatim theo spec — không đổi dạng).
@@ -49,74 +50,49 @@ export function dangKyRoutes(deps: AppDeps) {
   const r = new Hono<AppEnv>();
 
   r.post("/", async (c) => {
-    // F6 — CF-Connecting-IP do CHÍNH Cloudflare edge ghi (client KHÔNG giả mạo được) — giữ
-    // NGUYÊN header này, KHÔNG chuyển sang X-Forwarded-For (client tự đặt được, vô hiệu hoá
-    // toàn bộ limiter theo IP). Vấn đề đã sửa là FALLBACK: `?? "unknown"` cũ dồn MỌI request
-    // thiếu header vào chung một bucket "unknown" — 5 lượt/giờ khoá luôn cổng đăng ký cho
-    // TOÀN BỘ Internet nếu header từng vắng mặt (tự-DoS). Header vắng mặt nghĩa là request
-    // không đi qua đúng đường (dev trực tiếp bỏ qua CF, hoặc lỗi cấu hình edge) — TỪ CHỐI
-    // TƯỜNG MINH thay vì âm thầm gộp bucket. 503 (không phải 400): đây KHÔNG phải lỗi của
-    // người gọi (body/tham số của họ hoàn toàn có thể hợp lệ) mà là điều kiện HẠ TẦNG khiến
-    // ta tạm thời không thể áp cổng chống lạm dụng một cách an toàn — cùng ngữ nghĩa "tạm
-    // thời, thử lại sau" với 503 sync_busy đã dùng ở nơi khác trong dự án (U28 Queue 429).
-    const ip = c.req.header("CF-Connecting-IP");
-    if (!ip) {
-      return c.json({ error: "khong_xac_dinh_duoc_ip" }, 503);
+    // ── U33 — CỔNG TURNSTILE (thay SignupLimiter) ────────────────────────────────────
+    // QĐ-11 (2026-07-21): chặn nhịp theo IP giao cho WAF của Cloudflare; tầng ứng dụng chỉ
+    // giữ captcha. Sau thay đổi này, đây là lớp bảo vệ DUY NHẤT còn lại ở tầng ứng dụng cho
+    // cổng GHI công khai duy nhất của hệ thống — nên mọi nhánh đều fail-closed.
+    const cauHinh = kiemTraCauHinhTurnstile(c.env);
+    if (!cauHinh.ok) {
+      // Thiếu secret ⇒ TỪ CHỐI PHỤC VỤ. Cố ý NGƯỢC với SignupLimiter cũ (fail-open khi
+      // thiếu binding): hồi đó limiter chỉ là một trong nhiều lớp, giờ nó là lớp duy nhất.
+      // Fail-open bây giờ nghĩa là một lần cấu hình sai âm thầm mở toang cổng đăng ký.
+      return c.json({ error: "captcha_chua_cau_hinh" }, 503);
     }
 
-    // F1 (TOCTOU) — kiểm limiter TRƯỚC KHI mở kết nối DB, VÀ ghi lượt NGAY TRONG CÙNG một
-    // round-trip DO nguyên tử (checkAndRecordSignup — signupLimiter.ts). TRƯỚC bản vá này,
-    // check() và record() là hai round-trip RIÊNG với toàn bộ việc DB (xuLyDangKy) xen giữa
-    // — N request đồng thời từ một IP đều lọt qua check() trước khi request đầu kịp record()
-    // (đo được 12/12 lọt ngưỡng 3, xem RED-PROOF git log dangKy.test.ts). Gộp làm MỘT lệnh
-    // gọi khép lỗ hổng vì Durable Object tuần tự hoá TỪNG fetch() riêng lẻ trọn vẹn.
-    const limiter = deps.getSignupLimiter(c.env, `dangky:${ip}`);
-    const { gate, token } = await limiter.checkAndRecord();
-    if (gate.chan) {
-      // Request ĐÃ BIẾT bị chặn — checkAndRecordSignup KHÔNG ghi thêm (không token), nên ở
-      // đây cũng không có gì để hoàn — thoát ngay, không chạm DB.
-      return c.json({ error: "qua_nhieu_yeu_cau" }, 429, {
-        "Retry-After": String(Math.ceil(gate.thuLaiSauMs / 1000)),
-      });
+    // Đọc body MỘT LẦN ở đây rồi truyền xuống: một Request chỉ đọc được body một lần, mà
+    // cả cổng captcha lẫn `xuLyDangKy` đều cần nó.
+    const body = await c.req.json().catch(() => null);
+    const token = (body as Record<string, unknown> | null)?.[TURNSTILE_FIELD];
+
+    // `CF-Connecting-IP` do CHÍNH biên Cloudflare ghi (client không giả mạo được). Ở đây nó
+    // CHỈ là dữ liệu phụ giúp Cloudflare chấm điểm — KHÔNG còn là điều kiện bắt buộc như
+    // thời SignupLimiter (vốn phải có IP mới đếm được). Vắng header vẫn xác minh được token,
+    // nên không còn trả 503 `khong_xac_dinh_duoc_ip` nữa.
+    const kq = await xacMinhTurnstile(
+      cauHinh.secret,
+      typeof token === "string" ? token : "",
+      c.req.header("CF-Connecting-IP"),
+    );
+    if (!kq.ok) {
+      // `cau_hinh_sai` = secret của MÁY CHỦ sai, không phải lỗi người gọi — trả 503 để họ
+      // không ngồi bấm lại vô ích trong khi vấn đề nằm ở phía ta.
+      if (kq.ly_do === "cau_hinh_sai") return c.json({ error: "captcha_chua_cau_hinh" }, 503);
+      return c.json({ error: kq.ly_do }, 400);
     }
 
-    try {
-      // Thành công (201), 4xx nghiệp vụ (bad_request/chua_dong_y_dieu_khoan/
-      // email_khong_hop_le/mst_khong_hop_le), và 409 da_ton_tai đều trả về (return) BÊN
-      // TRONG xuLyDangKy — KHÔNG ném — nên đều giữ nguyên lượt đã ghi ở trên (đúng thiết kế
-      // đã chốt: đếm MỌI lượt kể cả sẽ thất bại sau, validate rẻ không được là đường né).
-      return await xuLyDangKy(c, deps);
-    } catch (err) {
-      // F9 — CHỈ lỗi HẠ TẦNG thật (DB mất kết nối, ...) rơi vào đây (409/4xx nghiệp vụ đã
-      // return ở trên, không ném). Đây KHÔNG phải lạm dụng của người gọi — hoàn lại lượt vừa
-      // ghi để một lần trục trặc CỦA HỆ THỐNG không ngốn mất quota ít ỏi (5/giờ) của một
-      // doanh nghiệp hợp lệ. refund() lỗi (DO hiccup) TUYỆT ĐỐI không được thay thế lỗi gốc
-      // (F9 gốc: finally cũ đã từng biến một 201 ĐÃ COMMIT thành 500) — bắt riêng, chỉ log
-      // (không PII), rồi luôn ném lại lỗi GỐC để app.onError xử lý như cũ ({error:"internal"}).
-      // token luôn có giá trị ở đây trên thực tế (gate.chan === false ⇒ checkAndRecordSignup
-      // luôn kèm token — xem signupLimiter.ts) — kiểm tường minh thay vì ép kiểu, phòng
-      // trường hợp client limiter fail-open (thiếu binding) không có token nào để hoàn.
-      if (token !== undefined) {
-        try {
-          await limiter.refund(token);
-        } catch {
-          console.warn(JSON.stringify({ type: "signup_limiter_refund_failed", at: Date.now() }));
-        }
-      }
-      throw err;
-    }
+    return await xuLyDangKy(c, deps, body);
   });
 
   return r;
 }
 
-async function xuLyDangKy(c: Context<AppEnv>, deps: AppDeps) {
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "bad_request" }, 400);
-  }
+// `body` do nơi gọi đọc sẵn (một Request chỉ đọc body được MỘT LẦN, mà cổng captcha ở
+// trên đã dùng lượt đó). `null` = body không phải JSON hợp lệ.
+async function xuLyDangKy(c: Context<AppEnv>, deps: AppDeps, body: unknown) {
+  if (body === null) return c.json({ error: "bad_request" }, 400);
   const parsed = dangKySchema.safeParse(body);
   if (!parsed.success) return c.json({ error: "bad_request" }, 400);
   const { tenDoanhNghiep, mst } = parsed.data;

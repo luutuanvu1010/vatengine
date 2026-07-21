@@ -15,6 +15,7 @@ import { requireTenant, signToken } from "../auth";
 import { hashPassword, resolvePbkdf2Iterations, verifyPassword } from "../password";
 import { isRole } from "../rbac";
 import { clearSessionCookie, setSessionCookie } from "../session";
+import { TURNSTILE_FIELD, kiemTraCauHinhTurnstile, xacMinhTurnstile } from "../turnstile";
 import type { AnyDb, AppDeps, AppEnv } from "../types";
 
 // U18 — độ dài tối thiểu mật khẩu người dùng tự đặt. 8 ký tự: mật khẩu này KHÔNG có cửa
@@ -107,15 +108,31 @@ export function authRoutes(deps: AppDeps) {
     // ở TẦNG GỌI (không sửa auth_lookup_user — hàm SECURITY DEFINER ngoài phạm vi sửa này).
     const emailChuanHoa = email.trim().toLowerCase();
 
-    // H-A.5b — KHÓA per-account (lớp app, bổ sung WAF per-IP ở edge). Key = email chuẩn
-    // hóa; kiểm TRƯỚC mọi việc DB. Đếm theo email (KỂ CẢ email giả) ⇒ enumeration-neutral
-    // (email không tồn tại cũng bị khóa sau N lần). Khóa → 429 gọn (không lộ tài khoản).
-    const limiter = deps.getLoginLimiter(c.env, `login:${emailChuanHoa}`);
-    const gate = await limiter.check();
-    if (gate.locked) {
-      return c.json({ error: "too_many_attempts" }, 429, {
-        "Retry-After": String(Math.ceil(gate.retryAfterMs / 1000)),
-      });
+    // ── U33 — CỔNG TURNSTILE (thay LoginLimiter) ─────────────────────────────────────
+    // QĐ-11 (2026-07-21): chủ dự án chốt giao chặn nhịp cho WAF của Cloudflare.
+    //
+    // ⚠️ GHI RÕ ĐỂ NGƯỜI SAU KHÔNG HIỂU NHẦM LÀ BỎ SÓT: `LoginLimiter` cũ khoá theo TÀI
+    // KHOẢN (10 lần sai/15 phút), còn WAF giới hạn theo IP. Hai thứ KHÔNG thay thế nhau —
+    // tấn công phân tán qua nhiều IP nhắm MỘT tài khoản đi lọt dưới giới hạn theo IP.
+    // Turnstile phân biệt người với máy, không ngăn được người kiên nhẫn dò mật khẩu.
+    // Hệ quả: mật khẩu TẠM 6 chữ số nay chỉ còn MỘT điều kiện bù là hạn 72h (QĐ-7 đã bỏ
+    // "buộc đổi lần đầu"). Đánh đổi này được nêu rõ và chủ dự án chọn có ý thức — xem
+    // docs/plans/U33-plan-thuc-thi.md §2.
+    const cauHinhCaptcha = kiemTraCauHinhTurnstile(c.env);
+    if (!cauHinhCaptcha.ok) return c.json({ error: "captcha_chua_cau_hinh" }, 503);
+
+    const kqCaptcha = await xacMinhTurnstile(
+      cauHinhCaptcha.secret,
+      typeof (body as Record<string, unknown>)[TURNSTILE_FIELD] === "string"
+        ? ((body as Record<string, unknown>)[TURNSTILE_FIELD] as string)
+        : "",
+      c.req.header("CF-Connecting-IP"),
+    );
+    if (!kqCaptcha.ok) {
+      if (kqCaptcha.ly_do === "cau_hinh_sai") {
+        return c.json({ error: "captcha_chua_cau_hinh" }, 503);
+      }
+      return c.json({ error: kqCaptcha.ly_do }, 400);
     }
 
     const { db, close } = await deps.getDb(c.env);
@@ -163,13 +180,12 @@ export function authRoutes(deps: AppDeps) {
         !passwordOk ||
         !isRole(row.vai_tro) ||
         // U17b — cổng trạng thái. ĐẶT TRONG CÙNG biểu thức 401 có chủ ý: một `if` riêng đặt
-        // trước sẽ trả về SỚM hơn, bỏ qua verify PBKDF2 và recordFailure() ⇒ tenant chưa
+        // trước sẽ trả về SỚM hơn, bỏ qua verify PBKDF2 ⇒ tenant chưa
         // duyệt phản hồi nhanh hơn tenant sai mật khẩu, đo được từ ngoài ⇒ rò trạng thái.
         row.tenant_trang_thai !== "active"
       ) {
         // Ghi một lần sai vào bộ đếm khóa — UNIFORM cho mọi nhánh sai (email thật lẫn giả)
         // ⇒ không rò tồn tại. Audit THẤT BẠI chỉ khi quy được về tenant (email có thật).
-        await limiter.recordFailure();
         // U17b — phân nhánh audit: tenant có thật nhưng chưa active ghi
         // login_fail_chua_duyet (để soi được lý do thật khi tra audit), còn lại (sai mật
         // khẩu / vai không hợp lệ) vẫn that_bai như cũ. KHÔNG đổi mã lỗi HTTP (vẫn 401 gọn,
@@ -191,9 +207,6 @@ export function authRoutes(deps: AppDeps) {
         await settle(audit);
         return c.json({ error: "unauthorized" }, 401);
       }
-
-      // Đăng nhập đúng → reset bộ đếm khóa (không phạt oan phiên sau).
-      await limiter.recordSuccess();
 
       // ── U18 — CỔNG MẬT KHẨU TẠM ────────────────────────────────────────────────────
       // Mật khẩu tạm 6 chữ số (cấp khi super-admin duyệt/reset) chỉ có 10^6 không gian;
@@ -225,7 +238,7 @@ export function authRoutes(deps: AppDeps) {
       const coMatKhauTam = co[0];
       if (coMatKhauTam?.hetHan && coMatKhauTam.hetHan.getTime() <= Date.now()) {
         // Mật khẩu ĐÚNG nhưng đã quá hạn ⇒ vẫn 401 gọn. Khách phải xin super-admin cấp
-        // lại (POST /admin/tenants/:id/reset-mat-khau). KHÔNG recordFailure: mật khẩu gõ
+        // lại (POST /admin/tenants/:id/reset-mat-khau). Mật khẩu gõ
         // đúng nên đây không phải tín hiệu dò mật khẩu, không được tính vào khoá tài khoản.
         await settle(auditLogin(db, row.tenant_id, row.id, "login_fail_mat_khau_tam_het_han"));
         return c.json({ error: "unauthorized" }, 401);
