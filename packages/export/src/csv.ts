@@ -8,6 +8,7 @@ import {
   type LineDetailRow,
   type RenderColumn,
   lineDetailRenderColumns,
+  lineInvoiceContext,
   nativeRenderColumns,
 } from "./columns";
 import type { InvoiceLineLike } from "./invoiceDoc";
@@ -179,7 +180,7 @@ export function csvStreamWithLines(
             let chunk = "";
             for (const inv of value) {
               for (const l of linesByInvoice.get(inv.id) ?? []) {
-                const detailRow: LineDetailRow = { ...l, shdon: inv.shdon };
+                const detailRow: LineDetailRow = { ...l, ...lineInvoiceContext(inv) };
                 chunk += csvRowLineFor(LINE_COLS, detailRow);
               }
             }

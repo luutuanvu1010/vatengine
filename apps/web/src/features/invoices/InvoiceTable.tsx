@@ -298,8 +298,9 @@ export function InvoiceTable({
                     <ol style={dsSoLuong}>
                       {r.hangHoa.map((h, i) => (
                         <li key={`${r.id}-sl-${i}-${h.ten ?? ""}`} style={mucHang}>
+                          {/* KHÔNG kèm đơn vị (2026-07-21) — chỉ hiện số. Đơn vị vẫn còn
+                              ở cột ĐVT của sheet 2 trong file xuất. */}
                           <span className="tabular">{h.sluong ?? "—"}</span>
-                          {h.dvtinh ? <span style={sub}> {h.dvtinh}</span> : null}
                         </li>
                       ))}
                     </ol>

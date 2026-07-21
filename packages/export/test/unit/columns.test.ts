@@ -166,7 +166,7 @@ describe("U29 — tổng số lượng giữ ĐẦY ĐỦ phần thập phân (M
         col("hangHoa"),
         row({ hangHoa: [{ ten: "Xăng E10 RON 95", sluong: "40", dvtinh: "Lít" }] }),
       ),
-    ).toEqual({ t: "str", v: "Xăng E10 RON 95 — 40 Lít" });
+    ).toEqual({ t: "str", v: "Xăng E10 RON 95 — 40" });
     expect(cellFor(col("hangHoa"), row({ hangHoa: [] }))).toEqual({ t: "blank" });
   });
 });
@@ -210,7 +210,7 @@ describe("Cột hàng hóa trong file xuất — liệt kê đủ, kèm số lư
   it("mỗi mặt hàng một dòng, kèm số lượng và đơn vị CỦA CHÍNH NÓ", () => {
     expect(cellFor(col("hangHoa"), row({ hangHoa: hh }))).toEqual({
       t: "str",
-      v: "Xăng E10 RON 95 Mức 3 — 42.492 Lít\nDầu Điêzen 0,001S Mức 5 — 20.433 Lít",
+      v: "Xăng E10 RON 95 Mức 3 — 42.492\nDầu Điêzen 0,001S Mức 5 — 20.433",
     });
   });
 

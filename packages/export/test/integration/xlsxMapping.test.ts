@@ -76,9 +76,7 @@ describe("Ánh xạ xlsx — mọi cột đúng nguồn, không sót cột", () 
     expect(o("Tên người bán")).toBe(NB_TEN);
     expect(o("MST người mua")).toBe("2222222222");
     expect(o("Tên người mua")).toBe(NM_TEN);
-    expect(o("Hàng hóa, dịch vụ (số lượng)")).toBe(
-      `${HANG_1} — 42.492 Lít\n${HANG_2} — 20.433 Lít`,
-    );
+    expect(o("Hàng hóa, dịch vụ (số lượng)")).toBe(`${HANG_1} — 42.492\n${HANG_2} — 20.433`);
     expect(o("Số dòng hàng")).toBe("2");
     expect(o("Tiền chưa thuế")).toBe("111");
     expect(o("Chiết khấu")).toBe("222");
@@ -143,5 +141,48 @@ describe("Ánh xạ xlsx — mọi cột đúng nguồn, không sót cột", () 
       ["100", HANG_1, "5"],
       ["200", HANG_2, "9"],
     ]);
+  });
+
+  it("sheet 2 PHẲNG: mỗi dòng hàng kèm đủ ngữ cảnh hóa đơn của CHÍNH nó (2026-07-21)", async () => {
+    // Hai hóa đơn khác người bán; mỗi dòng hàng phải mang đúng người bán của HĐ nó thuộc về
+    // — để lọc/pivot trong Excel không cần tra chéo sheet 1.
+    const a = await seedInvoice(db, tenantA, {
+      shdon: "100",
+      nbten: "AAA Bán",
+      nmten: "Khách A",
+      chieu: "sold",
+      tdlap: new Date("2026-06-01T03:00:00Z"),
+    });
+    const b = await seedInvoice(db, tenantA, {
+      shdon: "200",
+      nbten: "BBB Bán",
+      nmten: "Khách B",
+      chieu: "purchase",
+      tdlap: new Date("2026-06-02T03:00:00Z"),
+    });
+    await seedLine(db, tenantA, a, { stt: 1, ten: "Vé xem phim", sluong: "3", dvtinh: "vé" });
+    await seedLine(db, tenantA, b, { stt: 1, ten: "Xăng", sluong: "10", dvtinh: "Lít" });
+
+    const sheet = readXlsx(await xuat(), 2);
+    const h = sheet.rows[0]?.map((c) => c.value) ?? [];
+    const o = (r: number, nhan: string) => sheet.rows[r]?.[h.indexOf(nhan)]?.value;
+
+    const byShdon = new Map(
+      sheet.rows.slice(1).map((r, i) => [r[h.indexOf("Số HĐ")]?.value, i + 1]),
+    );
+    const rA = byShdon.get("100") as number;
+    const rB = byShdon.get("200") as number;
+
+    // Dòng của HĐ 100: đủ ngữ cảnh của 100, KHÔNG lẫn của 200.
+    expect(o(rA, "Ngày lập")).toBe("2026-06-01 03:00:00");
+    expect(o(rA, "Tên người bán")).toBe("AAA Bán");
+    expect(o(rA, "Tên người mua")).toBe("Khách A");
+    expect(o(rA, "Chiều")).toBe("sold");
+    expect(o(rA, "Tên hàng hóa/dịch vụ")).toBe("Vé xem phim");
+    expect(o(rA, "ĐVT")).toBe("vé"); // đơn vị VẪN CÒN ở cột ĐVT riêng (chỉ bỏ ở sheet 1)
+    expect(o(rA, "Số lượng")).toBe("3");
+    // Dòng của HĐ 200: ngữ cảnh khác hẳn.
+    expect(o(rB, "Tên người bán")).toBe("BBB Bán");
+    expect(o(rB, "Chiều")).toBe("purchase");
   });
 });
