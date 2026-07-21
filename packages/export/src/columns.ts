@@ -57,11 +57,13 @@ const BLANK: ExportCell = { t: "blank" };
 
 /** Một mặt hàng → "Tên — <số lượng> <đơn vị>". Thiếu số lượng thì chỉ còn tên; thiếu đơn
  * vị thì bỏ đơn vị. KHÔNG bịa "0" khi hóa đơn không khai số lượng. */
+// KHÔNG kèm đơn vị (quyết định chủ dự án 2026-07-21): "1 vé"/"2 vé" đọc thừa, chỉ cần
+// "1"/"2". Đơn vị KHÔNG mất — vẫn còn ở cột ĐVT riêng của sheet 2 "Chi tiết dòng hàng".
 function moTaHangHoa(h: HangHoaTomTat): string {
   const ten = (h.ten ?? "").trim();
   if (!ten) return "";
   if (h.sluong === null || h.sluong === undefined) return ten;
-  return `${ten} — ${h.sluong}${h.dvtinh ? ` ${h.dvtinh}` : ""}`;
+  return `${ten} — ${h.sluong}`;
 }
 
 /** Định dạng Date → chuỗi UTC ổn định "YYYY-MM-DD HH:mm:ss" (không phụ thuộc múi giờ chạy). */
@@ -95,10 +97,41 @@ export function nativeRenderColumns(): RenderColumn[] {
 
 // ------------------------- Dòng hàng chi tiết (U23-B) ------------------------- //
 
-// Một dòng hàng để kết xuất = trường của dong_hang_hoa (InvoiceLineLike) + khóa `shdon`
-// liên kết về hóa đơn. NGUỒN CỘT DUY NHẤT cho cả xlsx (sheet "Chi tiết dòng hàng") lẫn
-// csv (khối cùng tên) — không nhân đôi danh sách cột.
-export type LineDetailRow = InvoiceLineLike & { shdon: string };
+// Ngữ cảnh hóa đơn gắn vào MỖI dòng hàng (quyết định chủ dự án 2026-07-21): sheet "Chi
+// tiết dòng hàng" thành sheet PHẲNG — mỗi mặt hàng một dòng, KÈM đủ thông tin hóa đơn để
+// lọc/pivot/cộng thẳng trong Excel, không phải tra chéo với sheet 1.
+export interface LineInvoiceContext {
+  tdlap: Date;
+  khhdon: string;
+  shdon: string;
+  nbmst: string;
+  nbten: string | null;
+  nmmst: string | null;
+  nmten: string | null;
+  chieu: string;
+  nguon: string;
+}
+
+/** Trích ngữ cảnh hóa đơn cho dòng hàng — NGUỒN DUY NHẤT, dùng chung ở cả xlsx lẫn csv
+ * (chép sang nơi thứ hai là mời gọi lệch). */
+export function lineInvoiceContext(inv: ExportRow): LineInvoiceContext {
+  return {
+    tdlap: inv.tdlap,
+    khhdon: inv.khhdon,
+    shdon: inv.shdon,
+    nbmst: inv.nbmst,
+    nbten: inv.nbten,
+    nmmst: inv.nmmst,
+    nmten: inv.nmten,
+    chieu: inv.chieu,
+    nguon: inv.nguon,
+  };
+}
+
+// Một dòng hàng để kết xuất = trường của dong_hang_hoa (InvoiceLineLike) + ngữ cảnh hóa
+// đơn. NGUỒN CỘT DUY NHẤT cho cả xlsx (sheet "Chi tiết dòng hàng") lẫn csv (khối cùng tên)
+// — không nhân đôi danh sách cột.
+export type LineDetailRow = InvoiceLineLike & LineInvoiceContext;
 
 /** Tên sheet/khối dòng hàng — dùng chung xlsx (tên sheet 2) + csv (nhãn khối). */
 export const LINE_DETAIL_SECTION = "Chi tiết dòng hàng";
@@ -119,7 +152,17 @@ const numCell = (v: string | number | null | undefined): ExportCell =>
  * gộp thành một chữ số `0`, không phân biệt nổi. `ltsuat` là thứ duy nhất tách được. */
 export function lineDetailRenderColumns(): RenderColumn<LineDetailRow>[] {
   return [
+    // Ngữ cảnh hóa đơn (2026-07-21) — đứng TRƯỚC, để mỗi dòng tự đủ thông tin lọc/pivot.
+    { header: "Ngày lập", money: false, cell: (r) => ({ t: "str", v: formatDate(r.tdlap) }) },
+    { header: "Ký hiệu HĐ", money: false, cell: (r) => strCell(r.khhdon) },
     { header: "Số HĐ", money: false, cell: (r) => strCell(r.shdon) },
+    { header: "MST người bán", money: false, cell: (r) => strCell(r.nbmst) },
+    { header: "Tên người bán", money: false, cell: (r) => strCell(r.nbten) },
+    { header: "MST người mua", money: false, cell: (r) => strCell(r.nmmst) },
+    { header: "Tên người mua", money: false, cell: (r) => strCell(r.nmten) },
+    { header: "Chiều", money: false, cell: (r) => strCell(r.chieu) },
+    { header: "Nguồn", money: false, cell: (r) => strCell(r.nguon) },
+    // Chi tiết dòng hàng.
     { header: "STT", money: false, cell: (r) => numCell(r.stt) },
     { header: "Tên hàng hóa/dịch vụ", money: false, cell: (r) => strCell(r.ten) },
     { header: "ĐVT", money: false, cell: (r) => strCell(r.dvtinh) },

@@ -9,6 +9,7 @@ import {
   LINE_DETAIL_SECTION,
   type RenderColumn,
   lineDetailRenderColumns,
+  lineInvoiceContext,
   nativeRenderColumns,
 } from "./columns";
 import type { InvoiceLineLike } from "./invoiceDoc";
@@ -196,7 +197,7 @@ export async function toXlsxWithLinesFromBatches(
     const linesByInvoice = await fetchLines(batch.map((r) => r.id));
     for (const inv of batch) {
       for (const l of linesByInvoice.get(inv.id) ?? []) {
-        lineBody += dataRowXml(LINE_COLS, { ...l, shdon: inv.shdon }, lineR++);
+        lineBody += dataRowXml(LINE_COLS, { ...l, ...lineInvoiceContext(inv) }, lineR++);
       }
     }
   }

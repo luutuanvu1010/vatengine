@@ -107,7 +107,17 @@ const iCol = (key: string) => LINE_HEADERS.indexOf(key);
 describe("U29 — cột dòng hàng", () => {
   it("có 'Mã thuế suất' ngay TRƯỚC 'Thuế suất' và 'Tiền thuế dòng' ngay SAU", () => {
     expect(LINE_HEADERS).toEqual([
+      // Ngữ cảnh hóa đơn (2026-07-21) — mỗi dòng hàng tự đủ thông tin để lọc/pivot.
+      "Ngày lập",
+      "Ký hiệu HĐ",
       "Số HĐ",
+      "MST người bán",
+      "Tên người bán",
+      "MST người mua",
+      "Tên người mua",
+      "Chiều",
+      "Nguồn",
+      // Chi tiết dòng hàng.
       "STT",
       "Tên hàng hóa/dịch vụ",
       "ĐVT",
@@ -118,6 +128,11 @@ describe("U29 — cột dòng hàng", () => {
       "Thuế suất",
       "Tiền thuế dòng",
     ]);
+    // "Mã thuế suất" NGAY TRƯỚC "Thuế suất" và "Tiền thuế dòng" NGAY SAU (U29 — không lệch
+    // dù đã chèn cột ngữ cảnh).
+    const i = (n: string) => LINE_HEADERS.indexOf(n);
+    expect(i("Thuế suất")).toBe(i("Mã thuế suất") + 1);
+    expect(i("Tiền thuế dòng")).toBe(i("Thuế suất") + 1);
   });
 
   it("KCT / KKKNT / 0% thật — cùng tsuat=0 — vẫn PHÂN BIỆT được nhờ mã thuế suất", async () => {
@@ -245,8 +260,9 @@ describe("U23-B csv — khối 'Chi tiết dòng hàng'", () => {
     expect(hdrIdx).toBeGreaterThan(0);
     expect(grid[hdrIdx]).toEqual(LINE_HEADERS);
     const lineRows = grid.slice(hdrIdx + 1).filter((r) => r.length === LINE_HEADERS.length);
-    expect(lineRows.map((r) => r[0])).toEqual(["100", "100", "200"]);
-    expect(lineRows.map((r) => r[2])).toEqual(["A1", "A2", "B1"]);
+    // Đọc theo TÊN cột (iCol), không theo chỉ số cứng — bền khi chèn cột ngữ cảnh.
+    expect(lineRows.map((r) => r[iCol("Số HĐ")])).toEqual(["100", "100", "200"]);
+    expect(lineRows.map((r) => r[iCol("Tên hàng hóa/dịch vụ")])).toEqual(["A1", "A2", "B1"]);
   });
 
   it("(c) csv giữ số lượng/thành tiền > 2^53 nguyên bản chuỗi", async () => {

@@ -122,7 +122,7 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
     const xml = invoiceToXml(row, []);
     expect(xml).toContain("<ncnhat>2026-05-01 10:00:00</ncnhat>");
     expect(xml).toContain("<ttcktmai>60257129</ttcktmai>");
-    expect(xml).toContain("<hangHoa>Xăng E10 RON 95 — 62.925 Lít</hangHoa>");
+    expect(xml).toContain("<hangHoa>Xăng E10 RON 95 — 62.925</hangHoa>");
     expect(xml).toContain("<soDongHang>3</soDongHang>");
     // Giữ đủ phần thập phân (M1) — không làm tròn thành 63.
   });
@@ -137,7 +137,7 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
       expect(html, `thiếu nhãn ${col.label}`).toContain(`<th>${col.label}</th>`);
     }
     expect(html).toContain("<td>60257129</td>");
-    expect(html).toContain("<td>Xăng E10 RON 95 — 62.925 Lít</td>");
+    expect(html).toContain("<td>Xăng E10 RON 95 — 62.925</td>");
   });
 });
 

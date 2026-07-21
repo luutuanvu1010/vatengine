@@ -10,6 +10,7 @@ import { saveBlob } from "../../lib/download";
 import { loadInvoiceFilter } from "../../lib/filterStore";
 import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
 import type { ExportFormat } from "../../types/api";
+import { tenFileXuat } from "../invoices/exportFilename";
 
 // Nguồn: packages/export/src/profiles/registry.ts (PENDING_PROFILES). Mirror hiển thị.
 const PENDING = [
@@ -43,7 +44,7 @@ export function ExportsPage() {
           ? await api.convertExport("reference", format, filter)
           : await api.createExport(format, filter);
       const blob = await api.downloadExport(res.id);
-      saveBlob(blob, `hoa-don.${format}`);
+      saveBlob(blob, tenFileXuat(filter, format));
       return res;
     },
   });

@@ -9,6 +9,7 @@ import { saveBlob } from "../../lib/download";
 import { canExport } from "../../lib/rbac";
 import type { ExportFormat, InvoiceFilter } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
+import { tenFileXuat } from "./exportFilename";
 
 export function InvoiceExportButtons({
   filter,
@@ -22,7 +23,7 @@ export function InvoiceExportButtons({
       // không tick gì thì giữ hành vi cũ: xuất toàn bộ kết quả theo bộ lọc.
       const res = await api.createExport(format, filter, coChon ? selectedIds : undefined);
       const blob = await api.downloadExport(res.id);
-      saveBlob(blob, `hoa-don.${format}`);
+      saveBlob(blob, tenFileXuat(filter, format));
     },
   });
 
