@@ -6,6 +6,7 @@ import { zipSync } from "fflate";
 // TextEncoder (chuẩn Web) → chạy cả Node lẫn workerd. Core `*For(columns, sheetName)` chạy
 // trên RenderColumn[] để dùng chung mẫu native (U7) LẪN profile kế toán (U11).
 import {
+  EMPTY_LINE,
   LINE_DETAIL_SECTION,
   type RenderColumn,
   lineDetailRenderColumns,
@@ -188,21 +189,21 @@ export async function toXlsxWithLinesFromBatches(
   invoiceBatches: AsyncIterable<ExportRow[]>,
   fetchLines: (ids: string[]) => Promise<Map<string, InvoiceLineLike[]>>,
 ): Promise<Uint8Array> {
-  let invBody = headerRowXml(NATIVE);
-  let lineBody = headerRowXml(LINE_COLS);
-  let invR = 2;
-  let lineR = 2;
+  // MỘT sheet phẳng (2026-07-21): mỗi mặt hàng một dòng, kèm đủ ngữ cảnh hóa đơn. Hóa đơn
+  // chưa có dòng hàng vẫn xuất MỘT dòng (EMPTY_LINE) — không được biến mất khỏi file.
+  let body = headerRowXml(LINE_COLS);
+  let r = 2;
   for await (const batch of invoiceBatches) {
-    for (const row of batch) invBody += dataRowXml(NATIVE, row, invR++);
-    const linesByInvoice = await fetchLines(batch.map((r) => r.id));
+    const linesByInvoice = await fetchLines(batch.map((x) => x.id));
     for (const inv of batch) {
-      for (const l of linesByInvoice.get(inv.id) ?? []) {
-        lineBody += dataRowXml(LINE_COLS, { ...l, ...lineInvoiceContext(inv) }, lineR++);
+      const ctx = lineInvoiceContext(inv);
+      const lines = linesByInvoice.get(inv.id) ?? [];
+      if (lines.length === 0) {
+        body += dataRowXml(LINE_COLS, { ...EMPTY_LINE, ...ctx }, r++);
+      } else {
+        for (const l of lines) body += dataRowXml(LINE_COLS, { ...l, ...ctx }, r++);
       }
     }
   }
-  return zipXlsxMulti([
-    { name: NATIVE_SHEET, body: invBody },
-    { name: LINE_DETAIL_SECTION, body: lineBody },
-  ]);
+  return zipXlsx(body, LINE_DETAIL_SECTION);
 }

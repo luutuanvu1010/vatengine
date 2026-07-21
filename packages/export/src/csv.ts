@@ -4,7 +4,7 @@
 // dùng chung cho mẫu native (U7) LẪN profile kế toán (U11) — một encoder duy nhất. Hàm
 // cấp thấp (header/row string) để route stream lô-by-lô vào R2, KHÔNG gom cả tập vào RAM.
 import {
-  LINE_DETAIL_SECTION,
+  EMPTY_LINE,
   type LineDetailRow,
   type RenderColumn,
   lineDetailRenderColumns,
@@ -119,81 +119,52 @@ export function csvStream(batches: AsyncIterable<ExportRow[]>): ReadableStream<U
 }
 
 /**
- * Stream CSV native + THÊM khối "Chi tiết dòng hàng" (U23-B) trong CÙNG file. Khối 1 = hóa
- * đơn (như csvStream); dòng trống ngăn cách; khối 2 = nhãn khối + header dòng hàng + mỗi dòng
- * hàng 1 row (khóa `shdon`). Hai generator độc lập trên CÙNG bộ lọc: khối 1 duyệt hết trước,
- * rồi khối 2 duyệt lại + `fetchLines` theo lô (tenant_id lọc tường minh trong fetchLines) →
- * KHÔNG gom cả tập vào RAM. Tiền/số lượng giữ CHUỖI nguyên bản (không ép float).
+ * Stream CSV MỘT khối phẳng (2026-07-21): mỗi mặt hàng một dòng, kèm đủ ngữ cảnh hóa đơn.
+ * Một pass qua generator hóa đơn + `fetchLines` theo lô (tenant_id lọc tường minh trong
+ * fetchLines) → KHÔNG gom cả tập vào RAM. Hóa đơn chưa có dòng hàng vẫn xuất MỘT dòng
+ * (EMPTY_LINE) — không mất khỏi file. Tiền/số lượng giữ CHUỖI nguyên bản (không ép float).
  */
 export function csvStreamWithLines(
   invoiceBatches: AsyncIterable<ExportRow[]>,
-  lineBatches: AsyncIterable<ExportRow[]>,
   fetchLines: (ids: string[]) => Promise<Map<string, InvoiceLineLike[]>>,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
-  const invIt = invoiceBatches[Symbol.asyncIterator]();
-  const lineIt = lineBatches[Symbol.asyncIterator]();
-  type Phase = "invHeader" | "invRows" | "sep" | "lineHeader" | "lineRows" | "closed";
-  let phase: Phase = "invHeader";
+  const it = invoiceBatches[Symbol.asyncIterator]();
+  let daGuiHeader = false;
   return new ReadableStream<Uint8Array>({
-    // MỖI lần pull PHẢI enqueue hoặc close (nếu chỉ đổi phase mà không enqueue, Web Streams
-    // KHÔNG tự gọi lại pull → treo). Vòng while cho một pull tiến qua các bước không-enqueue
-    // (đổi phase / lô rỗng) cho tới khi enqueue được một chunk hoặc đóng stream.
+    // MỖI lần pull PHẢI enqueue hoặc close (nếu không, Web Streams không gọi lại pull → treo).
+    // Vòng for cho một pull vượt qua các lô rỗng cho tới khi enqueue được một chunk / đóng.
     async pull(controller) {
       for (;;) {
-        switch (phase) {
-          case "invHeader":
-            controller.enqueue(encoder.encode(csvHeaderLineFor(NATIVE)));
-            phase = "invRows";
-            return;
-          case "invRows": {
-            const { value, done } = await invIt.next();
-            if (done) {
-              phase = "sep";
-              break; // tiếp vòng: xử lý "sep" ngay (không để pull rỗng)
-            }
-            let chunk = "";
-            for (const row of value) chunk += csvRowLineFor(NATIVE, row);
-            if (chunk) {
-              controller.enqueue(encoder.encode(chunk));
-              return;
-            }
-            break; // lô rỗng: đọc lô kế
-          }
-          case "sep":
-            // Dòng trống ngăn cách + nhãn khối (KHÔNG BOM giữa file).
-            controller.enqueue(encoder.encode(`\r\n${toLine([LINE_DETAIL_SECTION])}`));
-            phase = "lineHeader";
-            return;
-          case "lineHeader":
-            controller.enqueue(encoder.encode(csvHeaderRowFor(LINE_COLS)));
-            phase = "lineRows";
-            return;
-          case "lineRows": {
-            const { value, done } = await lineIt.next();
-            if (done) {
-              phase = "closed";
-              controller.close();
-              return;
-            }
-            const linesByInvoice = await fetchLines(value.map((r) => r.id));
-            let chunk = "";
-            for (const inv of value) {
-              for (const l of linesByInvoice.get(inv.id) ?? []) {
-                const detailRow: LineDetailRow = { ...l, ...lineInvoiceContext(inv) };
-                chunk += csvRowLineFor(LINE_COLS, detailRow);
-              }
-            }
-            if (chunk) {
-              controller.enqueue(encoder.encode(chunk));
-              return;
-            }
-            break; // lô không có dòng hàng: đọc lô kế
-          }
-          default:
-            controller.close();
-            return;
+        if (!daGuiHeader) {
+          daGuiHeader = true;
+          controller.enqueue(encoder.encode(csvHeaderLineFor(LINE_COLS)));
+          return;
         }
+        const { value, done } = await it.next();
+        if (done) {
+          controller.close();
+          return;
+        }
+        const linesByInvoice = await fetchLines(value.map((r) => r.id));
+        let chunk = "";
+        for (const inv of value) {
+          const ctx = lineInvoiceContext(inv);
+          const lines = linesByInvoice.get(inv.id) ?? [];
+          if (lines.length === 0) {
+            chunk += csvRowLineFor(LINE_COLS, { ...EMPTY_LINE, ...ctx });
+          } else {
+            for (const l of lines) {
+              const detailRow: LineDetailRow = { ...l, ...ctx };
+              chunk += csvRowLineFor(LINE_COLS, detailRow);
+            }
+          }
+        }
+        if (chunk) {
+          controller.enqueue(encoder.encode(chunk));
+          return;
+        }
+        // lô rỗng → đọc lô kế
       }
     },
   });
