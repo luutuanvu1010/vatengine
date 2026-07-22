@@ -272,6 +272,55 @@ chỉ theo message; hoặc nâng Workers Paid (1000 subrequest/invocation).
 đối chiếu `docs/plans/U28-plan.md` (phiên song song cùng ngày, nhánh
 `claude/fix-subrequest-breaker`).
 
+## [2026-07-19] Rủi ro quy trình: nhiều agent cùng MỘT thư mục repo + nợ dọn sau U27
+
+**Ngày phát hiện:** 2026-07-18 → 19 (phiên thực thi U27).
+
+**1. Rủi ro quy trình — ĐÃ GÂY THIỆT HẠI THẬT (ưu tiên Cao).**
+Hai phiên Claude chạy song song trong **cùng thư mục repo chính** dùng chung `.git/index`
+và working tree. Hậu quả đo được trong phiên này:
+
+- Một `git commit` (chủ ý chỉ `add` 2 file) đã **nuốt 23 file / +925 dòng** của phiên kia
+  — kể cả `apps/api` — vào commit `e7ad31b`. `git status` ngay trước đó chỉ hiện 2 file.
+- File nguồn bị **đồng-sửa theo thời gian thực**: một dòng `import` biến mất rồi hiện lại
+  giữa hai lệnh bash liên tiếp; Edit tool báo "file modified on disk since last read".
+
+**Đề xuất:** khi chạy nhiều agent trên cùng repo, mỗi agent làm trong **git worktree
+riêng** (`git worktree add -b <nhánh> <dir> <base>` — index/HEAD/working tree riêng).
+Muốn bảo toàn việc chưa-commit của phiên khác mà KHÔNG chạm cây của họ: dựng snapshot
+bằng **index tạm** (`GIT_INDEX_FILE=<tmp> git read-tree HEAD && … add -A && write-tree`
+→ `git commit-tree` → `git branch <backup>`). Cân nhắc ghi thành luật trong
+`.claude/rules/` vì đây là lần **thứ hai** (xem sự cố git-race 2026-07-15).
+
+**2. Nợ dọn cụ thể (ưu tiên Thấp):**
+
+- Nhánh **`feat/u27-web-loc-ketxuat-dongbo`** (commit `ba8c41e`) chỉ tồn tại ở máy local,
+  là bản U27 **trùng lặp** với PR #10 đã merge (`5410337`), và còn chứa `yesterdayVN`
+  (mặc-định-hôm-qua) mà chủ dự án đã quyết **BỎ**. Nên xoá để tránh nhầm lẫn về sau.
+- Worktree `Documents/Projects/vat-u27-clean`, nhánh cứu hộ
+  `wip/line-view-snapshot-20260717`, và stash trên `claude/u22-backfill` — xoá được khi
+  chắc không cần.
+
+**3. Nghiệm thu U27 còn thiếu (ưu tiên Thấp):** hành vi (c) — bấm "Đồng bộ khoảng này" và
+xem báo kết quả — **chưa smoke-test được** trên production vì kỳ quá khứ chiều mua vào còn
+bị 429 chặn (xem mục 2026-07-18 phía trên). Hai hành vi còn lại đã kiểm trên production và
+**ĐẠT**: (a) chọn Mua vào/Bán ra ẩn đúng ô MST; (b) nút Xuất Excel/CSV hiện với vai đủ quyền.
+
+**Nguồn phát hiện:** phiên thực thi U27 (2026-07-18 → 19).
+
+## [2026-07-20] Thiếu UI admin — replay & quản trị hệ thống chỉ có endpoint máy
+
+**Ngày phát hiện:** 2026-07-20 (phiên deploy H-B.6).
+
+**Vấn đề:** H-B.6 dựng endpoint `POST /dlq/replay` (phát lại job đồng bộ hỏng) nhưng **chỉ gọi được bằng `curl`** — không có giao diện. Chủ dự án muốn một **trang admin để một mình quản lý mọi thứ** (xem/replay job hỏng từ `dong_bo_that_bai`, xem tình trạng đồng bộ mọi tenant, quản người dùng/tenant/phân quyền, xem audit log/cảnh báo). App hiện tại (`vatengine.tourdao.vn`) chỉ là màn tra cứu/kết xuất hoá đơn **theo từng tenant**, KHÔNG có tầng quản trị hệ thống.
+
+**Phân rã đề xuất (2 mức, tách được):**
+- **Nhỏ — trang replay có giao diện:** một màn admin (sau Cloudflare Access) liệt kê `dong_bo_that_bai` trạng thái `da_dau` + nút "Phát lại", gọi `/dlq/replay`. Phạm vi vừa, làm nhanh.
+- **Lớn — trang quản trị toàn hệ thống:** thuộc vùng **U24** (quản lý người dùng nội bộ) + hơn thế. Cần đặc tả riêng: định nghĩa "super-admin" là ai; RLS/pháp lý khi một identity đọc **nhiều tenant** (đối lập quy tắc cách ly tenant — xem mục "công ty dịch vụ đọc nhiều DN" phía trên); audit truy cập admin. KHÔNG làm ẩu — dễ thành lỗ rò dữ liệu giữa khách hàng.
+
+**Ưu tiên:** Cao (chủ dự án chủ động nêu). Bắt đầu bằng mức Nhỏ nếu chỉ cần thao tác vận hành; mức Lớn cần brainstorm → spec như H-B.6.
+
+**Nguồn phát hiện:** phiên deploy H-B.6 2026-07-20 (`docs/audit/HANDOFF-2026-07-20.md`).
 ### [2026-07-20] Không có nhật ký audit cho lượt đăng ký bị từ chối (`/dang-ky`)
 
 - **Trạng thái:** Đề xuất — chưa triển khai. Phát hiện trong review chéo U17b.
