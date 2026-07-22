@@ -105,7 +105,7 @@ trạng thái an toàn và nhất quán.
 
 ---
 
-### LÁT CẮT 3 — Duyệt xong khách tự đặt mật khẩu  ← **ĐANG Ở ĐÂY (đảo lên trước Lát 2)**
+### LÁT CẮT 3 — Duyệt xong khách tự đặt mật khẩu  ← **MÃ XONG, CHỜ DEPLOY**
 
 > **Đảo thứ tự 2026-07-22.** Chủ dự án nêu: hiện Cổng Admin hiện mã 6 số để tự tay gửi cho
 > khách — bất hợp lý và đang xảy ra MỖI LẦN duyệt. Lát 2 lo tình huống chưa gặp lần nào.
@@ -120,11 +120,36 @@ trạng thái an toàn và nhất quán.
 
 **Xong khi:** chủ dự án bấm Duyệt → khách nhận thư kèm link đặt mật khẩu → tự đặt → đăng nhập được. **Chủ dự án không còn nhìn thấy mật khẩu của khách.**
 
-- Token đặt mật khẩu (32 byte, băm, dùng một lần, hạn 72h) — cùng khuôn mẫu Lát 1.
-- Trang `/dat-mat-khau`.
-- **Gỡ hẳn mật khẩu tạm 6 chữ số** (QĐ-14) → xoá món nợ mức CAO đang treo.
+Kế hoạch thực thi chi tiết: **`docs/plans/U34-LAT3-plan-thuc-thi.md`**.
 
-🔴 **Deploy cùng nhau:** migration + `vat-api` + `vat-web` + **`vat-admin`** (Cổng Admin bỏ phần hiện mã 6 số).
+| Việc | Trạng thái | Commit |
+|---|---|---|
+| 1. Migration **0014** — bảng `dat_mat_khau`, role `dat_mat_khau_api`, 2 hàm SECURITY DEFINER | ✅ xong, **chưa áp** | `685c9f4` |
+| 2. Token 72h + mẫu thư; tách `sinhToken`/`bamToken` thành module generic | ✅ xong | `00da23b` |
+| 3. `POST /dat-mat-khau` — công khai, không Turnstile (tiền lệ `/xac-thuc-email`) | ✅ xong | `cf7b71c` |
+| 4. Duyệt gửi thư · **xoá `admin/matKhauTam.ts`** · `reset-mat-khau` → `gui-link-dat-mat-khau` | ✅ xong | `dd050db` |
+| 5. Trang SPA `/dat-mat-khau` | ✅ xong | `17c22ff` |
+| 6. Cổng Admin bỏ hiện mã, báo kết quả gửi thư | ✅ xong | `34c1ebe` |
+| **Deploy** | ⬜ **CHƯA** | — |
+| **Nghiệm thu bằng người thật** | ⬜ **CHƯA** | — |
+
+Cổng kiểm tại thời điểm mã xong: `make test` **172 file / 1449 test xanh**, `make lint` mã thoát 0.
+
+🔴 **Deploy cùng nhau, đúng thứ tự:** `make migrate` → `vat-api` → `vat-web` → `vat-admin`.
+Hợp đồng `duyet` đổi (bỏ `mat_khau_tam`) và route `reset-mat-khau` đã XOÁ — deploy
+`vat-admin` lệch pha là Cổng Admin vỡ. Runbook đầy đủ: `docs/CHECKLIST-NGHIEM-THU.md`.
+
+**Ba quyết định chốt trong lúc làm, ghi để không phải suy lại:**
+
+1. **Role DB mới `dat_mat_khau_api`**, không dùng lại `xac_thuc_api` — hàm mới cần quyền ghi
+   `nguoi_dung.password_hash`, không nhét quyền đó vào role đang gánh đường xác thực email.
+2. **Cột `mat_khau_tam_het_han` / `phai_doi_mat_khau` và cổng chặn ở `routes/auth.ts` GIỮ
+   NGUYÊN.** Lát cắt này gỡ đường **CẤP**, không gỡ đường **CHẶN** — hai việc khác nhau.
+   Production có thể còn hàng cũ mang mật khẩu tạm đang sống; gỡ cổng là cho một mã 6 số
+   quá hạn bỗng đăng nhập được.
+3. **Gửi thư hỏng phải NỔI LÊN tới màn hình** (`da_gui_thu: false` → cảnh báo đỏ + nút gửi
+   lại). Nuốt lỗi này nghĩa là khách chờ một lá thư không bao giờ tới, và chủ dự án là
+   người duy nhất có thể phát hiện — nhưng chỉ khi màn hình nói ra.
 
 ---
 

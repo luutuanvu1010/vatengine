@@ -1,13 +1,20 @@
-// U18 (QĐ-2) — Vòng đời mật khẩu TẠM, đi trọn đường thật:
-//   super-admin Duyệt → khách nhận 6 số → đăng nhập → BUỘC đổi → mật khẩu tạm chết.
+// U18 (QĐ-2) — Cổng chặn mật khẩu TẠM ở đường đăng nhập, và đường đổi mật khẩu.
 //
-// Đây là phần đóng lại lỗ hổng mà chính U18 mở ra. Mật khẩu 6 chữ số chỉ an toàn nhờ ba
-// ràng buộc (hết hạn 72h / buộc đổi / rate-limit login); các test dưới đây kiểm hai cái
-// đầu — cái thứ ba là LOGIN_LIMITER đã có từ H-A.5b, không dựng lại.
+// ⚠️ CẬP NHẬT Lát cắt 3 (QĐ-14, 2026-07-22): đường CẤP mật khẩu tạm 6 chữ số đã gỡ hẳn —
+// Duyệt giờ gửi thư kèm liên kết đặt mật khẩu, không sinh mã nào. Nhưng CỔNG CHẶN nó ở
+// login thì GIỮ NGUYÊN, và file này canh đúng cổng đó.
+//
+// Vì sao giữ: production có thể còn những hàng `nguoi_dung` mang mật khẩu tạm đang sống,
+// cấp trước Lát cắt 3. Gỡ cổng nghĩa là một mật khẩu 6 số quá hạn bỗng đăng nhập được.
+// Lát cắt này gỡ đường CẤP, không gỡ đường CHẶN — hai việc khác nhau.
+//
+// Hệ quả cho test: dữ liệu không còn dựng được bằng cách gọi Duyệt. `matKhauTamCu()` dựng
+// thẳng hình dạng hàng cũ đó, và tên hàm nói rõ nó mô phỏng cái gì.
 import { auditLog, nguoiDung } from "@vat/db";
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
+import { hashPassword } from "../../src/password";
 import {
   type Db,
   adminTokenFor,
@@ -24,35 +31,43 @@ import {
 
 const EMAIL_KHACH = "chu.cty@congty.vn";
 
-describe("Vòng đời mật khẩu tạm", () => {
+describe("Cổng mật khẩu tạm (hàng cũ) + đổi mật khẩu", () => {
   let db: Db;
   let app: ReturnType<typeof createApp>;
   let tenantId: string;
   let userId: string;
-  let tokenAdmin: string;
 
   beforeEach(async () => {
     stubTurnstile();
     db = await freshDb();
     app = createApp(injectDb(db));
-    tenantId = await makeTenant(db, "Cty Chờ Duyệt", "0100000001");
-    await db.execute(sql`update tenants set trang_thai = 'cho_duyet' where id = ${tenantId}::uuid`);
+    tenantId = await makeTenant(db, "Cty Đang Chạy", "0100000001");
+    await db.execute(sql`update tenants set trang_thai = 'active' where id = ${tenantId}::uuid`);
     const [u] = await db
       .insert(nguoiDung)
       .values({ tenantId, email: EMAIL_KHACH, vaiTro: "quan_tri" })
       .returning({ id: nguoiDung.id });
     userId = u?.id as string;
-    const adminId = await seedSuperAdmin(db, "chu@vatengine.vn", "mat-khau-chu");
-    tokenAdmin = await adminTokenFor(adminId);
   });
 
-  async function duyet(): Promise<string> {
-    const res = await app.request(
-      `/admin/tenants/${tenantId}/duyet`,
-      { method: "POST", headers: bearer(tokenAdmin) },
-      makeEnv(),
-    );
-    return ((await res.json()) as { mat_khau_tam: string }).mat_khau_tam;
+  /**
+   * Dựng một hàng NGƯỜI DÙNG CŨ còn mật khẩu tạm đang sống — hình dạng đã có thật trong
+   * DB production trước Lát cắt 3.
+   *
+   * KHÔNG đi qua `POST /admin/tenants/:id/duyet` nữa: sau QĐ-14 đường đó không sinh mật
+   * khẩu nào. Dựng thẳng ở đây là cách trung thực duy nhất để canh cổng chặn, và tên hàm
+   * nói rõ đây là dữ liệu DI SẢN chứ không phải luồng đang chạy.
+   */
+  async function matKhauTamCu(mk = "482913"): Promise<string> {
+    await db
+      .update(nguoiDung)
+      .set({
+        passwordHash: await hashPassword(mk),
+        phaiDoiMatKhau: true,
+        matKhauTamHetHan: new Date(Date.now() + 72 * 3600_000),
+      })
+      .where(eq(nguoiDung.id, userId));
+    return mk;
   }
 
   const login = (password: string) =>
@@ -78,7 +93,7 @@ describe("Vòng đời mật khẩu tạm", () => {
     );
 
   it("đăng nhập bằng mật khẩu tạm → 200 kèm cờ phai_doi_mat_khau", async () => {
-    const mk = await duyet();
+    const mk = await matKhauTamCu();
     const res = await login(mk);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, phai_doi_mat_khau: true });
@@ -88,7 +103,6 @@ describe("Vòng đời mật khẩu tạm", () => {
     // Không hồi quy U8/U17b: cờ chỉ xuất hiện khi thực sự phải đổi, nên không đơn vị đang
     // chạy nào phải sửa theo.
     const tenantB = await makeTenant(db, "Cty B", "0100000002");
-    const { hashPassword } = await import("../../src/password");
     await db.insert(nguoiDung).values({
       tenantId: tenantB,
       email: "binh.thuong@b.vn",
@@ -110,7 +124,7 @@ describe("Vòng đời mật khẩu tạm", () => {
   });
 
   it("🔴 mật khẩu tạm QUÁ HẠN 72h → 401 dù gõ ĐÚNG", async () => {
-    const mk = await duyet();
+    const mk = await matKhauTamCu();
     expect((await login(mk)).status).toBe(200); // còn hạn thì vào được
 
     // Đẩy hạn về quá khứ — mô phỏng khách để quên mã 4 ngày.
@@ -125,7 +139,7 @@ describe("Vòng đời mật khẩu tạm", () => {
   });
 
   it("quá hạn ghi audit login_fail_mat_khau_tam_het_han (phân biệt được với sai mật khẩu)", async () => {
-    const mk = await duyet();
+    const mk = await matKhauTamCu();
     await db
       .update(nguoiDung)
       .set({ matKhauTamHetHan: new Date(Date.now() - 1000) })
@@ -137,7 +151,7 @@ describe("Vòng đời mật khẩu tạm", () => {
   });
 
   it("🔴 đổi mật khẩu → mật khẩu tạm CHẾT, mật khẩu mới dùng được, cờ tắt", async () => {
-    const mk = await duyet();
+    const mk = await matKhauTamCu();
     const token = await tokenFor(tenantId, { role: "quan_tri", sub: userId });
 
     const res = await doiMatKhau(token, {
@@ -158,7 +172,7 @@ describe("Vòng đời mật khẩu tạm", () => {
   });
 
   it("🔴 đổi mật khẩu ĐÒI mật khẩu hiện tại — phiên bị chiếm không đủ để chiếm tài khoản", async () => {
-    await duyet();
+    await matKhauTamCu();
     const token = await tokenFor(tenantId, { role: "quan_tri", sub: userId });
     const res = await doiMatKhau(token, {
       mat_khau_hien_tai: "doan-bua",
@@ -171,14 +185,14 @@ describe("Vòng đời mật khẩu tạm", () => {
   });
 
   it("mật khẩu mới trùng mật khẩu hiện tại → 400 (không cho biến bước buộc-đổi thành hình thức)", async () => {
-    const mk = await duyet();
+    const mk = await matKhauTamCu();
     const token = await tokenFor(tenantId, { role: "quan_tri", sub: userId });
     const res = await doiMatKhau(token, { mat_khau_hien_tai: mk, mat_khau_moi: mk });
     expect(res.status).toBe(400);
   });
 
   it("mật khẩu mới quá ngắn → 400", async () => {
-    const mk = await duyet();
+    const mk = await matKhauTamCu();
     const token = await tokenFor(tenantId, { role: "quan_tri", sub: userId });
     const res = await doiMatKhau(token, { mat_khau_hien_tai: mk, mat_khau_moi: "ngan" });
     expect(res.status).toBe(400);
@@ -187,7 +201,7 @@ describe("Vòng đời mật khẩu tạm", () => {
   it("🔴 mật khẩu tạm quá hạn KHÔNG dùng được làm chìa để đặt mật khẩu vĩnh viễn", async () => {
     // Nếu bỏ cổng này, ai còn giữ mã cũ vẫn "hợp thức hoá" được nó thành mật khẩu thật —
     // cửa sổ 72h thành vô nghĩa.
-    const mk = await duyet();
+    const mk = await matKhauTamCu();
     const token = await tokenFor(tenantId, { role: "quan_tri", sub: userId });
     await db
       .update(nguoiDung)
@@ -215,7 +229,7 @@ describe("Vòng đời mật khẩu tạm", () => {
   });
 
   it("🔴 token của tenant KHÁC không đổi được mật khẩu người này", async () => {
-    await duyet();
+    await matKhauTamCu();
     const tenantB = await makeTenant(db, "Cty B", "0100000002");
     // Token hợp lệ của B nhưng `sub` trỏ vào người dùng của A. RLS trong withTenant(B)
     // làm hàng đó vô hình ⇒ không tìm thấy ⇒ 401.

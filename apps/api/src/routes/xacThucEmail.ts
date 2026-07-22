@@ -16,7 +16,7 @@ import { sql } from "drizzle-orm";
 // 32 byte ngẫu nhiên, lưu ở dạng băm, dùng một lần, hết hạn sau 24 giờ.
 import { Hono } from "hono";
 import { z } from "zod";
-import { bamToken } from "../email/tokenXacThuc";
+import { bamToken } from "../email/token";
 import type { AppDeps, AppEnv } from "../types";
 
 const schema = z.object({ token: z.string().min(1) }).strict();

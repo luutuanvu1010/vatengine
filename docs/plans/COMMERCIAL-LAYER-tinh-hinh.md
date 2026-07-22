@@ -130,7 +130,7 @@ Bài học đắt nhất của phiên. Các thao tác ghi của admin viết dư
 | Mã vẫn diễn đạt thao tác ghi bằng `SELECT fn()` | Thấp (đã bù bằng tắt cache) | Nếu ai muốn bật lại cache Hyperdrive |
 | ~~Service token Access chưa dùng được~~ | — | ✅ đã xong 2026-07-21 |
 | 🔴 **Không xoá được tenant** — trigger append-only của `audit_log` chặn cascade | **Cao** | **Trước khi nhận khách trả phí.** Mâu thuẫn thật giữa `security.md` (audit bất biến) và NĐ 13/2023 (quyền xoá dữ liệu). Ba hướng đã ghi ở BACKLOG, **chưa chốt** — quyết định tầng kiến trúc |
-| Mật khẩu tạm 6 số chỉ còn **1/3** điều kiện bù sau QĐ-7 + QĐ-11 | Trung bình | Nếu thấy cần siết: đổi sang chuỗi dài hơn, hoặc rút hạn 72h |
+| ~~Mật khẩu tạm 6 số chỉ còn **1/3** điều kiện bù sau QĐ-7 + QĐ-11~~ | — | ✅ **ĐÃ TRẢ 2026-07-22 (QĐ-14, Lát cắt 3).** Không siết mã 6 số mà **xoá hẳn nó**: `apps/api/src/admin/matKhauTam.ts` không còn tồn tại, Duyệt gửi thư kèm liên kết 32 byte hạn 72h, khách tự đặt mật khẩu. ⚠️ Mã ĐÃ VIẾT XONG nhưng **CHƯA DEPLOY** — xem `U34-LAT3-plan-thuc-thi.md` §Việc 7 |
 
 ---
 

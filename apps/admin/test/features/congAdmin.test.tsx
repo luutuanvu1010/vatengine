@@ -19,7 +19,7 @@ vi.mock("../../src/lib/adminApiClient", async (importOriginal) => {
       tuChoiTenant: vi.fn(),
       khoaTenant: vi.fn(),
       moKhoaTenant: vi.fn(),
-      resetMatKhau: vi.fn(),
+      guiLaiLinkDatMatKhau: vi.fn(),
       suaMetadata: vi.fn(),
       docAudit: vi.fn(),
     },
@@ -95,7 +95,7 @@ describe("🔴 Guard phiên — không lẫn sang miền khách", () => {
 describe("Bảng thao tác bám máy trạng thái U18", () => {
   it("hanhDongChoTrangThai khớp đúng máy trạng thái", () => {
     expect(hanhDongChoTrangThai("cho_duyet")).toEqual(["duyet", "tu_choi"]);
-    expect(hanhDongChoTrangThai("active")).toEqual(["khoa", "reset"]);
+    expect(hanhDongChoTrangThai("active")).toEqual(["khoa", "gui_lai_link"]);
     expect(hanhDongChoTrangThai("khoa")).toEqual(["mo_khoa"]);
     // tu_choi là trạng thái CUỐI — không hành động nào đưa nó đi tiếp.
     expect(hanhDongChoTrangThai("tu_choi")).toEqual([]);
@@ -105,7 +105,7 @@ describe("Bảng thao tác bám máy trạng thái U18", () => {
 
   it.each([
     ["cho_duyet", ["Duyệt", "Từ chối"], ["Khóa", "Mở khóa"]],
-    ["active", ["Khóa", "Cấp lại mật khẩu"], ["Duyệt", "Mở khóa"]],
+    ["active", ["Khóa", "Gửi lại link đặt mật khẩu"], ["Duyệt", "Mở khóa"]],
     ["khoa", ["Mở khóa"], ["Duyệt", "Khóa"]],
   ])("trạng thái %s hiện đúng nút", async (trangThai, hien, khongHien) => {
     api.lietKeTenant.mockResolvedValue({ items: [tenant({ trang_thai: trangThai })], total: 1 });
@@ -130,78 +130,81 @@ describe("Bảng thao tác bám máy trạng thái U18", () => {
   });
 });
 
-describe("🔴 D3 — mật khẩu tạm hiện MỘT LẦN", () => {
+describe("🔴 Lát cắt 3 — Duyệt KHÔNG còn hiện mật khẩu, chỉ báo đã gửi thư", () => {
   const ketQua = {
     ok: true as const,
     trang_thai: "active" as const,
-    mat_khau_tam: "482913",
     email: "chu@congty.vn",
-    mat_khau_tam_het_han: "2026-07-24T03:00:00.000Z",
+    da_gui_thu: true,
+    het_han: "2026-07-25T03:00:00.000Z",
   };
 
-  it("Duyệt → hiện hộp thoại kèm mã 6 số", async () => {
+  it("Duyệt → hộp thoại nói đã gửi thư tới đâu, KHÔNG có mật khẩu nào", async () => {
     api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
     api.duyetTenant.mockResolvedValue(ketQua);
     renderTenants();
 
     await userEvent.click(await screen.findByRole("button", { name: "Duyệt" }));
 
-    const hop = await screen.findByRole("dialog");
-    expect(within(hop).getByTestId("mat-khau-tam")).toHaveTextContent("482913");
-    expect(within(hop).getByText(/chỉ hiện MỘT LẦN/i)).toBeInTheDocument();
+    const hop = within(await screen.findByRole("dialog"));
+    expect(hop.getByText(/Đã gửi thư đặt mật khẩu/i)).toBeInTheDocument();
+    expect(hop.getByText("chu@congty.vn")).toBeInTheDocument();
+    // Bất biến cốt lõi của QĐ-14: không còn mã nào để chủ dự án nhìn thấy, và cũng không
+    // còn thứ gì "không lấy lại được" để phải dặn dò.
+    expect(screen.queryByTestId("mat-khau-tam")).not.toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/\b\d{6}\b/);
     expect(api.duyetTenant).toHaveBeenCalledWith(tenant().id);
   });
 
-  it("nút Đóng bị VÔ HIỆU cho tới khi xác nhận đã lưu mã", async () => {
-    // Chống đóng nhầm: mã không lấy lại được, nên một cú Enter theo quán tính không được
-    // phép làm mất nó.
+  it("nút Đóng KHÔNG còn bị vô hiệu — không còn bí mật nào phải bắt xác nhận đã lưu", async () => {
     api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
     api.duyetTenant.mockResolvedValue(ketQua);
     renderTenants();
     await userEvent.click(await screen.findByRole("button", { name: "Duyệt" }));
 
     const hop = within(await screen.findByRole("dialog"));
-    expect(hop.getByRole("button", { name: "Đóng" })).toBeDisabled();
-    await userEvent.click(hop.getByRole("checkbox"));
     expect(hop.getByRole("button", { name: "Đóng" })).toBeEnabled();
-  });
-
-  it("đóng rồi thì mã KHÔNG còn ở đâu trên màn hình", async () => {
-    api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
-    api.duyetTenant.mockResolvedValue(ketQua);
-    renderTenants();
-    await userEvent.click(await screen.findByRole("button", { name: "Duyệt" }));
-    const hop = within(await screen.findByRole("dialog"));
-    await userEvent.click(hop.getByRole("checkbox"));
     await userEvent.click(hop.getByRole("button", { name: "Đóng" }));
-
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.queryByText("482913")).not.toBeInTheDocument();
   });
 
-  it("🔴 mã tạm KHÔNG bị ghi vào localStorage / sessionStorage (R4)", async () => {
-    localStorage.clear();
-    sessionStorage.clear();
+  it("🔴 gửi thư HỎNG → cảnh báo và có nút gửi lại ngay trong hộp thoại", async () => {
+    // Nuốt lỗi này nghĩa là khách ngồi chờ một lá thư không bao giờ tới, và chủ dự án
+    // tưởng mình đã xong việc.
     api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
-    api.duyetTenant.mockResolvedValue(ketQua);
+    api.duyetTenant.mockResolvedValue({ ...ketQua, da_gui_thu: false });
     renderTenants();
     await userEvent.click(await screen.findByRole("button", { name: "Duyệt" }));
-    await screen.findByRole("dialog");
 
-    expect(JSON.stringify(localStorage)).not.toContain("482913");
-    expect(JSON.stringify(sessionStorage)).not.toContain("482913");
+    const hop = within(await screen.findByRole("dialog"));
+    expect(hop.getByText(/CHƯA gửi được thư/i)).toBeInTheDocument();
+    expect(hop.getByRole("button", { name: "Gửi lại thư" })).toBeInTheDocument();
   });
 
-  it("Cấp lại mật khẩu cũng hiện hộp thoại (cùng hợp đồng một-lần)", async () => {
+  it("nút gửi lại trong hộp thoại gọi ĐÚNG tenant vừa duyệt", async () => {
+    api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
+    api.duyetTenant.mockResolvedValue({ ...ketQua, da_gui_thu: false });
+    api.guiLaiLinkDatMatKhau.mockResolvedValue(ketQua);
+    renderTenants();
+    await userEvent.click(await screen.findByRole("button", { name: "Duyệt" }));
+
+    const hop = within(await screen.findByRole("dialog"));
+    await userEvent.click(hop.getByRole("button", { name: "Gửi lại thư" }));
+    await waitFor(() => expect(api.guiLaiLinkDatMatKhau).toHaveBeenCalledWith(tenant().id));
+  });
+
+  it("tenant active có nút 'Gửi lại link đặt mật khẩu', KHÔNG còn 'Cấp lại mật khẩu'", async () => {
     api.lietKeTenant.mockResolvedValue({
       items: [tenant({ trang_thai: "active" })],
       total: 1,
     });
-    api.resetMatKhau.mockResolvedValue({ ...ketQua, mat_khau_tam: "111222" });
+    api.guiLaiLinkDatMatKhau.mockResolvedValue(ketQua);
     renderTenants();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Cấp lại mật khẩu" }));
-    expect(await screen.findByTestId("mat-khau-tam")).toHaveTextContent("111222");
+    await userEvent.click(await screen.findByRole("button", { name: "Gửi lại link đặt mật khẩu" }));
+    expect(screen.queryByRole("button", { name: "Cấp lại mật khẩu" })).not.toBeInTheDocument();
+    const hop = within(await screen.findByRole("dialog"));
+    expect(hop.getByText(/Đã gửi thư đặt mật khẩu/i)).toBeInTheDocument();
   });
 });
 

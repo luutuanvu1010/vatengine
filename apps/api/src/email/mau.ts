@@ -69,3 +69,49 @@ Nếu nút trên không bấm được, sao chép liên kết này vào trình d
 
   return { den: "", tieuDe: "Xác nhận địa chỉ email — VATEngine", html, text };
 }
+
+/**
+ * Lát cắt 3 (QĐ-14) — Thư gửi khi chủ dự án bấm Duyệt.
+ *
+ * ⚠️ Thư này KHÔNG chứa mật khẩu, và đó là điểm cốt lõi của QĐ-14. Trước Lát cắt 3, chủ
+ * dự án nhìn thấy mật khẩu 6 chữ số của khách rồi tự gửi qua Zalo/điện thoại. Mã 6 số ra
+ * đời CHỈ vì phải đọc qua điện thoại; khi hệ thống tự gửi được thư thì lý do đó biến mất
+ * và chỉ còn lại điểm yếu (10^6 khả năng). Gửi mã 6 số qua email là giữ nguyên điểm yếu
+ * mà vứt đi lý do duy nhất biện minh cho nó.
+ */
+export function thuDatMatKhau(
+  tenDoanhNghiep: string,
+  lienKet: string,
+): ThuCanGui & { den: string } {
+  const html = KHUNG_HTML(`
+<p style="font-size:16px;line-height:1.6;margin:0 0 16px">
+Hồ sơ của <strong>${thoat(tenDoanhNghiep)}</strong> đã được duyệt.
+</p>
+<p style="font-size:16px;line-height:1.6;margin:0 0 24px">
+Bước cuối: đặt mật khẩu để đăng nhập.
+</p>
+<p style="margin:0 0 24px">
+<a href="${thoat(lienKet)}" style="display:inline-block;background:#1f6feb;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;font-size:16px">Đặt mật khẩu</a>
+</p>
+<p style="font-size:14px;line-height:1.6;color:#6b7280;margin:0 0 8px">
+Liên kết có hiệu lực trong <strong>72 giờ</strong> và chỉ dùng được một lần.
+Quá hạn thì liên hệ chúng tôi để nhận liên kết mới.
+</p>
+<p style="font-size:14px;line-height:1.6;color:#6b7280;margin:0">
+Nếu nút trên không bấm được, sao chép liên kết này vào trình duyệt:<br>
+<span style="word-break:break-all">${thoat(lienKet)}</span>
+</p>`);
+
+  // Bản văn bản thuần phải TỰ ĐỦ NGHĨA — với một số người đây là bản DUY NHẤT họ đọc được.
+  const text = [
+    `Hồ sơ VATEngine của ${tenDoanhNghiep} đã được duyệt.`,
+    "",
+    "Bước cuối: đặt mật khẩu để đăng nhập, bằng cách mở liên kết sau:",
+    lienKet,
+    "",
+    "Liên kết có hiệu lực trong 72 giờ và chỉ dùng được một lần.",
+    "Quá hạn thì liên hệ chúng tôi để nhận liên kết mới.",
+  ].join("\n");
+
+  return { den: "", tieuDe: "Đặt mật khẩu cho tài khoản VATEngine", html, text };
+}

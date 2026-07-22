@@ -13,6 +13,7 @@ import {
   bearer,
   freshDb,
   injectDb,
+  makeEmailSpy,
   makeEnv,
   makeTenant,
   seedSuperAdmin,
@@ -85,11 +86,16 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
   let token: string;
   let tenantChoDuyet: string;
   let tenantActive: string;
+  // Lát cắt 3 — mọi test trong khối này đều đọc được thư đã gửi. Duyệt giờ KHÔNG trả mật
+  // khẩu nữa, nên đường duy nhất tới một tài khoản đăng nhập được là đi qua lá thư — đúng
+  // như khách thật. Test bám vào đường thật thay vì một cửa sau chỉ test mới có.
+  let thu: ReturnType<typeof makeEmailSpy>;
 
   beforeEach(async () => {
     stubTurnstile();
     db = await freshDb();
-    app = createApp(injectDb(db));
+    thu = makeEmailSpy();
+    app = createApp({ ...injectDb(db), getEmailTransport: thu.factory });
     adminId = await seedSuperAdmin(db, EMAIL_ADMIN, MK_ADMIN);
     token = await adminTokenFor(adminId);
 
@@ -115,6 +121,37 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
       makeEnv(),
     );
 
+  /** Rút token đặt mật khẩu ra khỏi lá thư — đúng việc khách làm khi bấm link trong thư. */
+  function tokenTrongThu(i = 0): string {
+    const text = thu.daGui[i]?.text ?? "";
+    const m = /dat-mat-khau\?token=([^\s"<]+)/.exec(text);
+    if (!m?.[1]) throw new Error(`không thấy liên kết đặt mật khẩu trong thư ${i}: ${text}`);
+    return decodeURIComponent(m[1]);
+  }
+
+  /** Đi trọn đường của khách: bấm link trong thư rồi đặt mật khẩu. */
+  const datMatKhau = (tokenTho: string, matKhau: string) =>
+    app.request(
+      "/dat-mat-khau",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenTho, mat_khau: matKhau }),
+      },
+      makeEnv(),
+    );
+
+  const dangNhap = (matKhau: string) =>
+    app.request(
+      "/auth/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(voiCaptcha({ email: "chu.cty@congty.vn", password: matKhau })),
+      },
+      makeEnv(),
+    );
+
   it("GET /admin/tenants thấy NHIỀU tenant (xuyên tenant thật sự) + total", async () => {
     const res = await goi("/admin/tenants");
     const body = (await res.json()) as { items: unknown[]; total: number };
@@ -136,83 +173,82 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
     expect(tim.items[0]?.mst).toBe("0100000002");
   });
 
-  it("🔴 Duyệt: cho_duyet → active, trả mật khẩu tạm MỘT LẦN, khách đăng nhập được", async () => {
+  it("🔴 Duyệt: cho_duyet → active, GỬI THƯ, và khách đặt mật khẩu rồi đăng nhập được", async () => {
     const res = await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      trang_thai: string;
-      mat_khau_tam: string;
-      email: string;
-    };
-    expect(body.trang_thai).toBe("active");
-    expect(body.mat_khau_tam).toMatch(/^\d{6}$/);
-    expect(body.email).toBe("chu.cty@congty.vn");
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      trang_thai: "active",
+      email: "chu.cty@congty.vn",
+      da_gui_thu: true,
+    });
 
-    // Đây là toàn bộ lý do U18 tồn tại: trước bước này, tenant tự đăng ký KHÔNG đăng nhập
-    // được và không ai duyệt được. Sau bước này thì được.
-    const login = await app.request(
-      "/auth/login",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          voiCaptcha({ email: "chu.cty@congty.vn", password: body.mat_khau_tam }),
-        ),
-      },
+    // Đúng một lá thư, tới đúng địa chỉ, mang liên kết `/dat-mat-khau`.
+    expect(thu.daGui).toHaveLength(1);
+    expect(thu.daGui[0]?.den).toBe("chu.cty@congty.vn");
+
+    // Đây là toàn bộ lý do Lát cắt 3 tồn tại: khách tự đi hết đường, không ai đọc mật khẩu
+    // cho ai qua điện thoại.
+    expect((await datMatKhau(tokenTrongThu(), "mat-khau-cua-khach")).status).toBe(200);
+    expect((await dangNhap("mat-khau-cua-khach")).status).toBe(200);
+  });
+
+  it("🔴 QĐ-14 — phản hồi duyệt KHÔNG mang mật khẩu nào", async () => {
+    const s = await (
+      await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" })
+    ).text();
+    expect(s).not.toContain("mat_khau_tam");
+    // Bất biến cốt lõi: không còn chuỗi 6 chữ số nào để chủ dự án nhìn thấy.
+    expect(s).not.toMatch(/\b\d{6}\b/);
+  });
+
+  it("🔴 audit ghi ĐÃ GỬI, không ghi token và không ghi email (QĐ-17)", async () => {
+    await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" });
+    const rows = await db.select().from(auditLogAdmin);
+    const hang = rows.find((a) => a.hanhDong === "gui_link_dat_mat_khau");
+    expect(hang).toBeDefined();
+    const chiTiet = JSON.stringify(hang?.chiTiet);
+    expect(chiTiet).not.toContain("chu.cty@congty.vn");
+    expect(chiTiet).not.toContain(tokenTrongThu());
+    expect(chiTiet).toContain("da_gui_thu");
+  });
+
+  it("🔴 gửi thư HỎNG → vẫn duyệt, nhưng phản hồi NÓI RA da_gui_thu=false", async () => {
+    // Nuốt lỗi này nghĩa là khách ngồi chờ một lá thư không bao giờ tới, và chủ dự án
+    // tưởng mình đã xong việc. Không ai phát hiện được cho tới khi khách gọi điện.
+    const hong = makeEmailSpy({ daGui: false, lyDo: "tai_khoan_bi_khoa" });
+    const app2 = createApp({ ...injectDb(db), getEmailTransport: hong.factory });
+    const res = await app2.request(
+      `/admin/tenants/${tenantChoDuyet}/duyet`,
+      { method: "POST", headers: bearer(token) },
       makeEnv(),
     );
-    expect(login.status).toBe(200);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, trang_thai: "active", da_gui_thu: false });
   });
 
-  it("🔴 mật khẩu tạm KHÔNG đọc lại được và KHÔNG nằm trong audit", async () => {
-    const body = (await (
-      await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" })
-    ).json()) as { mat_khau_tam: string };
-
-    // Không có đường đọc lại: DB chỉ giữ bản băm.
-    const chiTiet = await (await goi(`/admin/tenants/${tenantChoDuyet}`)).text();
-    expect(chiTiet).not.toContain(body.mat_khau_tam);
-
-    // Và audit ghi RẰNG đã cấp, không ghi cấp cái gì. So trên chuỗi thật, không trên tên khoá.
-    const rows = await db.select().from(auditLogAdmin);
-    expect(JSON.stringify(rows)).not.toContain(body.mat_khau_tam);
-    expect(rows.some((a) => a.hanhDong === "cap_mat_khau_tam")).toBe(true);
-  });
-
-  it("Duyệt đặt cờ phai_doi_mat_khau + hạn 72h", async () => {
+  it("Duyệt KHÔNG đặt cờ mật khẩu tạm — đường đó đã gỡ hẳn (QĐ-14)", async () => {
     await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" });
     const [u] = await db.select().from(nguoiDung).where(eq(nguoiDung.tenantId, tenantChoDuyet));
-    expect(u?.phaiDoiMatKhau).toBe(true);
-    const gio = ((u?.matKhauTamHetHan as Date).getTime() - Date.now()) / 3600_000;
-    expect(gio).toBeGreaterThan(71);
-    expect(gio).toBeLessThanOrEqual(72);
+    expect(u?.phaiDoiMatKhau).toBe(false);
+    expect(u?.matKhauTamHetHan).toBeNull();
+    // Và chưa có mật khẩu nào cho tới khi CHÍNH KHÁCH đặt.
+    expect(u?.passwordHash).toBeNull();
   });
 
   it("Khóa → khách KHÔNG đăng nhập được nữa; Mở khóa → được lại", async () => {
-    const { mat_khau_tam } = (await (
-      await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" })
-    ).json()) as { mat_khau_tam: string };
-
-    const login = () =>
-      app.request(
-        "/auth/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(voiCaptcha({ email: "chu.cty@congty.vn", password: mat_khau_tam })),
-        },
-        makeEnv(),
-      );
+    await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" });
+    await datMatKhau(tokenTrongThu(), "mat-khau-cua-khach");
 
     expect((await goi(`/admin/tenants/${tenantChoDuyet}/khoa`, { method: "POST" })).status).toBe(
       200,
     );
-    expect((await login()).status).toBe(401);
+    expect((await dangNhap("mat-khau-cua-khach")).status).toBe(401);
 
     expect((await goi(`/admin/tenants/${tenantChoDuyet}/mo-khoa`, { method: "POST" })).status).toBe(
       200,
     );
-    expect((await login()).status).toBe(200);
+    expect((await dangNhap("mat-khau-cua-khach")).status).toBe(200);
   });
 
   it("Từ chối: cho_duyet → tu_choi, và tu_choi là trạng thái CUỐI", async () => {
@@ -238,16 +274,14 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
     expect(r.rows[0]?.trang_thai).toBe("active");
   });
 
-  it("thao tác LẶP (bấm Duyệt hai lần) → lần hai 409, không cấp mật khẩu tạm mới", async () => {
-    const lan1 = (await (
-      await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" })
-    ).json()) as { mat_khau_tam: string };
+  it("thao tác LẶP (bấm Duyệt hai lần) → lần hai 409, KHÔNG gửi thư thứ hai", async () => {
+    await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" });
     const lan2 = await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" });
 
     expect(lan2.status).toBe(409);
-    // Quan trọng: nếu lần hai vẫn cấp mật khẩu mới, mật khẩu lần một mà admin đã đọc cho
-    // khách qua điện thoại sẽ chết im lặng.
-    expect(await lan2.text()).not.toContain(lan1.mat_khau_tam);
+    // Quan trọng: nếu lần hai vẫn tạo token mới, liên kết trong lá thư khách ĐANG cầm sẽ
+    // chết im lặng — họ bấm vào và thấy "đã dùng rồi" cho một thư chưa ai động tới.
+    expect(thu.daGui).toHaveLength(1);
   });
 
   it("tenant không tồn tại → 404 (phân biệt với 409 sai trạng thái)", async () => {
@@ -290,28 +324,44 @@ describe("Quản trị tenant — vòng đời + metadata", () => {
     expect(s).toContain("Tên Đã Sửa"); // giá trị MỚI
   });
 
-  it("reset-mat-khau cấp mật khẩu MỚI và vô hiệu cái cũ", async () => {
-    const cu = (await (
-      await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" })
-    ).json()) as { mat_khau_tam: string };
-    const moi = (await (
-      await goi(`/admin/tenants/${tenantChoDuyet}/reset-mat-khau`, { method: "POST" })
-    ).json()) as { mat_khau_tam: string };
+  it("🔴 gui-link-dat-mat-khau gửi thư MỚI và GIẾT liên kết cũ", async () => {
+    await goi(`/admin/tenants/${tenantChoDuyet}/duyet`, { method: "POST" });
+    const res = await goi(`/admin/tenants/${tenantChoDuyet}/gui-link-dat-mat-khau`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      email: "chu.cty@congty.vn",
+      da_gui_thu: true,
+    });
 
-    expect(moi.mat_khau_tam).not.toBe(cu.mat_khau_tam);
+    expect(thu.daGui).toHaveLength(2);
+    const cu = tokenTrongThu(0);
+    const moi = tokenTrongThu(1);
+    expect(moi).not.toBe(cu);
 
-    const login = (mk: string) =>
-      app.request(
-        "/auth/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(voiCaptcha({ email: "chu.cty@congty.vn", password: mk })),
-        },
-        makeEnv(),
-      );
-    expect((await login(cu.mat_khau_tam)).status).toBe(401);
-    expect((await login(moi.mat_khau_tam)).status).toBe(200);
+    // Bấm "Gửi lại" mà liên kết cũ vẫn sống là hai chìa cùng mở một cửa, và người bấm
+    // tưởng mình vừa thu hồi chìa cũ.
+    expect(await (await datMatKhau(cu, "mat-khau-bang-link-cu")).json()).toEqual({
+      error: "da_dung",
+    });
+    expect((await datMatKhau(moi, "mat-khau-bang-link-moi")).status).toBe(200);
+    expect((await dangNhap("mat-khau-bang-link-moi")).status).toBe(200);
+  });
+
+  it("gui-link-dat-mat-khau cho tenant không tồn tại → 404", async () => {
+    const res = await goi(`/admin/tenants/${crypto.randomUUID()}/gui-link-dat-mat-khau`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("🔴 route reset-mat-khau cũ KHÔNG còn tồn tại", async () => {
+    // Tên cũ nói dối sau QĐ-14 — nó không reset mật khẩu nào cả. Để lại một cái tên nói
+    // dối trong hợp đồng API là để lại một cái bẫy cho người đọc sau.
+    const res = await goi(`/admin/tenants/${tenantChoDuyet}/reset-mat-khau`, { method: "POST" });
+    expect(res.status).toBe(404);
   });
 
   it("mọi thao tác ghi audit đúng người thực hiện", async () => {

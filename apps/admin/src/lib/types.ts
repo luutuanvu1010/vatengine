@@ -58,17 +58,23 @@ export interface ChiTietTenant {
 }
 
 /**
- * Phản hồi của `duyet` và `reset-mat-khau` (QĐ-1).
+ * Phản hồi của `duyet` và `gui-link-dat-mat-khau` (QĐ-14).
  *
- * `mat_khau_tam` chỉ tồn tại trong ĐÚNG phản hồi này — DB giữ bản băm nên không endpoint
- * nào đọc lại được. Mất là phải `reset-mat-khau` để cấp mã mới.
+ * KHÔNG còn `mat_khau_tam`. Trước Lát cắt 3, chủ dự án nhìn thấy mật khẩu 6 chữ số của
+ * khách rồi tự chuyển cho họ qua điện thoại/Zalo. Giờ hệ thống gửi thư kèm liên kết, và
+ * thứ duy nhất Cổng Admin biết là thư ĐÃ ĐI HAY CHƯA.
+ *
+ * `da_gui_thu` phải được hiện ra, không được nuốt: nó `false` nghĩa là khách sẽ không bao
+ * giờ nhận được gì, và chủ dự án là người duy nhất có thể phát hiện.
  */
-export interface KetQuaCapMatKhau {
+export interface KetQuaGuiThuDatMatKhau {
   ok: true;
   trang_thai?: TrangThaiTenant;
-  mat_khau_tam: string;
+  /** Địa chỉ thư đã gửi tới — để chủ dự án đối chiếu đúng người. */
   email: string;
-  mat_khau_tam_het_han: string;
+  da_gui_thu: boolean;
+  /** Mốc hết hạn của liên kết (72 giờ). */
+  het_han: string;
 }
 
 export interface AuditRow {

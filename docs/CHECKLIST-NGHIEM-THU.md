@@ -263,3 +263,105 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 ## D. Điều kiện hoàn thành toàn dự án
 
 Tất cả U0–U15 đạt Definition of Done, test hồi quy toàn bộ xanh, và hai vòng giám sát rủi ro (mục C) đang chạy ổn định. **Lưu ý phạm vi:** U0–U12 (Backend + Xử lý/Dữ liệu) đã ✅; **U15 (Frontend — Tầng trình bày) hiện KẾ HOẠCH, chưa hiện thực** — dự án chỉ "hoàn thành đủ 3 lớp vận hành" khi U15 đạt DoD.
+
+---
+
+## E. Lát cắt 3 (U34 / QĐ-14) — runbook deploy & nghiệm thu
+
+> Mã đã xong và `make test` toàn kho xanh (172 file / 1449 test), `make lint` mã thoát 0.
+> Nhánh `feat/u34-lat3-dat-mat-khau`. **Chưa có gì chạm production.**
+
+### Vì sao BỐN thứ phải đi một lượt
+
+Hợp đồng `POST /admin/tenants/:id/duyet` **đổi** (bỏ `mat_khau_tam`, thêm `da_gui_thu`) và
+route `reset-mat-khau` **đã xoá**. Lệch pha là hỏng thật, không phải hỏng đẹp:
+
+| Nếu deploy lệch | Hỏng thế nào |
+|---|---|
+| `vat-api` trước khi `make migrate` | Duyệt chết ngay — thiếu bảng `dat_mat_khau`. Đúng sự cố `deploy.md` đã ghi |
+| `vat-admin` trước `vat-api` | Cổng Admin gọi `gui-link-dat-mat-khau` → 404 |
+| `vat-api` mà quên `vat-admin` | Duyệt chạy, thư gửi đi, nhưng Cổng Admin đọc `mat_khau_tam` không còn tồn tại → hộp thoại vỡ |
+| `vat-api` mà quên `vat-web` | Thư tới tay khách mang liên kết `/dat-mat-khau` → **trang trắng** |
+
+### 1. Áp migration 0014
+
+```bash
+make migrate
+```
+
+⚠️ **`drizzle-kit migrate` NUỐT thông báo lỗi** — chỉ quay spinner rồi thoát mã 1. Hỏng thì
+áp tay bằng `pg`: tách theo `--> statement-breakpoint`, chạy trong transaction, in lỗi
+**TỪNG CÂU**. Không có bước này thì mò cả buổi (bài học migration 0013).
+
+### 2. Hậu kiểm DB — 5 điểm, chạy trên `DATABASE_URL` production
+
+Đây là **chỗ duy nhất** kiểm chứng được quyền thật. Test trong kho chạy PGlite dưới
+superuser nên chỉ kiểm được *khai báo*, không kiểm được *thi hành*.
+
+```sql
+-- 1. Bảng có, RLS bật + force, KHÔNG policy nào (fail-closed)
+SELECT relrowsecurity, relforcerowsecurity,
+       (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid) AS so_policy
+FROM pg_class c WHERE c.relname = 'dat_mat_khau';
+-- kỳ vọng: t | t | 0
+
+-- 2-4. Hai hàm thuộc đúng role; vat_app gọi được; PUBLIC KHÔNG gọi được
+SELECT p.proname, r.rolname AS chu_so_huu,
+       has_function_privilege('vat_app', p.oid, 'EXECUTE') AS vat_app_goi_duoc,
+       has_function_privilege('public',  p.oid, 'EXECUTE') AS public_goi_duoc
+FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
+WHERE p.proname IN ('dat_mat_khau_tao', 'dat_mat_khau_dung');
+-- kỳ vọng: 2 hàng, chu_so_huu = dat_mat_khau_api, vat_app_goi_duoc = t, public_goi_duoc = f
+
+-- 5. Còn hàng nào mang mật khẩu tạm đang sống không? (chỉ để BIẾT, không chặn deploy)
+SELECT count(*) FROM nguoi_dung WHERE mat_khau_tam_het_han IS NOT NULL;
+```
+
+Điểm 5 quyết định khi nào dọn được hai cột đó — xem BACKLOG. **Bằng 0 không phải điều kiện
+để deploy**; cổng chặn ở `routes/auth.ts` vẫn giữ dù bằng bao nhiêu.
+
+Nếu điểm 2–4 sai (thường vì role app tên khác `vat_app`/`app_user`), migration đã
+`RAISE WARNING` — cấp tay:
+
+```sql
+GRANT EXECUTE ON FUNCTION public.dat_mat_khau_tao(uuid,text,timestamptz),
+                          public.dat_mat_khau_dung(text,text) TO <ten_role_app>;
+```
+
+### 3. Deploy ba worker, ĐÚNG thứ tự
+
+```
+vat-api  →  vat-web  →  vat-admin
+```
+
+### 4. Smoke sau deploy (không dừng ở /health)
+
+`/health` vẫn 200 trong khi đường mới đã chết — nó không đủ để kết luận gì.
+
+- [ ] Mở `https://vatengine.tourdao.vn/dat-mat-khau` (KHÔNG kèm token) → phải thấy
+      **"Liên kết không hợp lệ"**, không phải trang trắng. Trang trắng = SPA fallback chưa
+      nhận route mới.
+- [ ] Mở Cổng Admin, vào tab **Đang hoạt động** → nút phải là **"Gửi lại link đặt mật khẩu"**,
+      KHÔNG còn "Cấp lại mật khẩu".
+
+### 5. Nghiệm thu — bằng NGƯỜI THẬT, không bằng test tự động
+
+Chuỗi này đã có test phủ. Thứ chưa có bằng chứng là **đường thật xuyên qua bốn hệ thống**
+(DB · vat-api · SES · vat-web) — test không chạm tới được.
+
+- [ ] Đăng ký một hồ sơ thật trên `vatengine.tourdao.vn` bằng địa chỉ thật
+- [ ] Nhận thư xác thực → bấm link → thấy "chờ duyệt" (Lát cắt 1, đã LIVE)
+- [ ] Điện thoại chủ dự án kêu (Telegram) đúng ở bước xác thực
+- [ ] Vào Cổng Admin bấm **Duyệt** → hộp thoại báo **"Đã gửi thư đặt mật khẩu"** tới đúng
+      địa chỉ, và **KHÔNG hiện mã 6 số nào** ← đây là điều kiện cốt lõi của QĐ-14
+- [ ] Mở hộp thư khách → có thư **"Đặt mật khẩu cho tài khoản VATEngine"**
+- [ ] Bấm liên kết → đặt mật khẩu → **đăng nhập được**
+- [ ] Bấm lại đúng liên kết đó lần hai → thấy **"Liên kết này đã được dùng"** (không phải
+      lỗi chung chung)
+
+### Nếu hộp thoại báo "⚠️ CHƯA gửi được thư"
+
+Doanh nghiệp **đã được duyệt** (trạng thái đã đổi trong DB) nhưng thư không đi. Bấm
+**"Gửi lại thư"** ngay trong hộp thoại. Vẫn hỏng thì vấn đề nằm ở cấu hình SES phía ta,
+không ở hộp thư khách — kiểm `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION`
+(`ap-southeast-1`) / `EMAIL_FROM` (`no-reply@vatengine.tourdao.vn`) trước khi báo cho khách.

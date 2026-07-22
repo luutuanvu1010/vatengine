@@ -7,8 +7,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AdminApiError, adminApi } from "../../lib/adminApiClient";
-import type { KetQuaCapMatKhau, TenantRow, TrangThaiTenant } from "../../lib/types";
-import { MatKhauTamDialog } from "./MatKhauTamDialog";
+import type { KetQuaGuiThuDatMatKhau, TenantRow, TrangThaiTenant } from "../../lib/types";
+import { DaGuiThuDialog } from "./DaGuiThuDialog";
 
 const TAB: Array<{ ma: TrangThaiTenant | "tat_ca"; nhan: string }> = [
   // "Chờ duyệt" đứng đầu VÀ là mặc định: đó là việc cần làm của chủ dự án, không phải
@@ -27,19 +27,21 @@ const NHAN_TRANG_THAI: Record<string, { chu: string; mau: string }> = {
   tu_choi: { chu: "Đã từ chối", mau: "var(--chu-mo)" },
 };
 
-type HanhDong = "duyet" | "tu_choi" | "khoa" | "mo_khoa" | "reset";
+type HanhDong = "duyet" | "tu_choi" | "khoa" | "mo_khoa" | "gui_lai_link";
 
 const XAC_NHAN: Record<HanhDong, (t: TenantRow) => string> = {
-  duyet: (t) => `Duyệt "${t.ten}" (MST ${t.mst})? Hệ thống sẽ cấp mật khẩu tạm cho khách.`,
+  duyet: (t) =>
+    `Duyệt "${t.ten}" (MST ${t.mst})? Hệ thống sẽ gửi thư kèm liên kết đặt mật khẩu cho khách.`,
   tu_choi: (t) => `Từ chối "${t.ten}"? Đây là trạng thái CUỐI — không hoàn tác được.`,
   khoa: (t) => `Khóa "${t.ten}"? Khách sẽ không đăng nhập mới được nữa.`,
   mo_khoa: (t) => `Mở khóa "${t.ten}"? Khách đăng nhập lại được ngay.`,
-  reset: (t) => `Cấp lại mật khẩu tạm cho "${t.ten}"? Mật khẩu hiện tại sẽ hết hiệu lực.`,
+  gui_lai_link: (t) =>
+    `Gửi lại liên kết đặt mật khẩu cho "${t.ten}"? Liên kết cũ sẽ hết hiệu lực ngay.`,
 };
 
-/** Hai nhóm phản hồi: `duyet`/`reset` kèm mật khẩu tạm, còn lại chỉ trạng thái mới.
+/** Hai nhóm phản hồi: `duyet`/`gui_lai_link` kèm kết quả gửi thư, còn lại chỉ trạng thái mới.
  * Khai tường minh để `useMutation` có MỘT kiểu dữ liệu thay vì suy ra union từ switch. */
-type KetQuaThaoTac = KetQuaCapMatKhau | { ok: true; trang_thai: TrangThaiTenant };
+type KetQuaThaoTac = KetQuaGuiThuDatMatKhau | { ok: true; trang_thai: TrangThaiTenant };
 
 function goiApi(hanhDong: HanhDong, id: string): Promise<KetQuaThaoTac> {
   switch (hanhDong) {
@@ -51,8 +53,8 @@ function goiApi(hanhDong: HanhDong, id: string): Promise<KetQuaThaoTac> {
       return adminApi.khoaTenant(id);
     case "mo_khoa":
       return adminApi.moKhoaTenant(id);
-    case "reset":
-      return adminApi.resetMatKhau(id);
+    case "gui_lai_link":
+      return adminApi.guiLaiLinkDatMatKhau(id);
   }
 }
 
@@ -62,7 +64,7 @@ export function hanhDongChoTrangThai(trangThai: string): HanhDong[] {
     case "cho_duyet":
       return ["duyet", "tu_choi"];
     case "active":
-      return ["khoa", "reset"];
+      return ["khoa", "gui_lai_link"];
     case "khoa":
       return ["mo_khoa"];
     default:
@@ -75,14 +77,17 @@ const NHAN_NUT: Record<HanhDong, string> = {
   tu_choi: "Từ chối",
   khoa: "Khóa",
   mo_khoa: "Mở khóa",
-  reset: "Cấp lại mật khẩu",
+  gui_lai_link: "Gửi lại link đặt mật khẩu",
 };
 
 export function TenantsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<TrangThaiTenant | "tat_ca">("cho_duyet");
   const [tim, setTim] = useState("");
-  const [matKhauTam, setMatKhauTam] = useState<KetQuaCapMatKhau | null>(null);
+  const [ketQuaGui, setKetQuaGui] = useState<KetQuaGuiThuDatMatKhau | null>(null);
+  // Nhớ tenant vừa thao tác để nút "Gửi lại thư" trong hộp thoại biết gửi cho AI. Thiếu
+  // nó thì nút đó hoặc phải đóng hộp thoại đi tìm lại hàng, hoặc gửi nhầm người.
+  const [tenantDangThaoTac, setTenantDangThaoTac] = useState<string | null>(null);
   const [loiThaoTac, setLoiThaoTac] = useState<string | null>(null);
 
   const ds = useQuery({
@@ -99,8 +104,9 @@ export function TenantsPage() {
     mutationFn: ({ hanhDong, id }: { hanhDong: HanhDong; id: string }) => goiApi(hanhDong, id),
     onSuccess: (kq) => {
       setLoiThaoTac(null);
-      // Duyệt và Cấp-lại trả về mật khẩu tạm — hiện ngay, vì không có lần thứ hai.
-      if ("mat_khau_tam" in kq) setMatKhauTam(kq as KetQuaCapMatKhau);
+      // Duyệt và Gửi-lại trả kết quả gửi thư — hiện ngay, vì `da_gui_thu === false` là
+      // thứ chỉ con người xử lý được, và chủ dự án là người duy nhất nhìn thấy nó.
+      if ("da_gui_thu" in kq) setKetQuaGui(kq as KetQuaGuiThuDatMatKhau);
       void qc.invalidateQueries({ queryKey: ["tenants"] });
     },
     onError: (e) => {
@@ -124,6 +130,7 @@ export function TenantsPage() {
 
   function bam(hanhDong: HanhDong, t: TenantRow) {
     if (!window.confirm(XAC_NHAN[hanhDong](t))) return;
+    setTenantDangThaoTac(t.id);
     thaoTac.mutate({ hanhDong, id: t.id });
   }
 
@@ -268,7 +275,17 @@ export function TenantsPage() {
         </>
       )}
 
-      {matKhauTam && <MatKhauTamDialog ketQua={matKhauTam} onDong={() => setMatKhauTam(null)} />}
+      {ketQuaGui && (
+        <DaGuiThuDialog
+          ketQua={ketQuaGui}
+          onDong={() => setKetQuaGui(null)}
+          onGuiLai={() => {
+            if (tenantDangThaoTac) {
+              thaoTac.mutate({ hanhDong: "gui_lai_link", id: tenantDangThaoTac });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

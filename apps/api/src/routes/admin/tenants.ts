@@ -13,12 +13,14 @@ import { sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { ghiAuditAdmin } from "../../admin/auditAdmin";
-import { hanMatKhauTam, sinhMatKhauTam } from "../../admin/matKhauTam";
 import { requireSuperAdmin } from "../../admin/requireSuperAdmin";
 import { type HanhDongAdmin, chuyenTuHanhDong } from "../../admin/tenantStateMachine";
 import { isUuid } from "../../auth";
-import { hashPassword, resolvePbkdf2Iterations } from "../../password";
-import type { AdminEnv, AnyDb, AppDeps } from "../../types";
+import { thuDatMatKhau } from "../../email/mau";
+import { bamToken, sinhToken } from "../../email/token";
+import { hanTokenDatMatKhau, lienKetDatMatKhau } from "../../email/tokenDatMatKhau";
+import type { AdminEnv, AnyDb, AppDeps, Env } from "../../types";
+import { urlWeb } from "../../urlWeb";
 
 const patchSchema = z
   .object({
@@ -40,20 +42,46 @@ const HANH_DONG_THEO_PATH: Record<string, HanhDongAdmin> = {
   "mo-khoa": "mo_khoa",
 };
 
-/** Đặt mật khẩu TẠM cho tài khoản chính của tenant. Dùng chung cho "duyệt" và "reset".
- * Trả mật khẩu THÔ cho nơi gọi để đưa vào phản hồi ĐÚNG MỘT LẦN (QĐ-1) — nơi gọi có
- * trách nhiệm không đưa nó vào audit/log. */
-async function datMatKhauTam(db: AnyDb, tenantId: string, env: { PBKDF2_ITERATIONS?: string }) {
-  const matKhauTam = sinhMatKhauTam();
-  const hetHan = hanMatKhauTam();
-  // Băm ở tầng Worker (WebCrypto) rồi mới xuống DB: mật khẩu thô KHÔNG BAO GIỜ đi vào
-  // Postgres, nên nó cũng không lọt vào nhật ký truy vấn chậm hay bản sao lưu của DB.
-  const hash = await hashPassword(matKhauTam, resolvePbkdf2Iterations(env));
+/**
+ * Lát cắt 3 (QĐ-14) — Tạo token đặt mật khẩu rồi GỬI THƯ. Dùng chung cho "duyệt" và
+ * "gửi lại link". Thay hẳn `datMatKhauTam` cũ (mật khẩu tạm 6 chữ số).
+ *
+ * Trả `null` khi tenant không có tài khoản `quan_tri` nào (không tồn tại, hoặc dữ liệu bất
+ * thường) — nơi gọi trả 404. KHÔNG tạo người dùng mới: đó không phải việc của đường này.
+ *
+ * `daGuiThu` phải NỔI LÊN tới phản hồi, không được nuốt. Thư hỏng nghĩa là khách không bao
+ * giờ nhận được gì, và chủ dự án là người DUY NHẤT có thể phát hiện — nhưng chỉ khi màn
+ * hình nói ra. Đây đúng chỗ mà một đường lỗi bị bỏ quên vì nó không nằm trên luồng chính.
+ */
+async function guiLinkDatMatKhau(
+  db: AnyDb,
+  tenantId: string,
+  tenDoanhNghiep: string,
+  env: Env,
+  deps: AppDeps,
+): Promise<{ email: string; hetHan: Date; daGuiThu: boolean } | null> {
+  const token = sinhToken();
+  const hetHan = hanTokenDatMatKhau();
   const r = (await db.execute(
-    sql`select id, email from admin_dat_mat_khau_tam(${tenantId}::uuid, ${hash}, ${hetHan.toISOString()}::timestamptz)`,
-  )) as { rows: Array<{ id: string; email: string }> };
+    sql`select r_nguoi_dung_id, r_email from dat_mat_khau_tao(${tenantId}::uuid, ${await bamToken(token)}, ${hetHan.toISOString()}::timestamptz)`,
+  )) as { rows: Array<{ r_nguoi_dung_id: string; r_email: string }> };
   const row = r.rows[0];
-  return row ? { matKhauTam, hetHan, email: row.email, nguoiDungId: row.id } : null;
+  if (!row) return null;
+
+  // Thư hỏng KHÔNG được ném đè lên kết quả chính: tenant đã đổi trạng thái trong DB rồi,
+  // trả 500 cho admin sẽ khiến họ bấm Duyệt lại và nhận 409 khó hiểu (F9, cùng lớp với
+  // `/dang-ky`). Nhưng KHÁC với Telegram, thư này là mắt xích BẮT BUỘC của chuỗi — nên
+  // phản hồi phải NÓI RA rằng thư chưa gửi được.
+  let daGuiThu = false;
+  try {
+    const thu = thuDatMatKhau(tenDoanhNghiep, lienKetDatMatKhau(urlWeb(env), token));
+    const kq = await deps.getEmailTransport(env).gui({ ...thu, den: row.r_email });
+    daGuiThu = kq.daGui;
+    if (!kq.daGui) console.warn(`[admin] không gửi được thư đặt mật khẩu: ${kq.lyDo}`);
+  } catch (err) {
+    console.warn("[admin] gửi thư đặt mật khẩu ném lỗi:", err instanceof Error ? err.message : err);
+  }
+  return { email: row.r_email, hetHan, daGuiThu };
 }
 
 export function adminTenantsRoutes(deps: AppDeps) {
@@ -138,30 +166,33 @@ export function adminTenantsRoutes(deps: AppDeps) {
         chiTiet: { cu: tu, moi: den },
       });
 
-      // Duyệt = mở tài khoản cho khách ⇒ phải có mật khẩu để đăng nhập lần đầu. U17b tạo
-      // `nguoi_dung` với `password_hash = NULL` (đặt mật khẩu là việc của luồng sau) nên
-      // nếu không làm bước này, tenant vừa duyệt vẫn KHÔNG đăng nhập được — đúng chỗ kẹt
-      // mà cả U18 sinh ra để gỡ.
+      // Duyệt = mở tài khoản cho khách ⇒ khách phải đặt được mật khẩu. U17b tạo
+      // `nguoi_dung` với `password_hash = NULL` nên nếu không làm bước này, tenant vừa
+      // duyệt vẫn KHÔNG đăng nhập được.
+      //
+      // Trước Lát cắt 3, chỗ này sinh mật khẩu tạm 6 chữ số rồi trả về cho admin tự chuyển
+      // cho khách qua điện thoại (QĐ-1). QĐ-14 gỡ hẳn đường đó: hệ thống tự gửi thư kèm
+      // liên kết, và admin không còn nhìn thấy mật khẩu của khách nữa.
       if (hanhDong === "duyet") {
-        const dat = await datMatKhauTam(db, id, c.env);
-        if (dat) {
+        const ten = (await db.execute(sql`select ten from admin_chi_tiet_tenant(${id}::uuid)`)) as {
+          rows: Array<{ ten: string }>;
+        };
+        const kq = await guiLinkDatMatKhau(db, id, ten.rows[0]?.ten ?? "", c.env, deps);
+        if (kq) {
           await ghiAuditAdmin(db, {
-            hanhDong: "cap_mat_khau_tam",
+            hanhDong: "gui_link_dat_mat_khau",
             doiTuong: id,
             nguoiThucHien: adminId,
-            // GHI RẰNG đã cấp, KHÔNG ghi cấp cái gì. `maskSensitive` không cứu được ở đây:
-            // mật khẩu tạm là chuỗi 6 chữ số, không có tên khoá nào để nó nhận ra mà che.
-            chiTiet: { da_cap: true, het_han: dat.hetHan.toISOString() },
+            // QĐ-17 — ghi RẰNG đã gửi, KHÔNG ghi gửi cái gì và gửi cho ai. Token là chìa
+            // khoá; email là dữ liệu cá nhân, mà bảng này thì bất biến.
+            chiTiet: { da_gui_thu: kq.daGuiThu, het_han: kq.hetHan.toISOString() },
           });
-          // QĐ-1 — mật khẩu tạm trả về ĐÚNG MỘT LẦN, ngay tại đây. Không có đường nào đọc
-          // lại nó: DB chỉ giữ bản băm. Super-admin chuyển cho khách ngoài luồng cho tới
-          // khi U24 dựng xong hạ tầng email (AWS SES).
           return c.json({
             ok: true,
             trang_thai: den,
-            mat_khau_tam: dat.matKhauTam,
-            email: dat.email,
-            mat_khau_tam_het_han: dat.hetHan.toISOString(),
+            email: kq.email,
+            da_gui_thu: kq.daGuiThu,
+            het_han: kq.hetHan.toISOString(),
           });
         }
       }
@@ -210,28 +241,40 @@ export function adminTenantsRoutes(deps: AppDeps) {
     }
   });
 
-  // ── Cấp lại mật khẩu tạm ───────────────────────────────────────────────────────────
-  r.post("/:id/reset-mat-khau", async (c) => {
+  // ── Gửi lại liên kết đặt mật khẩu ──────────────────────────────────────────────────
+  // Tên route đổi từ `reset-mat-khau` (QĐ-14): nó không còn reset mật khẩu nào cả, nó gửi
+  // một lá thư. Giữ tên cũ là để lại một cái tên nói dối trong hợp đồng API — cùng họ với
+  // bài học "thao tác GHI diễn đạt như câu đọc".
+  //
+  // Tác dụng phụ CÓ CHỦ Ý: mọi liên kết chưa dùng của tài khoản này chết ngay (hàm
+  // `dat_mat_khau_tao` lo). Bấm "Gửi lại" mà liên kết cũ vẫn sống là hai chìa cùng mở một
+  // cửa, và người bấm tưởng mình vừa thu hồi chìa cũ.
+  r.post("/:id/gui-link-dat-mat-khau", async (c) => {
     const id = c.req.param("id");
     if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
     const { db, close } = await deps.getDb(c.env);
     try {
-      const dat = await datMatKhauTam(db, id, c.env);
-      // NULL = không tìm thấy tài khoản `quan_tri` nào của tenant này (tenant không tồn
-      // tại, hoặc dữ liệu bất thường). Không tạo mới — U18 không phải nơi tạo người dùng.
-      if (!dat) return c.json({ error: "not_found" }, 404);
+      const ten = (await db.execute(sql`select ten from admin_chi_tiet_tenant(${id}::uuid)`)) as {
+        rows: Array<{ ten: string }>;
+      };
+      if (ten.rows.length === 0) return c.json({ error: "not_found" }, 404);
+
+      const kq = await guiLinkDatMatKhau(db, id, ten.rows[0]?.ten ?? "", c.env, deps);
+      // NULL = tenant có thật nhưng không có tài khoản `quan_tri` nào (dữ liệu bất thường).
+      // Không tạo mới — U18 không phải nơi tạo người dùng.
+      if (!kq) return c.json({ error: "not_found" }, 404);
 
       await ghiAuditAdmin(db, {
-        hanhDong: "reset_mat_khau_tenant",
+        hanhDong: "gui_link_dat_mat_khau",
         doiTuong: id,
         nguoiThucHien: c.get("adminId"),
-        chiTiet: { da_cap: true, het_han: dat.hetHan.toISOString() },
+        chiTiet: { da_gui_thu: kq.daGuiThu, het_han: kq.hetHan.toISOString(), gui_lai: true },
       });
       return c.json({
         ok: true,
-        mat_khau_tam: dat.matKhauTam,
-        email: dat.email,
-        mat_khau_tam_het_han: dat.hetHan.toISOString(),
+        email: kq.email,
+        da_gui_thu: kq.daGuiThu,
+        het_han: kq.hetHan.toISOString(),
       });
     } finally {
       await close();

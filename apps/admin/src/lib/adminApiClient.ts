@@ -13,7 +13,7 @@ import type {
   AuditPage,
   ChiTietTenant,
   DanhSachTenant,
-  KetQuaCapMatKhau,
+  KetQuaGuiThuDatMatKhau,
   TrangThaiTenant,
 } from "./types";
 
@@ -130,11 +130,11 @@ export const adminApi = {
   },
 
   /**
-   * Duyệt tenant. Phản hồi mang `mat_khau_tam` — CHỈ LẦN NÀY.
-   * Nơi gọi có trách nhiệm hiện nó cho người dùng ngay và KHÔNG lưu lại ở đâu (R4):
-   * không localStorage, không URL, không log. DB chỉ giữ bản băm nên không có đường đọc lại.
+   * Duyệt tenant. Hệ thống TỰ gửi thư kèm liên kết đặt mật khẩu (QĐ-14) — phản hồi chỉ
+   * cho biết thư đã đi hay chưa, KHÔNG mang mật khẩu nào. Nơi gọi phải hiện `da_gui_thu`
+   * ra: gửi hỏng mà màn hình báo "xong" thì khách chờ một lá thư không bao giờ tới.
    */
-  duyetTenant(id: string): Promise<KetQuaCapMatKhau> {
+  duyetTenant(id: string): Promise<KetQuaGuiThuDatMatKhau> {
     return request("POST", `/admin/tenants/${id}/duyet`);
   },
   tuChoiTenant(id: string): Promise<{ ok: true; trang_thai: TrangThaiTenant }> {
@@ -146,9 +146,10 @@ export const adminApi = {
   moKhoaTenant(id: string): Promise<{ ok: true; trang_thai: TrangThaiTenant }> {
     return request("POST", `/admin/tenants/${id}/mo-khoa`);
   },
-  /** Cấp lại mật khẩu tạm. Cùng hợp đồng "một lần" như duyetTenant. */
-  resetMatKhau(id: string): Promise<KetQuaCapMatKhau> {
-    return request("POST", `/admin/tenants/${id}/reset-mat-khau`);
+  /** Gửi LẠI liên kết đặt mật khẩu. Mọi liên kết cũ chưa dùng của tài khoản này chết ngay
+   * — bấm "Gửi lại" mà liên kết cũ vẫn sống là hai chìa cùng mở một cửa. */
+  guiLaiLinkDatMatKhau(id: string): Promise<KetQuaGuiThuDatMatKhau> {
+    return request("POST", `/admin/tenants/${id}/gui-link-dat-mat-khau`);
   },
 
   /**
