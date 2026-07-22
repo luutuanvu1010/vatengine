@@ -1,3 +1,11 @@
+> ⚠️ **CÁCH CHIA ĐƠN VỊ Ở §4 ĐÃ BỊ THAY THẾ (2026-07-22)** bởi
+> **`U34-KE-HOACH-LAT-CAT.md`** — chia theo LÁT CẮT GIAO ĐƯỢC thay vì theo tầng kỹ thuật.
+> Lý do: U34b xong mà không ai dùng được gì; U34c xong nửa backend rồi mới lộ ra thiếu
+> trang SPA. Đơn vị mà xong vẫn không giao được cho ai là ranh giới sai.
+>
+> Các **quyết định** (§2, QĐ-12…QĐ-15) và **ràng buộc bắt buộc** (§5) trong file này vẫn
+> còn hiệu lực — chỉ phần §4 phân rã đơn vị là hết hiệu lực.
+
 # U34 — Xác thực email khi đăng ký + báo admin + khai tử mật khẩu tạm
 
 > Chốt 2026-07-22. Tài liệu này là **phương án đã duyệt**, chưa qua QA1 chi tiết cho từng đơn vị.
