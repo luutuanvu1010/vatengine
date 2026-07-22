@@ -110,6 +110,10 @@ Bài học đắt nhất của phiên. Các thao tác ghi của admin viết dư
 | **QĐ-9** | Giữ `--fs-base: 16px`; chỉ sửa chỗ lạm dụng `--fs-sm` ở **văn bản đọc** | 21-07 | U20 W4 |
 | **QĐ-10** | **Tắt cache Hyperdrive**, không bọc transaction | 21-07 | ⚠️ Mã vẫn diễn đạt ghi bằng `SELECT fn()`. **Bật lại cache = lỗi quay về, im lặng** |
 | **QĐ-11** | **Gỡ toàn bộ rate-limit tầng ứng dụng** (`SignupLimiter` + `LoginLimiter`), thay bằng WAF Cloudflare + **Turnstile** ở Đăng ký và Đăng nhập | 21-07 | ⚠️ WAF chặn theo **IP**, `LoginLimiter` chặn theo **TÀI KHOẢN** — không thay thế nhau. Hệ quả: mật khẩu tạm 6 số **chỉ còn 1/3 điều kiện bù** (hạn 72h); QĐ-7 đã bỏ "buộc đổi". Đánh đổi được nêu rõ và chủ dự án chọn có ý thức. Xem `U33-plan-thuc-thi.md` §2 |
+| **QĐ-12** | **KHÔNG duyệt bằng đường link trong email.** Thông báo chỉ mang **deep link** mở hồ sơ trong Cổng Admin; Duyệt vẫn là `POST` sau `requireSuperAdmin`. Nút inline Telegram là giai đoạn 2 | 22-07 | Link duyệt trong email là thao tác GHI diễn đạt như câu đọc — **cùng lớp lỗi với sự cố Hyperdrive**. Email client / Telegram / phần mềm quét link **tự fetch URL** ⇒ duyệt trước khi người kịp đọc. Xem `U34-plan-email-va-thong-bao.md` §2 |
+| **QĐ-13** | **Nhà cung cấp email = Resend** | 22-07 | Gọi thẳng từ Workers, dựng nhanh nhất. Đã **tra tài liệu chính thức 22-07**: free = 3.000/tháng nhưng **trần 100/ngày**; Pro $20/th = 50.000/tháng, bỏ trần ngày. ⚠️ Trần 100/ngày **tự nó là đích tấn công** — cạn hạn mức thì email đặt mật khẩu của khách thật cũng không gửi được |
+| **QĐ-14** | **Bỏ hẳn mật khẩu tạm 6 chữ số**, thay bằng link đặt mật khẩu dùng một lần (72h) | 22-07 | Xoá món nợ mức CAO thay vì cứu một lập luận đã mất 2/3 chân (QĐ-7 + QĐ-11). Admin thôi phải nhìn thấy mật khẩu của khách |
+| **QĐ-15** | **Chỉ báo admin SAU khi khách đã xác thực email** | 22-07 | Báo ngay lúc đăng ký thì kênh Telegram/email của admin thành đích spam của chính cổng công khai vừa mở |
 
 ---
 
