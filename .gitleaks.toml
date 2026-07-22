@@ -46,6 +46,30 @@ regexes = [
   '''0xTEST_SECRET_KHONG_PHAI_THAT''',
 ]
 
+[[allowlists]]
+description = "FP đã kiểm chứng (2026-07-22): Turnstile SITE key — công khai theo thiết kế, không phải bí mật."
+# Bối cảnh: site key Turnstile được Cloudflare NHÚNG VÀO HTML CLIENT cho mọi khách xem
+# được — đó là cách widget hoạt động. Bí mật thật là TURNSTILE_SECRET_KEY, nằm ở Workers
+# Secret của vat-api và KHÔNG bao giờ vào repo. Giá trị dưới đây vốn đã public trong bundle
+# production (`/assets/index-*.js`) trước khi vào file này.
+#
+# Vì sao PHẢI commit dù entropy cao: biến này nhúng LÚC BUILD. Không có nó trong
+# .env.production thì `npm run build -w apps/web` ra bundle khoá nút Đăng nhập trong khi
+# `wrangler deploy` vẫn báo thành công — sự cố mất đăng nhập toàn hệ thống 2026-07-22
+# (xem docs/plans/production-deploy.md). Để nó ngoài repo là đánh đổi một cảnh báo giả lấy
+# một cái bẫy sập thật.
+#
+# Neo theo đúng chuỗi literal, KHÔNG dùng mẫu rộng kiểu `0x4[A-Za-z0-9_-]+` — mẫu rộng sẽ
+# lặng lẽ tha cho mọi khoá tương lai có cùng hình dạng, kể cả secret thật. Đổi site key ⇒
+# sửa dòng regex này, có chủ đích (cùng nguyên tắc mục 0xTEST_SECRET bên trên).
+condition = "AND"
+paths = [
+  '''apps/web/\.env\.production''',
+]
+regexes = [
+  '''0x4AAAAAAD6d5RwMpZVh-PZq''',
+]
+
 # CHỦ Ý không allowlist các file *.example / .dev.vars.example: chúng chỉ chứa
 # placeholder (baseline scan 2026-07-15 sạch), và vẫn muốn gitleaks quét để bắt
 # trường hợp lỡ tay đưa bí mật thật vào file mẫu.
