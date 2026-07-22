@@ -6,8 +6,13 @@ title = "VATCrawlbot gitleaks"
 [extend]
 useDefault = true
 
-[allowlist]
-description = "False-positive đã kiểm chứng (2026-07-15): giá trị ví dụ trong tài liệu, không phải bí mật thật."
+# Dùng dạng MẢNG `[[allowlists]]` (không phải `[allowlist]` đơn) vì đã có hơn một
+# false-positive độc lập: mỗi mục giữ `condition = "AND"` riêng của nó. Gộp chung vào một
+# mục sẽ làm AND bắc cầu sai — path của mục này khớp với regex của mục kia, và blast radius
+# rộng ra đúng thứ mà condition=AND sinh ra để thu hẹp.
+
+[[allowlists]]
+description = "FP đã kiểm chứng (2026-07-15): giá trị ví dụ trong ADR-0001, không phải bí mật thật."
 # condition=AND: finding chỉ được bỏ qua khi ĐỒNG THỜI (a) nằm trong đúng file
 # ADR-0001 VÀ (b) khớp mẫu hex ví dụ. Nhờ vậy nếu về sau có chuỗi trùng tiền tố
 # `6a549f...` ở BẤT KỲ file nào khác, gitleaks VẪN bắt (thu hẹp blast radius —
@@ -22,6 +27,25 @@ paths = [
 regexes = [
   '''6a549f[0-9a-f]{18}''',
 ]
+
+[[allowlists]]
+description = "FP đã kiểm chứng (2026-07-22): hằng SECRET giả trong test unit Turnstile (U33)."
+# Bối cảnh: CI trunk ĐỎ ở commit 8be6fd3 vì rule `generic-api-key` (entropy 3.72) bắt hằng
+# `0xTEST_SECRET_KHONG_PHAI_THAT` ở apps/api/test/unit/turnstile.test.ts:14. Chuỗi tự nó
+# nói ra nó là gì. Không sửa được bằng cách đổi file hiện tại: gitleaks quét TOÀN LỊCH SỬ,
+# nên giá trị vẫn nằm ở commit cũ vĩnh viễn.
+#
+# Neo theo đúng chuỗi literal chứ KHÔNG theo mẫu chung như `0xTEST[A-Z_]+`: mẫu rộng sẽ
+# lặng lẽ tha cho mọi hằng đặt tên giống vậy trong tương lai, kể cả khi ai đó dán nhầm secret
+# thật vào một biến tên `0xTEST_...`. Thêm secret giả mới ⇒ thêm dòng mới ở đây, có chủ đích.
+condition = "AND"
+paths = [
+  '''apps/api/test/unit/turnstile\.test\.ts''',
+]
+regexes = [
+  '''0xTEST_SECRET_KHONG_PHAI_THAT''',
+]
+
 # CHỦ Ý không allowlist các file *.example / .dev.vars.example: chúng chỉ chứa
 # placeholder (baseline scan 2026-07-15 sạch), và vẫn muốn gitleaks quét để bắt
 # trường hợp lỡ tay đưa bí mật thật vào file mẫu.
