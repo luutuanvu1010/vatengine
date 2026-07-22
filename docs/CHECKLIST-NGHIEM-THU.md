@@ -243,7 +243,7 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [ ] **U15.2** Tra cứu `GET /invoices`(+`/summary`) — toàn bộ bộ lọc (`filters.ts`) + phân trang (`limit`≤200); formatter **tiền-chuỗi KHÔNG ép float** (test >2^53), ngày-VN, nhãn trạng thái.
 - [ ] **U15.3** Chi tiết `GET /invoices/:id` (chỉ header — U6 #2).
 - [ ] **U15.4** Kết xuất `POST /exports` + convert (chỉ profile khả dụng) + tải `GET /exports/:id`; RBAC ẩn với `ke_toan`.
-- [ ] **U15.5** Đối chiếu `GET /reconcile` — 4 loại finding + tóm tắt; gap nhãn "nghi thiếu".
+- [ ] **U15.5** Đối chiếu `GET /reconcile` — 4 loại finding + tóm tắt; gap nhãn "nghi thiếu". ⚠️ **Màn ĐANG ẨN** khỏi bảng điều khiển từ 2026-07-22 (cờ `SHOW_RECONCILE=false`, `apps/web/src/lib/featureFlags.ts`): menu + route tắt, mã màn và `@vat/reconcile` giữ nguyên. Nghiệm thu màn này hoãn tới khi bật lại cờ.
 - [ ] **Ánh xạ dữ liệu (Nguyên tắc bằng chứng):** nhãn `ttxly`/`tthai` CHỈ cho mã đã kiểm chứng, mã lạ → số + "(chưa rõ)" (đồng bộ `@vat/reconcile statusCodes`); cột bảng = `EXPORT_COLUMNS`.
 - [ ] **Cách ly tenant + bảo mật client:** `tenant_id` lấy từ token (không tin client); không bí mật/không token trong mã/log.
 - [ ] **DoD chung (mục A)** + coverage tầng logic UI (formatter/mapping/guard) ≥ 80% + a11y smoke + **hồi quy U0–U15 xanh**.

@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { SHOW_RECONCILE } from "../../lib/featureFlags";
 import { vi } from "../../lib/i18n/vi";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
 import type { Role } from "../../types/api";
@@ -15,7 +16,9 @@ interface NavItem {
 const MAIN: NavItem[] = [
   { to: "/", label: vi.navDashboard, end: true },
   { to: "/invoices", label: vi.navInvoices },
-  { to: "/reconcile", label: vi.navReconcile },
+  // Cờ tính năng, KHÔNG dùng `visible` — `visible` dành riêng cho RBAC theo vai; trộn hai
+  // thứ khác bản chất vào một chỗ sẽ làm mờ ý nghĩa của cả hai.
+  ...(SHOW_RECONCILE ? [{ to: "/reconcile", label: vi.navReconcile }] : []),
   { to: "/exports", label: vi.navExports, visible: canExport },
   { to: "/tax-accounts", label: vi.navTaxAccounts, visible: canManageTaxAccounts },
 ];
