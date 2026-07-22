@@ -156,6 +156,25 @@ async function xuLyDangKy(c: Context<AppEnv>, deps: AppDeps, body: unknown) {
       }
       throw err;
     }
+    // Báo admin — SAU khi giao dịch đã commit, TRƯỚC khi trả lời khách.
+    //
+    // Đặt sau commit vì tin nhắn nói "đang chờ duyệt": gửi trước mà giao dịch rollback thì
+    // admin đi tìm một hồ sơ không tồn tại. Đổi lại, đăng ký thành công mà Telegram hỏng
+    // thì KHÔNG có cách nào báo lại — chấp nhận, vì hàng `dang_ky` trong audit_log và tab
+    // "Chờ duyệt" của Cổng Admin vẫn là nguồn sự thật đầy đủ; Telegram chỉ để biết SỚM.
+    //
+    // try/catch ở đây là lớp phòng thủ THỨ HAI: `baoDangKyMoi` bản thật đã cam kết không
+    // ném. Nhưng deps là thứ tiêm được, và một hiện thực tương lai (hoặc test) có thể ném.
+    // Đúng lớp lỗi F9: một nhánh phụ trợ tuyệt đối không được ném đè lên kết quả chính —
+    // khách đã có tenant trong DB rồi, không thể trả 500 cho họ vì bot của ta chết.
+    try {
+      await deps.baoDangKyMoi(c.env, { tenantId: idMoi, tenDoanhNghiep, mst, email });
+    } catch (err) {
+      console.warn(
+        "[dangKy] báo admin thất bại, bỏ qua:",
+        err instanceof Error ? err.message : err,
+      );
+    }
     return c.json({ ok: true, trangThai: "cho_duyet" }, 201);
   } finally {
     await close();

@@ -11,6 +11,7 @@ import {
   type Db,
   freshDb,
   injectDb,
+  makeBaoDangKySpy,
   makeEnv,
   makeTenant,
   stubTurnstile,
@@ -396,5 +397,67 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: "internal" });
     expect(closeSpy.called).toBe(1);
+  });
+});
+
+// ══ U34a — báo super-admin khi có đăng ký mới ═══════════════════════════════════════════
+describe("U34a — báo admin khi có hồ sơ đăng ký mới", () => {
+  let db: Db;
+
+  beforeEach(async () => {
+    stubTurnstile();
+    db = await freshDb();
+  });
+
+  it("đăng ký thành công → báo admin ĐÚNG MỘT LẦN, kèm đủ dữ liệu để quyết", async () => {
+    const spy = makeBaoDangKySpy();
+    const app = createApp(injectDb(db, undefined, undefined, undefined, spy.fn));
+    const res = await dangKy(app, body());
+    expect(res.status).toBe(201);
+
+    expect(spy.goi).toHaveLength(1);
+    expect(spy.goi[0]).toMatchObject({
+      tenDoanhNghiep: "Công ty TNHH ABC",
+      mst: "0100000099",
+      email: "chu.dn@congty.vn",
+    });
+    // tenantId phải là id THẬT vừa ghi, không phải chuỗi bịa — nếu sai, deep link trong
+    // thông báo (và U34e sau này) sẽ trỏ vào hư không.
+    const [t] = await db.select().from(tenants).where(eq(tenants.mst, "0100000099"));
+    expect(spy.goi[0]?.tenantId).toBe(t?.id);
+  });
+
+  it("🔴 đăng ký HỎNG (MST trùng → 409) → KHÔNG báo admin", async () => {
+    // Báo về một hồ sơ không tồn tại là bắt admin đi tìm thứ không có. Lời gọi nằm SAU
+    // commit chính vì vậy.
+    await makeTenant(db, "Cty đã có", "0100000099");
+    const spy = makeBaoDangKySpy();
+    const app = createApp(injectDb(db, undefined, undefined, undefined, spy.fn));
+    const res = await dangKy(app, body());
+    expect(res.status).toBe(409);
+    expect(spy.goi).toHaveLength(0);
+  });
+
+  it("🔴 body sai (400) → KHÔNG báo admin", async () => {
+    const spy = makeBaoDangKySpy();
+    const app = createApp(injectDb(db, undefined, undefined, undefined, spy.fn));
+    expect((await dangKy(app, body({ mst: "123" }))).status).toBe(400);
+    expect(spy.goi).toHaveLength(0);
+  });
+
+  it("🔴 (F9) thông báo NÉM LỖI → khách vẫn nhận 201 và tenant vẫn nằm trong DB", async () => {
+    // Đúng lớp lỗi F9: một nhánh phụ trợ ném đè lên kết quả chính. Khách đã có tenant
+    // trong DB rồi — trả 500 cho họ vì bot Telegram của ta chết là sai hai lần: vừa mất
+    // niềm tin, vừa khiến họ đăng ký lại và nhận 409 khó hiểu.
+    const spy = makeBaoDangKySpy({ nem: true });
+    const app = createApp(injectDb(db, undefined, undefined, undefined, spy.fn));
+    const res = await dangKy(app, body());
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ ok: true, trangThai: "cho_duyet" });
+    expect(spy.goi).toHaveLength(1);
+
+    const rows = await db.select().from(tenants).where(eq(tenants.mst, "0100000099"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.trangThai).toBe("cho_duyet");
   });
 });

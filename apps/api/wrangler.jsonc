@@ -47,7 +47,14 @@
   // H-A.5a — PBKDF2_ITERATIONS: số vòng băm mật khẩu SaaS cho hash MỚI. GIỮ 100000 trên
   // Free (đo: 600k ~42ms > trần CPU Free 10ms). ĐỔI "600000" (OWASP) SAU khi nâng Paid
   // (H-A.3). Không nhạy cảm; hash tự mô tả số vòng nên đổi không phá hàng cũ.
-  "vars": { "ENVIRONMENT": "production", "PBKDF2_ITERATIONS": "100000" },
+  // U34a — URL_CONG_ADMIN khai ở "vars" (KHÔNG phải secret): nó chỉ là địa chỉ công khai
+  // của Cổng Admin, dùng dựng deep link trong thông báo. Thứ bảo vệ cổng đó là Cloudflare
+  // Access, không phải việc giấu URL.
+  "vars": {
+    "ENVIRONMENT": "production",
+    "PBKDF2_ITERATIONS": "100000",
+    "URL_CONG_ADMIN": "https://adminvatengine.tourdao.vn"
+  },
 
   // "Đồng bộ ngay" (POST /tax-accounts/:id/sync) đẩy job vào hàng đợi vat-sync;
   // consumer là apps/sync-worker. API chỉ là PRODUCER (giữ stateless — ADR-0001 §3).
@@ -89,6 +96,11 @@
   // trả 503 (fail-closed có chủ ý, QĐ-11): sau khi gỡ rate-limit, captcha là lớp bảo vệ
   // duy nhất còn lại nên cấu hình sai KHÔNG được âm thầm mở cổng. Không khai ở "vars" —
   // đây là bí mật (security.md). Site key (công khai) nằm ở apps/web lúc build.
+  //
+  // U34a — TELEGRAM_BOT_TOKEN và TELEGRAM_CHAT_ID nạp qua `wrangler secret put`. THIẾU thì
+  // thông báo TẮT nhưng đăng ký vẫn chạy bình thường (FAIL-SILENT) — ngược chiều
+  // TURNSTILE_SECRET_KEY ở trên, và ngược có chủ ý: captcha bảo vệ hệ thống nên phải
+  // fail-closed; thông báo chỉ báo cho một con người nên không được chặn khách vì bot chết.
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình

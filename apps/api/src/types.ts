@@ -5,6 +5,7 @@ import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { BackfillDef } from "./backfillTracker";
 import type { Role } from "./rbac";
+import type { ThongTinDangKyMoi } from "./thongBao/telegram";
 
 export interface Env {
   ENVIRONMENT?: string;
@@ -22,6 +23,14 @@ export interface Env {
   // thiếu thì `/dang-ky` và `/auth/login` trả 503 (FAIL-CLOSED). Sau QĐ-11, Turnstile là
   // lớp bảo vệ duy nhất còn lại ở tầng ứng dụng nên không được fail-open.
   TURNSTILE_SECRET_KEY?: string;
+  // U34a — Báo super-admin khi có đăng ký mới. CẢ BA optional và thiếu thì thông báo
+  // TẮT (fail-silent) — ngược chiều TURNSTILE_SECRET_KEY ở trên, có chủ ý: captcha bảo vệ
+  // hệ thống nên phải fail-closed, còn thông báo chỉ báo cho một con người nên không được
+  // phép chặn đăng ký của khách khi bot Telegram chết. Token là bí mật (`wrangler secret
+  // put`); URL_CONG_ADMIN công khai nên khai ở "vars" cũng được.
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
+  URL_CONG_ADMIN?: string;
   // R2: lưu file kết xuất (U7) — không giữ file lớn trong RAM Worker (ADR-0001).
   RAW: R2Bucket;
   // U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
@@ -97,4 +106,8 @@ export interface AppDeps {
   getTransport: (env: Env) => GdtTransport;
   // U22 — tracker backfill theo backfillId (DO thật ở production; test tiêm giả).
   getBackfillTracker: (env: Env, backfillId: string) => BackfillTrackerClient;
+  // U34a — báo super-admin khi có đăng ký mới. Tiêm qua deps (không gọi thẳng module) để
+  // test khẳng định được ĐÃ GỌI với ĐÚNG dữ liệu, và để dựng được nhánh "thông báo ném lỗi"
+  // — nhánh mà bản thật cố tình không bao giờ đi vào, nhưng luồng chính vẫn phải chịu được.
+  baoDangKyMoi: (env: Env, tt: ThongTinDangKyMoi) => Promise<unknown>;
 }

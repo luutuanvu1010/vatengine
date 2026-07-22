@@ -12,7 +12,8 @@ import { vi } from "vitest";
 import { signAdminToken } from "../src/admin/adminAuth";
 import { type BackfillDef, initDef, readDef } from "../src/backfillTracker";
 import { hashPassword } from "../src/password";
-import type { AnyDb, BackfillTrackerClient, Env, StorageHandle } from "../src/types";
+import type { ThongTinDangKyMoi } from "../src/thongBao/telegram";
+import type { AnyDb, AppDeps, BackfillTrackerClient, Env, StorageHandle } from "../src/types";
 
 // migrations của @vat/db (áp bằng PGlite) — giải qua URL để không phụ thuộc cwd.
 const MIGRATIONS = new URL("../../../packages/db/migrations", import.meta.url).pathname;
@@ -129,13 +130,29 @@ export function injectDb(
   storage: FakeStorage = makeStorage(),
   transport: GdtTransport = makeTransport(),
   getBackfillTracker = makeBackfillTrackerFactory(),
+  baoDangKyMoi: AppDeps["baoDangKyMoi"] = async () => ({ daGui: false, lyDo: "chua_cau_hinh" }),
 ) {
   return {
     getDb: async () => ({ db: db as unknown as AnyDb, close: async () => {} }),
     getStorage: () => storage,
     getTransport: () => transport,
     getBackfillTracker,
+    // U34a — mặc định KHÔNG đụng mạng và KHÔNG ném: mọi test đi qua `/dang-ky` (rất nhiều)
+    // không được phụ thuộc Telegram. Test nào cần đối chiếu thì truyền `makeBaoDangKySpy()`.
+    baoDangKyMoi,
   };
+}
+
+/** Spy cho `baoDangKyMoi`: phơi danh sách lời gọi, và dựng được nhánh NÉM LỖI — nhánh mà
+ * bản thật cố tình không bao giờ đi vào, nhưng luồng đăng ký vẫn phải chịu được (F9). */
+export function makeBaoDangKySpy(opts: { nem?: boolean } = {}) {
+  const goi: ThongTinDangKyMoi[] = [];
+  const fn: AppDeps["baoDangKyMoi"] = async (_env, tt) => {
+    goi.push(tt);
+    if (opts.nem) throw new Error("bot Telegram tam thoi khong phan hoi");
+    return { daGui: true };
+  };
+  return { goi, fn };
 }
 
 export async function makeTenant(db: Db, ten: string, mst: string): Promise<string> {
