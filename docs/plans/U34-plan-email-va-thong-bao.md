@@ -72,9 +72,11 @@ Token xác thực email và token đặt mật khẩu đều là **chìa khoá v
 ### 5.2 Cổng gửi email PHẢI có chốt nhịp riêng
 Endpoint gửi email theo yêu cầu là **vũ khí dội thư**: kẻ xấu nhập địa chỉ nạn nhân liên tục, hệ thống ta thay họ spam, và `tourdao.vn` vào danh sách đen.
 
-Nghiêm trọng hơn vì **QĐ-13**: trần **100 email/ngày** của bậc miễn phí tự nó là đích tấn công — kích cạn hạn mức là **email đặt mật khẩu của khách thật cũng không gửi được**, và chuỗi onboard đứng im mà không báo lỗi rõ ràng.
+Nghiêm trọng hơn vì **QĐ-16 (SES)**: AWS **đình chỉ tài khoản gửi** khi tỉ lệ bounce > 5% hoặc khiếu nại > 0,1%. Kẻ xấu nộp hàng loạt địa chỉ **không tồn tại** ⇒ bounce dồn lên ⇒ **AWS khoá tài khoản** ⇒ không chỉ email xác thực chết mà **email đặt mật khẩu của khách thật cũng chết**, và khôi phục thì phải giải trình với AWS. Xem ADR-0007 §1.5.
 
 Bắt buộc:
+- **kiểm bản ghi MX của tên miền TRƯỚC khi gửi** (DNS-over-HTTPS tới `1.1.1.1`) — bộ lọc rẻ nhất chặn địa chỉ gõ sai, và là chốt chính chống bounce;
+- **Configuration Set + suppression list** của SES để tự chặn địa chỉ đã bounce;
 - **cooldown theo địa chỉ email** cho nút "gửi lại" (lưu `gui_lai_sau` trong DB, không dùng Durable Object — QĐ-11 đã gỡ hết);
 - **trần cứng theo ngày ở tầng ứng dụng**, đặt THẤP HƠN trần nhà cung cấp, và khi chạm trần phải **ghi log cảnh báo rõ ràng** thay vì im lặng hỏng;
 - ⚠️ **Rule rate-limit WAF ở tầng zone Cloudflare chuyển từ "nên có" sang ĐIỀU KIỆN BẮT BUỘC trước khi bật email.** Nợ này đang mở trong sổ.
@@ -88,10 +90,14 @@ Bắt buộc:
 Gửi Telegram và gửi email đều phải **fail-silent** đối với luồng chính: Telegram sập thì khách vẫn đăng ký được. Đây đúng lớp lỗi F9 đã gặp (một `catch` phụ trợ ném đè lên kết quả chính) — phải có test riêng cho nhánh này.
 
 ### 5.5 Cô lập nhà cung cấp
-Mọi lời gọi ra Resend đi qua interface **`EmailTransport`** hoán đổi được, cùng khuôn mẫu `GdtTransport`. Đổi sang SES sau này chỉ sửa một chỗ. Không gọi `fetch()` tới Resend trong logic nghiệp vụ.
+Mọi lời gọi ra SES đi qua interface **`EmailTransport`** hoán đổi được, cùng khuôn mẫu `GdtTransport`. Không gọi `fetch()` tới SES trong logic nghiệp vụ. Ranh giới này còn gánh thêm một việc: `aws4fetch` đã 2 năm không ra bản mới, và nếu có ngày nó hỏng thì thay bằng ~60 dòng SigV4 tự viết chỉ đụng **một** file.
 
 ## 6. Bí mật cần nạp
-`RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Nạp qua `wrangler secret put`, **không** khai ở `vars` (`security.md`). U34e thêm `TELEGRAM_WEBHOOK_SECRET`.
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Nạp qua `wrangler secret put`, **không** khai ở `vars` (`security.md`). U34e thêm `TELEGRAM_WEBHOOK_SECRET`.
+
+⚠️ Khoá IAM phải thuộc user **chỉ có đúng quyền `ses:SendEmail`** — không dùng khoá vạn năng. Khoá AWS rò ra từ một Worker mà có quyền rộng thì thiệt hại vượt xa phạm vi email.
+
+✅ `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` **đã nạp và đã chạy thật** (U34a, 22-07).
 
 ## 7. Điều CHƯA chốt — cần quyết khi tới nơi
 - ~~**Hồ sơ không xác thực email trong 24h thì xử lý sao?**~~ ✅ **Đã chốt 22-07 (QĐ-18 / ADR-0007 §2):** chuyển sang `da_xoa` bằng `admin_xoa_tenant()` — ẩn danh hoá tại chỗ, không `DELETE`. Món nợ "không xoá được tenant" đã có lời giải.
