@@ -20,7 +20,7 @@ U34 giải quyết cả bốn bằng **một** hạ tầng: đường email.
 | Mã | Quyết định | Lý do |
 |---|---|---|
 | **QĐ-12** | **KHÔNG có nút duyệt bằng đường link trong email.** Thông báo chỉ chứa **deep link** mở hồ sơ trong Cổng Admin (đã sau Cloudflare Access); thao tác Duyệt vẫn là `POST` sau `requireSuperAdmin`. Nút inline Telegram (`callback_query`) là giai đoạn 2, làm sau khi giai đoạn 1 chạy ổn. | Link duyệt trong email là **thao tác GHI diễn đạt như câu đọc** — cùng lớp lỗi với sự cố Hyperdrive đã ghi trong sổ. Email client, Telegram, phần mềm diệt virus và bộ quét link doanh nghiệp **tự động fetch URL**; tenant sẽ được duyệt trước khi người đọc kịp mở thư. Thêm nữa URL chính là chìa khoá duy nhất: forward thư = trao quyền duyệt. |
-| **QĐ-13** | **Nhà cung cấp email = Resend.** | API gọi thẳng được từ Workers, dựng nhanh nhất. **Đã tra tài liệu chính thức 2026-07-22:** bậc miễn phí = 3.000 email/tháng **nhưng chặn 100 email/ngày**, 1 tên miền, lưu vết 30 ngày; bậc Pro $20/tháng = 50.000/tháng, bỏ trần ngày. SES rẻ hơn khi lượng lớn nhưng phải xác minh miền + xin thoát sandbox + ký SigV4 — để dành cho lúc thật sự cần. |
+| **QĐ-13 (ĐÃ BỊ THAY THẾ bởi QĐ-16 — xem ADR-0007)** | ~~Resend~~ | API gọi thẳng được từ Workers, dựng nhanh nhất. **Đã tra tài liệu chính thức 2026-07-22:** bậc miễn phí = 3.000 email/tháng **nhưng chặn 100 email/ngày**, 1 tên miền, lưu vết 30 ngày; bậc Pro $20/tháng = 50.000/tháng, bỏ trần ngày. SES rẻ hơn khi lượng lớn nhưng phải xác minh miền + xin thoát sandbox + ký SigV4 — để dành cho lúc thật sự cần. |
 | **QĐ-14** | **Bỏ hẳn mật khẩu tạm 6 chữ số.** Duyệt xong thì gửi khách **link đặt mật khẩu dùng một lần, hạn 72h**. | Xoá luôn món nợ mức CAO thay vì đi cứu một lập luận đã mất 2/3 chân. Admin thôi phải nhìn thấy và đọc mật khẩu của khách. |
 | **QĐ-15** | **Admin chỉ được báo SAU khi khách đã xác thực email.** | Nếu báo ngay lúc đăng ký, kênh Telegram/email của admin trở thành đích spam — chính cổng công khai vừa mở ra. Xác thực email là bộ lọc đặt trước người thật. |
 
@@ -51,10 +51,11 @@ U34 giải quyết cả bốn bằng **một** hạ tầng: đường email.
 | Đơn vị | Nội dung | Phụ thuộc | Ước lượng |
 |---|---|---|---|
 | **U34a** | Webhook Telegram báo hồ sơ mới + deep link. Fail-silent. | không | nhỏ |
-| **U34b** | Hạ tầng email: adapter `EmailTransport` + Resend + SPF/DKIM/DMARC trên `vatengine.tourdao.vn` | không | vừa |
+| **U34b** | Hạ tầng email: adapter `EmailTransport` + **SES v2 qua `aws4fetch`** + SPF/DKIM/DMARC + kiểm MX trước khi gửi | không | vừa |
 | **U34c** | Xác thực email khi đăng ký: trạng thái mới + bảng token + trang xác thực | U34b | vừa |
 | **U34d** | Email khi được duyệt + link đặt mật khẩu → **gỡ mật khẩu tạm 6 số** | U34b, U34c | vừa |
 | **U34e** | Nút inline Telegram 1 chạm (`callback_query`) | U34a | nhỏ |
+| **U34f** | Ẩn danh hoá tenant (`da_xoa`) + `maskSensitive` che email + UNIQUE một phần trên `mst` | không | vừa |
 
 **U34a làm trước** vì nó không phụ thuộc email và giải quyết ngay nỗi đau lớn nhất ("có người đăng ký mà không ai biết"). Các bước sau đi theo thứ tự phụ thuộc.
 
@@ -93,6 +94,7 @@ Mọi lời gọi ra Resend đi qua interface **`EmailTransport`** hoán đổi 
 `RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Nạp qua `wrangler secret put`, **không** khai ở `vars` (`security.md`). U34e thêm `TELEGRAM_WEBHOOK_SECRET`.
 
 ## 7. Điều CHƯA chốt — cần quyết khi tới nơi
-- **Hồ sơ không xác thực email trong 24h thì xử lý sao?** Xoá, hay để `tu_choi`? Vướng món nợ "không xoá được tenant" (trigger append-only của `audit_log`) đang treo. **Phải trả lời trước khi làm U34c.**
+- ~~**Hồ sơ không xác thực email trong 24h thì xử lý sao?**~~ ✅ **Đã chốt 22-07 (QĐ-18 / ADR-0007 §2):** chuyển sang `da_xoa` bằng `admin_xoa_tenant()` — ẩn danh hoá tại chỗ, không `DELETE`. Món nợ "không xoá được tenant" đã có lời giải.
+- ⚠️ **Phần CÒN LẠI của món nợ đó là câu hỏi PHÁP LÝ, không phải kỹ thuật:** các hàng `audit_log` ĐÃ ghi vẫn còn email thô và theo thiết kế thì không sửa được. Giữ lại (dựa nghĩa vụ lưu trữ theo NĐ 123/2020) hay chạy một migration ẩn danh hoá một lần — **phải hỏi người có chuyên môn pháp lý** trước khi nhận khách trả phí. Xem ADR-0007 §2.4.
 - **Tên miền gửi**: `vatengine.tourdao.vn` hay `mail.tourdao.vn`? Gửi từ tên miền con bảo vệ uy tín của tên miền gốc — nhưng cần xác nhận không đụng bản ghi DNS đang phục vụ Worker.
 - Có gửi email cho khách khi bị **từ chối** không, và nội dung tới đâu.
