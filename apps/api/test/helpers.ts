@@ -11,6 +11,7 @@ import { sign } from "hono/jwt";
 import { vi } from "vitest";
 import { signAdminToken } from "../src/admin/adminAuth";
 import { type BackfillDef, initDef, readDef } from "../src/backfillTracker";
+import type { EmailTransport, KetQuaGuiThu, ThuCanGui } from "../src/email/types";
 import { hashPassword } from "../src/password";
 import type { ThongTinDangKyMoi } from "../src/thongBao/telegram";
 import type { AnyDb, AppDeps, BackfillTrackerClient, Env, StorageHandle } from "../src/types";
@@ -140,7 +141,26 @@ export function injectDb(
     // U34a — mặc định KHÔNG đụng mạng và KHÔNG ném: mọi test đi qua `/dang-ky` (rất nhiều)
     // không được phụ thuộc Telegram. Test nào cần đối chiếu thì truyền `makeBaoDangKySpy()`.
     baoDangKyMoi,
+    // U34b — mặc định KHÔNG đụng mạng: mọi test đi qua createApp đều dùng transport giả này.
+    getEmailTransport: (): EmailTransport => ({
+      async gui(): Promise<KetQuaGuiThu> {
+        return { daGui: true, messageId: "gia" };
+      },
+    }),
   };
+}
+
+/** Spy cho đường gửi thư: phơi các lá đã gửi, và dựng được nhánh HỎNG theo từng lý do —
+ * `tai_khoan_bi_khoa` và `cau_hinh_sai` nghĩa là cả đường thư chết, chỗ gọi phải phân biệt. */
+export function makeEmailSpy(ketQua: KetQuaGuiThu = { daGui: true, messageId: "gia" }) {
+  const daGui: ThuCanGui[] = [];
+  const transport = {
+    async gui(thu: ThuCanGui): Promise<KetQuaGuiThu> {
+      daGui.push(thu);
+      return ketQua;
+    },
+  };
+  return { daGui, transport, factory: () => transport };
 }
 
 /** Spy cho `baoDangKyMoi`: phơi danh sách lời gọi, và dựng được nhánh NÉM LỖI — nhánh mà

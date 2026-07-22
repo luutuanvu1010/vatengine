@@ -21,7 +21,8 @@
     "@vat/sync": "*",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.22.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "aws4fetch": "1.0.20"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",

@@ -53,7 +53,12 @@
   "vars": {
     "ENVIRONMENT": "production",
     "PBKDF2_ITERATIONS": "100000",
-    "URL_CONG_ADMIN": "https://adminvatengine.tourdao.vn"
+    "URL_CONG_ADMIN": "https://adminvatengine.tourdao.vn",
+    // U34b — AWS_REGION và EMAIL_FROM KHÔNG nhạy cảm nên khai ở đây. Hai khoá AWS thì nạp
+    // qua `wrangler secret put` (xem ghi chú cuối file). EMAIL_FROM phải là danh tính ĐÃ
+    // XÁC MINH trong SES, nếu không mọi lá thư đều hỏng với MailFromDomainNotVerified.
+    "AWS_REGION": "ap-southeast-1",
+    "EMAIL_FROM": "no-reply@vatengine.tourdao.vn"
   },
 
   // "Đồng bộ ngay" (POST /tax-accounts/:id/sync) đẩy job vào hàng đợi vat-sync;
@@ -101,6 +106,10 @@
   // thông báo TẮT nhưng đăng ký vẫn chạy bình thường (FAIL-SILENT) — ngược chiều
   // TURNSTILE_SECRET_KEY ở trên, và ngược có chủ ý: captcha bảo vệ hệ thống nên phải
   // fail-closed; thông báo chỉ báo cho một con người nên không được chặn khách vì bot chết.
+  //
+  // U34b — AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY nạp qua `wrangler secret put`.
+  // ⚠️ IAM user phải CHỈ có quyền `ses:SendEmail` — không dùng khoá vạn năng. Khoá AWS rộng
+  // quyền rò ra từ một Worker thì thiệt hại vượt xa phạm vi email.
 
   // --- Binding sẽ bật dần theo lộ trình (giữ comment) ---
   // "kv_namespaces": [{ "binding": "SESSION", "id": "<KV_ID>" }],           // session/cấu hình

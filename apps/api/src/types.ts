@@ -4,6 +4,7 @@ import type { VatSyncQueueMessage } from "@vat/sync";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { BackfillDef } from "./backfillTracker";
+import type { EmailTransport } from "./email/types";
 import type { Role } from "./rbac";
 import type { ThongTinDangKyMoi } from "./thongBao/telegram";
 
@@ -23,6 +24,15 @@ export interface Env {
   // thiếu thì `/dang-ky` và `/auth/login` trả 503 (FAIL-CLOSED). Sau QĐ-11, Turnstile là
   // lớp bảo vệ duy nhất còn lại ở tầng ứng dụng nên không được fail-open.
   TURNSTILE_SECRET_KEY?: string;
+  // U34b (ADR-0007) — Gửi thư qua Amazon SES. Cả bốn optional: thiếu thì đường thư TẮT và
+  // `taoEmailTransport` trả về transport luôn từ chối với lý do `chua_cau_hinh`. Hai khoá
+  // AWS là BÍ MẬT (`wrangler secret put`); IAM user phải CHỈ có quyền `ses:SendEmail` —
+  // khoá rộng quyền rò ra từ Worker thì thiệt hại vượt xa phạm vi email. AWS_REGION và
+  // EMAIL_FROM không nhạy cảm, khai ở "vars" được.
+  AWS_ACCESS_KEY_ID?: string;
+  AWS_SECRET_ACCESS_KEY?: string;
+  AWS_REGION?: string;
+  EMAIL_FROM?: string;
   // U34a — Báo super-admin khi có đăng ký mới. CẢ BA optional và thiếu thì thông báo
   // TẮT (fail-silent) — ngược chiều TURNSTILE_SECRET_KEY ở trên, có chủ ý: captcha bảo vệ
   // hệ thống nên phải fail-closed, còn thông báo chỉ báo cho một con người nên không được
@@ -110,4 +120,7 @@ export interface AppDeps {
   // test khẳng định được ĐÃ GỌI với ĐÚNG dữ liệu, và để dựng được nhánh "thông báo ném lỗi"
   // — nhánh mà bản thật cố tình không bao giờ đi vào, nhưng luồng chính vẫn phải chịu được.
   baoDangKyMoi: (env: Env, tt: ThongTinDangKyMoi) => Promise<unknown>;
+  // U34b — đường gửi thư. Tiêm qua deps cùng lý do với `getTransport` (GDT): test không
+  // được đụng mạng, và phải dựng được các nhánh hỏng mà bản thật hiếm khi đi vào.
+  getEmailTransport: (env: Env) => EmailTransport;
 }
