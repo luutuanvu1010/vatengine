@@ -92,17 +92,26 @@ export function kiemTraCauHinhTelegram(env: {
   TELEGRAM_CHAT_ID?: string;
   URL_CONG_ADMIN?: string;
 }): { ok: true; cauHinh: CauHinhTelegram } | { ok: false; thieu: string[] } {
+  // TRIM mọi giá trị. Không phải sạch sẽ hình thức — đây là chốt chặn một lỗi ĐÃ XẢY RA
+  // (2026-07-22): `TELEGRAM_CHAT_ID` bị dán dư một khoảng trắng đầu chuỗi, Telegram trả
+  // "chat not found", và vì module này FAIL-SILENT nên kênh báo chết CÂM: không lỗi, không
+  // 5xx, không gì cả — chỉ là tin nhắn không bao giờ tới. Dán vào `wrangler secret put`
+  // càng dễ dính (shell giữ nguyên khoảng trắng, không ai nhìn thấy nó).
+  const botToken = env.TELEGRAM_BOT_TOKEN?.trim();
+  const chatId = env.TELEGRAM_CHAT_ID?.trim();
+  const urlCongAdmin = env.URL_CONG_ADMIN?.trim();
+
   const thieu: string[] = [];
-  if (!env.TELEGRAM_BOT_TOKEN) thieu.push("TELEGRAM_BOT_TOKEN");
-  if (!env.TELEGRAM_CHAT_ID) thieu.push("TELEGRAM_CHAT_ID");
-  if (!env.URL_CONG_ADMIN) thieu.push("URL_CONG_ADMIN");
+  if (!botToken) thieu.push("TELEGRAM_BOT_TOKEN");
+  if (!chatId) thieu.push("TELEGRAM_CHAT_ID");
+  if (!urlCongAdmin) thieu.push("URL_CONG_ADMIN");
   if (thieu.length > 0) return { ok: false, thieu };
   return {
     ok: true,
     cauHinh: {
-      botToken: env.TELEGRAM_BOT_TOKEN as string,
-      chatId: env.TELEGRAM_CHAT_ID as string,
-      urlCongAdmin: env.URL_CONG_ADMIN as string,
+      botToken: botToken as string,
+      chatId: chatId as string,
+      urlCongAdmin: urlCongAdmin as string,
     },
   };
 }

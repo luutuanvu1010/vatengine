@@ -90,6 +90,35 @@ describe("kiemTraCauHinhTelegram", () => {
     expect(kq.ok).toBe(true);
   });
 
+  it("🔴 khoảng trắng thừa quanh giá trị bị CẮT — lỗi thật gặp ngày 2026-07-22", () => {
+    // `TELEGRAM_CHAT_ID` bị dán dư một khoảng trắng đầu chuỗi ⇒ Telegram trả "chat not
+    // found". Vì module này FAIL-SILENT, kênh báo chết CÂM: không lỗi, không 5xx, chỉ là
+    // tin nhắn không bao giờ tới. Dán vào `wrangler secret put` càng dễ dính vì shell giữ
+    // nguyên khoảng trắng và mắt thường không thấy.
+    const kq = kiemTraCauHinhTelegram({
+      TELEGRAM_BOT_TOKEN: " 123:ABC ",
+      TELEGRAM_CHAT_ID: " -1001234567890\n",
+      URL_CONG_ADMIN: "  https://a.example  ",
+    });
+    expect(kq.ok).toBe(true);
+    if (kq.ok)
+      expect(kq.cauHinh).toEqual({
+        botToken: "123:ABC",
+        chatId: "-1001234567890",
+        urlCongAdmin: "https://a.example",
+      });
+  });
+
+  it("🔴 giá trị TOÀN khoảng trắng bị coi là THIẾU, không phải là có", () => {
+    const kq = kiemTraCauHinhTelegram({
+      TELEGRAM_BOT_TOKEN: "   ",
+      TELEGRAM_CHAT_ID: "x",
+      URL_CONG_ADMIN: "y",
+    });
+    expect(kq.ok).toBe(false);
+    if (!kq.ok) expect(kq.thieu).toEqual(["TELEGRAM_BOT_TOKEN"]);
+  });
+
   it("🔴 thiếu biến nào thì NÓI RA biến đó — 'thông báo không chạy' mà không biết vì sao là kiểu hỏng tốn giờ nhất", () => {
     const kq = kiemTraCauHinhTelegram({ TELEGRAM_BOT_TOKEN: "x" });
     expect(kq.ok).toBe(false);
