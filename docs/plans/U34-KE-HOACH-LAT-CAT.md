@@ -41,7 +41,9 @@ Thêm: mỗi đơn vị cũ **không có Định nghĩa Hoàn thành viết trư
 
 ## 4. Bốn lát cắt
 
-### LÁT CẮT 1 — Khách tự xác thực được email  ← **ĐANG Ở ĐÂY**
+### ✅ LÁT CẮT 1 — Khách tự xác thực được email — **XONG, ĐÃ NGHIỆM THU 2026-07-22**
+
+Chủ dự án đăng ký thật, đi trọn đường: nhận thư → bấm link → thấy chờ duyệt → Telegram bắn đúng ở bước xác thực. `vat-api` `a4293a9e` · `vat-web` `4a5b3a42` · migration 0013 đã áp.
 
 **Xong khi:** một người thật đăng ký trên `vatengine.tourdao.vn` → nhận được thư → bấm link → thấy màn "đã xác thực, chờ duyệt" → **và điện thoại chủ dự án kêu đúng lúc đó, không sớm hơn**.
 
@@ -52,7 +54,8 @@ Thêm: mỗi đơn vị cũ **không có Định nghĩa Hoàn thành viết trư
 | Chuyển thông báo Telegram sang bước xác thực | ✅ xong |
 | **Trang SPA `/xac-thuc-email`** | ✅ xong |
 | **Màn chờ đọc cờ `daGuiThu`** | ✅ xong |
-| Deploy | 🔴 **KẸT — xem §4b** |
+| Deploy | ✅ xong |
+| Nghiệm thu bằng đăng ký thật | ✅ đạt |
 
 **Trang `/xac-thuc-email` phải:** đọc `?token=`, gửi **POST** (không phải GET — máy quét thư tự fetch GET và tiêu mất token), và hiển thị **bốn** kết quả riêng biệt: thành công · hết hạn · đã dùng rồi · liên kết hỏng. Ba cái sau người dùng xử lý khác nhau, gộp lại là bắt họ đoán.
 
@@ -89,7 +92,7 @@ trạng thái an toàn và nhất quán.
 
 ---
 
-### LÁT CẮT 2 — Khách không bị kẹt khi không nhận được thư
+### LÁT CẮT 2 — Khách không bị kẹt khi không nhận được thư  *(lùi xuống sau Lát 3)*
 
 **Xong khi:** khách không thấy thư (rơi spam, gõ nhầm địa chỉ) tự xin gửi lại được, **và** hồ sơ bỏ dở không chiếm chỗ vĩnh viễn.
 
@@ -102,7 +105,18 @@ trạng thái an toàn và nhất quán.
 
 ---
 
-### LÁT CẮT 3 — Duyệt xong khách tự đặt mật khẩu
+### LÁT CẮT 3 — Duyệt xong khách tự đặt mật khẩu  ← **ĐANG Ở ĐÂY (đảo lên trước Lát 2)**
+
+> **Đảo thứ tự 2026-07-22.** Chủ dự án nêu: hiện Cổng Admin hiện mã 6 số để tự tay gửi cho
+> khách — bất hợp lý và đang xảy ra MỖI LẦN duyệt. Lát 2 lo tình huống chưa gặp lần nào.
+> Nỗi đau đang có thắng nỗi đau có thể có.
+>
+> **QĐ-14 giữ nguyên và được xác nhận lại:** thư chứa **ĐƯỜNG LINK đặt mật khẩu**, không
+> chứa mã 6 số. Lý do chốt lại lần hai — mã 6 số ra đời CHỈ vì phải đọc qua điện thoại; khi
+> hệ thống tự gửi thư, lý do đó biến mất và chỉ còn lại điểm yếu: 10^6 khả năng, không còn
+> khoá theo tài khoản (QĐ-11), và rule WAF thì VẪN CHƯA ai kiểm chứng. Link 32 byte không
+> dò được. Khách cũng ít thao tác hơn (mở thư → bấm → đặt), và bộ máy token đã dựng sẵn ở
+> Lát cắt 1 nên dùng lại rẻ hơn là giữ đường mã 6 số.
 
 **Xong khi:** chủ dự án bấm Duyệt → khách nhận thư kèm link đặt mật khẩu → tự đặt → đăng nhập được. **Chủ dự án không còn nhìn thấy mật khẩu của khách.**
 
