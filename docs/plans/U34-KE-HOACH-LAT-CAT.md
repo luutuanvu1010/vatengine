@@ -66,27 +66,26 @@ Lý do: `/dang-ky` đổi hợp đồng phản hồi. Deploy `vat-web` trước 
 
 ---
 
-### 🔴 §4b — NỢ KỸ THUẬT ĐANG CHẶN LÁT CẮT 1
+### ✅ §4b — Nợ đã giải: migration 0013 đã áp lên production (2026-07-22)
 
-**Migration 0013 không áp được lên production.** Mã đã xong và trên trunk; production NGUYÊN VẸN (đã kiểm: chưa có bảng `xac_thuc_email`, 0 tenant trạng thái mới, rollback trọn vẹn).
+Chủ dự án chốt **hướng 1** (bỏ bước trả-lại-membership). Nhưng khi chạy thật thì lộ ra
+nguyên nhân KHÁC hẳn suy đoán ban đầu:
 
-⛔ **KHÔNG deploy `vat-api`/`vat-web` cho tới khi việc này xong** — `/dang-ky` đã đổi hợp đồng.
+| Lỗi | Nguyên nhân thật | Cách giải |
+|---|---|---|
+| `must be able to SET ROLE` | Đổi chủ sở hữu đòi phải là thành viên của role đích | `GRANT xac_thuc_api TO CURRENT_USER` |
+| `permission denied for schema public` | **KHÔNG phải do câu REVOKE.** Postgres đòi chủ sở hữu MỚI phải có quyền `CREATE` trên schema chứa hàm — mà role vừa tạo thì chưa có gì | `GRANT USAGE, CREATE ON SCHEMA public TO xac_thuc_api` |
 
-**Gốc rễ:** role migrate trên Neon là `neondb_owner`, **KHÔNG superuser**. PGlite chạy superuser ⇒ **test xanh trong khi production hỏng**. Khoảng mù này migration 0011 đã ghi nhận trước; hôm nay nó cắn thật.
+Suy đoán ban đầu đổ cho câu REVOKE là **sai**: câu 13 hoá ra là khối đổi chủ sở hữu, không
+phải REVOKE. Chỉ khi áp tay và in lỗi TỪNG CÂU mới thấy. Hướng 1 vẫn giữ (lý do ghi ở cuối
+file migration), nhưng nó không phải thứ gỡ được bế tắc.
 
-| Lỗi | Trạng thái |
-|---|---|
-| `ALTER FUNCTION … OWNER TO xac_thuc_api` → `must be able to SET ROLE` | ✅ vá bằng `GRANT xac_thuc_api TO CURRENT_USER` |
-| Câu cuối `REVOKE xac_thuc_api FROM CURRENT_USER` → `permission denied for schema public` | ❌ **chưa giải** |
+**Đã kiểm chứng trên production, 6/6:** bảng có · RLS enable+force · 0 policy (fail-closed) ·
+hai hàm thuộc `xac_thuc_api` · `vat_app` gọi được · PUBLIC không gọi được.
 
-**Ba hướng, đều có đánh đổi — CHƯA CHỌN:**
-1. Bỏ câu REVOKE. Đơn giản nhất, nhưng `neondb_owner` giữ vĩnh viễn membership của một role **BYPASSRLS**.
-2. Bọc REVOKE trong `DO … EXCEPTION WHEN OTHERS THEN RAISE WARNING`. Chạy được, nhưng là né chứ không giải.
-3. Dùng luôn `admin_api` thay vì tạo role riêng. Gọn nhất, nhưng gộp đường CÔNG KHAI vào miền QUẢN TRỊ — đúng thứ đã cố ý tách (xem đầu file migration).
-
-**⚠️ Cách chẩn đoán:** `drizzle-kit migrate` **NUỐT thông báo lỗi** — chỉ hiện spinner rồi thoát mã 1. Tin nó là tưởng migration chạy xong rồi deploy tiếp và làm hỏng đăng ký. Phải áp tay bằng `pg`: tách câu theo `--> statement-breakpoint`, chạy trong transaction, in lỗi từng câu.
-
-**Bài học rộng hơn, đáng ghi riêng:** mọi migration đụng `CREATE ROLE` / `ALTER … OWNER` / `GRANT` **không được PGlite kiểm chứng** vì PGlite là superuser. Nhóm migration này cần một cách kiểm khác — hoặc chấp nhận rằng chúng chỉ được kiểm thật lúc áp lên production, và vì vậy phải áp TRONG TRANSACTION có in lỗi từng câu.
+⚠️ **CÒN LẠI CỦA LÁT CẮT 1:** deploy `vat-api` rồi `vat-web`, sau đó đăng ký thật một lượt.
+Migration là thay đổi CỘNG DỒN nên mã cũ đang chạy không hề hấn gì — production đang ở
+trạng thái an toàn và nhất quán.
 
 ---
 

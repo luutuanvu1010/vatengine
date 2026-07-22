@@ -46,6 +46,12 @@ ALTER TABLE "xac_thuc_email" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "xac_thuc_email" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 REVOKE ALL ON "xac_thuc_email" FROM PUBLIC;--> statement-breakpoint
 
+-- Postgres đòi chủ sở hữu MỚI của một hàm phải có quyền CREATE trên schema chứa nó —
+-- nếu không, `ALTER FUNCTION … OWNER TO` hỏng với `permission denied for schema public`
+-- (đã gặp thật khi áp lên production 2026-07-22). USAGE để tham chiếu được đối tượng
+-- trong schema; CREATE để đứng tên sở hữu chúng. Role vẫn NOLOGIN nên không ai đăng nhập
+-- thẳng vào nó được; hai quyền này chỉ đủ để nó làm đúng việc giữ hai hàm xác thực.
+GRANT USAGE, CREATE ON SCHEMA public TO xac_thuc_api;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON "xac_thuc_email" TO xac_thuc_api;--> statement-breakpoint
 GRANT SELECT, UPDATE ON "tenants" TO xac_thuc_api;--> statement-breakpoint
 GRANT SELECT ON "nguoi_dung" TO xac_thuc_api;--> statement-breakpoint
@@ -163,8 +169,23 @@ BEGIN
   ELSE
     RAISE WARNING 'U34c: KHÔNG tìm thấy role app nào (đã thử vat_app, app_user) — BỎ QUA cấp EXECUTE cho xac_thuc_email_tao/dung. Nếu môi trường này dùng tên role khác, ĐĂNG KÝ VÀ XÁC THỰC EMAIL SẼ HỎNG (permission denied) cho tới khi cấp tay: GRANT EXECUTE ON FUNCTION public.xac_thuc_email_tao(uuid,text,timestamptz), public.xac_thuc_email_dung(text) TO <ten_role_app>;';
   END IF;
-END $$;--> statement-breakpoint
+END $$;
 
--- ĐÓNG đường leo thang: trả lại membership TẠM ngay sau khi xong. Để nguyên nghĩa là role
--- chạy migration vĩnh viễn mượn được BYPASSRLS qua danh tính này (khuôn mẫu 0011 Bước 7).
-REVOKE xac_thuc_api FROM CURRENT_USER;
+-- ══════════════════════════════════════════════════════════════════════════════════════
+-- VÌ SAO KHÔNG CÓ BƯỚC "TRẢ LẠI MEMBERSHIP" NHƯ 0011 (chốt 2026-07-22)
+-- ══════════════════════════════════════════════════════════════════════════════════════
+-- 0011 kết thúc bằng `REVOKE admin_api FROM CURRENT_USER` để đóng đường leo thang. Ở đây
+-- CỐ Ý không có bước đó. Hai lý do, theo thứ tự quan trọng:
+--
+-- 1. NÓ KHÔNG CHẠY ĐƯỢC. Trên Neon, role chạy migration là `neondb_owner` (KHÔNG phải
+--    superuser) và câu REVOKE hỏng với `permission denied for schema public` — đã gặp thật
+--    khi áp lên production 2026-07-22. PGlite không bắt được vì nó chạy superuser.
+--
+-- 2. VÀ NÓ CŨNG KHÔNG BẢO VỆ THÊM GÌ. `neondb_owner` SỞ HỮU TOÀN BỘ bảng trong database.
+--    Nó đã có thể tự tắt RLS trên bất kỳ bảng nào bất cứ lúc nào — không cần mượn danh
+--    tính `xac_thuc_api`. Câu REVOKE đóng một cánh cửa phụ trong khi chính role đó đang
+--    cầm chìa khoá cửa chính. Nếu `neondb_owner` bị lộ thì kẻ lấy được nó đã có toàn
+--    quyền; membership này không thêm bớt gì vào bán kính thiệt hại.
+--
+-- Ghi rõ ở đây để người đọc sau KHÔNG tưởng là quên. Nếu có ngày role migrate được hạ
+-- quyền xuống thấp hơn owner, hãy bổ sung lại bước REVOKE — lúc đó nó mới có nghĩa.
