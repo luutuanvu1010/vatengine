@@ -32,7 +32,7 @@
 | S1 | **Danh sách hóa đơn** (lọc kỳ/chiều/nguồn/MST + phân trang) | `GET /invoices`, `GET /invoices/summary` | 3 vai |
 | S2 | **Chi tiết hóa đơn** (header + bảng dòng hàng) | `GET /invoices/:id` | 3 vai |
 | S3 | **Kết xuất & Convert** (xlsx/csv + profile kế toán; xlsx 2 sheet / csv 2 khối: hóa đơn + Chi tiết dòng hàng — U23-B) → tải file | `POST /exports`, `POST /exports/convert`, `GET /exports/:id` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
-| S4 | **Đối chiếu** (4 loại phát hiện + tóm tắt) | `GET /reconcile` | 3 vai |
+| S4 | **Đối chiếu** (4 loại phát hiện + tóm tắt) — ⚠️ **ĐANG ẨN** khỏi SPA bằng cờ `SHOW_RECONCILE=false` (`apps/web/src/lib/featureFlags.ts`, quyết định 2026-07-22): không có mục menu, route tắt → `/reconcile` về Tổng quan. Mã màn + hợp đồng API giữ nguyên, bật lại bằng 1 hằng số. | `GET /reconcile` | 3 vai |
 | S5 | **Kết nối tài khoản thuế (GDT)** — MST cố định (auto từ tenant) → ủy quyền → captcha + mật khẩu → đăng nhập lưu token; **ngắt kết nối** (U23-D) | `POST /tax-accounts`, `/:id/authorize`, `GET /:id/captcha`, `POST /:id/login`, `POST /:id/disconnect` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
 
 ## 3. Hợp đồng API đầy đủ (đã kiểm chứng từ mã)
@@ -121,7 +121,7 @@ Trạng thái một `tax-account` và hành vi UI tương ứng:
 | Hành động | `ke_toan` | `ke_toan_truong` | `quan_tri` |
 |---|:---:|:---:|:---:|
 | Đăng nhập, xem danh sách/chi tiết/summary (`/invoices*`) | ✅ | ✅ | ✅ |
-| Đối chiếu (`/reconcile`) | ✅ | ✅ | ✅ |
+| Đối chiếu (`/reconcile`) — API mở cho 3 vai, nhưng **màn S4 đang ẩn** với mọi vai (cờ `SHOW_RECONCILE`, không phải RBAC) | ✅ | ✅ | ✅ |
 | Kết xuất/Convert/Tải (`/exports*`) | ❌ 403 | ✅ | ✅ |
 | Kết nối tài khoản thuế (`/tax-accounts*`) | ❌ 403 | ✅ | ✅ |
 

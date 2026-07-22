@@ -13,6 +13,7 @@ import { InvoicesPage } from "../features/invoices/InvoicesPage";
 import { ReconcilePage } from "../features/reconcile/ReconcilePage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { TaxAccountsPage } from "../features/taxAccounts/TaxAccountsPage";
+import { SHOW_RECONCILE } from "../lib/featureFlags";
 import { vi } from "../lib/i18n/vi";
 import { canExport, canManageTaxAccounts } from "../lib/rbac";
 import type { Role } from "../types/api";
@@ -85,7 +86,10 @@ export function AppRouter() {
         <Route index element={<DashboardPage />} />
         <Route path="invoices" element={<InvoicesPage />} />
         <Route path="invoices/:id" element={<InvoiceDetailPage />} />
-        <Route path="reconcile" element={<ReconcilePage />} />
+        {/* Ẩn bằng cờ (2026-07-22). Giữ import ReconcilePage để không sinh file mồ côi.
+            Route tắt ⇒ /reconcile rơi vào catch-all "*" cuối file → về Tổng quan. React
+            Router bỏ qua child không phải element, nên `false` ở đây là hợp lệ. */}
+        {SHOW_RECONCILE && <Route path="reconcile" element={<ReconcilePage />} />}
         <Route
           path="exports"
           element={
