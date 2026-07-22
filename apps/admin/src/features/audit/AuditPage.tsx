@@ -17,8 +17,12 @@ const NHAN: Record<string, string> = {
   tu_choi_tenant: "Từ chối doanh nghiệp",
   khoa_tenant: "Khóa doanh nghiệp",
   mo_khoa_tenant: "Mở khóa doanh nghiệp",
-  cap_mat_khau_tam: "Cấp mật khẩu tạm",
-  reset_mat_khau_tenant: "Cấp lại mật khẩu",
+  // Hai nhãn dưới đây thuộc về hành động ĐÃ NGỪNG sau QĐ-14 (Lát cắt 3). Giữ lại vì
+  // `audit_log_admin` là bảng bất biến: các hàng ghi trước đó vẫn còn và vẫn phải đọc được.
+  // Xoá nhãn không xoá được hàng, chỉ làm hàng cũ hiện ra dưới dạng mã thô khó hiểu.
+  cap_mat_khau_tam: "Cấp mật khẩu tạm (đã ngừng)",
+  reset_mat_khau_tenant: "Cấp lại mật khẩu tạm (đã ngừng)",
+  gui_link_dat_mat_khau: "Gửi liên kết đặt mật khẩu",
   sua_metadata_tenant: "Sửa thông tin doanh nghiệp",
 };
 

@@ -72,9 +72,9 @@ describe("Đường dẫn — phải khớp allowlist của front-door", () => {
     ["khoaTenant", () => adminApi.khoaTenant("abc"), "/api/admin/tenants/abc/khoa", "POST"],
     ["moKhoaTenant", () => adminApi.moKhoaTenant("abc"), "/api/admin/tenants/abc/mo-khoa", "POST"],
     [
-      "resetMatKhau",
-      () => adminApi.resetMatKhau("abc"),
-      "/api/admin/tenants/abc/reset-mat-khau",
+      "guiLaiLinkDatMatKhau",
+      () => adminApi.guiLaiLinkDatMatKhau("abc"),
+      "/api/admin/tenants/abc/gui-link-dat-mat-khau",
       "POST",
     ],
     ["docPhien", () => adminApi.docPhien(), "/api/admin/auth/me", "GET"],
