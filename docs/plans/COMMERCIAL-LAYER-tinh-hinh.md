@@ -150,7 +150,11 @@ Nhánh **`feat/u33-turnstile`**, commit `5cbef98`. **`make lint` = 0, `make test
 | `POST /api/dang-ky` với token **bịa** | `400 {"error":"captcha_sai"}` — không lọt |
 | Bundle production | chứa đúng site key + URL script Turnstile |
 
-⚠️ **CHƯA kiểm chứng:** widget có **hiện ra và giải được** trên trình duyệt thật hay không. Vì thiết kế fail-closed, widget không hiện ⇒ **không ai đăng nhập được**. Công cụ tự động không chụp được trang (không đạt `document_idle` — đặc trưng của trang có iframe Turnstile). **Phải có người mở `https://vatengine.tourdao.vn/login` và đăng nhập thật một lần.**
+✅ **Chủ dự án xác nhận 2026-07-22:** ô xác minh **hiện và tự tick xanh** trên trình duyệt thật ⇒ CSP không chặn, script tải được, site key hợp lệ, widget phát được token.
+
+✅ **Secret key hợp lệ — suy ra từ chính smoke:** token bịa trả `400 captcha_sai`. Mã ánh xạ `invalid-input-secret` → `cau_hinh_sai` → **503**; nhận `captcha_sai` nghĩa là Cloudflare đã CHẤP NHẬN secret và chỉ từ chối token. (Đây là suy luận từ bảng mã lỗi, không phải giả định.)
+
+⚠️ **Mắt xích cuối chưa chứng minh được bằng máy:** site key và secret key có thuộc **cùng một widget** không. Nếu là hai widget khác nhau, ô vẫn tick xanh nhưng siteverify trả `invalid-input-response` ⇒ người dùng nhận "Chưa qua được bước kiểm tra bảo mật". Không tự sinh được token thật để thử ⇒ **chỉ một lần đăng nhập thật mới kết luận được.**
 
 ### Hai lỗi thật do chạy test bắt được (không phải lỗi test)
 1. **`dangKySchema` dùng `.strict()`** nên token nằm lại trong body bị từ chối là khoá lạ ⇒ **mọi** đăng ký hợp lệ trả 400. Sửa: bóc `cf-turnstile-response` khỏi body trước khi validate.
