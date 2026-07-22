@@ -2,7 +2,17 @@
 import { nguoiDung } from "@vat/db";
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { type Db, freshDb, makeTenant } from "../helpers";
+import { createApp } from "../../src/app";
+import { bamToken } from "../../src/email/token";
+import {
+  type Db,
+  freshDb,
+  injectDb,
+  makeEnv,
+  makeTenant,
+  stubTurnstile,
+  voiCaptcha,
+} from "../helpers";
 
 /** Tạo tenant + tài khoản quản trị chưa có mật khẩu (đúng hình dạng sau `POST /dang-ky`). */
 async function tenantCoQuanTri(db: Db, email: string): Promise<string> {
@@ -109,5 +119,107 @@ describe("hàm DB dat_mat_khau_tao / dat_mat_khau_dung", () => {
       expect(h.rolname).toBe("dat_mat_khau_api");
       expect(h.public_goi_duoc).toBe(false);
     }
+  });
+});
+
+describe("POST /dat-mat-khau — khách tự đặt mật khẩu bằng link trong thư", () => {
+  let db: Db;
+  let app: ReturnType<typeof createApp>;
+  let tenantId: string;
+
+  beforeEach(async () => {
+    stubTurnstile();
+    db = await freshDb();
+    app = createApp(injectDb(db));
+    tenantId = await tenantCoQuanTri(db, "chu.cty@congty.vn");
+    // Tenant phải `active` thì mới đăng nhập được sau khi đặt mật khẩu.
+    await db.execute(sql`update tenants set trang_thai = 'active' where id = ${tenantId}::uuid`);
+  });
+
+  /** Tạo một token thật (thô + băm) đã nằm trong DB, trả về bản THÔ để gửi lên route. */
+  async function tokenThat(hetHan = SAU_MOT_GIO()): Promise<string> {
+    const tho = "token-tho-cho-test";
+    await db.execute(
+      sql`select r_nguoi_dung_id from dat_mat_khau_tao(${tenantId}::uuid, ${await bamToken(tho)}, ${hetHan}::timestamptz)`,
+    );
+    return tho;
+  }
+
+  const dat = (body: unknown) =>
+    app.request(
+      "/dat-mat-khau",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      makeEnv(),
+    );
+
+  it("token hợp lệ + mật khẩu đủ dài → 200, và ĐĂNG NHẬP ĐƯỢC ngay sau đó", async () => {
+    const token = await tokenThat();
+    const res = await dat({ token, mat_khau: "mat-khau-that-cua-toi" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const login = await app.request(
+      "/auth/login",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          voiCaptcha({ email: "chu.cty@congty.vn", password: "mat-khau-that-cua-toi" }),
+        ),
+      },
+      makeEnv(),
+    );
+    expect(login.status).toBe(200);
+  });
+
+  it("🔴 mật khẩu thô KHÔNG đi vào DB — cột chỉ giữ bản băm PBKDF2", async () => {
+    const token = await tokenThat();
+    await dat({ token, mat_khau: "mat-khau-that-cua-toi" });
+    const u = (await db.select().from(nguoiDung).where(eq(nguoiDung.tenantId, tenantId)))[0];
+    expect(u?.passwordHash).toMatch(/^pbkdf2\$/);
+    expect(u?.passwordHash).not.toContain("mat-khau-that-cua-toi");
+  });
+
+  it("token dùng lần hai → 400 da_dung", async () => {
+    const token = await tokenThat();
+    await dat({ token, mat_khau: "mat-khau-lan-mot" });
+    const res = await dat({ token, mat_khau: "mat-khau-lan-hai" });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "da_dung" });
+  });
+
+  it("token quá hạn → 400 het_han", async () => {
+    const token = await tokenThat(TRUOC_MOT_GIO());
+    const res = await dat({ token, mat_khau: "mat-khau-du-dai" });
+    expect(await res.json()).toEqual({ error: "het_han" });
+  });
+
+  it("token bịa → 400 khong_thay", async () => {
+    const res = await dat({ token: "khong-he-ton-tai", mat_khau: "mat-khau-du-dai" });
+    expect(await res.json()).toEqual({ error: "khong_thay" });
+  });
+
+  it("🔴 mật khẩu dưới 8 ký tự → 400 mat_khau_qua_ngan, và token KHÔNG bị tiêu", async () => {
+    const token = await tokenThat();
+    const res = await dat({ token, mat_khau: "ngan" });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "mat_khau_qua_ngan" });
+    // Gõ hụt một lần không được đốt mất liên kết duy nhất của khách.
+    expect((await dat({ token, mat_khau: "mat-khau-du-dai" })).status).toBe(200);
+  });
+
+  it("body hỏng / thiếu trường → 400 bad_request", async () => {
+    expect((await dat({ token: "x" })).status).toBe(400);
+    expect((await dat(null)).status).toBe(400);
+  });
+
+  it("khoá lạ trong body bị TỪ CHỐI (strict), không bị bỏ qua im lặng", async () => {
+    const token = await tokenThat();
+    const res = await dat({ token, mat_khau: "mat-khau-du-dai", vai_tro: "quan_tri" });
+    expect(await res.json()).toEqual({ error: "bad_request" });
   });
 });

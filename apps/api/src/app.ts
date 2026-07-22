@@ -10,6 +10,7 @@ import { adminTenantsRoutes } from "./routes/admin/tenants";
 import { authRoutes } from "./routes/auth";
 import { backfillRoutes } from "./routes/backfill";
 import { dangKyRoutes } from "./routes/dangKy";
+import { datMatKhauRoutes } from "./routes/datMatKhau";
 import { exportsRoutes } from "./routes/exports";
 import { invoicesRoutes } from "./routes/invoices";
 import { meRoutes } from "./routes/me";
@@ -42,6 +43,9 @@ export function createApp(deps: AppDeps) {
   app.route("/dang-ky", dangKyRoutes(deps));
   // U34c — công khai, đặt cạnh /dang-ky: cả hai đều chạy TRƯỚC khi có phiên nào.
   app.route("/xac-thuc-email", xacThucEmailRoutes(deps));
+  // Lát cắt 3 — CÔNG KHAI như /xac-thuc-email: khách chưa có mật khẩu thì đương nhiên
+  // chưa có phiên. Thứ bảo vệ là chính token 32 byte trong thư.
+  app.route("/dat-mat-khau", datMatKhauRoutes(deps));
 
   // A1 (U15): hồ sơ tenant + vai — đọc-only, sau requireTenant (cả 3 vai).
   app.route("/me", meRoutes(deps));
