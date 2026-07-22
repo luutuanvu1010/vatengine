@@ -208,10 +208,18 @@ export function authRoutes(deps: AppDeps) {
         return c.json({ error: "unauthorized" }, 401);
       }
 
-      // ── U18 — CỔNG MẬT KHẨU TẠM ────────────────────────────────────────────────────
-      // Mật khẩu tạm 6 chữ số (cấp khi super-admin duyệt/reset) chỉ có 10^6 không gian;
-      // "hết hạn 72h" là một trong ba điều kiện bù bắt buộc khiến đánh đổi đó còn an
-      // toàn (U18-plan §103, xem admin/matKhauTam.ts).
+      // ── U18 — CỔNG MẬT KHẨU TẠM (DI SẢN, VẪN PHẢI GIỮ) ─────────────────────────────
+      // Mật khẩu tạm 6 chữ số chỉ có 10^6 không gian; "hết hạn 72h" là điều kiện bù giữ
+      // cho đánh đổi đó còn an toàn (U18-plan §103).
+      //
+      // ⚠️ Lát cắt 3 (QĐ-14, 2026-07-22) đã GỠ HẲN đường CẤP mật khẩu tạm — `duyệt` giờ
+      // gửi thư kèm liên kết đặt mật khẩu, `admin/matKhauTam.ts` đã xoá. Cổng dưới đây
+      // KHÔNG được gỡ theo, và đó là chủ ý: production có thể còn những hàng `nguoi_dung`
+      // mang mật khẩu tạm cấp trước lát cắt đó. Gỡ cổng nghĩa là một mã 6 số quá hạn bỗng
+      // đăng nhập được. Gỡ đường CẤP và gỡ đường CHẶN là hai việc khác nhau.
+      //
+      // Khi nào bỏ được: khi xác nhận không hàng nào còn `mat_khau_tam_het_han` khác NULL.
+      // Đã ghi ở BACKLOG cùng việc bỏ hai cột.
       //
       // ĐẶT Ở ĐÂY — SAU biểu thức 401, KHÔNG gộp vào trong nó — và đó là chủ ý ngược với
       // cổng trạng thái U17b ở trên. Lý do: cổng này cần một truy vấn phụ mà chỉ chạy
@@ -237,9 +245,10 @@ export function authRoutes(deps: AppDeps) {
       );
       const coMatKhauTam = co[0];
       if (coMatKhauTam?.hetHan && coMatKhauTam.hetHan.getTime() <= Date.now()) {
-        // Mật khẩu ĐÚNG nhưng đã quá hạn ⇒ vẫn 401 gọn. Khách phải xin super-admin cấp
-        // lại (POST /admin/tenants/:id/reset-mat-khau). Mật khẩu gõ
-        // đúng nên đây không phải tín hiệu dò mật khẩu, không được tính vào khoá tài khoản.
+        // Mật khẩu ĐÚNG nhưng đã quá hạn ⇒ vẫn 401 gọn. Đường ra cho khách sau QĐ-14:
+        // super-admin bấm "Gửi lại link đặt mật khẩu" (POST
+        // /admin/tenants/:id/gui-link-dat-mat-khau), khách tự đặt mật khẩu mới. Mật khẩu
+        // gõ đúng nên đây không phải tín hiệu dò mật khẩu, không tính vào khoá tài khoản.
         await settle(auditLogin(db, row.tenant_id, row.id, "login_fail_mat_khau_tam_het_han"));
         return c.json({ error: "unauthorized" }, 401);
       }
@@ -276,10 +285,12 @@ export function authRoutes(deps: AppDeps) {
     return c.json({ ok: true });
   });
 
-  // POST /auth/doi-mat-khau — U18 (QĐ-2). Đóng lỗ hổng mà chính U18 mở ra: super-admin
-  // cấp mật khẩu TẠM 6 chữ số, và nếu không có đường đổi thì nó thành mật khẩu VĨNH VIỄN
-  // — sụp điều kiện bù "buộc đổi lần đầu" (matKhauTam.ts). U20 làm phần UI ép màn đổi;
-  // đây là backend, thuộc phạm vi U18.
+  // POST /auth/doi-mat-khau — U18 (QĐ-2). Ra đời để đóng lỗ hổng mật khẩu tạm 6 chữ số
+  // thành mật khẩu VĨNH VIỄN nếu không có đường đổi.
+  //
+  // Sau Lát cắt 3 (QĐ-14) mật khẩu tạm không còn được cấp nữa, nhưng route này KHÔNG mất
+  // lý do tồn tại: nó là đường đổi mật khẩu bình thường của người đang đăng nhập, và là
+  // đường duy nhất có. Nó không phụ thuộc mật khẩu tạm, chỉ tình cờ ra đời vì nó.
   //
   // ĐÒI MẬT KHẨU HIỆN TẠI, không chỉ dựa vào phiên đang đăng nhập: nếu chỉ cần cookie
   // hợp lệ, một phiên bị chiếm (máy bỏ quên, XSS chưa vá) đổi được mật khẩu và khoá
