@@ -78,6 +78,25 @@ export function anhXaLoiSes(status: number, tenLoi: string): LyDoKhongGui {
   return "dia_chi_bi_tu_choi";
 }
 
+/**
+ * Lấy câu GIẢI THÍCH của AWS. Tên lỗi một mình gần như vô dụng khi chẩn đoán:
+ * `MessageRejected` có thể là địa chỉ gửi chưa xác minh, sai vùng, hoặc nội dung bị chặn —
+ * ba việc phải xử lý hoàn toàn khác nhau. Chính câu này ("Email address is not verified…
+ * in region AP-SOUTHEAST-1") mới chỉ ra được vấn đề — kiểm chứng thật 2026-07-22, và nếu
+ * mã lúc đó đã giữ nó thì đã không phải mở một lần gọi chẩn đoán riêng.
+ *
+ * ⚠️ Câu này CÓ THỂ chứa địa chỉ email. Nó được TRẢ VỀ cho chỗ gọi để chẩn đoán, và module
+ * này KHÔNG tự ghi ra log. Chỗ gọi tuyệt đối không được đưa thẳng vào `audit_log` (QĐ-17)
+ * — bảng đó không sửa, không xoá được.
+ */
+export function layThongDiepLoi(than: unknown): string {
+  if (than && typeof than === "object") {
+    const m = (than as Record<string, unknown>).message;
+    if (typeof m === "string" && m.length > 0) return m;
+  }
+  return "";
+}
+
 /** Lấy tên lỗi từ phản hồi, chịu được cả hai kiểu AWS trả về. */
 export function layTenLoi(headers: Headers, than: unknown): string {
   const h = headers.get("x-amzn-errortype");
@@ -146,7 +165,9 @@ export function taoSesTransport(
           return {
             daGui: false,
             lyDo: anhXaLoiSes(res.status, ten),
-            chiTiet: ten || `HTTP ${res.status}`,
+            chiTiet: [ten || `HTTP ${res.status}`, layThongDiepLoi(than)]
+              .filter(Boolean)
+              .join(": "),
           };
         }
         const messageId = (than as { MessageId?: string } | null)?.MessageId ?? "";

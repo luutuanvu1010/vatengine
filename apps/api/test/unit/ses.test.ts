@@ -160,6 +160,23 @@ describe("gui — hợp đồng gửi đi", () => {
     expect(fetchGia).toHaveBeenCalledTimes(1); // chỉ có lời gọi DoH
   });
 
+  it("🔴 giữ CÂU GIẢI THÍCH của AWS, không chỉ tên lỗi", async () => {
+    // Kiểm chứng thật 2026-07-22: `MessageRejected` một mình gần như vô dụng — nó có thể là
+    // địa chỉ gửi chưa xác minh, sai vùng, hoặc nội dung bị chặn, ba việc xử lý khác hẳn
+    // nhau. Chính câu giải thích mới chỉ ra được vấn đề.
+    fetchGia
+      .mockResolvedValueOnce(DNS_CO_MX())
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ message: "Email address is not verified in region AP-SOUTHEAST-1" }),
+          { status: 400, headers: { "x-amzn-errortype": "MessageRejected" } },
+        ),
+      );
+    const kq = await taoSesTransport(CAU_HINH, fetchGia).gui(THU);
+    expect(kq).toMatchObject({ daGui: false, lyDo: "dia_chi_bi_tu_choi" });
+    if (!kq.daGui) expect(kq.chiTiet).toContain("is not verified in region");
+  });
+
   it("SES trả lỗi → ánh xạ đúng lý do, KHÔNG ném", async () => {
     fetchGia
       .mockResolvedValueOnce(DNS_CO_MX())
