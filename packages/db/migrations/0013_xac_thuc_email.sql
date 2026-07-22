@@ -120,6 +120,11 @@ END $$;--> statement-breakpoint
 -- Bước 4 — Nghi thức sở hữu. Ba lệnh cho mỗi hàm, viết bằng vòng lặp vì bỏ sót đúng một
 -- dòng REVOKE là mở một hàm BYPASSRLS cho PUBLIC (khuôn mẫu 0011).
 -- ══════════════════════════════════════════════════════════════════════════════════════
+-- Mượn TẠM membership: `ALTER FUNCTION ... OWNER TO r` đòi role đang chạy phải là THÀNH
+-- VIÊN của `r`. Thiếu dòng này, migration hỏng với "must be able to SET ROLE" — đã gặp
+-- thật trên production 2026-07-22. PGlite KHÔNG bắt được vì nó chạy superuser, và superuser
+-- SET ROLE được tới bất kỳ role nào; đúng khoảng mù mà 0011 đã ghi nhận.
+GRANT xac_thuc_api TO CURRENT_USER;--> statement-breakpoint
 DO $$
 DECLARE
   sig text;
@@ -158,4 +163,8 @@ BEGIN
   ELSE
     RAISE WARNING 'U34c: KHÔNG tìm thấy role app nào (đã thử vat_app, app_user) — BỎ QUA cấp EXECUTE cho xac_thuc_email_tao/dung. Nếu môi trường này dùng tên role khác, ĐĂNG KÝ VÀ XÁC THỰC EMAIL SẼ HỎNG (permission denied) cho tới khi cấp tay: GRANT EXECUTE ON FUNCTION public.xac_thuc_email_tao(uuid,text,timestamptz), public.xac_thuc_email_dung(text) TO <ten_role_app>;';
   END IF;
-END $$;
+END $$;--> statement-breakpoint
+
+-- ĐÓNG đường leo thang: trả lại membership TẠM ngay sau khi xong. Để nguyên nghĩa là role
+-- chạy migration vĩnh viễn mượn được BYPASSRLS qua danh tính này (khuôn mẫu 0011 Bước 7).
+REVOKE xac_thuc_api FROM CURRENT_USER;

@@ -50,9 +50,9 @@ Thêm: mỗi đơn vị cũ **không có Định nghĩa Hoàn thành viết trư
 | Migration 0013 (bảng token + 2 hàm SECURITY DEFINER) | ✅ viết xong, **chưa áp** |
 | Backend: `/dang-ky` đổi hợp đồng, `POST /xac-thuc-email` | ✅ xong |
 | Chuyển thông báo Telegram sang bước xác thực | ✅ xong |
-| **Trang SPA `/xac-thuc-email`** | ❌ **CHƯA LÀM** |
-| **Màn "chờ duyệt" đọc cờ `daGuiThu`** | ❌ **CHƯA LÀM** |
-| Deploy | ❌ chưa |
+| **Trang SPA `/xac-thuc-email`** | ✅ xong |
+| **Màn chờ đọc cờ `daGuiThu`** | ✅ xong |
+| Deploy | 🔴 **KẸT — xem §4b** |
 
 **Trang `/xac-thuc-email` phải:** đọc `?token=`, gửi **POST** (không phải GET — máy quét thư tự fetch GET và tiêu mất token), và hiển thị **bốn** kết quả riêng biệt: thành công · hết hạn · đã dùng rồi · liên kết hỏng. Ba cái sau người dùng xử lý khác nhau, gộp lại là bắt họ đoán.
 
@@ -63,6 +63,30 @@ make migrate  →  vat-api  →  vat-web
 Lý do: `/dang-ky` đổi hợp đồng phản hồi. Deploy `vat-web` trước thì màn chờ đọc một cờ chưa tồn tại; deploy `vat-api` trước khi migrate thì đăng ký chết vì thiếu bảng (đúng sự cố `deploy.md` ghi lại).
 
 **Nghiệm thu:** đăng ký thật bằng một địa chỉ thật, đi trọn đường. Không nghiệm thu bằng test tự động — chuỗi này đã có test, thứ chưa có bằng chứng là **đường thật xuyên qua ba hệ thống**.
+
+---
+
+### 🔴 §4b — NỢ KỸ THUẬT ĐANG CHẶN LÁT CẮT 1
+
+**Migration 0013 không áp được lên production.** Mã đã xong và trên trunk; production NGUYÊN VẸN (đã kiểm: chưa có bảng `xac_thuc_email`, 0 tenant trạng thái mới, rollback trọn vẹn).
+
+⛔ **KHÔNG deploy `vat-api`/`vat-web` cho tới khi việc này xong** — `/dang-ky` đã đổi hợp đồng.
+
+**Gốc rễ:** role migrate trên Neon là `neondb_owner`, **KHÔNG superuser**. PGlite chạy superuser ⇒ **test xanh trong khi production hỏng**. Khoảng mù này migration 0011 đã ghi nhận trước; hôm nay nó cắn thật.
+
+| Lỗi | Trạng thái |
+|---|---|
+| `ALTER FUNCTION … OWNER TO xac_thuc_api` → `must be able to SET ROLE` | ✅ vá bằng `GRANT xac_thuc_api TO CURRENT_USER` |
+| Câu cuối `REVOKE xac_thuc_api FROM CURRENT_USER` → `permission denied for schema public` | ❌ **chưa giải** |
+
+**Ba hướng, đều có đánh đổi — CHƯA CHỌN:**
+1. Bỏ câu REVOKE. Đơn giản nhất, nhưng `neondb_owner` giữ vĩnh viễn membership của một role **BYPASSRLS**.
+2. Bọc REVOKE trong `DO … EXCEPTION WHEN OTHERS THEN RAISE WARNING`. Chạy được, nhưng là né chứ không giải.
+3. Dùng luôn `admin_api` thay vì tạo role riêng. Gọn nhất, nhưng gộp đường CÔNG KHAI vào miền QUẢN TRỊ — đúng thứ đã cố ý tách (xem đầu file migration).
+
+**⚠️ Cách chẩn đoán:** `drizzle-kit migrate` **NUỐT thông báo lỗi** — chỉ hiện spinner rồi thoát mã 1. Tin nó là tưởng migration chạy xong rồi deploy tiếp và làm hỏng đăng ký. Phải áp tay bằng `pg`: tách câu theo `--> statement-breakpoint`, chạy trong transaction, in lỗi từng câu.
+
+**Bài học rộng hơn, đáng ghi riêng:** mọi migration đụng `CREATE ROLE` / `ALTER … OWNER` / `GRANT` **không được PGlite kiểm chứng** vì PGlite là superuser. Nhóm migration này cần một cách kiểm khác — hoặc chấp nhận rằng chúng chỉ được kiểm thật lúc áp lên production, và vì vậy phải áp TRONG TRANSACTION có in lỗi từng câu.
 
 ---
 

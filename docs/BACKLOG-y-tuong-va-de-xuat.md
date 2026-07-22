@@ -481,3 +481,16 @@ kind duy nhất khi có dịp chạm vào file đó; không đáng một commit 
 
 **Đề xuất:** làm **A** trước như một miếng vá vận hành (chi phí gần bằng không, dùng được ngay), rồi thay bằng **B** khi U24 tới — chứ không chờ U24 mới có gì báo.
 
+---
+
+## 🧱 PGlite không kiểm chứng được migration đụng ROLE/OWNER/GRANT (2026-07-22)
+
+PGlite chạy **superuser**, nên mọi câu `CREATE ROLE`, `ALTER … OWNER TO`, `GRANT`, `SET ROLE` đều lọt trong test mà có thể hỏng trên production — nơi role migrate (`neondb_owner` trên Neon) **không** phải superuser.
+
+Đã cắn thật hai lần: migration 0011 ghi nhận trước dưới dạng "giới hạn phủ test", và migration 0013 hỏng đúng vì nó (chi tiết ở `U34-KE-HOACH-LAT-CAT.md` §4b).
+
+Hướng có thể làm, chưa chốt:
+- Chạy một job CI đối chiếu bằng Postgres thật (container) dưới role **non-superuser**, chỉ cho nhóm migration có đụng quyền.
+- Hoặc: quy ước bắt buộc áp migration bằng script `pg` tự viết (transaction + in lỗi từng câu) thay vì `drizzle-kit migrate` — vì công cụ đó nuốt mất thông báo lỗi.
+- Hoặc: tránh hẳn việc tạo role mới trong migration; tái dùng role sẵn có (đổi lại: bán kính thiệt hại rộng hơn).
+
