@@ -456,3 +456,28 @@ kind duy nhất khi có dịp chạm vào file đó; không đáng một commit 
 **Ưu tiên đề xuất:** Thấp (nợ tên, không ảnh hưởng hành vi).
 
 **Nguồn phát hiện:** `docs/plans/U29-plan.md` §8b + §9 (M1/M3).
+
+---
+
+## 🔔 Báo cho admin khi có người đăng ký mới (phát hiện 2026-07-22, ngay sau khi U33 live)
+
+**Trạng thái hiện tại — đã kiểm chứng bằng mã, không phải phỏng đoán:**
+- `routes/dangKy.ts` chỉ INSERT tenant + người dùng + audit log. Không gửi email, không webhook, không đẩy queue.
+- `apps/api` không có bất kỳ thư viện gửi email nào (đúng QĐ-1: hạ tầng email thuộc U24).
+- Cổng Admin không có polling, không badge, không đếm hồ sơ chờ.
+- Thứ duy nhất đang đỡ: `TenantsPage` mặc định mở tab `cho_duyet` ⇒ vừa đăng nhập là thấy danh sách.
+
+**Vì sao bây giờ mới thành vấn đề:** U33 vừa mở cổng đăng ký cho người lạ. Trước đó chỉ có 1 khách do chủ dự án tự tạo nên không ai cần được báo. Giờ khách đăng ký xong ngồi chờ không biết chờ bao lâu, còn chủ dự án không biết có người đang chờ. Đây là lỗ hổng VẬN HÀNH, không phải lỗi mã.
+
+**Ba hướng, xếp theo công sức:**
+
+| Hướng | Công sức | Đánh đổi |
+|---|---|---|
+| **A. Webhook Telegram/Zalo** ngay trong `routes/dangKy.ts` sau khi commit thành công | Thấp nhất — một `fetch()` + một secret | Phải fail-SILENT (webhook hỏng KHÔNG được làm hỏng đăng ký của khách). Không cần hạ tầng email. Hợp với việc dự án đã dùng Zalo làm kênh hỗ trợ |
+| **B. Email cho admin** qua MailChannels/Resend | Trung bình | Kéo U24 lên sớm. Nhưng đằng nào cũng cần U24 để báo cho KHÁCH khi được duyệt — làm một lần dùng hai đầu |
+| **C. Cron tổng hợp hằng ngày** đọc `tenants` trạng thái `cho_duyet` | Thấp | Trễ tới 24h. Chỉ hợp khi lượng đăng ký còn thưa |
+
+**Lưu ý thiết kế cho cả ba hướng:** nội dung báo KHÔNG được chứa mật khẩu tạm và nên che bớt PII (`maskSensitive` đã có sẵn) — `security.md` cấm log dữ liệu nhạy cảm, và một webhook/email là nơi lưu vết nằm NGOÀI tầm kiểm soát tenant.
+
+**Đề xuất:** làm **A** trước như một miếng vá vận hành (chi phí gần bằng không, dùng được ngay), rồi thay bằng **B** khi U24 tới — chứ không chờ U24 mới có gì báo.
+
