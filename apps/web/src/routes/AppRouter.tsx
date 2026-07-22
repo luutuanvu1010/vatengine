@@ -5,6 +5,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { AboutPage } from "../features/about/AboutPage";
 import { DangKyPage } from "../features/auth/DangKyPage";
 import { LoginPage } from "../features/auth/LoginPage";
+import { XacThucEmailPage } from "../features/auth/XacThucEmailPage";
 import { useAuth } from "../features/auth/auth-context";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { ExportsPage } from "../features/exports/ExportsPage";
@@ -82,6 +83,10 @@ export function AppRouter() {
           đương nhiên chưa có phiên. Người ĐANG đăng nhập vào đây thì đá về app — họ đã
           có tài khoản rồi, form đăng ký chỉ gây bối rối. */}
       <Route path="/dang-ky" element={<DangKyRoute />} />
+      {/* Lát cắt 1 — Đích của liên kết trong thư xác thực. CÔNG KHAI và KHÔNG đá người
+          đang đăng nhập đi đâu cả: rất có thể họ đăng ký ở máy này rồi mở thư ở máy khác,
+          hoặc đang đăng nhập bằng một tài khoản khác. Đá đi là làm hỏng việc xác thực. */}
+      <Route path="/xac-thuc-email" element={<XacThucEmailPage />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="invoices" element={<InvoicesPage />} />

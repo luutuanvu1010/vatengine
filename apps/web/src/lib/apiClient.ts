@@ -175,8 +175,17 @@ export const api = {
       dongYDieuKhoan: boolean;
     },
     captcha: string,
-  ): Promise<{ ok: true; trangThai: "cho_duyet" }> {
+  ): Promise<{ ok: true; trangThai: "cho_xac_thuc_email"; daGuiThu: boolean }> {
     return request("POST", "/dang-ky", { body: { ...body, "cf-turnstile-response": captcha } });
+  },
+
+  /** Lát cắt 1 — Xác nhận địa chỉ email bằng token trong thư.
+   *
+   * `POST`, KHÔNG phải `GET`: token dùng một lần, mà máy quét thư và phần mềm diệt virus
+   * tự động fetch mọi URL trong thư. Một endpoint `GET` sẽ bị chúng tiêu mất token trước
+   * khi khách kịp bấm. Máy quét không chạy JavaScript nên không gửi được POST. */
+  xacThucEmail(token: string): Promise<{ ok: true; trangThai: "cho_duyet" }> {
+    return request("POST", "/xac-thuc-email", { body: { token } });
   },
 
   // C4 — đăng xuất THẬT: chỉ server mới xoá được cookie HttpOnly. Bỏ bước này thì

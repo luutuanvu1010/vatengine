@@ -59,16 +59,51 @@ export function thongDiepLoiDangKy(err: unknown): string {
  * (hạ tầng email thuộc U24, chưa có; mật khẩu tạm do quản trị viên đọc trực tiếp — QĐ-1).
  * Hứa một bức thư không bao giờ tới là cách chắc chắn nhất để mất niềm tin ngay từ bước
  * đầu tiên khách chạm vào sản phẩm. */
-function ManChoDuyet({ email }: { email: string }) {
+function ManChoDuyet({ email, daGuiThu }: { email: string; daGuiThu: boolean }) {
+  // Lát cắt 1 — hai màn KHÁC HẲN nhau, vì việc khách cần làm khác hẳn nhau.
+  //
+  // Thư gửi được ⇒ bảo họ đi mở hộp thư. Thư KHÔNG gửi được ⇒ tuyệt đối không được nói câu
+  // đó: bắt người ta ngồi chờ một bức thư không bao giờ tới là cách chắc chắn nhất để mất
+  // họ. Backend trả cờ `daGuiThu` chính là để màn này nói đúng sự thật.
+  if (!daGuiThu) {
+    return (
+      <Card>
+        <h1 style={{ margin: "0 0 var(--sp-3)", fontSize: "var(--fs-2xl)" }}>
+          Đã ghi nhận đăng ký
+        </h1>
+        <Alert tone="danger">
+          Chúng tôi chưa gửi được thư xác nhận tới <strong>{email}</strong>.
+        </Alert>
+        <p style={{ fontSize: "var(--fs-base)", lineHeight: 1.6 }}>
+          Đăng ký của bạn <strong>đã được lưu</strong>, nhưng địa chỉ email có thể gõ nhầm hoặc
+          không nhận được thư. Vui lòng kiểm tra lại địa chỉ và{" "}
+          <Link to="/dang-ky">đăng ký lại</Link>, hoặc liên hệ qua trang{" "}
+          <Link to="/gioi-thieu">Giới thiệu &amp; Hỗ trợ</Link>.
+        </p>
+        <Link to="/login">← Về trang đăng nhập</Link>
+      </Card>
+    );
+  }
+
   return (
     <Card>
-      <h1 style={{ margin: "0 0 var(--sp-3)", fontSize: "var(--fs-2xl)" }}>Đã ghi nhận đăng ký</h1>
+      <h1 style={{ margin: "0 0 var(--sp-3)", fontSize: "var(--fs-2xl)" }}>
+        Kiểm tra hộp thư của bạn
+      </h1>
       <Alert tone="success">
-        Đăng ký cho <strong>{email}</strong> đã được ghi nhận và đang <strong>chờ duyệt</strong>.
+        Chúng tôi vừa gửi thư xác nhận tới <strong>{email}</strong>.
       </Alert>
       <p style={{ fontSize: "var(--fs-base)", lineHeight: 1.6 }}>
-        Chúng tôi sẽ xác minh thông tin doanh nghiệp trước khi kích hoạt tài khoản. Sau khi được
-        duyệt, bạn sẽ nhận mật khẩu đăng nhập từ bộ phận hỗ trợ.
+        Vui lòng mở thư và bấm nút xác nhận để chúng tôi biết đây đúng là địa chỉ của bạn. Liên kết
+        có hiệu lực trong <strong>24 giờ</strong>.
+      </p>
+      <p style={{ fontSize: "var(--fs-base)", lineHeight: 1.6 }}>
+        Không thấy thư? Hãy kiểm tra cả thư mục <strong>Spam</strong> hoặc{" "}
+        <strong>Quảng cáo</strong>.
+      </p>
+      <p style={{ fontSize: "var(--fs-base)", lineHeight: 1.6 }}>
+        Sau khi xác nhận, chúng tôi sẽ xác minh thông tin doanh nghiệp trước khi kích hoạt tài
+        khoản.
       </p>
       <p style={{ fontSize: "var(--fs-base)", lineHeight: 1.6 }}>
         Nếu cần hỗ trợ hoặc muốn hỏi tình trạng hồ sơ, vui lòng liên hệ qua trang{" "}
@@ -89,6 +124,7 @@ export function DangKyPage() {
   const [dangGui, setDangGui] = useState(false);
   const [loi, setLoi] = useState<string | null>(null);
   const [xong, setXong] = useState(false);
+  const [daGuiThu, setDaGuiThu] = useState(true);
 
   // Validate phía client CHỈ để đỡ một vòng round-trip vô ích. Nguồn chân lý vẫn là
   // backend (U17b) — nó lọc miền email dùng-một-lần, alias `+`, và rate-limit theo IP,
@@ -111,7 +147,7 @@ export function DangKyPage() {
     if (captcha === null) return;
     setDangGui(true);
     try {
-      await api.dangKy(
+      const kq = await api.dangKy(
         {
           email: email.trim(),
           tenDoanhNghiep: tenDoanhNghiep.trim(),
@@ -120,6 +156,7 @@ export function DangKyPage() {
         },
         captcha,
       );
+      setDaGuiThu(kq.daGuiThu);
       setXong(true);
     } catch (err) {
       setLoi(thongDiepLoiDangKy(err));
@@ -144,7 +181,7 @@ export function DangKyPage() {
         <Brand />
 
         {xong ? (
-          <ManChoDuyet email={email.trim()} />
+          <ManChoDuyet email={email.trim()} daGuiThu={daGuiThu} />
         ) : (
           <Card>
             <h1 style={{ margin: "0 0 var(--sp-2)", fontSize: "var(--fs-2xl)" }}>

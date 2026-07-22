@@ -122,42 +122,40 @@ describe("Gửi đăng ký", () => {
   });
 });
 
-describe("Màn chờ duyệt", () => {
+describe("Màn sau khi đăng ký", () => {
   it("201 → hiện xác nhận kèm email đã đăng ký", async () => {
     // mockImplementation chứ KHÔNG mockResolvedValue: body của một Response chỉ đọc được
     // MỘT lần, mà AuthProvider gọi /me trước ⇒ dùng chung một instance thì lời gọi
     // /dang-ky nhận về body đã bị tiêu thụ và ném lỗi.
     vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-      json(201, { ok: true, trangThai: "cho_duyet" }),
+      json(201, { ok: true, trangThai: "cho_xac_thuc_email", daGuiThu: true }),
     );
     renderWithProviders(<DangKyPage />);
     const u = await dienForm();
     await u.click(screen.getByRole("button", { name: /Gửi đăng ký/i }));
 
-    expect(
-      await screen.findByRole("heading", { name: /Đã ghi nhận đăng ký/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Kiểm tra hộp thư/i })).toBeInTheDocument();
     expect(screen.getByText(/ketoan@congty.vn/)).toBeInTheDocument();
-    expect(screen.getByText(/chờ duyệt/i)).toBeInTheDocument();
   });
 
-  it("🔴 KHÔNG hứa gửi email — hệ thống hiện không gửi gì cho khách", async () => {
-    // Hạ tầng email thuộc U24, chưa tồn tại; mật khẩu tạm do super-admin đọc trực tiếp
-    // (QĐ-1). Một câu "chúng tôi sẽ gửi email cho bạn" sẽ khiến khách ngồi chờ một bức thư
-    // không bao giờ tới — mất niềm tin ngay ở bước đầu tiên họ chạm vào sản phẩm.
-    // mockImplementation chứ KHÔNG mockResolvedValue: body của một Response chỉ đọc được
-    // MỘT lần, mà AuthProvider gọi /me trước ⇒ dùng chung một instance thì lời gọi
-    // /dang-ky nhận về body đã bị tiêu thụ và ném lỗi.
+  // ── ĐẢO CHIỀU, KHÔNG XOÁ ────────────────────────────────────────────────────────────
+  // Ca này TRƯỚC ĐÂY khẳng định "KHÔNG hứa gửi email", vì lúc U20 ra đời hạ tầng email
+  // chưa tồn tại và một lời hứa suông sẽ khiến khách ngồi chờ bức thư không bao giờ tới.
+  //
+  // Lát cắt 1 làm cho lời hứa đó thành SỰ THẬT — nhưng chỉ khi thư gửi được. Nên ràng buộc
+  // gốc không mất đi, nó chuyển thành dạng CÓ ĐIỀU KIỆN: chỉ được nhắc tới hộp thư khi
+  // backend xác nhận đã gửi. Ca "không gửi được → tuyệt đối không bảo đi mở hộp thư" nằm ở
+  // `xacThucEmail.test.tsx`.
+  it("🔴 chỉ hứa gửi thư KHI backend xác nhận đã gửi được", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-      json(201, { ok: true, trangThai: "cho_duyet" }),
+      json(201, { ok: true, trangThai: "cho_xac_thuc_email", daGuiThu: false }),
     );
     const { container } = renderWithProviders(<DangKyPage />);
     const u = await dienForm();
     await u.click(screen.getByRole("button", { name: /Gửi đăng ký/i }));
-    await screen.findByRole("heading", { name: /Đã ghi nhận đăng ký/i });
+    await screen.findByText(/chưa gửi được thư xác nhận/i);
 
     const chu = container.textContent ?? "";
-    expect(chu).not.toMatch(/gửi (một )?(email|thư|mail)/i);
     expect(chu).not.toMatch(/kiểm tra (hộp thư|email|inbox)/i);
   });
 });
