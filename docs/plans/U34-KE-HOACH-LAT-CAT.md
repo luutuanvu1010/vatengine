@@ -105,7 +105,12 @@ trạng thái an toàn và nhất quán.
 
 ---
 
-### LÁT CẮT 3 — Duyệt xong khách tự đặt mật khẩu  ← **MÃ XONG, CHỜ DEPLOY**
+### ✅ LÁT CẮT 3 — Duyệt xong khách tự đặt mật khẩu — **XONG, ĐÃ LIVE + NGHIỆM THU 2026-07-23**
+
+Deploy 2026-07-22 (`vat-api` `a27e6148` · `vat-web` `77202d7b` · `vat-admin` `f66b8984` ·
+migration 0014 đã áp, hậu kiểm quyền 7/7). **Nghiệm thu bằng đăng ký thật 2026-07-23:** chủ
+dự án đăng ký → duyệt → nhận thư → đặt mật khẩu → đăng nhập được. Chủ dự án KHÔNG còn nhìn
+thấy mật khẩu của khách. Món nợ mức CAO (mật khẩu tạm 6 số) đã trả trọn.
 
 > **Đảo thứ tự 2026-07-22.** Chủ dự án nêu: hiện Cổng Admin hiện mã 6 số để tự tay gửi cho
 > khách — bất hợp lý và đang xảy ra MỖI LẦN duyệt. Lát 2 lo tình huống chưa gặp lần nào.
