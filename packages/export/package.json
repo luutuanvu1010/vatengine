@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@vat/db": "*",
+    "@vat/domain": "*",
     "@vat/query": "*",
     "drizzle-orm": "^0.45.2",
     "fflate": "^0.8.2"

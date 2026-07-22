@@ -1,10 +1,12 @@
 // U7 unit — mẫu cột chuẩn DUY NHẤT (columns.ts) + chuẩn hóa ô. ttxly/tthai xuất MÃ số
 // (chốt #3: KHÔNG nhãn tiếng Việt — tránh nguồn sự thật thứ hai). Offline.
+import { INVOICE_FIELDS } from "@vat/domain";
 import { describe, expect, it } from "vitest";
 import {
   EXPORT_COLUMNS,
   type ExportColumn,
   cellFor,
+  deriveExportColumns,
   formatDate,
   nativeRenderColumns,
 } from "../../src/columns";
@@ -102,6 +104,21 @@ describe("EXPORT_COLUMNS (mẫu cột chuẩn)", () => {
     const labels = EXPORT_COLUMNS.map((c) => c.label);
     expect(labels.every((l) => l.length > 0)).toBe(true);
     expect(new Set(labels).size).toBe(labels.length);
+  });
+});
+
+// U-K1 — EXPORT_COLUMNS phải DẪN XUẤT từ Registry miền hoá đơn (@vat/domain), không tự
+// khai lại (.claude/rules/ui.md). Sửa lệch Registry ⇒ test này đỏ.
+describe("EXPORT_COLUMNS — dẫn xuất từ INVOICE_FIELDS (Registry, một nguồn sự thật)", () => {
+  it("EXPORT_COLUMNS bằng đúng deriveExportColumns(INVOICE_FIELDS)", () => {
+    expect(EXPORT_COLUMNS).toEqual(deriveExportColumns(INVOICE_FIELDS));
+  });
+
+  it("mọi nhãn cột đến từ INVOICE_FIELDS[].nhan — không có chuỗi nhãn rời trong columns.ts", () => {
+    const nhanByKey = new Map(INVOICE_FIELDS.map((f) => [f.key, f.nhan]));
+    for (const c of EXPORT_COLUMNS) {
+      expect(c.label).toBe(nhanByKey.get(c.key));
+    }
   });
 });
 

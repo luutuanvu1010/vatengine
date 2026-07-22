@@ -1,6 +1,16 @@
 // Mẫu cột kết xuất chuẩn DUY NHẤT (U7) — port từ MVP `backend/gdt_client.py::EXPORT_COLUMNS`.
 // Nguồn sự thật cho CẢ csv lẫn xlsx (không nhân đôi danh sách cột). ttxly/tthai xuất MÃ số
 // (chốt #3: KHÔNG nhãn tiếng Việt — U6 đã hoãn nhãn, tránh nguồn sự thật thứ hai).
+//
+// U-K1: EXPORT_COLUMNS DẪN XUẤT từ Registry miền hoá đơn (@vat/domain) — không còn khai tay
+// ở đây (.claude/rules/ui.md "một nguồn sự thật cho trường hoá đơn"). Danh sách/nhãn/thứ tự
+// GIỮ NGUYÊN hành vi cũ; chỉ đổi NGUỒN của nó.
+import {
+  INVOICE_FIELDS,
+  type InvoiceField,
+  type InvoiceFieldKind,
+  fieldsForExport,
+} from "@vat/domain";
 import type { HangHoaTomTat } from "@vat/query";
 import type { InvoiceLineLike } from "./invoiceDoc";
 import type { ExportRow } from "./rows";
@@ -23,30 +33,34 @@ export interface ExportColumn {
   kind: ColumnKind;
 }
 
+// U-K1: `kieu` (Registry) → `kind` (ExportColumn cũ). Registry gộp int/num/date/money vào
+// kieu chung 'ngay'/'tien'/'ma' — ánh xạ tường minh ở đây để KHÔNG mất phân biệt mà encoder
+// csv/xlsx cần (numFmt tiền vs mã số thô). `enum` chưa dùng ở U-K1 (chưa field nào khai).
+const KIEU_TO_KIND: Record<InvoiceFieldKind, ColumnKind> = {
+  text: "text",
+  ngay: "date",
+  tien: "money",
+  ma: "int",
+  list: "list",
+  enum: "text",
+};
+
+/** `EXPORT_COLUMNS` dẫn xuất từ Registry — U-K1 §Thiết kế Registry: phải tái tạo CHÍNH XÁC
+ * danh sách cũ (key/nhãn/kind/thứ tự). Sửa lệch Registry ⇒ test golden của EXPORT_COLUMNS đỏ. */
+export function deriveExportColumns(fields: readonly InvoiceField[]): ExportColumn[] {
+  return fields
+    .filter((f) => f.tren.fileXuat === true)
+    .map((f) => ({
+      key: f.key as keyof ExportRow,
+      label: f.nhan,
+      kind: KIEU_TO_KIND[f.kieu],
+    }));
+}
+
 // U29: cột phụ (ncnhat, hangHoa, soDongHang, ttcktmai) chèn theo trật tự
 // NGHIỆP VỤ, không nối đuôi — thời điểm rẻ nhất để sắp lại là lúc còn ít khách hàng.
 // `tgia` bị LOẠI (M3): production chưa có hóa đơn dvtte≠VND nào để kiểm chứng.
-export const EXPORT_COLUMNS: readonly ExportColumn[] = [
-  { key: "tdlap", label: "Ngày lập", kind: "date" },
-  { key: "ncnhat", label: "Ngày cập nhật", kind: "date" },
-  { key: "khmshdon", label: "Ký hiệu mẫu số", kind: "text" },
-  { key: "khhdon", label: "Ký hiệu HĐ", kind: "text" },
-  { key: "shdon", label: "Số HĐ", kind: "text" },
-  { key: "nbmst", label: "MST người bán", kind: "text" },
-  { key: "nbten", label: "Tên người bán", kind: "text" },
-  { key: "nmmst", label: "MST người mua", kind: "text" },
-  { key: "nmten", label: "Tên người mua", kind: "text" },
-  { key: "hangHoa", label: "Hàng hóa, dịch vụ (số lượng)", kind: "list" },
-  { key: "tgtcthue", label: "Tiền chưa thuế", kind: "money" },
-  { key: "ttcktmai", label: "Chiết khấu", kind: "money" },
-  { key: "tgtthue", label: "Tiền thuế", kind: "money" },
-  { key: "tgtttbso", label: "Tổng thanh toán", kind: "money" },
-  { key: "dvtte", label: "Tiền tệ", kind: "text" },
-  { key: "ttxly", label: "Trạng thái xử lý (mã)", kind: "int" },
-  { key: "tthai", label: "Trạng thái HĐ (mã)", kind: "int" },
-  { key: "chieu", label: "Chiều", kind: "text" },
-  { key: "nguon", label: "Nguồn", kind: "text" },
-];
+export const EXPORT_COLUMNS: readonly ExportColumn[] = deriveExportColumns(fieldsForExport());
 
 // Ô đã chuẩn hóa. `num` giữ giá trị dạng CHUỖI để KHÔNG bao giờ ép qua float (mục 7.1):
 // tiền `numeric` Postgres có thể vượt 2^53 → csv giữ nguyên, xlsx nhét thẳng vào <v>.
