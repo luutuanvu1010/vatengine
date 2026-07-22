@@ -15,7 +15,7 @@ Tài liệu này là **Hiến pháp** — nguyên tắc tối cao, ít thay đ�
 | **Cổng kiểm soát** | `.claude/settings.json` → `hooks` | Chặn/ép hành vi cụ thể: prompt vào, hành động nguy hiểm, kết quả ra | **Bắt buộc kỹ thuật**, không phụ thuộc Claude có tuân theo hay không |
 | **Quy trình đóng gói** | `.claude/skills/`, `.claude/agents/` | Vòng lặp U0–U12 hoá thành skill gọi lại được; review chéo bằng subagent độc lập | Thực thi lặp lại, kiểm chứng độc lập |
 
-Luật hiện có: `gdt-adapter.md` (cô lập API thuế + hợp đồng), `multi-tenant.md` (cách ly tenant), `security.md` (bí mật, audit log), `testing.md` (TDD, coverage). Khi một luật mâu thuẫn với Hiến pháp, Hiến pháp thắng — sửa luật, không sửa hiến pháp để né.
+Luật hiện có: `gdt-adapter.md` (cô lập API thuế + hợp đồng), `multi-tenant.md` (cách ly tenant), `security.md` (bí mật, audit log), `testing.md` (TDD, coverage), `ui.md` (giao diện & ánh xạ dữ liệu: Registry một-nguồn-sự-thật, token/primitive, hợp đồng tương tác). Khi một luật mâu thuẫn với Hiến pháp, Hiến pháp thắng — sửa luật, không sửa hiến pháp để né.
 
 ## Tài liệu nguồn (đọc khi cần, KHÔNG tự import)
 
@@ -24,6 +24,7 @@ Luật hiện có: `gdt-adapter.md` (cô lập API thuế + hợp đồng), `mul
 - `KHAO_SAT_TINH_NANG_NIBOT.md` — mốc tính năng đối thủ (feature parity).
 - `docs/adr/` — **Nhật ký quyết định kiến trúc (ADR)**. `0001-nen-tang-cloudflare.md` chốt ngăn xếp Cloudflare (nguồn của các thay đổi ở mục "Ngăn xếp công nghệ" bên dưới).
 - `README.md` — cài đặt & chạy. `backend/` (Python) là **khung tham chiếu MVP cũ**, được **thay bằng ngăn xếp Cloudflare/TypeScript** theo ADR-0001; giữ lại làm tài liệu nghiệp vụ (đặc biệt `gdt_client.py`, `gdt_contract_schema.json`) để port sang TS ở U1–U3, không phát triển tiếp trên đó. Mã production mới nằm ở `apps/` + `packages/`.
+- `docs/design/CHUAN-giao-dien-va-anh-xa-du-lieu.md` — **chuẩn tầng trình bày**: kiến trúc 6 tầng, Registry miền hoá đơn (một nguồn sự thật), triết lý thiết kế + tiêu chí nghiệm thu + cổng kiểm thay đổi. Ép thi hành qua `.claude/rules/ui.md`. Bản rút gọn: `docs/design/huong-dan-co-ban-giao-dien.md`.
 - `docs/BACKLOG-y-tuong-va-de-xuat.md` — **giỏ ý tưởng/đề xuất/rủi ro phát hiện được nhưng chưa đến lượt làm** (không phải kế hoạch đã chốt). Ghi vào đây khi phát hiện điều gì đáng lưu nhưng lạc phạm vi đơn vị đang làm; đọc lại khi tìm việc cho thời điểm rảnh hoặc chuẩn bị roadmap mới.
 
 Trước khi bắt đầu một đơn vị công việc, đọc mục liên quan trong hai tài liệu đầu, hoặc gọi skill `/start-unit`.

@@ -1,0 +1,28 @@
+# CODEOWNERS — chống làm yếu cổng cứng (U-K0.1)
+#
+# Mục đích: các file định nghĩa CỔNG hoặc NGUỒN SỰ THẬT không được sửa để "né"
+# mà không có người duyệt. Chỉ có hiệu lực khi GitHub branch protection bật
+# "Require review from Code Owners" trên trunk (xem docs/prompts/U-K0.1-cong-cung.md).
+#
+# ⚠️ THAY @CHU-DU-AN bằng tài khoản/nhóm GitHub thật (vd @tuanbao hoặc @to-chuc/maintainers).
+# Placeholder không phân giải được sẽ KHÔNG ép được review — phải thay trước khi coi là xong.
+
+# Cổng CI + hạ tầng kiểm thử
+/.github/                 @CHU-DU-AN
+/Makefile                 @CHU-DU-AN
+
+# Cổng mềm + cứng phía agent (Luật, hooks)
+/.claude/                 @CHU-DU-AN
+/CLAUDE.md                @CHU-DU-AN
+
+# Cấu hình lint/format/type (nơi có thể "tắt" quy tắc)
+/biome.json               @CHU-DU-AN
+/tsconfig.base.json       @CHU-DU-AN
+
+# Nguồn sự thật miền hoá đơn + lớp an toàn (khi tạo ở U-K1/U-K2)
+/packages/domain/         @CHU-DU-AN
+/packages/query/src/filters.ts   @CHU-DU-AN
+/packages/export/src/columns.ts  @CHU-DU-AN
+
+# Chuẩn giao diện
+/docs/design/             @CHU-DU-AN
