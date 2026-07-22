@@ -494,3 +494,27 @@ Hướng có thể làm, chưa chốt:
 - Hoặc: quy ước bắt buộc áp migration bằng script `pg` tự viết (transaction + in lỗi từng câu) thay vì `drizzle-kit migrate` — vì công cụ đó nuốt mất thông báo lỗi.
 - Hoặc: tránh hẳn việc tạo role mới trong migration; tái dùng role sẵn có (đổi lại: bán kính thiệt hại rộng hơn).
 
+
+## 🧹 Hai món dọn mở ra từ Lát cắt 3 (QĐ-14, 2026-07-22)
+
+Cả hai đều là **dọn**, không chặn gì. Ghi lại vì cả hai là loại "để lâu thì quên mất vì sao
+nó còn ở đó", chứ không phải loại "để lâu thì đắt".
+
+**1. Hàm SQL `admin_dat_mat_khau_tam` (migration 0011) nay mồ côi.**
+Không route nào gọi nữa sau khi `admin/matKhauTam.ts` bị xoá. KHÔNG sửa `0011` — migration
+là lịch sử, sửa file cũ là làm sai lệch thứ đã chạy trên production. Dọn bằng một migration
+MỚI (`DROP FUNCTION IF EXISTS`) khi tiện.
+⚠️ Nhớ bài học `0009`: `DROP FUNCTION` xoá sạch mọi `GRANT` gắn trên hàm. Ở đây vô hại vì
+xoá hẳn, nhưng đừng `DROP` rồi `CREATE` lại mà quên cấp lại quyền.
+
+**2. Cột `nguoi_dung.mat_khau_tam_het_han` và `phai_doi_mat_khau` chỉ còn phục vụ hàng CŨ.**
+Đường CẤP mật khẩu tạm đã gỡ, nhưng cổng CHẶN ở `apps/api/src/routes/auth.ts` vẫn giữ — nó
+bảo vệ những hàng cấp trước Lát cắt 3. Gỡ cổng khi và chỉ khi xác nhận được:
+
+```sql
+SELECT count(*) FROM nguoi_dung WHERE mat_khau_tam_het_han IS NOT NULL;  -- phải = 0
+```
+
+Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_doi_mat_khau` ở `apps/web`
+(`auth-context.tsx`, `DoiMatKhauCard.tsx`). Trước đó thì KHÔNG — gỡ sớm là cho một mật khẩu
+6 số quá hạn bỗng đăng nhập được.
