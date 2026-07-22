@@ -154,7 +154,7 @@ Nhánh **`feat/u33-turnstile`**, commit `5cbef98`. **`make lint` = 0, `make test
 
 ✅ **Secret key hợp lệ — suy ra từ chính smoke:** token bịa trả `400 captcha_sai`. Mã ánh xạ `invalid-input-secret` → `cau_hinh_sai` → **503**; nhận `captcha_sai` nghĩa là Cloudflare đã CHẤP NHẬN secret và chỉ từ chối token. (Đây là suy luận từ bảng mã lỗi, không phải giả định.)
 
-⚠️ **Mắt xích cuối chưa chứng minh được bằng máy:** site key và secret key có thuộc **cùng một widget** không. Nếu là hai widget khác nhau, ô vẫn tick xanh nhưng siteverify trả `invalid-input-response` ⇒ người dùng nhận "Chưa qua được bước kiểm tra bảo mật". Không tự sinh được token thật để thử ⇒ **chỉ một lần đăng nhập thật mới kết luận được.**
+✅ **Đăng nhập thật thành công (chủ dự án, 2026-07-22)** ⇒ site key và secret key thuộc **cùng một widget**, token thật đi trọn đường qua siteverify. **Toàn tuyến U33 đã kiểm chứng đầu-cuối, không còn mắt xích nào dựa trên suy đoán.**
 
 ### Hai lỗi thật do chạy test bắt được (không phải lỗi test)
 1. **`dangKySchema` dùng `.strict()`** nên token nằm lại trong body bị từ chối là khoá lạ ⇒ **mọi** đăng ký hợp lệ trả 400. Sửa: bóc `cf-turnstile-response` khỏi body trước khi validate.
@@ -172,7 +172,7 @@ Việc cần làm: vào Cloudflare Dashboard → Security → WAF → Rate limit
 
 ### Dọn sau khi xong
 - `cau_hinh_he_thong.dangky_max_moi_ip_gio` (=5) trên production **không còn ai đọc**. Xoá hàng để không ai tưởng nó còn tác dụng. **CHƯA LÀM.**
-- `.github/workflows/ci.yml:11` còn liệt kê nhánh `main` đã xoá. **CHƯA LÀM.**
+- ~~`.github/workflows/ci.yml:11` còn liệt kê nhánh `main` đã xoá.~~ ✅ xong 2026-07-22.
 
 ### Bài học rút ra ngay tại đây
 Kế hoạch U33 §5 liệt kê "21 file bị đụng" — đúng về **file nguồn**, nhưng **không tính hệ quả lên bộ test**. Gỡ một cổng nằm ở đầu hai route công khai làm đỏ mọi test đi qua hai route đó, kể cả những test chẳng liên quan gì tới cổng ấy. Lần sau, khi lập kế hoạch cho việc gỡ/thêm một **middleware ở đầu route**, phải đếm luôn số test đi qua route đó — không chỉ số file chứa tên module bị gỡ.

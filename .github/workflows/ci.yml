@@ -7,8 +7,10 @@ on:
     # Trước khi sửa, danh sách này chỉ có `main` ⇒ mọi cú push vào trunk KHÔNG được CI
     # kiểm, kể cả các lần merge PR trước đó. Chỉ PR mới chạy CI. Đây là lỗ hổng quy trình,
     # không phải chủ ý: Definition of Done đòi lint+test xanh, mà cổng máy lại không chạy.
-    # Giữ `main` trong danh sách để không phá gì nếu sau này quay về dùng nó.
-    branches: [main, feat/cloudflare-stack-u0]
+    # 2026-07-21: nhánh `main` đã bị XOÁ khỏi remote khi dọn kho, nên để tên nó ở đây chỉ
+    # gây hiểu nhầm là còn có nhánh thứ hai được CI canh. Đổi tên trunk thành `main` là
+    # bước C, làm ở phiên riêng — khi đó sửa đúng một dòng này.
+    branches: [feat/cloudflare-stack-u0]
   pull_request:
   schedule:
     # GIÁM SÁT mục C — Vòng 1: contract test hằng ngày 02:00 UTC (bắt GDT đổi API +
