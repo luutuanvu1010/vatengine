@@ -13,13 +13,24 @@ export interface InvoiceField {
   key: string;
   /** Nhãn VN DUY NHẤT — hết cảnh "Tổng TT" vs "Tổng thanh toán". */
   nhan: string;
+  /** Nhãn rút gọn cho cột hẹp. Bảng hiện `nhanNgan ?? nhan`; file xuất LUÔN dùng `nhan`.
+   * Hai chữ khác nhau nhưng CÙNG một khai báo ⇒ không thể trôi khỏi nhau. */
   nhanNgan?: string;
   kieu: InvoiceFieldKind;
   canh?: "trai" | "phai";
 
-  // Khai sẵn kiểu cho U-K2 (bảng/thanh lọc/allowlist) — CHƯA dùng ở U-K1.
+  /** Sinh ô lọc kiểu gì trên bảng. `false`/bỏ trống = không lọc được. */
   locDuoc?: false | "text" | "range" | "enum" | "ngay";
+  /** Tên tham số lọc gửi lên server khi KHÁC `key` (vd tổng thanh toán lọc bằng `ttbso`
+   * → cặp `ttbsoTu`/`ttbsoDen` trong Zod). Bỏ trống ⇒ dùng `key`. */
+  khoaLoc?: string;
+  /** Có vào allowlist ORDER BY phía server không (chống SQL injection — nguồn của
+   * `SORT_COLUMNS`). RỘNG HƠN những gì bảng phơi ra: xem `sapTrenBang`. */
   sapDuoc?: boolean;
+  /** Bảng có phơi menu SẮP cho cột này không. Tách khỏi `sapDuoc` vì server sắp được 12
+   * cột trong khi bảng chỉ mời sắp 9 — khoảng lệch có sẵn từ U31, nay thành dữ liệu
+   * thấy được thay vì ẩn trong JSX. Bật thêm là quyết định sản phẩm, không phải refactor. */
+  sapTrenBang?: boolean;
   enum?: ReadonlyArray<readonly [ma: string, nhan: string]>;
 
   /** Xuất hiện ở đâu — thay cho việc khai 4 nơi. */
@@ -33,37 +44,153 @@ export interface InvoiceField {
 // Tái tạo CHÍNH XÁC `EXPORT_COLUMNS` hiện có ở packages/export/src/columns.ts (đúng key,
 // đúng nhãn, đúng thứ tự, kind cũ ↔ kieu mới) — đầu ra file xuất phải bất biến (U-K1 §Thiết
 // kế Registry). KHÔNG "cải thiện" nhãn ở đơn vị này (nguyên tắc bằng chứng).
+// THỨ TỰ KHAI BÁO = thứ tự FILE XUẤT (nghiệp vụ, đã chốt U29). Thứ tự BẢNG là hình chiếu
+// của cùng danh sách này qua `tren.bang` — trùng khớp vì bảng và file cùng trật tự nghiệp
+// vụ; trường chỉ-bảng (`soLuong`) chèn đúng chỗ nó đứng trên bảng.
+//
+// Enum chiều/nguồn: giá trị do SERVER định nghĩa (INVOICE_DIRECTIONS/INVOICE_SOURCES trong
+// @vat/query) — chép nhãn VN sang đây là để TRÌNH BÀY, không phải nguồn giá trị hợp lệ.
 export const INVOICE_FIELDS: readonly InvoiceField[] = [
-  { key: "tdlap", nhan: "Ngày lập", kieu: "ngay", tren: { fileXuat: true } },
+  {
+    key: "tdlap",
+    nhan: "Ngày lập",
+    kieu: "ngay",
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
+  },
   { key: "ncnhat", nhan: "Ngày cập nhật", kieu: "ngay", tren: { fileXuat: true } },
   { key: "khmshdon", nhan: "Ký hiệu mẫu số", kieu: "text", tren: { fileXuat: true } },
   { key: "khhdon", nhan: "Ký hiệu HĐ", kieu: "text", tren: { fileXuat: true } },
-  { key: "shdon", nhan: "Số HĐ", kieu: "text", tren: { fileXuat: true } },
+  {
+    key: "shdon",
+    nhan: "Số HĐ",
+    // Ô bảng gộp số HĐ (link) + ký hiệu mẫu số/ký hiệu HĐ ở dòng phụ → nhãn nói cả hai.
+    nhanNgan: "Ký hiệu · Số HĐ",
+    kieu: "text",
+    locDuoc: "text",
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
+  },
   { key: "nbmst", nhan: "MST người bán", kieu: "text", tren: { fileXuat: true } },
-  { key: "nbten", nhan: "Tên người bán", kieu: "text", tren: { fileXuat: true } },
+  {
+    key: "nbten",
+    nhan: "Tên người bán",
+    nhanNgan: "Người bán",
+    kieu: "text",
+    locDuoc: "text",
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
+  },
   { key: "nmmst", nhan: "MST người mua", kieu: "text", tren: { fileXuat: true } },
-  { key: "nmten", nhan: "Tên người mua", kieu: "text", tren: { fileXuat: true } },
+  {
+    key: "nmten",
+    nhan: "Tên người mua",
+    nhanNgan: "Người mua",
+    kieu: "text",
+    locDuoc: "text",
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
+  },
   {
     key: "hangHoa",
     nhan: "Hàng hóa, dịch vụ (số lượng)",
+    // Bảng có cột "Số lượng" riêng đứng cạnh nên nhãn bảng không cần đuôi "(số lượng)".
+    nhanNgan: "Hàng hóa, dịch vụ",
     kieu: "list",
-    tren: { fileXuat: true },
+    tren: { fileXuat: true, bang: true },
   },
-  { key: "tgtcthue", nhan: "Tiền chưa thuế", kieu: "tien", canh: "phai", tren: { fileXuat: true } },
+  // CHỈ trên bảng: số lượng từng mặt hàng hiện thành danh sách ngang hàng với cột tên hàng.
+  // Không vào file xuất — file đã có cột ĐVT/Số lượng riêng ở sheet phẳng dòng hàng.
+  // Là sub-select (lineSummarySelect) nên KHÔNG lọc/sắp được: cần HAVING hoặc bảng dẫn xuất.
+  { key: "soLuong", nhan: "Số lượng", kieu: "list", canh: "phai", tren: { bang: true } },
+  {
+    key: "tgtcthue",
+    nhan: "Tiền chưa thuế",
+    nhanNgan: "Chưa thuế",
+    kieu: "tien",
+    canh: "phai",
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
+  },
   { key: "ttcktmai", nhan: "Chiết khấu", kieu: "tien", canh: "phai", tren: { fileXuat: true } },
-  { key: "tgtthue", nhan: "Tiền thuế", kieu: "tien", canh: "phai", tren: { fileXuat: true } },
+  {
+    key: "tgtthue",
+    nhan: "Tiền thuế",
+    kieu: "tien",
+    canh: "phai",
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
+  },
   {
     key: "tgtttbso",
     nhan: "Tổng thanh toán",
+    nhanNgan: "Tổng TT",
     kieu: "tien",
     canh: "phai",
-    tren: { fileXuat: true },
+    locDuoc: "range",
+    // Lọc bằng cặp `ttbsoTu`/`ttbsoDen` (Zod), KHÁC khóa sắp `tgtttbso`.
+    khoaLoc: "ttbso",
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
   },
-  { key: "dvtte", nhan: "Tiền tệ", kieu: "text", tren: { fileXuat: true } },
-  { key: "ttxly", nhan: "Trạng thái xử lý (mã)", kieu: "ma", tren: { fileXuat: true } },
-  { key: "tthai", nhan: "Trạng thái HĐ (mã)", kieu: "ma", tren: { fileXuat: true } },
-  { key: "chieu", nhan: "Chiều", kieu: "text", tren: { fileXuat: true } },
-  { key: "nguon", nhan: "Nguồn", kieu: "text", tren: { fileXuat: true } },
+  {
+    key: "dvtte",
+    nhan: "Tiền tệ",
+    kieu: "text",
+    sapDuoc: true,
+    tren: { fileXuat: true, bang: true },
+  },
+  {
+    key: "ttxly",
+    nhan: "Trạng thái xử lý (mã)",
+    // Ô bảng hiện CHIP nhãn qua statusLabels.ts (chỉ nhãn mã đã kiểm chứng), không hiện mã
+    // trần như file xuất → nhãn cột bỏ đuôi "(mã)".
+    nhanNgan: "TT xử lý",
+    kieu: "ma",
+    sapDuoc: true,
+    tren: { fileXuat: true, bang: true },
+  },
+  {
+    key: "tthai",
+    nhan: "Trạng thái HĐ (mã)",
+    nhanNgan: "TT hóa đơn",
+    kieu: "ma",
+    sapDuoc: true,
+    tren: { fileXuat: true, bang: true },
+  },
+  {
+    key: "chieu",
+    nhan: "Chiều",
+    kieu: "enum",
+    locDuoc: "enum",
+    enum: [
+      ["purchase", "Mua vào"],
+      ["sold", "Bán ra"],
+    ],
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
+  },
+  {
+    key: "nguon",
+    nhan: "Nguồn",
+    kieu: "enum",
+    locDuoc: "enum",
+    enum: [
+      ["normal", "HĐĐT thường"],
+      ["sco", "Máy tính tiền"],
+    ],
+    sapDuoc: true,
+    sapTrenBang: true,
+    tren: { fileXuat: true, bang: true },
+  },
 ];
 
 /** Trường vào file xuất, ĐÚNG thứ tự khai báo (thứ tự nghiệp vụ — không nối đuôi). */

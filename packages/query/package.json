@@ -4,13 +4,16 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage"
   },
   "dependencies": {
     "@vat/db": "*",
+    "@vat/domain": "*",
     "drizzle-orm": "^0.45.2",
     "zod": "^3.23.8"
   },

@@ -2,6 +2,7 @@
 // `buildWhere` LUÔN kèm ràng buộc `tenant_id` tường minh (lớp 1 — multi-tenant.md);
 // RLS `withTenant` là lớp 2. Khoảng `tdlap` fail-loud khi ngày phi thực tế (không đoán).
 import { hoaDon } from "@vat/db";
+import { sortableKeys } from "@vat/domain";
 import { type SQL, and, asc, desc, eq, gte, ilike, inArray, lte } from "drizzle-orm";
 import { z } from "zod";
 
@@ -71,9 +72,14 @@ export type InvoiceSelection = InvoiceFilter & { ids?: string[] };
 
 // ⚠️ ALLOWLIST — tên cột sắp xếp đến từ CLIENT và đi thẳng vào ORDER BY. Nội suy chuỗi
 // đó vào SQL là injection trực tiếp. Bảng tra cứu này là hàng rào duy nhất: khóa do ta
-// định nghĩa, giá trị là tham chiếu cột Drizzle (không phải chuỗi). Thêm cột mới ở đây,
-// KHÔNG BAO GIỜ dựng tên cột từ input.
-// Cố ý KHÔNG cho sắp theo `tenantId`/`rawJson`/`createdAt` — nội bộ, không phải nghiệp vụ.
+// định nghĩa, giá trị là tham chiếu cột Drizzle (không phải chuỗi). KHÔNG BAO GIỜ dựng
+// tên cột từ input.
+//
+// U-K2 — DANH SÁCH KHÓA nay dẫn xuất từ Registry miền hoá đơn (`sortableKeys()`), không
+// khai tay hai nơi. Registry *sinh ra* allowlist chứ KHÔNG thay nó: bảng tra dưới đây vẫn
+// là hàng rào (khóa → cột Drizzle), và Zod `sortSchema` vẫn validate input không tin cậy.
+// Cố ý KHÔNG cho sắp theo `tenantId`/`rawJson`/`createdAt` — nội bộ, không phải nghiệp vụ;
+// chúng không mang `sapDuoc` trong Registry nên không lọt vào đây.
 const SORT_COLUMNS = {
   tdlap: hoaDon.tdlap,
   shdon: hoaDon.shdon,
@@ -89,9 +95,39 @@ const SORT_COLUMNS = {
   nguon: hoaDon.nguon,
 } as const;
 
+// Kiểu vẫn là UNION 12 literal (không nới thành `string`): bảng tra là nguồn KIỂU, Registry
+// là nguồn DANH SÁCH. Khẳng định dưới đây buộc hai bên trùng khớp ngay lúc nạp module.
 export type SortBy = keyof typeof SORT_COLUMNS;
-/** Danh sách cột sắp xếp hợp lệ — export để test duyệt HẾT, không lấy mẫu vài cột. */
-export const SORT_BY_VALUES = Object.keys(SORT_COLUMNS) as [SortBy, ...SortBy[]];
+
+/** Khóa sắp xếp → cột Drizzle. Ném khi thiếu ánh xạ: khai `sapDuoc` trong Registry cho một
+ * trường chưa có cột ở đây là LỖI CẤU HÌNH, phải nổ ngay chứ không được âm thầm rơi về cột
+ * mặc định (sắp sai cột là lỗi im lặng — người dùng tưởng đã sắp, thực ra chưa). */
+export function cotSapXep(key: string): (typeof SORT_COLUMNS)[SortBy] {
+  const cot = (SORT_COLUMNS as Record<string, (typeof SORT_COLUMNS)[SortBy] | undefined>)[key];
+  if (!cot) {
+    throw new Error(`filters: khóa sắp xếp '${key}' thiếu ánh xạ cột Drizzle (allowlist)`);
+  }
+  return cot;
+}
+
+/** CỔNG CHỐNG TRÔI (U-K2): allowlist ORDER BY phải bằng ĐÚNG tập `sapDuoc` của Registry.
+ * Tách thành hàm thuần để test được CẢ nhánh lệch — cổng chỉ đáng tin khi đã chứng minh nó
+ * biết kêu. Thêm/bớt một bên mà quên bên kia ⇒ ném ngay lúc nạp module (mọi route + test đỏ
+ * tức thì), thay vì lệch âm thầm giữa "cột bảng mời sắp" và "cột server chịu sắp". */
+export function kiemAllowlistKhopRegistry(khoaRegistry: string[], khoaAllowlist: string[]): void {
+  const a = [...khoaRegistry].sort().join(",");
+  const b = [...khoaAllowlist].sort().join(",");
+  if (a !== b) {
+    throw new Error(`filters: allowlist ORDER BY lệch Registry — Registry=[${a}] allowlist=[${b}]`);
+  }
+}
+
+kiemAllowlistKhopRegistry(sortableKeys(), Object.keys(SORT_COLUMNS));
+
+/** Danh sách cột sắp xếp hợp lệ — export để test duyệt HẾT, không lấy mẫu vài cột.
+ * DẪN XUẤT từ Registry (thứ tự khai báo nghiệp vụ), đã được cổng trên chứng minh là trùng
+ * khớp bảng tra. */
+export const SORT_BY_VALUES = sortableKeys() as [SortBy, ...SortBy[]];
 
 export const sortSchema = z.object({
   sortBy: z.enum(SORT_BY_VALUES).optional(),
@@ -107,7 +143,7 @@ export type InvoiceSort = z.infer<typeof sortSchema>;
  * thầm, người dùng không thể phát hiện. (Ghi chú gốc: listInvoices.ts trước U31.) */
 export function buildOrderBy(sort: InvoiceSort): SQL[] {
   const dir = sort.sortDir === "asc" ? asc : desc;
-  const chinh = sort.sortBy ? SORT_COLUMNS[sort.sortBy] : hoaDon.tdlap;
+  const chinh = sort.sortBy ? cotSapXep(sort.sortBy) : hoaDon.tdlap;
   // Khi sắp theo cột phụ, vẫn giữ tdlap làm mốc thứ hai để thứ tự dễ đoán với người dùng.
   const phu = sort.sortBy && sort.sortBy !== "tdlap" ? [dir(hoaDon.tdlap)] : [];
   return [dir(chinh), ...phu, desc(hoaDon.id)] as SQL[];

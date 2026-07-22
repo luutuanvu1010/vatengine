@@ -1,24 +1,16 @@
-// Bảng hóa đơn = EXPORT_COLUMNS (packages/export/src/columns.ts) — KHÔNG bịa cột,
-// NGOẠI LỆ (quyết định chủ dự án 2026-07-17, thay U23-A): 2 cột tóm tắt dòng hàng
-// "Hàng hóa, dịch vụ" + "Số lượng" (hangHoa/soDongHang từ listInvoices)
-// chỉ có trên UI, chưa vào file xuất (xuất đã có khối "Chi tiết dòng hàng" riêng). Tiền
-// định dạng chuỗi (không float), căn phải, tabular. Ngày giờ VN. ttxly & tthai TÁCH riêng
-// (mã), chip trung tính khi chưa kiểm chứng (B1). Gồm dvtte (Tiền tệ) + nguon (M1).
+// Bảng hóa đơn — CỘT DẪN XUẤT TỪ REGISTRY miền hoá đơn (`@vat/domain`, U-K2). Nhãn, kiểu ô
+// lọc, lựa chọn enum, khả năng sắp và căn lề đều khai MỘT LẦN trong Registry; file này chỉ
+// còn lo CÁCH VẼ ô (renderer), không lo cột nào/nhãn gì. Nhờ vậy nhãn bảng và nhãn file
+// xuất không thể trôi khỏi nhau nữa (gốc của lệch "Tổng TT" vs "Tổng thanh toán").
+//
+// Tiền định dạng chuỗi (không float), căn phải, tabular. Ngày giờ VN. ttxly & tthai TÁCH
+// riêng (mã), chip trung tính khi chưa kiểm chứng (B1).
+import { type InvoiceField, fieldsForTable } from "@vat/domain";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { formatDateVN, formatMoney } from "../../lib/format";
 import type { InvoiceListRow, InvoiceSort, SortBy } from "../../types/api";
 import { ColumnMenu, type LoaiLoc } from "./ColumnMenu";
-
-// Giá trị hợp lệ do server định nghĩa (INVOICE_DIRECTIONS / INVOICE_SOURCES) — không bịa.
-const CHIEU_CHON = [
-  ["purchase", "Mua vào"],
-  ["sold", "Bán ra"],
-] as const;
-const NGUON_CHON = [
-  ["normal", "HĐĐT thường"],
-  ["sco", "Máy tính tiền"],
-] as const;
 import { ChieuChip, NguonLabel, TthaiChip, TtxlyChip } from "./chips";
 
 const th: React.CSSProperties = {
@@ -151,6 +143,108 @@ function ThMenu({
   );
 }
 
+// ----------------------- Dẫn xuất bề mặt bảng từ Registry ----------------------- //
+
+/** Cột bảng, đúng thứ tự Registry. Tính một lần: `fieldsForTable()` là hàm thuần trên hằng
+ * số nên không cần tính lại mỗi lần render. */
+const COT_BANG: readonly InvoiceField[] = fieldsForTable();
+
+/** `locDuoc` (Registry, ngôn ngữ miền) → `LoaiLoc` (ngôn ngữ của ColumnMenu). Registry nói
+ * "lọc bằng danh sách chọn" (`enum`); widget gọi nó là `select` — ánh xạ ở ranh giới, không
+ * bắt Registry nói theo tên widget. */
+function loaiLocCua(f: InvoiceField): LoaiLoc {
+  if (f.locDuoc === "text") return "text";
+  if (f.locDuoc === "range") return "range";
+  if (f.locDuoc === "enum") return "select";
+  return "none";
+}
+
+/** Cột chỉ mời SẮP khi Registry cho phép trên bảng (`sapTrenBang`). Cố ý HẸP HƠN allowlist
+ * server (`sapDuoc`): dvtte/ttxly/tthai server sắp được nhưng bảng chưa phơi menu — giữ
+ * nguyên hành vi có từ U31, bật thêm là quyết định sản phẩm riêng. */
+function khoaSapCua(f: InvoiceField): SortBy | undefined {
+  return f.sapTrenBang ? (f.key as SortBy) : undefined;
+}
+
+const sub2: React.CSSProperties = sub;
+
+/** Ô của một cột. Registry quyết ĐỌC TRƯỜNG NÀO; đây quyết VẼ RA SAO (link, chip, danh
+ * sách, tiền). Thiếu renderer cho một field `tren.bang` ⇒ ô trống thay vì nổ giữa bảng —
+ * nhưng đó là lưới an toàn, KHÔNG phải trạng thái chấp nhận được: test khoá bất biến "mọi
+ * cột Registry đều có renderer" nên thêm cột mà quên ô sẽ đỏ ngay. */
+export const O_BANG: Record<string, (r: InvoiceListRow) => React.ReactNode> = {
+  tdlap: (r) => formatDateVN(r.tdlap),
+  shdon: (r) => (
+    <>
+      <Link
+        to={`/invoices/${r.id}`}
+        style={{ fontWeight: "var(--fw-semibold)", color: "var(--info-700)" }}
+      >
+        {r.shdon}
+      </Link>
+      <div style={sub2}>
+        {r.khmshdon}
+        {r.khhdon}
+      </div>
+    </>
+  ),
+  nbten: (r) => (
+    <>
+      <div>{r.nbten ?? "—"}</div>
+      <div style={sub2}>{r.nbmst}</div>
+    </>
+  ),
+  nmten: (r) => (
+    <>
+      <div>{r.nmten ?? "—"}</div>
+      <div style={sub2}>{r.nmmst ?? "—"}</div>
+    </>
+  ),
+  // Nghiệm thu 2026-07-20: hiện ĐỦ mọi mặt hàng, và mỗi mặt hàng phải nằm NGANG HÀNG với số
+  // lượng của chính nó. Trước đây cột số lượng chỉ có một con số TỔNG đặt cạnh tên dòng đầu
+  // → đọc thành "xăng E10 có 62.925 lít" trong khi đó là tổng của hai mặt hàng.
+  hangHoa: (r) =>
+    r.hangHoa.length > 0 ? (
+      <ol style={dsHang}>
+        {r.hangHoa.map((h, i) => (
+          <li key={`${r.id}-${i}-${h.ten ?? ""}`} style={mucHang}>
+            {h.ten ?? "—"}
+          </li>
+        ))}
+      </ol>
+    ) : (
+      "—"
+    ),
+  soLuong: (r) =>
+    r.hangHoa.length > 0 ? (
+      // KHÔNG cộng tổng số lượng (quyết định chủ dự án 2026-07-20): các mặt hàng có ĐƠN VỊ
+      // khác nhau (Lít, Kg, cái) nên tổng của chúng là con số vô nghĩa.
+      <ol style={dsSoLuong}>
+        {r.hangHoa.map((h, i) => (
+          <li key={`${r.id}-sl-${i}-${h.ten ?? ""}`} style={mucHang}>
+            {/* KHÔNG kèm đơn vị (2026-07-21) — chỉ hiện số. Đơn vị vẫn còn ở cột ĐVT của
+                sheet dòng hàng trong file xuất. */}
+            <span className="tabular">{h.sluong ?? "—"}</span>
+          </li>
+        ))}
+      </ol>
+    ) : (
+      "—"
+    ),
+  tgtcthue: (r) => <span className="tabular">{formatMoney(r.tgtcthue)}</span>,
+  tgtthue: (r) => <span className="tabular">{formatMoney(r.tgtthue)}</span>,
+  tgtttbso: (r) => (
+    <span className="tabular" style={{ fontWeight: "var(--fw-bold)" }}>
+      {formatMoney(r.tgtttbso)}
+    </span>
+  ),
+  dvtte: (r) => r.dvtte ?? "—",
+  ttxly: (r) => <TtxlyChip code={r.ttxly} />,
+  tthai: (r) => <TthaiChip code={r.tthai} />,
+  chieu: (r) => <ChieuChip chieu={r.chieu} />,
+  nguon: (r) => <NguonLabel nguon={r.nguon} />,
+};
+
 export function InvoiceTable({
   rows,
   selection,
@@ -177,66 +271,22 @@ export function InvoiceTable({
                 />
               </th>
             ) : null}
-            <ThMenu nhan="Ngày lập" sortBy="tdlap" ops={ops} style={th} />
-            <ThMenu
-              nhan="Ký hiệu · Số HĐ"
-              khoa="shdon"
-              sortBy="shdon"
-              loaiLoc="text"
-              ops={ops}
-              style={th}
-            />
-            <ThMenu
-              nhan="Người bán"
-              khoa="nbten"
-              sortBy="nbten"
-              loaiLoc="text"
-              ops={ops}
-              style={th}
-            />
-            <ThMenu
-              nhan="Người mua"
-              khoa="nmten"
-              sortBy="nmten"
-              loaiLoc="text"
-              ops={ops}
-              style={th}
-            />
-            {/* Hai cột tóm tắt dòng hàng là sub-select — lọc/sắp theo chúng cần HAVING
-                hoặc bảng dẫn xuất, để ngoài U31 (xem U31-plan §1). */}
-            <th style={th}>Hàng hóa, dịch vụ</th>
-            <th style={thRight}>Số lượng</th>
-            <ThMenu nhan="Chưa thuế" sortBy="tgtcthue" ops={ops} style={thRight} />
-            <ThMenu nhan="Tiền thuế" sortBy="tgtthue" ops={ops} style={thRight} />
-            <ThMenu
-              nhan="Tổng TT"
-              khoa="ttbso"
-              sortBy="tgtttbso"
-              loaiLoc="range"
-              ops={ops}
-              style={thRight}
-            />
-            <th style={th}>Tiền tệ</th>
-            <th style={th}>TT xử lý</th>
-            <th style={th}>TT hóa đơn</th>
-            <ThMenu
-              nhan="Chiều"
-              khoa="chieu"
-              sortBy="chieu"
-              loaiLoc="select"
-              chonLua={CHIEU_CHON}
-              ops={ops}
-              style={th}
-            />
-            <ThMenu
-              nhan="Nguồn"
-              khoa="nguon"
-              sortBy="nguon"
-              loaiLoc="select"
-              chonLua={NGUON_CHON}
-              ops={ops}
-              style={th}
-            />
+            {/* Cột sinh từ Registry: thứ tự, nhãn, kiểu ô lọc, lựa chọn enum, khả năng sắp
+                và căn lề đều đọc từ `fieldsForTable()`. Cột KHÔNG lọc/sắp được (tóm tắt dòng
+                hàng — sub-select cần HAVING; trạng thái; tiền tệ) tự nhiên không có menu vì
+                Registry không khai `locDuoc`/`sapTrenBang` cho chúng. */}
+            {COT_BANG.map((f) => (
+              <ThMenu
+                key={f.key}
+                nhan={f.nhanNgan ?? f.nhan}
+                khoa={f.locDuoc ? (f.khoaLoc ?? f.key) : undefined}
+                sortBy={khoaSapCua(f)}
+                loaiLoc={loaiLocCua(f)}
+                chonLua={f.enum}
+                ops={f.sapTrenBang || f.locDuoc ? ops : undefined}
+                style={f.canh === "phai" ? thRight : th}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -254,86 +304,11 @@ export function InvoiceTable({
                   />
                 </td>
               ) : null}
-              <td style={td}>{formatDateVN(r.tdlap)}</td>
-              <td style={td}>
-                <Link
-                  to={`/invoices/${r.id}`}
-                  style={{ fontWeight: "var(--fw-semibold)", color: "var(--info-700)" }}
-                >
-                  {r.shdon}
-                </Link>
-                <div style={sub}>
-                  {r.khmshdon}
-                  {r.khhdon}
-                </div>
-              </td>
-              <td style={td}>
-                <div>{r.nbten ?? "—"}</div>
-                <div style={sub}>{r.nbmst}</div>
-              </td>
-              <td style={td}>
-                <div>{r.nmten ?? "—"}</div>
-                <div style={sub}>{r.nmmst ?? "—"}</div>
-              </td>
-              {/* Nghiệm thu 2026-07-20: hiện ĐỦ mọi mặt hàng, và mỗi mặt hàng phải nằm
-                  NGANG HÀNG với số lượng của chính nó. Trước đây cột số lượng chỉ có một
-                  con số TỔNG đặt cạnh tên dòng đầu → đọc thành "xăng E10 có 62.925 lít"
-                  trong khi đó là tổng của hai mặt hàng. */}
-              <td style={td}>
-                {r.hangHoa.length > 0 ? (
-                  <ol style={dsHang}>
-                    {r.hangHoa.map((h, i) => (
-                      <li key={`${r.id}-${i}-${h.ten ?? ""}`} style={mucHang}>
-                        {h.ten ?? "—"}
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td style={tdMoney}>
-                {r.hangHoa.length > 0 ? (
-                  <>
-                    <ol style={dsSoLuong}>
-                      {r.hangHoa.map((h, i) => (
-                        <li key={`${r.id}-sl-${i}-${h.ten ?? ""}`} style={mucHang}>
-                          {/* KHÔNG kèm đơn vị (2026-07-21) — chỉ hiện số. Đơn vị vẫn còn
-                              ở cột ĐVT của sheet 2 trong file xuất. */}
-                          <span className="tabular">{h.sluong ?? "—"}</span>
-                        </li>
-                      ))}
-                    </ol>
-                    {/* KHÔNG cộng tổng số lượng (quyết định chủ dự án 2026-07-20): các mặt
-                        hàng có ĐƠN VỊ khác nhau (Lít, Kg, cái) nên tổng của chúng là con
-                        số vô nghĩa — cộng 42 lít với 3 cái không ra đại lượng nào cả. */}
-                  </>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td style={tdMoney} className="tabular">
-                {formatMoney(r.tgtcthue)}
-              </td>
-              <td style={tdMoney} className="tabular">
-                {formatMoney(r.tgtthue)}
-              </td>
-              <td style={{ ...tdMoney, fontWeight: "var(--fw-bold)" }} className="tabular">
-                {formatMoney(r.tgtttbso)}
-              </td>
-              <td style={td}>{r.dvtte ?? "—"}</td>
-              <td style={td}>
-                <TtxlyChip code={r.ttxly} />
-              </td>
-              <td style={td}>
-                <TthaiChip code={r.tthai} />
-              </td>
-              <td style={td}>
-                <ChieuChip chieu={r.chieu} />
-              </td>
-              <td style={td}>
-                <NguonLabel nguon={r.nguon} />
-              </td>
+              {COT_BANG.map((f) => (
+                <td key={f.key} style={f.canh === "phai" ? tdMoney : td}>
+                  {O_BANG[f.key]?.(r) ?? null}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>

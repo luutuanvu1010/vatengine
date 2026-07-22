@@ -1,4 +1,5 @@
 // U6 unit — validate bộ lọc/phân trang (Zod, thuần, offline) + fail-loud ngày sai.
+import { sortableKeys } from "@vat/domain";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -7,9 +8,11 @@ import {
   SORT_BY_VALUES,
   buildOrderBy,
   buildWhere,
+  cotSapXep,
   dayBoundaryVn,
   exportSelectionSchema,
   invoiceFilterSchema,
+  kiemAllowlistKhopRegistry,
   pageSchema,
   sortSchema,
 } from "../../src/filters";
@@ -219,6 +222,45 @@ describe("U31 — sortSchema (allowlist cột sắp xếp)", () => {
     for (const k of ["tenantId", "rawJson", "createdAt"]) {
       expect(() => sortSchema.parse({ sortBy: k })).toThrow();
     }
+  });
+});
+
+// U-K2 — allowlist ORDER BY nay DẪN XUẤT từ Registry miền hoá đơn (@vat/domain) thay vì
+// khai tay hai nơi. Vẫn là allowlist ĐÓNG: Registry chỉ *sinh ra* danh sách khóa, khóa lạ
+// vẫn bị Zod từ chối và không bao giờ có đường vào ORDER BY.
+describe("U-K2 — SORT_COLUMNS dẫn xuất từ Registry, allowlist vẫn ĐÓNG", () => {
+  it("tập khóa sắp xếp bằng ĐÚNG sortableKeys() của Registry", () => {
+    expect([...SORT_BY_VALUES].sort()).toEqual([...sortableKeys()].sort());
+  });
+
+  it("mọi khóa Registry đều sắp xếp được thật (không khai suông)", () => {
+    for (const k of sortableKeys()) {
+      expect(() => sortSchema.parse({ sortBy: k })).not.toThrow();
+    }
+  });
+
+  it("khóa KHÔNG có trong Registry vẫn bị từ chối (chống SQL injection)", () => {
+    for (const k of ["tenantId", "rawJson", "hangHoa", "soLuong", "id; DROP TABLE hoa_don"]) {
+      expect(sortableKeys()).not.toContain(k);
+      expect(() => sortSchema.parse({ sortBy: k })).toThrow();
+    }
+  });
+
+  // Ép DẪN XUẤT chứ không chỉ "tình cờ trùng": bảng tra key→cột Drizzle phải phủ HẾT khóa
+  // Registry. Khai `sapDuoc: true` cho một trường chưa có cột ⇒ hàm này ném ngay lúc nạp
+  // module, không âm thầm rơi về `tdlap` (sắp sai cột là lỗi im lặng, người dùng không thấy).
+  it("mọi khóa Registry có cột Drizzle tương ứng — thiếu ánh xạ là ném, không im lặng", () => {
+    for (const k of sortableKeys()) {
+      expect(() => cotSapXep(k), `khóa ${k} thiếu ánh xạ cột`).not.toThrow();
+    }
+    expect(() => cotSapXep("khong_ton_tai")).toThrow(/ánh xạ|allowlist/i);
+  });
+
+  // Cổng chỉ đáng tin khi đã chứng minh nó BIẾT KÊU — không chỉ im lặng lúc mọi thứ khớp.
+  it("cổng chống trôi kêu khi hai bên lệch, im khi trùng", () => {
+    expect(() => kiemAllowlistKhopRegistry(["a", "b"], ["b", "a"])).not.toThrow();
+    expect(() => kiemAllowlistKhopRegistry(["a", "b"], ["a"])).toThrow(/lệch Registry/);
+    expect(() => kiemAllowlistKhopRegistry(["a"], ["a", "b"])).toThrow(/lệch Registry/);
   });
 });
 

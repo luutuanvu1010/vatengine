@@ -97,13 +97,133 @@ describe("labelOf() — trường chưa khai báo", () => {
   });
 });
 
-// U-K2 dùng — khai sẵn chữ ký hàm ở U-K1 nên phải có test ngay, tránh code chết không phủ.
-describe("fieldsForTable() / sortableKeys() — chưa gán tren.bang/sapDuoc ở U-K1", () => {
-  it("rỗng vì chưa có field nào đánh dấu tren.bang", () => {
-    expect(fieldsForTable()).toEqual([]);
+// U-K2 — hai bộ chọn này khai khung ở U-K1 (khi đó CHƯA field nào gán tren.bang/sapDuoc,
+// test cũ khoá ở "rỗng"). U-K2 gán thật, nên kỳ vọng siết từ "rỗng" thành TẬP CHÍNH XÁC —
+// mạnh hơn, không phải nới.
+describe("fieldsForTable() — cột bảng hoá đơn, đúng thứ tự hiển thị", () => {
+  it("đúng danh sách key + thứ tự khớp bảng đang chạy (mốc PARITY U-K2)", () => {
+    expect(fieldsForTable().map((f) => f.key)).toEqual([
+      "tdlap",
+      "shdon",
+      "nbten",
+      "nmten",
+      "hangHoa",
+      "soLuong",
+      "tgtcthue",
+      "tgtthue",
+      "tgtttbso",
+      "dvtte",
+      "ttxly",
+      "tthai",
+      "chieu",
+      "nguon",
+    ]);
   });
 
-  it("rỗng vì chưa có field nào đánh dấu sapDuoc", () => {
-    expect(sortableKeys()).toEqual([]);
+  it("nhãn hiển thị trên bảng = nhanNgan ?? nhan — giữ NGUYÊN chữ bảng đang dùng", () => {
+    const hien = new Map(fieldsForTable().map((f) => [f.key, f.nhanNgan ?? f.nhan]));
+    expect(hien.get("tdlap")).toBe("Ngày lập");
+    expect(hien.get("shdon")).toBe("Ký hiệu · Số HĐ");
+    expect(hien.get("nbten")).toBe("Người bán");
+    expect(hien.get("nmten")).toBe("Người mua");
+    expect(hien.get("hangHoa")).toBe("Hàng hóa, dịch vụ");
+    expect(hien.get("soLuong")).toBe("Số lượng");
+    expect(hien.get("tgtcthue")).toBe("Chưa thuế");
+    expect(hien.get("tgtthue")).toBe("Tiền thuế");
+    expect(hien.get("tgtttbso")).toBe("Tổng TT");
+    expect(hien.get("dvtte")).toBe("Tiền tệ");
+    expect(hien.get("ttxly")).toBe("TT xử lý");
+    expect(hien.get("tthai")).toBe("TT hóa đơn");
+    expect(hien.get("chieu")).toBe("Chiều");
+    expect(hien.get("nguon")).toBe("Nguồn");
+  });
+
+  // Đây là điểm "hết lệch": nhãn NGẮN của bảng và nhãn ĐẦY ĐỦ của file xuất nay sinh từ
+  // CÙNG một khai báo, nên không thể trôi khỏi nhau nữa. Muốn bảng hiện "Tổng thanh toán"
+  // chỉ cần xoá `nhanNgan` — một dòng, một nơi.
+  it("nhãn đầy đủ của cột tiền khớp ĐÚNG nhãn file xuất (cùng một field)", () => {
+    const f = INVOICE_FIELDS.find((x) => x.key === "tgtttbso");
+    expect(f?.nhan).toBe("Tổng thanh toán");
+    expect(f?.nhanNgan).toBe("Tổng TT");
+    expect(f?.tren.fileXuat).toBe(true);
+    expect(f?.tren.bang).toBe(true);
+  });
+});
+
+describe("sortableKeys() — allowlist ORDER BY phía server", () => {
+  it("đúng 12 khóa khớp SORT_COLUMNS đang chạy (mốc PARITY U-K2)", () => {
+    expect(sortableKeys()).toEqual([
+      "tdlap",
+      "shdon",
+      "nbten",
+      "nmten",
+      "tgtcthue",
+      "tgtthue",
+      "tgtttbso",
+      "dvtte",
+      "ttxly",
+      "tthai",
+      "chieu",
+      "nguon",
+    ]);
+  });
+
+  it("cột tóm tắt dòng hàng KHÔNG sắp được (sub-select, cần HAVING — ngoài phạm vi)", () => {
+    expect(sortableKeys()).not.toContain("hangHoa");
+    expect(sortableKeys()).not.toContain("soLuong");
+  });
+});
+
+// PARITY: `sapDuoc` (allowlist server) RỘNG HƠN `sapTrenBang` (menu sắp bảng phơi ra).
+// Bảng hôm nay KHÔNG có menu cho dvtte/ttxly/tthai dù server sắp được. Tách hai khái niệm
+// để U-K2 không vô tình mọc thêm menu — và để khoảng lệch đó thành DỮ LIỆU THẤY ĐƯỢC thay
+// vì ẩn trong JSX.
+describe("sapDuoc vs sapTrenBang — khoảng lệch server/bảng là CÓ CHỦ Ý", () => {
+  it("dvtte/ttxly/tthai: server sắp được nhưng bảng CHƯA phơi menu sắp", () => {
+    for (const k of ["dvtte", "ttxly", "tthai"]) {
+      const f = INVOICE_FIELDS.find((x) => x.key === k);
+      expect(f?.sapDuoc, `${k} phải nằm trong allowlist server`).toBe(true);
+      expect(f?.sapTrenBang ?? false, `${k} bảng chưa có menu sắp`).toBe(false);
+    }
+  });
+
+  it("mọi field sapTrenBang PHẢI sapDuoc (bảng không thể sắp thứ server từ chối)", () => {
+    for (const f of INVOICE_FIELDS) {
+      if (f.sapTrenBang)
+        expect(f.sapDuoc, `${f.key} sắp trên bảng mà không có allowlist`).toBe(true);
+    }
+  });
+});
+
+describe("locDuoc — ô lọc trên bảng", () => {
+  it("đúng 6 trường lọc được, đúng kiểu ô (mốc PARITY U-K2)", () => {
+    const loc = INVOICE_FIELDS.filter((f) => f.locDuoc).map((f) => [f.key, f.locDuoc]);
+    expect(loc).toEqual([
+      ["shdon", "text"],
+      ["nbten", "text"],
+      ["nmten", "text"],
+      ["tgtttbso", "range"],
+      ["chieu", "enum"],
+      ["nguon", "enum"],
+    ]);
+  });
+
+  // Khóa LỌC của cột tổng thanh toán là `ttbso` (cặp ttbsoTu/ttbsoDen trong Zod), KHÁC
+  // khóa SẮP `tgtttbso`. Ghi tường minh để bảng không gửi nhầm tên tham số lên server.
+  it("khoaLoc mặc định = key; riêng tgtttbso lọc bằng khóa 'ttbso'", () => {
+    const f = INVOICE_FIELDS.find((x) => x.key === "tgtttbso");
+    expect(f?.khoaLoc).toBe("ttbso");
+    expect(INVOICE_FIELDS.find((x) => x.key === "nbten")?.khoaLoc).toBeUndefined();
+  });
+
+  it("chiều/nguồn mang đúng lựa chọn enum do server định nghĩa (không bịa)", () => {
+    expect(INVOICE_FIELDS.find((x) => x.key === "chieu")?.enum).toEqual([
+      ["purchase", "Mua vào"],
+      ["sold", "Bán ra"],
+    ]);
+    expect(INVOICE_FIELDS.find((x) => x.key === "nguon")?.enum).toEqual([
+      ["normal", "HĐĐT thường"],
+      ["sco", "Máy tính tiền"],
+    ]);
   });
 });

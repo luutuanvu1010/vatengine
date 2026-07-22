@@ -154,8 +154,8 @@ Nguyên tắc: **không viết lại toàn bộ frontend**. Dựng khung rồi *
 | Đơn vị | Nội dung | Kết quả |
 |---|---|---|
 | **U-K0** | Chốt & tạo `.claude/rules/ui.md` + tài liệu Registry (từ tài liệu này) | Có "gốc" thành văn, có hiệu lực |
-| **U-K1** | Dựng Registry miền hoá đơn; **`EXPORT_COLUMNS` dẫn xuất từ Registry** (không đổi hành vi file xuất — có test giữ nguyên đầu ra) | Một nguồn sự thật, đã chứng minh không phá xuất |
-| **U-K2** | `InvoiceTable` + allowlist sắp/lọc **đọc Registry** thay vì khai tay | Bảng & server cùng nguồn; nhãn hết lệch |
+| **U-K1** ✅ | Dựng Registry miền hoá đơn; **`EXPORT_COLUMNS` dẫn xuất từ Registry** (không đổi hành vi file xuất — có test giữ nguyên đầu ra) | Một nguồn sự thật, đã chứng minh không phá xuất |
+| **U-K2** ✅ | `InvoiceTable` + allowlist sắp/lọc **đọc Registry** thay vì khai tay | Bảng & server cùng nguồn; nhãn hết lệch |
 | **U-K3** | Bổ sung primitive `Select`/`Field`; `FilterBar` dùng primitive + pattern `ChonKy` | Yêu cầu (1) rơi ra tự nhiên |
 | **U-K4** | Áp hợp đồng tương tác + mặc định tháng hiện tại + đổi tên nút + tự tải sau đồng bộ | Yêu cầu (2)(3) hoàn tất |
 | **U-K5** *(tùy chọn)* | Bộ lọc lên URL; chỉ mục `(tenant_id, tdlap)` | Chia sẻ được + nhanh ở quy mô lớn |
@@ -264,3 +264,27 @@ Ngược lại, một ý tưởng **trượt cổng** trông như: "thêm riêng
 3. **Hiệu lực:** ✅ đưa **`ui.md` vào `.claude/rules/`** (thành Luật) + **bản hướng dẫn cơ bản vào `docs/`**.
 
 **Bước kế tiếp:** tôi soạn **prompt thực thi cho U-K0** (tạo `ui.md` + tài liệu Registry từ tài liệu này) và **U-K1** (dựng Registry; `EXPORT_COLUMNS` dẫn xuất, có test giữ nguyên đầu ra file xuất), theo đúng vòng lặp viết-test-trước của dự án.
+
+---
+
+## Nhật ký thực thi
+
+### U-K1 (xong) — Registry + file xuất dẫn xuất
+
+`packages/domain` giữ `INVOICE_FIELDS`. `EXPORT_COLUMNS` (`packages/export/src/columns.ts`) nay là `deriveExportColumns(fieldsForExport())`. Đầu ra csv/xlsx **bất biến** — bộ test golden có sẵn không sửa một dòng nào và vẫn xanh.
+
+### U-K2 (xong) — bảng + allowlist đọc Registry
+
+- `InvoiceTable.tsx` không còn khai `<ThMenu>` từng cột. Cột, nhãn, kiểu ô lọc, lựa chọn enum, khả năng sắp, căn lề đều duyệt từ `fieldsForTable()`. File chỉ còn giữ **renderer ô** (`O_BANG`) — tách bạch "có cột nào" (Registry) với "vẽ ra sao" (bảng).
+- `SORT_COLUMNS` (`packages/query/src/filters.ts`) giữ vai trò **hàng rào** (khóa → cột Drizzle, chống SQL injection) nhưng **danh sách khóa** nay do Registry quyết. `kiemAllowlistKhopRegistry()` chạy lúc nạp module: hai bên lệch ⇒ ném ngay, không trôi âm thầm. Zod `invoiceFilterSchema` **không đổi**, allowlist **không nới**.
+
+**Hai khái niệm cố ý tách rời** (đừng gộp lại khi đọc mã):
+
+| Thuộc tính | Nghĩa | Hiện có |
+|---|---|---|
+| `sapDuoc` | Vào allowlist `ORDER BY` phía server | 12 khóa |
+| `sapTrenBang` | Bảng có phơi menu **Sắp** cho cột đó không | 9 cột |
+
+`dvtte`, `ttxly`, `tthai` server sắp được nhưng bảng **chưa** mời sắp — khoảng lệch này có từ U31, U-K2 chỉ biến nó thành **dữ liệu thấy được** thay vì ẩn trong JSX. Bật thêm là quyết định sản phẩm, không phải việc của refactor.
+
+**Nhãn ngắn (`nhanNgan`) là có chủ ý, không phải trôi.** Bảng hẹp nên hiện "Tổng TT", file xuất hiện "Tổng thanh toán" — nhưng cả hai nay sinh từ **một** khai báo `tgtttbso`, nên không thể lệch ngẫu nhiên nữa. Muốn bảng hiện nhãn đầy đủ: xoá đúng dòng `nhanNgan` trong Registry, một nơi.
