@@ -4,6 +4,7 @@ import { AppLayout } from "../components/layout/AppLayout";
 import { PageHeader } from "../components/layout/PageHeader";
 import { AboutPage } from "../features/about/AboutPage";
 import { DangKyPage } from "../features/auth/DangKyPage";
+import { DatMatKhauPage } from "../features/auth/DatMatKhauPage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { XacThucEmailPage } from "../features/auth/XacThucEmailPage";
 import { useAuth } from "../features/auth/auth-context";
@@ -87,6 +88,10 @@ export function AppRouter() {
           đang đăng nhập đi đâu cả: rất có thể họ đăng ký ở máy này rồi mở thư ở máy khác,
           hoặc đang đăng nhập bằng một tài khoản khác. Đá đi là làm hỏng việc xác thực. */}
       <Route path="/xac-thuc-email" element={<XacThucEmailPage />} />
+      {/* Lát cắt 3 — Đích của liên kết trong thư duyệt. CÔNG KHAI và KHÔNG đá người
+          đang đăng nhập đi đâu cả, cùng lý do với /xac-thuc-email: rất có thể họ mở thư
+          ở một máy khác, hoặc đang đăng nhập bằng một tài khoản khác. */}
+      <Route path="/dat-mat-khau" element={<DatMatKhauPage />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="invoices" element={<InvoicesPage />} />

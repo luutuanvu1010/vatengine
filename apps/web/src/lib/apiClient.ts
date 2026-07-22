@@ -188,6 +188,14 @@ export const api = {
     return request("POST", "/xac-thuc-email", { body: { token } });
   },
 
+  /** Lát cắt 3 — Đặt mật khẩu bằng token trong thư duyệt.
+   *
+   * `POST`, và CHỈ gọi khi người dùng bấm gửi. Trang `/dat-mat-khau` không tự gọi lúc tải,
+   * nên kể cả một máy quét thư biết chạy JavaScript cũng không tiêu được token. */
+  datMatKhau(token: string, matKhau: string): Promise<{ ok: true }> {
+    return request("POST", "/dat-mat-khau", { body: { token, mat_khau: matKhau } });
+  },
+
   // C4 — đăng xuất THẬT: chỉ server mới xoá được cookie HttpOnly. Bỏ bước này thì
   // "Đăng xuất" chỉ dọn state phía client, cookie vẫn sống và phiên vẫn dùng được.
   logout(): Promise<{ ok: true }> {
