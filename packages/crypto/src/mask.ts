@@ -18,6 +18,12 @@ const SENSITIVE_KEYS = new Set([
   "cookie",
   "rawjson",
   "raw",
+  // QĐ-17 (2026-07-22) — email là DỮ LIỆU CÁ NHÂN, và `audit_log` là bảng KHÔNG SỬA,
+  // KHÔNG XOÁ được. Hai điều đó gặp nhau tạo ra một cái bẫy: mỗi lượt đăng ký để lại một
+  // email vĩnh viễn, không có đường gỡ. Che ở đây là chốt duy nhất đặt đúng chỗ — nó phủ
+  // cả những nơi ghi audit CHƯA VIẾT, chứ không chỉ chỗ hôm nay phát hiện ra.
+  "email",
+  "diachiemail",
 ]);
 
 // Chuỗi kết nối DB có thể lộ mật khẩu inline (postgres://user:pass@host). Che phần
@@ -29,14 +35,24 @@ const CONN_STRING = /\b([a-z][a-z0-9+.-]*:\/\/)([^:@/\s]+):([^@/\s]+)@/gi;
 // `{"`). (Phát hiện Low từ security-reviewer 2026-07-14.)
 const JWT = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
 
+// Email nằm LẪN trong chuỗi tự do (thông điệp lỗi, `reason`, `message`) — che theo KHOÁ ở
+// trên không với tới được. Ví dụ: app.ts ghi `err.message`, mà một lỗi UNIQUE của Postgres
+// có thể kèm nguyên giá trị bị trùng, tức chính địa chỉ email của khách.
+const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+
 function normalizeKey(key: string): string {
   return key.replace(/_/g, "").toLowerCase();
 }
 
 function maskString(value: string): string {
-  return value
-    .replace(CONN_STRING, (_m, scheme, user) => `${scheme}${user}:${REDACTED}@`)
-    .replace(JWT, REDACTED);
+  return (
+    value
+      .replace(CONN_STRING, (_m, scheme, user) => `${scheme}${user}:${REDACTED}@`)
+      .replace(JWT, REDACTED)
+      // Chạy SAU CONN_STRING: chuỗi kết nối `postgres://user:pass@host` đã được xử lý
+      // riêng ở trên và không còn phần nào trông giống email nữa.
+      .replace(EMAIL, REDACTED)
+  );
 }
 
 /**

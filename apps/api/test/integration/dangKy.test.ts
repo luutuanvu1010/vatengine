@@ -461,3 +461,40 @@ describe("U34a — báo admin khi có hồ sơ đăng ký mới", () => {
     expect(rows[0]?.trangThai).toBe("cho_duyet");
   });
 });
+
+// ══ QĐ-17 — nhật ký KHÔNG được giữ dữ liệu cá nhân ═════════════════════════════════════
+describe("QĐ-17 — audit_log không giữ email khách", () => {
+  let db: Db;
+  let app: ReturnType<typeof createApp>;
+
+  beforeEach(async () => {
+    stubTurnstile();
+    db = await freshDb();
+    app = createApp(injectDb(db));
+  });
+
+  it("🔴 đăng ký xong → hàng audit KHÔNG chứa email, nhưng VẪN đủ để truy vết", async () => {
+    // Vì sao ca này quan trọng hơn vẻ ngoài của nó: `audit_log` không sửa, không xoá được
+    // (trigger append-only, migration 0002). Một email lọt vào đó là lọt VĨNH VIỄN — kể cả
+    // khi khách dùng quyền yêu cầu xoá dữ liệu theo NĐ 13/2023. Trước 2026-07-22 route này
+    // ghi thẳng email vào `chi_tiet`, tức mỗi lượt đăng ký để lại một địa chỉ không có
+    // đường gỡ. Nếu ai đó bỏ `maskSensitive` đi "cho dễ debug", ca này phải ĐỎ.
+    expect((await dangKy(app, body())).status).toBe(201);
+
+    const rows = await db.select().from(auditLog);
+    expect(rows).toHaveLength(1);
+    expect(JSON.stringify(rows[0]?.chiTiet)).not.toContain("chu.dn@congty.vn");
+
+    // Nhưng vẫn phải TRUY VẾT ĐƯỢC: che dữ liệu cá nhân không có nghĩa là làm nhật ký vô
+    // dụng. MST và tên doanh nghiệp là dữ liệu đăng ký kinh doanh công khai của một TỔ
+    // CHỨC, không phải dữ liệu cá nhân — giữ lại. Muốn biết ai đăng ký thì tra `nguoi_dung`
+    // theo tenant_id, và bảng ĐÓ ẩn danh hoá được.
+    const ct = rows[0]?.chiTiet as Record<string, unknown>;
+    expect(ct.mst).toBe("0100000099");
+    expect(ct.tenDoanhNghiep).toBe("Công ty TNHH ABC");
+    expect(rows[0]?.hanhDong).toBe("dang_ky");
+
+    const u = await db.select().from(nguoiDung);
+    expect(u[0]?.email).toBe("chu.dn@congty.vn"); // vẫn còn ở nơi XOÁ ĐƯỢC
+  });
+});

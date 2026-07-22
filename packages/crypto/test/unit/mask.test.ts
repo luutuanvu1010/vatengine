@@ -63,4 +63,44 @@ describe("maskSensitive", () => {
     maskSensitive(original);
     expect(original.token).toBe("bi-mat");
   });
+
+  // ── QĐ-17 (2026-07-22) — email là dữ liệu cá nhân ────────────────────────────────────
+  // Vì sao đây không phải chuyện nhỏ: `audit_log` KHÔNG SỬA, KHÔNG XOÁ được (trigger
+  // append-only, 0002). Một email lọt vào đó là lọt vĩnh viễn — không có đường gỡ, kể cả
+  // khi khách yêu cầu xoá dữ liệu. Trước ngày 22-07, `routes/dangKy.ts` ghi thẳng email
+  // vào `chi_tiet`, tức mỗi lượt đăng ký để lại một địa chỉ không bao giờ lấy ra được.
+  describe("che email", () => {
+    it("🔴 khoá `email` bị che", () => {
+      expect(maskSensitive({ email: "ketoan@congty.vn", mst: "0101234567" })).toEqual({
+        email: "***",
+        mst: "0101234567", // MST là dữ liệu đăng ký kinh doanh công khai → GIỮ
+      });
+    });
+
+    it("🔴 email LẪN trong chuỗi tự do cũng bị che", () => {
+      // Che theo KHOÁ không với tới được ca này. Lỗi UNIQUE của Postgres có thể kèm nguyên
+      // giá trị bị trùng — tức chính địa chỉ email của khách — rồi `app.ts` ghi `err.message`.
+      expect(maskSensitive({ message: "duplicate key: (email)=(ketoan@congty.vn)" })).toEqual({
+        message: "duplicate key: (email)=(***)",
+      });
+    });
+
+    it("che nhiều email trong cùng một chuỗi", () => {
+      expect(maskSensitive("gui tu a.b@x.vn toi c@y.com.vn")).toBe("gui tu *** toi ***");
+    });
+
+    it("KHÔNG che nhầm chuỗi chỉ trông hao hao", () => {
+      // Giữ được ngữ cảnh chẩn đoán: che quá tay thì log thành vô dụng.
+      expect(maskSensitive("ty-le 5@ngay")).toBe("ty-le 5@ngay");
+      expect(maskSensitive("khong-co-a-cong")).toBe("khong-co-a-cong");
+    });
+
+    it("🔴 chuỗi kết nối DB vẫn che đúng như cũ, KHÔNG bị regex email cướp mất", () => {
+      // `postgres://user:pass@host` có dạng hao hao email. CONN_STRING chạy TRƯỚC nên phần
+      // credential đã bị che rồi; ca này khoá đúng thứ tự đó lại.
+      expect(maskSensitive("postgres://vat_app:sieumat@db.neon.tech/vat")).toBe(
+        "postgres://vat_app:***@db.neon.tech/vat",
+      );
+    });
+  });
 });
