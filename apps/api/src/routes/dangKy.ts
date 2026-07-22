@@ -11,12 +11,16 @@
 // non-superuser thật (không chỉ tin theo tài liệu — CLAUDE.md nguyên tắc bằng chứng).
 import { maskSensitive } from "@vat/crypto";
 import { auditLog, nguoiDung, tenants, withTenant } from "@vat/db";
+import { sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
+import { thuXacThucEmail } from "../email/mau";
+import { bamToken, hanToken, lienKetXacThuc, sinhToken } from "../email/tokenXacThuc";
 import { validateEmailDangKy } from "../lib/validateEmailDangKy";
 import { TURNSTILE_FIELD, kiemTraCauHinhTurnstile, xacMinhTurnstile } from "../turnstile";
 import type { AppDeps, AppEnv } from "../types";
+import { urlWeb } from "../urlWeb";
 
 // MST 10 hoặc 13 chữ số (giá trị verbatim theo spec — không đổi dạng).
 const MST_RE = /^\d{10}$|^\d{13}$/;
@@ -122,6 +126,11 @@ async function xuLyDangKy(c: Context<AppEnv>, deps: AppDeps, body: unknown) {
 
   if (!MST_RE.test(mst)) return c.json({ error: "mst_khong_hop_le" }, 400);
 
+  // Sinh token TRƯỚC khi mở kết nối: nó không cần DB, và giữ phần sinh ngẫu nhiên ra
+  // ngoài giao dịch làm giao dịch ngắn lại.
+  const token = sinhToken();
+  const tokenBam = await bamToken(token);
+
   const { db, close } = await deps.getDb(c.env);
   try {
     const idMoi = crypto.randomUUID();
@@ -131,7 +140,9 @@ async function xuLyDangKy(c: Context<AppEnv>, deps: AppDeps, body: unknown) {
           id: idMoi,
           ten: tenDoanhNghiep,
           mst,
-          trangThai: "cho_duyet",
+          // U34c — KHÔNG còn vào thẳng `cho_duyet`. Hồ sơ phải qua bước xác thực email
+          // trước, và chỉ sau đó admin mới nhìn thấy (QĐ-15).
+          trangThai: "cho_xac_thuc_email",
           goiDichVu: "free",
         });
         await tx.insert(nguoiDung).values({
@@ -147,6 +158,12 @@ async function xuLyDangKy(c: Context<AppEnv>, deps: AppDeps, body: unknown) {
           doiTuong: idMoi,
           chiTiet: maskSensitive({ email, mst, tenDoanhNghiep }),
         });
+        // Token nằm TRONG cùng giao dịch với việc tạo tenant: nếu insert tenant rollback
+        // thì token cũng biến mất. Ngược lại, tenant tồn tại mà không có token nghĩa là
+        // khách không bao giờ xác thực được và hồ sơ kẹt vĩnh viễn.
+        await tx.execute(
+          sql`select xac_thuc_email_tao(${idMoi}::uuid, ${tokenBam}, ${hanToken().toISOString()}::timestamptz)`,
+        );
       });
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -156,7 +173,11 @@ async function xuLyDangKy(c: Context<AppEnv>, deps: AppDeps, body: unknown) {
       }
       throw err;
     }
-    // Báo admin — SAU khi giao dịch đã commit, TRƯỚC khi trả lời khách.
+    // U34c (QĐ-15) — KHÔNG báo admin ở đây nữa. Việc đó chuyển sang bước khách đã bấm link
+    // xác thực (`routes/xacThucEmail.ts`). Báo từ lúc này nghĩa là bất kỳ ai gõ một địa chỉ
+    // bất kỳ cũng làm điện thoại chủ dự án kêu.
+    //
+    // Gửi thư xác thực — SAU khi giao dịch đã commit, TRƯỚC khi trả lời khách.
     //
     // Đặt sau commit vì tin nhắn nói "đang chờ duyệt": gửi trước mà giao dịch rollback thì
     // admin đi tìm một hồ sơ không tồn tại. Đổi lại, đăng ký thành công mà Telegram hỏng
@@ -167,15 +188,20 @@ async function xuLyDangKy(c: Context<AppEnv>, deps: AppDeps, body: unknown) {
     // ném. Nhưng deps là thứ tiêm được, và một hiện thực tương lai (hoặc test) có thể ném.
     // Đúng lớp lỗi F9: một nhánh phụ trợ tuyệt đối không được ném đè lên kết quả chính —
     // khách đã có tenant trong DB rồi, không thể trả 500 cho họ vì bot của ta chết.
+    // Thư hỏng KHÔNG được làm hỏng đăng ký (F9): tenant đã nằm trong DB rồi, trả 500 cho
+    // khách sẽ khiến họ đăng ký lại và nhận 409 khó hiểu. Nhưng KHÁC với Telegram, thư này
+    // là mắt xích BẮT BUỘC của chuỗi — nên phản hồi phải NÓI RA rằng thư chưa gửi được, để
+    // giao diện hướng dẫn "gửi lại" thay vì bảo khách đi kiểm hộp thư không bao giờ có gì.
+    let daGuiThu = false;
     try {
-      await deps.baoDangKyMoi(c.env, { tenantId: idMoi, tenDoanhNghiep, mst, email });
+      const thu = thuXacThucEmail(tenDoanhNghiep, lienKetXacThuc(urlWeb(c.env), token));
+      const kq = await deps.getEmailTransport(c.env).gui({ ...thu, den: email });
+      daGuiThu = kq.daGui;
+      if (!kq.daGui) console.warn(`[dangKy] không gửi được thư xác thực: ${kq.lyDo}`);
     } catch (err) {
-      console.warn(
-        "[dangKy] báo admin thất bại, bỏ qua:",
-        err instanceof Error ? err.message : err,
-      );
+      console.warn("[dangKy] gửi thư ném lỗi, bỏ qua:", err instanceof Error ? err.message : err);
     }
-    return c.json({ ok: true, trangThai: "cho_duyet" }, 201);
+    return c.json({ ok: true, trangThai: "cho_xac_thuc_email", daGuiThu }, 201);
   } finally {
     await close();
   }

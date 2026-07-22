@@ -15,6 +15,7 @@ import { invoicesRoutes } from "./routes/invoices";
 import { meRoutes } from "./routes/me";
 import { reconcileRoutes } from "./routes/reconcile";
 import { taxAccountsRoutes } from "./routes/taxAccounts";
+import { xacThucEmailRoutes } from "./routes/xacThucEmail";
 import { requireSameOrigin } from "./session";
 import type { AppDeps, AppEnv } from "./types";
 
@@ -39,6 +40,8 @@ export function createApp(deps: AppDeps) {
   // Tenant tạo ra ở trạng thái cho_duyet, bị cổng trạng thái ở /auth/login chặn tới khi
   // Admin duyệt (U18).
   app.route("/dang-ky", dangKyRoutes(deps));
+  // U34c — công khai, đặt cạnh /dang-ky: cả hai đều chạy TRƯỚC khi có phiên nào.
+  app.route("/xac-thuc-email", xacThucEmailRoutes(deps));
 
   // A1 (U15): hồ sơ tenant + vai — đọc-only, sau requireTenant (cả 3 vai).
   app.route("/me", meRoutes(deps));

@@ -92,6 +92,13 @@
       "when": 1785386400000,
       "tag": "0012_an_danh_email_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785472800000,
+      "tag": "0013_xac_thuc_email",
+      "breakpoints": true
     }
   ]
 }

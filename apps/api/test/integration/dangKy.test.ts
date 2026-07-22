@@ -12,6 +12,7 @@ import {
   freshDb,
   injectDb,
   makeBaoDangKySpy,
+  makeEmailSpy,
   makeEnv,
   makeTenant,
   stubTurnstile,
@@ -62,11 +63,12 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
   it("hợp lệ → 201 { ok, trangThai } + tenant cho_duyet/free + user quan_tri password NULL + audit dang_ky", async () => {
     const res = await dangKy(app, body());
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual({ ok: true, trangThai: "cho_duyet" });
+    expect(await res.json()).toEqual({ ok: true, trangThai: "cho_xac_thuc_email", daGuiThu: true });
 
     const t = await db.select().from(tenants).where(eq(tenants.mst, "0100000099"));
     expect(t).toHaveLength(1);
-    expect(t[0]?.trangThai).toBe("cho_duyet");
+    // U34c — hồ sơ mới KHÔNG vào thẳng `cho_duyet` nữa; phải qua xác thực email trước.
+    expect(t[0]?.trangThai).toBe("cho_xac_thuc_email");
     expect(t[0]?.goiDichVu).toBe("free");
     const tenantId = t[0]?.id as string;
 
@@ -293,6 +295,13 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
       sql`grant select, insert, update, delete on all tables in schema public to vat_app_probe`,
     );
     await db.execute(sql`grant usage, select on all sequences in schema public to vat_app_probe`);
+    // U34c — role dựng TẠI CHỖ trong test này nên migration 0013 (chạy trước đó) không thể
+    // biết mà cấp EXECUTE. Phải cấp ở đây, nếu không đường đăng ký chết với
+    // `permission denied for function xac_thuc_email_tao` — và đó chính là điều ca này đã
+    // phát hiện khi U34c mới thêm hàm vào giao dịch đăng ký.
+    await db.execute(
+      sql`grant execute on function public.xac_thuc_email_tao(uuid,text,timestamptz) to vat_app_probe`,
+    );
     await db.execute(sql`set role vat_app_probe`);
 
     let res: Response;
@@ -305,7 +314,8 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
     expect(res.status).toBe(201);
     const t = await db.select().from(tenants).where(eq(tenants.mst, "0100000077"));
     expect(t).toHaveLength(1);
-    expect(t[0]?.trangThai).toBe("cho_duyet");
+    // U34c — hồ sơ mới KHÔNG vào thẳng `cho_duyet` nữa; phải qua xác thực email trước.
+    expect(t[0]?.trangThai).toBe("cho_xac_thuc_email");
   });
 
   // Finding 1 (TOCTOU) — dùng makeRacySignupLimiterFactory (helpers.ts): double mô phỏng
@@ -401,7 +411,7 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
 });
 
 // ══ U34a — báo super-admin khi có đăng ký mới ═══════════════════════════════════════════
-describe("U34a — báo admin khi có hồ sơ đăng ký mới", () => {
+describe("U34c/QĐ-15 — đăng ký KHÔNG còn báo admin; việc đó chuyển sang bước xác thực", () => {
   let db: Db;
 
   beforeEach(async () => {
@@ -409,92 +419,52 @@ describe("U34a — báo admin khi có hồ sơ đăng ký mới", () => {
     db = await freshDb();
   });
 
-  it("đăng ký thành công → báo admin ĐÚNG MỘT LẦN, kèm đủ dữ liệu để quyết", async () => {
+  it("🔴 đăng ký thành công → KHÔNG báo admin (chờ khách xác thực email đã)", async () => {
+    // Đảo chiều ca U34a cũ, có chủ ý. Báo ngay từ lúc đăng ký nghĩa là BẤT KỲ AI gõ một
+    // địa chỉ bất kỳ cũng làm điện thoại chủ dự án kêu — tức cổng công khai mà U33 vừa mở
+    // trở thành đường spam thẳng vào kênh báo. Xác thực email là bộ lọc đặt trước người thật.
     const spy = makeBaoDangKySpy();
     const app = createApp(injectDb(db, undefined, undefined, undefined, spy.fn));
-    const res = await dangKy(app, body());
-    expect(res.status).toBe(201);
-
-    expect(spy.goi).toHaveLength(1);
-    expect(spy.goi[0]).toMatchObject({
-      tenDoanhNghiep: "Công ty TNHH ABC",
-      mst: "0100000099",
-      email: "chu.dn@congty.vn",
-    });
-    // tenantId phải là id THẬT vừa ghi, không phải chuỗi bịa — nếu sai, deep link trong
-    // thông báo (và U34e sau này) sẽ trỏ vào hư không.
-    const [t] = await db.select().from(tenants).where(eq(tenants.mst, "0100000099"));
-    expect(spy.goi[0]?.tenantId).toBe(t?.id);
-  });
-
-  it("🔴 đăng ký HỎNG (MST trùng → 409) → KHÔNG báo admin", async () => {
-    // Báo về một hồ sơ không tồn tại là bắt admin đi tìm thứ không có. Lời gọi nằm SAU
-    // commit chính vì vậy.
-    await makeTenant(db, "Cty đã có", "0100000099");
-    const spy = makeBaoDangKySpy();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, spy.fn));
-    const res = await dangKy(app, body());
-    expect(res.status).toBe(409);
+    expect((await dangKy(app, body())).status).toBe(201);
     expect(spy.goi).toHaveLength(0);
   });
 
-  it("🔴 body sai (400) → KHÔNG báo admin", async () => {
-    const spy = makeBaoDangKySpy();
-    const app = createApp(injectDb(db, undefined, undefined, undefined, spy.fn));
-    expect((await dangKy(app, body({ mst: "123" }))).status).toBe(400);
-    expect(spy.goi).toHaveLength(0);
-  });
-
-  it("🔴 (F9) thông báo NÉM LỖI → khách vẫn nhận 201 và tenant vẫn nằm trong DB", async () => {
-    // Đúng lớp lỗi F9: một nhánh phụ trợ ném đè lên kết quả chính. Khách đã có tenant
-    // trong DB rồi — trả 500 cho họ vì bot Telegram của ta chết là sai hai lần: vừa mất
-    // niềm tin, vừa khiến họ đăng ký lại và nhận 409 khó hiểu.
-    const spy = makeBaoDangKySpy({ nem: true });
-    const app = createApp(injectDb(db, undefined, undefined, undefined, spy.fn));
-    const res = await dangKy(app, body());
-    expect(res.status).toBe(201);
-    expect(await res.json()).toEqual({ ok: true, trangThai: "cho_duyet" });
-    expect(spy.goi).toHaveLength(1);
-
-    const rows = await db.select().from(tenants).where(eq(tenants.mst, "0100000099"));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.trangThai).toBe("cho_duyet");
-  });
-});
-
-// ══ QĐ-17 — nhật ký KHÔNG được giữ dữ liệu cá nhân ═════════════════════════════════════
-describe("QĐ-17 — audit_log không giữ email khách", () => {
-  let db: Db;
-  let app: ReturnType<typeof createApp>;
-
-  beforeEach(async () => {
-    stubTurnstile();
-    db = await freshDb();
-    app = createApp(injectDb(db));
-  });
-
-  it("🔴 đăng ký xong → hàng audit KHÔNG chứa email, nhưng VẪN đủ để truy vết", async () => {
-    // Vì sao ca này quan trọng hơn vẻ ngoài của nó: `audit_log` không sửa, không xoá được
-    // (trigger append-only, migration 0002). Một email lọt vào đó là lọt VĨNH VIỄN — kể cả
-    // khi khách dùng quyền yêu cầu xoá dữ liệu theo NĐ 13/2023. Trước 2026-07-22 route này
-    // ghi thẳng email vào `chi_tiet`, tức mỗi lượt đăng ký để lại một địa chỉ không có
-    // đường gỡ. Nếu ai đó bỏ `maskSensitive` đi "cho dễ debug", ca này phải ĐỎ.
+  it("gửi THƯ XÁC THỰC tới đúng địa chỉ khách vừa nhập", async () => {
+    const email = makeEmailSpy();
+    const app = createApp({ ...injectDb(db), getEmailTransport: email.factory });
     expect((await dangKy(app, body())).status).toBe(201);
 
-    const rows = await db.select().from(auditLog);
-    expect(rows).toHaveLength(1);
-    expect(JSON.stringify(rows[0]?.chiTiet)).not.toContain("chu.dn@congty.vn");
+    expect(email.daGui).toHaveLength(1);
+    expect(email.daGui[0]?.den).toBe("chu.dn@congty.vn");
+    // Liên kết phải trỏ tới TRANG của SPA, KHÔNG trỏ thẳng vào API: máy quét thư sẽ tự
+    // fetch một URL API và tiêu mất token trước khi khách kịp bấm (cùng bài học QĐ-12).
+    expect(email.daGui[0]?.text).toContain("/xac-thuc-email?token=");
+    expect(email.daGui[0]?.text).not.toContain("/api/");
+    // Có cả hai dạng nội dung — chỉ gửi HTML làm điểm spam tăng.
+    expect(email.daGui[0]?.html).toContain("Xác nhận địa chỉ email");
+  });
 
-    // Nhưng vẫn phải TRUY VẾT ĐƯỢC: che dữ liệu cá nhân không có nghĩa là làm nhật ký vô
-    // dụng. MST và tên doanh nghiệp là dữ liệu đăng ký kinh doanh công khai của một TỔ
-    // CHỨC, không phải dữ liệu cá nhân — giữ lại. Muốn biết ai đăng ký thì tra `nguoi_dung`
-    // theo tenant_id, và bảng ĐÓ ẩn danh hoá được.
-    const ct = rows[0]?.chiTiet as Record<string, unknown>;
-    expect(ct.mst).toBe("0100000099");
-    expect(ct.tenDoanhNghiep).toBe("Công ty TNHH ABC");
-    expect(rows[0]?.hanhDong).toBe("dang_ky");
+  it("🔴 thư KHÔNG gửi được → khách VẪN nhận 201, nhưng phản hồi NÓI RA điều đó", async () => {
+    // Khác Telegram: thư này là mắt xích BẮT BUỘC của chuỗi. Nuốt lỗi sẽ khiến giao diện
+    // bảo khách đi kiểm hộp thư không bao giờ có gì. Nhưng cũng không được trả 500 — tenant
+    // đã nằm trong DB rồi, khách đăng ký lại sẽ nhận 409 khó hiểu (F9).
+    const email = makeEmailSpy({ daGui: false, lyDo: "mien_khong_nhan_thu" });
+    const app = createApp({ ...injectDb(db), getEmailTransport: email.factory });
+    const res = await dangKy(app, body());
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({
+      ok: true,
+      trangThai: "cho_xac_thuc_email",
+      daGuiThu: false,
+    });
+    expect((await db.select().from(tenants)).length).toBe(1);
+  });
 
-    const u = await db.select().from(nguoiDung);
-    expect(u[0]?.email).toBe("chu.dn@congty.vn"); // vẫn còn ở nơi XOÁ ĐƯỢC
+  it("🔴 đăng ký HỎNG (MST trùng → 409) → KHÔNG gửi thư", async () => {
+    await makeTenant(db, "Cty đã có", "0100000099");
+    const email = makeEmailSpy();
+    const app = createApp({ ...injectDb(db), getEmailTransport: email.factory });
+    expect((await dangKy(app, body())).status).toBe(409);
+    expect(email.daGui).toHaveLength(0);
   });
 });

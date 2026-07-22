@@ -12,7 +12,16 @@
 
 /** Tập trạng thái vòng đời tenant. Khớp giá trị thật đang chạy production sau U17b
  * (`apps/api/src/routes/auth.ts` — chỉ `active` đăng nhập được). */
-export const TRANG_THAI_TENANT = ["active", "cho_duyet", "khoa", "tu_choi"] as const;
+export const TRANG_THAI_TENANT = [
+  "active",
+  // U34c — trạng thái ĐẦU TIÊN của mọi hồ sơ tự đăng ký. Khách chưa bấm link trong thư
+  // thì admin CHƯA nhìn thấy và CHƯA bị làm phiền (QĐ-15): xác thực email là bộ lọc đặt
+  // trước người thật, nếu không kênh báo của chủ dự án thành đích spam.
+  "cho_xac_thuc_email",
+  "cho_duyet",
+  "khoa",
+  "tu_choi",
+] as const;
 export type TrangThaiTenant = (typeof TRANG_THAI_TENANT)[number];
 
 /** Hành động super-admin trên vòng đời tenant. Tên khớp path route:
@@ -23,6 +32,15 @@ export type HanhDongAdmin = (typeof HANH_DONG_ADMIN)[number];
 // Chỉ liệt kê ô HỢP LỆ. Mọi thứ không có mặt ở đây là không hợp lệ — bảng khai theo hướng
 // allowlist để việc thêm một trạng thái mới sau này KHÔNG vô tình mở thêm đường chuyển.
 const CHUYEN_HOP_LE: ReadonlyArray<readonly [TrangThaiTenant, HanhDongAdmin, TrangThaiTenant]> = [
+  // U34c — `cho_xac_thuc_email` KHÔNG xuất hiện ở vế trái ô nào, tức nằm HOÀN TOÀN NGOÀI
+  // bề mặt thao tác của admin. Không phải thiếu sót:
+  //   • Theo QĐ-15, admin còn chẳng NHÌN THẤY hồ sơ chưa xác thực — cho họ một nút bấm lên
+  //     thứ họ không thấy là vô nghĩa.
+  //   • Đường ra duy nhất của trạng thái này là do CHÍNH KHÁCH bấm link (hàm DB
+  //     `xac_thuc_email_dung`), còn dọn hồ sơ chết là việc của U34f (`da_xoa`).
+  //   • Và quan trọng nhất: thêm ô ở đây sẽ cho `tu_choi` HAI trạng thái nguồn, phá vỡ giả
+  //     định một-nguồn mà `chuyenTuHanhDong` dựa vào — nền của câu UPDATE nguyên tử ở
+  //     route. Test `chuyenTuHanhDong` đã bắt đúng điều này khi tôi thử thêm vào.
   ["cho_duyet", "duyet", "active"],
   ["cho_duyet", "tu_choi", "tu_choi"],
   ["active", "khoa", "khoa"],

@@ -19,15 +19,37 @@ import {
 // Bảng chân lý ĐẦY ĐỦ — nguồn đối chiếu độc lập với hiện thực (viết tay từ sơ đồ trong
 // docs/plans/U18-plan.md §5, KHÔNG sinh ra từ chính code đang kiểm).
 //
-//   cho_duyet ──duyet──▶ active ──khoa──▶ khoa ──mo_khoa──▶ active
+//   cho_xac_thuc_email ──(khách bấm link)──▶ cho_duyet ──duyet──▶ active ──khoa──▶ khoa
+//       │                                        └────tu_choi───▶ tu_choi     └─mo_khoa─▶ active
 //       └────tu_choi───▶ tu_choi
+//
+// U34c — `cho_xac_thuc_email` rời đi bằng HAI đường, và chỉ một trong hai là hành động của
+// admin: `tu_choi` (dọn hồ sơ rác) nằm ở bảng này; còn đường sang `cho_duyet` do CHÍNH
+// KHÁCH kích hoạt khi bấm link trong thư, nên nó nằm ở hàm DB `xac_thuc_email_dung`, không
+// phải ở máy trạng thái của admin.
+//
+// 🔴 `duyet` từ `cho_xac_thuc_email` phải là null: duyệt thẳng nghĩa là admin kích hoạt một
+// địa chỉ chưa ai chứng minh là có thật, và mọi thư gửi tới nó về sau đều có nguy cơ
+// bounce — thứ khiến AWS đình chỉ tài khoản SES (ADR-0007 §1.5).
 //
 // null = chuyển không hợp lệ (route phải trả 409).
 const BANG: Record<HanhDongAdmin, Record<TrangThaiTenant, TrangThaiTenant | null>> = {
-  duyet: { cho_duyet: "active", active: null, khoa: null, tu_choi: null },
-  tu_choi: { cho_duyet: "tu_choi", active: null, khoa: null, tu_choi: null },
-  khoa: { cho_duyet: null, active: "khoa", khoa: null, tu_choi: null },
-  mo_khoa: { cho_duyet: null, active: null, khoa: "active", tu_choi: null },
+  duyet: { cho_xac_thuc_email: null, cho_duyet: "active", active: null, khoa: null, tu_choi: null },
+  tu_choi: {
+    cho_xac_thuc_email: null,
+    cho_duyet: "tu_choi",
+    active: null,
+    khoa: null,
+    tu_choi: null,
+  },
+  khoa: { cho_xac_thuc_email: null, cho_duyet: null, active: "khoa", khoa: null, tu_choi: null },
+  mo_khoa: {
+    cho_xac_thuc_email: null,
+    cho_duyet: null,
+    active: null,
+    khoa: "active",
+    tu_choi: null,
+  },
 };
 
 describe("chuyenTrangThai — máy trạng thái vòng đời tenant (U18)", () => {
@@ -41,11 +63,25 @@ describe("chuyenTrangThai — máy trạng thái vòng đời tenant (U18)", () 
     }
   }
 
-  it("đúng 4 chuyển hợp lệ trong toàn bộ 16 ô — không nhiều hơn", () => {
+  it("đúng 4 chuyển hợp lệ trong toàn bộ 20 ô — không nhiều hơn", () => {
+    // Ca này canh việc THÊM trạng thái mới không vô tình mở thêm đường chuyển. U34c thêm
+    // `cho_xac_thuc_email` nhưng KHÔNG thêm ô nào — con số vẫn là 4 trên 20 ô thay vì 16.
     const hopLe = HANH_DONG_ADMIN.flatMap((h) =>
       TRANG_THAI_TENANT.map((t) => chuyenTrangThai(t, h)).filter((x) => x !== null),
     );
     expect(hopLe).toHaveLength(4);
+  });
+
+  it("🔴 U34c — `cho_xac_thuc_email` nằm NGOÀI bề mặt thao tác của admin", () => {
+    // KHÔNG hành động nào của admin chạm được vào trạng thái này, kể cả `duyet`.
+    //   • Duyệt thẳng = kích hoạt một địa chỉ chưa ai chứng minh là có thật; mọi thư gửi
+    //     tới nó về sau đều có nguy cơ bounce, thứ khiến AWS đình chỉ SES (ADR-0007 §1.5).
+    //   • Theo QĐ-15 admin còn chẳng NHÌN THẤY hồ sơ này.
+    // Đường ra duy nhất là khách tự bấm link (hàm DB `xac_thuc_email_dung`); dọn hồ sơ
+    // chết là việc của U34f.
+    for (const hanhDong of HANH_DONG_ADMIN) {
+      expect(chuyenTrangThai("cho_xac_thuc_email", hanhDong)).toBeNull();
+    }
   });
 
   it("'tu_choi' là trạng thái CUỐI — không hành động nào đưa nó đi tiếp", () => {

@@ -33,6 +33,8 @@ export interface Env {
   AWS_SECRET_ACCESS_KEY?: string;
   AWS_REGION?: string;
   EMAIL_FROM?: string;
+  // U34c — Địa chỉ gốc của SPA khách, dùng dựng liên kết trong thư. Không nhạy cảm.
+  URL_WEB?: string;
   // U34a — Báo super-admin khi có đăng ký mới. CẢ BA optional và thiếu thì thông báo
   // TẮT (fail-silent) — ngược chiều TURNSTILE_SECRET_KEY ở trên, có chủ ý: captcha bảo vệ
   // hệ thống nên phải fail-closed, còn thông báo chỉ báo cho một con người nên không được
