@@ -1,5 +1,24 @@
 # Kế hoạch triển khai Production — `vatengine.tourdao.vn`
 
+> ## ⚠️ SỰ CỐ 2026-07-22 — build thiếu biến ⇒ MẤT ĐĂNG NHẬP toàn hệ thống (đã khắc phục)
+>
+> **Việc đang làm:** deploy `vat-web` cho thay đổi ẩn trang Đối chiếu (PR #32, chỉ đụng `apps/web`).
+>
+> **Chuyện gì xảy ra:** `VITE_TURNSTILE_SITE_KEY` (U33) được **nhúng lúc build**, nhưng **KHÔNG có trong `apps/web/.env.production`** — bản deploy trước đó truyền nó qua dòng lệnh. Lần build này chạy `npm run build -w apps/web` trơn ⇒ bundle **mất site key** ⇒ SPA hiện *"Hệ thống chưa cấu hình kiểm tra bảo mật"* và **khoá nút Đăng nhập**. Toàn bộ khách hàng không đăng nhập được. Version hỏng: `8e2a83ec-125f-4896-8172-31b4c2abc083`.
+>
+> **Vì sao smoke không bắt được:** bộ smoke đã chạy (`/` → 200, đúng bundle mới, `to:"/reconcile"` → 0, `/api/health` → 200, đủ 4 security header) **toàn bộ đều XANH** trong khi đăng nhập đã chết. Đây đúng là cái bẫy `.claude/rules/deploy.md` đã cảnh báo: *"`/health` vẫn 200 trong khi `/me` đã 500; `/health` không đủ để kết luận deploy an toàn."* Lần này biến thể mới: **lỗi nằm ở tầng SPA render**, không lộ ra ở bất kỳ mã HTTP nào.
+>
+> **Khắc phục:** build lại kèm `VITE_TURNSTILE_SITE_KEY=…` → deploy Version `0de14f64-36b1-4c19-83e6-0b5ea95d2885` → xác minh bằng MẮT trên production: widget Turnstile hiện, nút Đăng nhập bật lại. Tổng thời gian mất đăng nhập ≈ 4 phút.
+>
+> **Luật rút ra (bắt buộc từ nay):**
+> 1. **Mọi biến `VITE_*` mà production cần PHẢI nằm trong `apps/web/.env.production`.** Truyền qua dòng lệnh là bẫy: `wrangler deploy` vẫn báo thành công, không ai biết cho tới khi khách kêu. **CÒN NỢ: `VITE_TURNSTILE_SITE_KEY=0x4AAAAAAD6d5RwMpZVh-PZq` chưa được ghi vào file đó** (hook chặn Claude ghi file `.env`) — chủ dự án phải tự thêm, nếu không lần build sau lặp lại y hệt sự cố này.
+> 2. **Smoke SPA phải mở trang bằng mắt, không chỉ curl mã trạng thái.** Tối thiểu: `/login` render đủ widget captcha + nút Đăng nhập KHÔNG bị khoá.
+> 3. **Trước khi deploy SPA, so bundle cũ với bundle mới xem có mất hằng số cấu hình nào không** — lệnh dưới bắt được đúng lớp lỗi này:
+>    ```bash
+>    curl -s "https://vatengine.tourdao.vn$(curl -s https://vatengine.tourdao.vn/ | grep -oE '/assets/index-[A-Za-z0-9_-]+\.js')" \
+>      | grep -oE '0x4[A-Za-z0-9_-]{10,}'      # site key phải còn; rỗng = SẮP mất đăng nhập
+>    ```
+>
 > Trạng thái: **🟢 PRODUCTION LIVE — đã deploy sheet xuất PHẲNG (2026-07-21, sau tinh chỉnh xuất).** Site chạy tại `https://vatengine.tourdao.vn` (same-origin, **phiên bằng cookie HttpOnly**, đủ 4 security header). **Cổng đăng ký công khai `POST /api/dang-ky` đã sống.** Còn treo: HSTS+WAF tầng zone (Bước 5), **màn duyệt tenant `cho_duyet` (U18 — chưa có, nên tenant đăng ký mới hiện KHÔNG ai duyệt được)**, verify đồng bộ HĐ thật (cần token GDT + captcha của chủ dự án).
 >
 > **Nhật ký deploy sheet xuất PHẲNG — 2026-07-21 (đã kiểm chứng):** PR #25 merge (`--merge`) vào trục (`9e91a537`). File xuất xlsx/csv gộp về MỘT sheet phẳng: mỗi mặt hàng một dòng kèm đủ ngữ cảnh hóa đơn; bỏ cột "Số dòng hàng" + sheet tổng quan; tiền cấp HĐ nhãn "(cả HĐ)"; hóa đơn chưa có dòng hàng vẫn xuất MỘT dòng. (0) **KHÔNG có migration mới**; PR này CHỈ đụng `packages/export` (chạy trong `vat-api`) + route `apps/api`, **KHÔNG đụng `apps/web`** ⇒ **chỉ deploy `vat-api`, KHỎI build/deploy SPA** (kiểm: `git diff origin/trunk~1 origin/trunk -- apps/web` trống). Deploy từ worktree khớp origin trunk (`git diff origin/feat/cloudflare-stack-u0 HEAD` **trống**). (1) Deploy `vat-api` (Version `ba430143-ebea-445e-a3ff-956c1185cc26`; Hyperdrive `1011ff82…`, `env=production`). (2) Smoke: `/api/health` **200 `env=production`**; login sai → **401**; SPA `/` **200** (bundle cũ, không đổi). **ĐÃ nghiệm thu bằng mắt trên APP LOCAL trước deploy** (chủ dự án duyệt): HĐ vé tách 3 dòng đúng, HĐ chưa có dòng vẫn hiện, một sheet, số lượng bỏ đơn vị. **CHƯA smoke tính năng trên production** (cần đăng nhập tenant thật — smoke ở trên KHÔNG đăng nhập). **Gotcha:** PR chỉ đụng logic export server-side ⇒ chỉ cần `vat-api`; đừng deploy thừa `vat-web` (encoder xlsx/csv chạy TRONG vat-api, không phải ở SPA).
