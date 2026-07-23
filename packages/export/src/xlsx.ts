@@ -71,9 +71,29 @@ function dataRowXml<T>(columns: RenderColumn<T>[], row: T, rowIndex: number): st
   return `<row r="${rowIndex}">${cells}</row>`;
 }
 
-function worksheetXml(rowsBody: string): string {
-  // Freeze dòng tiêu đề (pane) để cuộn vẫn thấy cột.
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>${rowsBody}</sheetData></worksheet>`;
+interface SheetOpts {
+  /** `<cols>` (độ rộng cột) — chèn TRƯỚC <sheetData> đúng thứ tự schema OOXML. */
+  colsXml?: string;
+  /** Đóng băng thêm cột đầu (STT) ngoài dòng tiêu đề. */
+  freezeFirstCol?: boolean;
+}
+
+/** `<cols>` từ RenderColumn.width — cột không khai width thì bỏ qua (Excel dùng mặc định). */
+function colsXmlFrom<T>(columns: RenderColumn<T>[]): string {
+  const cols = columns
+    .map((c, j) =>
+      c.width ? `<col min="${j + 1}" max="${j + 1}" width="${c.width}" customWidth="1"/>` : "",
+    )
+    .join("");
+  return cols ? `<cols>${cols}</cols>` : "";
+}
+
+function worksheetXml(rowsBody: string, opts?: SheetOpts): string {
+  // Freeze dòng tiêu đề (+ cột STT nếu có) để cuộn vẫn thấy tiêu đề/định danh.
+  const pane = opts?.freezeFirstCol
+    ? `<pane xSplit="1" ySplit="1" topLeftCell="B2" activePane="bottomRight" state="frozen"/>`
+    : `<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}"><sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>${opts?.colsXml ?? ""}<sheetData>${rowsBody}</sheetData></worksheet>`;
 }
 
 // Content_Types cho workbook N sheet: 1 Override cho mỗi worksheet + workbook + styles.
@@ -111,10 +131,12 @@ function workbookRelsXml(sheetCount: number): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`;
 }
 
-const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs></styleSheet>`;
+// Header (style 1): đậm + NỀN XÁM NHẠT (#F1F3F4, khớp --surface-muted; OOXML cần ARGB) + căn
+// giữa. fill index 2 = solid xám nhạt. Money (2) = #,##0. Wrap (3) = ô liệt kê hàng hóa.
+const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF1F3F4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs></styleSheet>`;
 
 // Đóng gói N sheet — NGUỒN OOXML DUY NHẤT (zipXlsx 1-sheet chỉ là trường hợp đặc biệt).
-function zipXlsxMulti(sheets: { name: string; body: string }[]): Uint8Array {
+function zipXlsxMulti(sheets: { name: string; body: string; opts?: SheetOpts }[]): Uint8Array {
   const parts: Record<string, Uint8Array> = {
     "[Content_Types].xml": enc.encode(contentTypesXml(sheets.length)),
     "_rels/.rels": enc.encode(RELS_ROOT),
@@ -123,13 +145,13 @@ function zipXlsxMulti(sheets: { name: string; body: string }[]): Uint8Array {
     "xl/styles.xml": enc.encode(STYLES),
   };
   sheets.forEach((s, i) => {
-    parts[`xl/worksheets/sheet${i + 1}.xml`] = enc.encode(worksheetXml(s.body));
+    parts[`xl/worksheets/sheet${i + 1}.xml`] = enc.encode(worksheetXml(s.body, s.opts));
   });
   return zipSync(parts);
 }
 
-function zipXlsx(sheetBody: string, sheetName: string): Uint8Array {
-  return zipXlsxMulti([{ name: sheetName, body: sheetBody }]);
+function zipXlsx(sheetBody: string, sheetName: string, opts?: SheetOpts): Uint8Array {
+  return zipXlsxMulti([{ name: sheetName, body: sheetBody, opts }]);
 }
 
 // ------------------------- Core tổng quát (RenderColumn[]) ------------------------- //
@@ -208,5 +230,9 @@ export async function toXlsxWithLinesFromBatches(
       }
     }
   }
-  return zipXlsx(body, LINE_DETAIL_SECTION);
+  // "Dễ nhìn": độ rộng cột theo loại + đóng băng dòng tiêu đề & cột STT (freeze cột đầu).
+  return zipXlsx(body, LINE_DETAIL_SECTION, {
+    colsXml: colsXmlFrom(columns),
+    freezeFirstCol: true,
+  });
 }

@@ -1,5 +1,6 @@
 import { FLAT_EXPORT_COLUMNS } from "@vat/domain";
 import type { InvoiceLineLike } from "@vat/export";
+import { unzipSync } from "fflate";
 // Sheet PHẲNG — file xuất chỉ còn MỘT sheet: mỗi mặt hàng một dòng, kèm đủ ngữ cảnh hóa đơn.
 // Cột dẫn xuất từ catalog @vat/domain: mặc định 16 cột "kê khai đầy đủ" (STT ở đầu); có thể
 // chọn hiện thêm cột ẩn. STT = số chạy TOÀN FILE 1..N. "Tổng tiền (sau thuế)" = thtien+tsuatTien.
@@ -288,6 +289,35 @@ describe("xlsx — MỘT sheet phẳng", () => {
     expect(detail.rows[1]?.[iCol("Người bán")]?.value).toBe("Bán X");
     expect(detail.rows[1]?.[iCol("Hàng hóa/dịch vụ")]?.value ?? "").toBe("");
     expect(detail.rows[1]?.[iCol("Số lượng")]?.value ?? "").toBe("");
+  });
+});
+
+describe("xlsx — định dạng 'dễ nhìn'", () => {
+  async function partsXlsx(): Promise<{ sheet: string; styles: string }> {
+    const bytes = await xlsxAll([row({ id: "a", shdon: "1" })], { a: [line()] });
+    const zip = unzipSync(bytes);
+    const dec = new TextDecoder();
+    return {
+      sheet: dec.decode(zip["xl/worksheets/sheet1.xml"] ?? new Uint8Array()),
+      styles: dec.decode(zip["xl/styles.xml"] ?? new Uint8Array()),
+    };
+  }
+
+  it("đóng băng dòng tiêu đề + cột STT (freeze cả hàng lẫn cột đầu)", async () => {
+    const { sheet } = await partsXlsx();
+    expect(sheet).toMatch(/<pane[^>]*xSplit="1"[^>]*ySplit="1"[^>]*state="frozen"/);
+  });
+
+  it("có <cols> khai độ rộng cột", async () => {
+    const { sheet } = await partsXlsx();
+    expect(sheet).toContain("<cols>");
+    expect(sheet).toMatch(/<col [^>]*width="\d/);
+  });
+
+  it("tiêu đề có nền (solid fill) + numFmt tiền #,##0 trong styles", async () => {
+    const { styles } = await partsXlsx();
+    expect(styles).toContain('patternType="solid"');
+    expect(styles).toContain('formatCode="#,##0"');
   });
 });
 

@@ -98,6 +98,8 @@ export interface RenderColumn<T = ExportRow> {
   header: string;
   money: boolean;
   cell: (row: T) => ExportCell;
+  /** Bề rộng cột gợi ý cho xlsx (ký tự). Bỏ trống → encoder tự chọn mặc định. */
+  width?: number;
 }
 
 /** Cột render cho mẫu native (U7): EXPORT_COLUMNS → RenderColumn. Nhãn = label, tiền =
@@ -277,15 +279,25 @@ const O_THEO_KEY: Record<string, (r: LineDetailRow) => ExportCell> = {
   tgtttbso: (r) => numCell(r.tgtttbso),
 };
 
+// Bề rộng cột (ký tự) cho file "dễ nhìn" — tên công ty/hàng hóa rộng, mã/số hẹp, ngày/tiền vừa.
+function beRong(c: FlatExportCol): number {
+  if (c.key === "nbten" || c.key === "nmten" || c.key === "ten") return 34;
+  if (c.key === "sttFile" || c.key === "sttDong") return 8;
+  if (c.kieu === "tien") return 16;
+  if (c.kieu === "ngay") return 20;
+  if (c.nhom === "nguoi") return 16; // MST bán/mua
+  return Math.min(Math.max(c.nhan.length + 3, 12), 24);
+}
+
 /** Cột render sheet phẳng — DẪN XUẤT từ catalog `@vat/domain`. `cols` = key người dùng chọn
  * (bỏ key lạ, sắp theo thứ tự catalog); rỗng/thiếu → 16 cột mặc định. `money` (numFmt tiền)
- * suy từ `kieu === "tien"`. */
+ * suy từ `kieu === "tien"`; `width` cho xlsx dễ nhìn. */
 export function flatRenderColumns(cols?: readonly string[] | null): RenderColumn<LineDetailRow>[] {
   return chonCotXuat(cols).map((c: FlatExportCol) => {
     const cell = O_THEO_KEY[c.key];
     // Catalog thêm cột mà quên gắn ô ⇒ hỏng to (cột trống im lặng). Fail-loud.
     if (!cell) throw new Error(`Thiếu hàm sinh ô cho cột xuất: ${c.key}`);
-    return { header: c.nhan, money: c.kieu === "tien", cell };
+    return { header: c.nhan, money: c.kieu === "tien", cell, width: beRong(c) };
   });
 }
 
