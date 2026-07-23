@@ -13,6 +13,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.6",
+    date: "2026-07-23",
+    title: "Chọn kỳ nhanh hơn & thao tác rõ ràng hơn",
+    changes: [
+      "Chọn kỳ xem bằng danh sách Tháng/Quý/Năm — chọn được cả kỳ đã qua, bấm gọn trên điện thoại.",
+      "Mở màn hóa đơn mặc định xem tháng hiện tại.",
+      'Đổi tên nút cho rõ nghĩa: "Lọc dữ liệu" để xem dữ liệu đã có; "Đồng bộ và tải xuống" để lấy mới từ Tổng cục Thuế và tự tải file khi xong.',
+    ],
+    kind: "improvement",
+  },
+  {
     version: "v1.5",
     date: "2026-07-21",
     title: "Lọc & xuất linh hoạt hơn",

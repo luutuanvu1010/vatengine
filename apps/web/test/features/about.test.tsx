@@ -24,7 +24,7 @@ describe("Trang Giới thiệu & Hỗ trợ (U16b)", () => {
 
   it("Lịch sử cập nhật: hiện phiên bản mới nhất", () => {
     renderWithProviders(<AboutPage />);
-    expect(screen.getByText(/v1\.5/)).toBeInTheDocument();
+    expect(screen.getByText(/v1\.6/)).toBeInTheDocument();
   });
 
   it("nút Zalo/WhatsApp: đúng liên kết, mở tab mới, chống tabnabbing + giờ hỗ trợ", () => {
