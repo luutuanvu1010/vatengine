@@ -36,7 +36,7 @@ export function ChonCotXuat({
   return (
     <div style={{ position: "relative" }}>
       <Button variant="secondary" onClick={() => setMo((o) => !o)}>
-        Chọn cột ({value.length})
+        Tùy chỉnh cột ({value.length})
       </Button>
       {mo ? (
         <div style={{ position: "absolute", zIndex: 20, right: 0, marginTop: "var(--sp-2)" }}>

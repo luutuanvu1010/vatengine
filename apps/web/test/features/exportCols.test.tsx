@@ -36,7 +36,7 @@ describe("ChonCotXuat — panel tick ẩn/hiện", () => {
   it("mở panel → bỏ tick cột → onChange; 'Về mặc định' khôi phục", async () => {
     const onChange = vi.fn();
     render(<ChonCotXuat value={["shdon"]} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("button", { name: /Chọn cột/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Tùy chỉnh cột/ }));
     await userEvent.click(screen.getByLabelText("Số HĐ")); // đang chọn → bỏ
     expect(onChange).toHaveBeenLastCalledWith([]);
     await userEvent.click(screen.getByRole("button", { name: /Về mặc định/ }));

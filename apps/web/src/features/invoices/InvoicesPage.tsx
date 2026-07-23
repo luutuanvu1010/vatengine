@@ -190,8 +190,8 @@ export function InvoicesPage() {
                 ) : undefined
               }
             />
-            {/* B2 (U27) — kết xuất TOÀN BỘ kết quả theo bộ lọc hiện tại; "Chọn cột" tùy chỉnh
-                cột file (chỉ vai được kết xuất). */}
+            {/* B2 (U27) — kết xuất TOÀN BỘ kết quả theo bộ lọc hiện tại; "Tùy chỉnh cột" chọn
+                cột vào file (chỉ vai được kết xuất). */}
             <div
               style={{
                 display: "flex",
