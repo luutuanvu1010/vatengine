@@ -1,6 +1,6 @@
 // U22 B7 — "chọn khoảng thời gian thì cũng chạy đồng bộ được cho khoảng đó" (chủ dự án),
 // NAY có thanh tiến độ + TỰ chạy khi danh sách RỖNG. Khi bộ lọc đủ tuNgay+denNgay: nút
-// "Đồng bộ khoảng này" (bấm tay khi có dữ liệu) HOẶC tự chạy (khi rỗng) → gọi CẢ HAI
+// "Đồng bộ và tải xuống" (bấm tay khi có dữ liệu) HOẶC tự chạy (khi rỗng) → gọi CẢ HAI
 // POST /backfill {tuNgay,denNgay} (U22) + POST /backfill-lines (U26), poll GET /backfill/:id
 // hiện tiến độ; xong → tự làm mới danh sách. Hết phiên → nhắc kết nối lại, KHÔNG gọi.
 // U27-B3: đồng bộ khoảng (nút + auto) CHỈ dành cho vai quản lý tài khoản thuế
@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../../src/features/auth/auth-context";
-import { InvoicesPage } from "../../src/features/invoices/InvoicesPage";
+import { InvoicesPage, nenHienPanelDongBo } from "../../src/features/invoices/InvoicesPage";
 import { saveInvoiceFilter } from "../../src/lib/filterStore";
 import type { InvoiceListRow, MeResponse, Role, TaxAccountView } from "../../src/types/api";
 import { renderWithProviders } from "../helpers/renderApp";
@@ -155,13 +155,13 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     expect(posts).toContain("backfill-lines");
   });
 
-  it("danh sách CÓ dữ liệu → bấm nút 'Đồng bộ khoảng này' → gọi backfill+backfill-lines (thủ công)", async () => {
+  it("danh sách CÓ dữ liệu → bấm nút 'Đồng bộ và tải xuống' → gọi backfill+backfill-lines (thủ công)", async () => {
     const { posts } = mockApi({ accounts: [ACC], rows: [ROW] });
     renderWithProviders(<InvoicesPageAs />);
     // list không rỗng → KHÔNG tự chạy; chờ bảng hiện rồi bấm nút.
     await screen.findByText("VND");
     expect(posts).toHaveLength(0); // chưa bấm → chưa gọi
-    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ khoảng này" }));
+    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
     expect(await screen.findByRole("progressbar")).toBeInTheDocument();
     expect(posts).toContain("backfill");
     expect(posts).toContain("backfill-lines");
@@ -184,12 +184,16 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     expect(posts).toHaveLength(0);
   });
 
-  it("thiếu khoảng ngày → KHÔNG hiện panel đồng bộ khoảng", async () => {
-    saveInvoiceFilter({ tuNgay: "2026-03-01" }); // thiếu denNgay
-    mockApi({ accounts: [ACC] });
-    renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Danh sách hóa đơn");
-    expect(screen.queryByRole("button", { name: /Đồng bộ khoảng này/ })).toBeNull();
+  // U-K4 — kịch bản "thiếu khoảng ngày qua bộ lọc lưu" KHÔNG còn xảy ra: filterStore bỏ nhớ
+  // tuNgay/denNgay và InvoicesPage luôn gieo tháng hiện tại. Guard ẩn panel nay là PHÒNG THỦ
+  // chiều sâu — kiểm bằng hàm thuần (giữ coverage cả hai nhánh mà không cần luồng không tồn tại).
+  it("guard nenHienPanelDongBo: đủ quyền + đủ khoảng → hiện; thiếu bất kỳ điều kiện → ẩn", () => {
+    const dayDu = { tuNgay: "2026-07-01", denNgay: "2026-07-31" };
+    expect(nenHienPanelDongBo(dayDu, true)).toBe(true);
+    expect(nenHienPanelDongBo(dayDu, false)).toBe(false); // không quyền đồng bộ
+    expect(nenHienPanelDongBo({ tuNgay: "2026-07-01" }, true)).toBe(false); // thiếu denNgay
+    expect(nenHienPanelDongBo({ denNgay: "2026-07-31" }, true)).toBe(false); // thiếu tuNgay
+    expect(nenHienPanelDongBo({}, true)).toBe(false); // thiếu cả hai
   });
 
   it("vai ke_toan → KHÔNG hiện panel VÀ không tự gọi backfill (U27-B3 AC6)", async () => {
@@ -197,7 +201,7 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     renderWithProviders(<InvoicesPageAs vaiTro="ke_toan" />);
     // Kỳ rỗng + vai không đủ quyền → auto KHÔNG chạy → hiện ô rỗng thường (không thanh tiến độ).
     expect(await screen.findByText(/Không có hóa đơn khớp bộ lọc/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Đồng bộ khoảng này/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Đồng bộ và tải xuống/ })).toBeNull();
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(posts).toHaveLength(0);
   });

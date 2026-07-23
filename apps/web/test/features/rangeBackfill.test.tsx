@@ -117,9 +117,9 @@ function panel(
 }
 
 describe("RangeSyncPanel — render từng trạng thái + nút", () => {
-  it("idle → nút 'Đồng bộ khoảng này'; bấm → gọi start", async () => {
+  it("idle → nút 'Đồng bộ và tải xuống'; bấm → gọi start", async () => {
     const start = panel({ kind: "idle" });
-    const btn = screen.getByRole("button", { name: "Đồng bộ khoảng này" });
+    const btn = screen.getByRole("button", { name: "Đồng bộ và tải xuống" });
     await userEvent.click(btn);
     expect(start).toHaveBeenCalledOnce();
   });

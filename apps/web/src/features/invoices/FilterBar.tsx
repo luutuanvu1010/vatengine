@@ -29,7 +29,7 @@ export function FilterBar({
   const set = (patch: Partial<InvoiceFilter>) => setDraft((d) => ({ ...d, ...patch }));
 
   // Kỳ chọn xong áp NGAY (giữ hành vi cũ: bấm Tháng/Quý/Năm → lọc liền). Các ô còn lại
-  // (chiều/nguồn/MST) vẫn theo hợp đồng "sửa bản nháp → bấm Áp dụng".
+  // (chiều/nguồn/MST) vẫn theo hợp đồng "sửa bản nháp → bấm Lọc dữ liệu".
   const apKy = (r: DateRange) => {
     const next = { ...draft, ...r };
     setDraft(next);
@@ -56,6 +56,9 @@ export function FilterBar({
       <ChonKy onChon={apKy} />
 
       <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "end" }}>
+        {/* U-K4 — "Lọc dữ liệu" (đọc nhẹ) đứng NGAY SAU ChonKy: hành động đọc dữ liệu ĐÃ CÓ,
+            tách bạch với "Đồng bộ và tải xuống" (kéo nặng từ Tổng cục Thuế) ở panel dưới. */}
+        <Button onClick={() => onApply(draft)}>Lọc dữ liệu</Button>
         <Select label="Chiều" value={draft.chieu ?? ""} onChange={(e) => setChieu(e.target.value)}>
           <option value="">Tất cả chiều</option>
           {luaChon("chieu").map(([v, nhan]) => (
@@ -94,7 +97,6 @@ export function FilterBar({
             onChange={(e) => set({ nmmst: e.target.value || undefined })}
           />
         ) : null}
-        <Button onClick={() => onApply(draft)}>Áp dụng</Button>
       </div>
     </div>
   );
