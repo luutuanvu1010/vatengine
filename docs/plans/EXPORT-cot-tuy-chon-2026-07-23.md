@@ -18,8 +18,17 @@ Thuần cải thiện trình bày dữ liệu xuất — KHÔNG đổi phạm vi
 
 ## 2. Quyết định đã chốt (chủ dự án 2026-07-23)
 
-- **Phạm vi cột:** 12 cột yêu cầu là **mặc định HIỆN**; các cột còn lại **giữ nguyên nhưng ẩn**
-  (người dùng bật khi cần). KHÔNG bỏ cột nào.
+- **Phạm vi cột — Cách 1 "kê khai đầy đủ" (cập nhật sau góc nhìn kế toán/giám đốc):** mặc định
+  HIỆN **16 cột** — gồm bộ **định danh hóa đơn** (`Ngày lập`, `Ký hiệu HĐ`, `Số HĐ`) và **`Chiều`
+  (Mua/Bán)** để file dùng được ngay cho kê khai/đối chiếu. Các cột còn lại **giữ nguyên nhưng
+  ẩn**. KHÔNG bỏ cột nào. (Bộ 12 cột "chi tiết hàng hóa" ban đầu thiếu định danh HĐ → không kê
+  khai/nhập phần mềm/đối chiếu được; xem §4 để rõ danh sách.)
+- **Thứ tự cột ẩn — chọn B (theo thứ tự logic):** catalog khai theo **thứ tự logic đầy đủ**;
+  cột ẩn khi bật **chen đúng vị trí** (vd `Ký hiệu mẫu số` cạnh `Ký hiệu HĐ`, `ĐVT` cạnh `Số
+  lượng`). Khi chỉ hiện mặc định vẫn đúng thứ tự 16 cột §4. (Kế toán quen trật tự bảng kê cố định.)
+- **Định dạng file dễ nhìn (mới):** file **xlsx** có tiêu đề đậm + nền nhạt, **đóng băng dòng
+  tiêu đề** (và cột STT), **độ rộng cột hợp lý**, cột tiền **căn phải + phân tách nghìn**. CSV
+  giữ BOM (mở Excel đúng tiếng Việt) + tiêu đề — CSV không định dạng ô được. Xem §7bis.
 - **Nơi đặt UI:** ngay tại **S1** (Danh sách hóa đơn), cạnh nút Xuất Excel/CSV. S3 dùng chung sau.
 - **"Tổng tiền (sau thuế)":** mức **DÒNG** = `Thành tiền (thtien)` + `Tiền thuế dòng (tsuatTien)`;
   là cột **TÍNH THÊM** (GDT không trả sẵn) — thiếu một vế thì **để trống**, không bịa số.
@@ -43,32 +52,33 @@ Thuần cải thiện trình bày dữ liệu xuất — KHÔNG đổi phạm vi
 
 ## 4. Catalog cột (nguồn sự thật — `@vat/domain`)
 
-Thứ tự dưới đây = thứ tự cột trong file khi hiện. **12 cột đầu = mặc định HIỆN.**
+Thứ tự dưới đây = **thứ tự logic đầy đủ** (chọn B). Cột **⬜ ẩn** khi bật hiện sẽ chen đúng
+vị trí này. Lọc theo mặc định → đúng **16 cột ✅** liền mạch (bộ kê khai đầy đủ).
 
 | # | key | Nhãn | Nhóm | Mặc định | Nguồn dữ liệu |
 |---|---|---|---|---|---|
 | 1 | `sttFile` | STT | stt | ✅ | **MỚI** — bộ đếm 1..N ở encoder |
-| 2 | `nbten` | Người bán | nguoi | ✅ | ngữ cảnh HĐ |
-| 3 | `nbmst` | MST người bán | nguoi | ✅ | ngữ cảnh HĐ |
-| 4 | `nmten` | Người mua | nguoi | ✅ | ngữ cảnh HĐ |
-| 5 | `nmmst` | MST người mua | nguoi | ✅ | ngữ cảnh HĐ |
-| 6 | `ten` | Hàng hóa/dịch vụ | dong | ✅ | dòng hàng |
-| 7 | `sluong` | Số lượng | dong | ✅ | dòng hàng |
-| 8 | `dgia` | Đơn giá | dong | ✅ | dòng hàng (tiền) |
-| 9 | `thtien` | Thành tiền (trước thuế) | dong | ✅ | dòng hàng (tiền) |
-| 10 | `tsuat` | Thuế suất | dong | ✅ | dòng hàng |
-| 11 | `tsuatTien` | Tiền thuế | dong | ✅ | dòng hàng (tiền) |
-| 12 | `tongSauThue` | Tổng tiền (sau thuế) | dong | ✅ | **MỚI** — `thtien`+`tsuatTien` (tiền) |
-| 13 | `dvtinh` | ĐVT | dong | ⬜ | dòng hàng |
-| 14 | `ltsuat` | Mã thuế suất | dong | ⬜ | dòng hàng |
-| 15 | `sttDong` | STT dòng (HĐ) | dong | ⬜ | dòng hàng (`stt` GDT cũ) |
-| 16 | `tdlap` | Ngày lập | hd | ⬜ | ngữ cảnh HĐ |
-| 17 | `ncnhat` | Ngày cập nhật | hd | ⬜ | ngữ cảnh HĐ |
-| 18 | `khmshdon` | Ký hiệu mẫu số | hd | ⬜ | ngữ cảnh HĐ |
-| 19 | `khhdon` | Ký hiệu HĐ | hd | ⬜ | ngữ cảnh HĐ |
-| 20 | `shdon` | Số HĐ | hd | ⬜ | ngữ cảnh HĐ |
-| 21 | `chieu` | Chiều | hd | ⬜ | ngữ cảnh HĐ |
-| 22 | `nguon` | Nguồn | hd | ⬜ | ngữ cảnh HĐ |
+| 2 | `tdlap` | Ngày lập | hd | ✅ | ngữ cảnh HĐ (ngày) |
+| 3 | `ncnhat` | Ngày cập nhật | hd | ⬜ | ngữ cảnh HĐ (ngày) |
+| 4 | `khmshdon` | Ký hiệu mẫu số | hd | ⬜ | ngữ cảnh HĐ |
+| 5 | `khhdon` | Ký hiệu HĐ | hd | ✅ | ngữ cảnh HĐ |
+| 6 | `shdon` | Số HĐ | hd | ✅ | ngữ cảnh HĐ |
+| 7 | `chieu` | Chiều | hd | ✅ | ngữ cảnh HĐ |
+| 8 | `nguon` | Nguồn | hd | ⬜ | ngữ cảnh HĐ |
+| 9 | `nbten` | Người bán | nguoi | ✅ | ngữ cảnh HĐ |
+| 10 | `nbmst` | MST người bán | nguoi | ✅ | ngữ cảnh HĐ |
+| 11 | `nmten` | Người mua | nguoi | ✅ | ngữ cảnh HĐ |
+| 12 | `nmmst` | MST người mua | nguoi | ✅ | ngữ cảnh HĐ |
+| 13 | `sttDong` | STT dòng (HĐ) | dong | ⬜ | dòng hàng (`stt` GDT cũ) |
+| 14 | `ten` | Hàng hóa/dịch vụ | dong | ✅ | dòng hàng |
+| 15 | `dvtinh` | ĐVT | dong | ⬜ | dòng hàng |
+| 16 | `sluong` | Số lượng | dong | ✅ | dòng hàng |
+| 17 | `dgia` | Đơn giá | dong | ✅ | dòng hàng (tiền) |
+| 18 | `thtien` | Thành tiền (trước thuế) | dong | ✅ | dòng hàng (tiền) |
+| 19 | `ltsuat` | Mã thuế suất | dong | ⬜ | dòng hàng |
+| 20 | `tsuat` | Thuế suất | dong | ✅ | dòng hàng |
+| 21 | `tsuatTien` | Tiền thuế | dong | ✅ | dòng hàng (tiền) |
+| 22 | `tongSauThue` | Tổng tiền (sau thuế) | dong | ✅ | **MỚI** — `thtien`+`tsuatTien` (tiền) |
 | 23 | `dvtte` | Tiền tệ | hd | ⬜ | ngữ cảnh HĐ |
 | 24 | `ttxly` | Trạng thái xử lý (mã) | trangthai | ⬜ | ngữ cảnh HĐ |
 | 25 | `tthai` | Trạng thái HĐ (mã) | trangthai | ⬜ | ngữ cảnh HĐ |
@@ -77,17 +87,18 @@ Thứ tự dưới đây = thứ tự cột trong file khi hiện. **12 cột đ
 | 28 | `tgtthue` | Tiền thuế (cả HĐ) | hdTien | ⬜ | ngữ cảnh HĐ (tiền) |
 | 29 | `tgtttbso` | Tổng thanh toán (cả HĐ) | hdTien | ⬜ | ngữ cảnh HĐ (tiền) |
 
+**16 cột mặc định (khi lọc):** STT · Ngày lập · Ký hiệu HĐ · Số HĐ · Chiều · Người bán · MST
+người bán · Người mua · MST người mua · Hàng hóa/dịch vụ · Số lượng · Đơn giá · Thành tiền
+(trước thuế) · Thuế suất · Tiền thuế · Tổng tiền (sau thuế).
+
 **Ghi chú giữ nguyên nghĩa cũ:** các cột tiền "(cả HĐ)" LẶP mỗi dòng của cùng hóa đơn — nhãn
 giữ hậu tố "(cả HĐ)" để không cộng nhầm (một HĐ nhiều mặt hàng). `ttxly`/`tthai` xuất **MÃ số**
 (không nhãn tiếng Việt — giữ quyết định U6, tránh nguồn sự thật thứ hai). "Tiền thuế" (dòng,
 `tsuatTien`) khác "Tiền thuế (cả HĐ)" (`tgtthue`) — hai cột phân biệt được nhờ hậu tố.
 
-**Vị trí cột ẩn khi bật hiện (quyết định tường minh):** thứ tự file = **thứ tự catalog** — 12
-cột mặc định đứng TRƯỚC (đúng yêu cầu chủ dự án), các cột ẩn xếp SAU theo nhóm (§4 #13→#29).
-Do đó khi người dùng bật một cột ẩn (vd "ĐVT"), nó xuất hiện ở **sau khối 12 mặc định** (đúng
-vị trí catalog #13), KHÔNG chen vào giữa cạnh "Số lượng". Đây là đánh đổi có chủ đích để giữ
-khối mặc định gọn; nếu muốn cột ẩn chen đúng vị trí logic khi bật, chỉ cần sắp lại THỨ TỰ trong
-catalog (một chỗ) — không đổi kiến trúc. **Cần chủ dự án xác nhận ở bước review spec.**
+**Vị trí cột ẩn khi bật hiện (chọn B — đã chốt):** thứ tự file = **thứ tự logic §4**. Cột ẩn
+khi bật chen đúng chỗ (vd bật "ĐVT" → nằm ngay sau "Hàng hóa/dịch vụ", trước "Số lượng"; bật
+"Ký hiệu mẫu số" → ngay trước "Ký hiệu HĐ"). Khi chỉ hiện mặc định, 16 cột vẫn đúng thứ tự trên.
 
 ## 5. Kiến trúc dẫn xuất
 
@@ -140,18 +151,39 @@ catalog (một chỗ) — không đổi kiến trúc. **Cần chủ dự án xá
 - Không chọn gì đặc biệt (lần đầu) → localStorage trống → gửi `cols` = macDinhHien (hoặc bỏ
   `cols` để server tự mặc định — chọn: **bỏ `cols` khi = đúng tập mặc định** để URL/body gọn).
 
+## 7bis. Định dạng file "dễ nhìn"
+
+Trọng tâm ở **xlsx** (CSV không định dạng ô được). Mở rộng bộ ghi xlsx tay hiện có
+(`packages/export/src/xlsx.ts`: `styles`, `<cols>`, `<sheetView>`), giữ mức "gọn mà rõ":
+
+- **Dòng tiêu đề:** chữ **đậm**, nền xám nhạt (token màu → hằng hex trong export vì OOXML cần
+  ARGB, KHÔNG phải features/), căn giữa; **đóng băng (freeze) dòng tiêu đề** để cuộn vẫn thấy.
+- **Đóng băng cột STT** (freeze cột 1) — định danh luôn thấy khi cuộn ngang.
+- **Độ rộng cột hợp lý** theo loại: tên/hàng hóa rộng (~28–36), MST/mã hẹp (~14–16), ngày
+  (~18), tiền (~16). Khai theo `nhom`/kind trong catalog (một chỗ), KHÔNG auto-fit thật.
+- **Tiền:** căn phải + numFmt `#,##0` (phân tách nghìn) — mở rộng cơ chế `money` sẵn có cho
+  MỌI cột tiền (gồm 2 cột mới). Số lượng/thuế suất giữ General (thập phân). Text căn trái.
+- **CSV:** giữ **BOM** (Excel mở đúng tiếng Việt) + dòng tiêu đề; không style ô.
+
+Ràng buộc: định dạng là **thuộc tính encoder** (xlsx.ts), không rải vào catalog logic; giữ
+tiền/số dạng CHUỖI trong `<v>` (không ép float). Không thêm thư viện xlsx nặng — mở rộng bộ
+ghi tay hiện có.
+
 ## 8. Kiểm thử (TDD — đỏ trước)
 
-- **`@vat/domain`:** catalog có đủ 29 key, không trùng, 12 cột `macDinhHien`; thứ tự khớp §4.
+- **`@vat/domain`:** catalog có đủ 29 key, không trùng, **16 cột `macDinhHien`**; thứ tự khớp §4.
 - **`@vat/export`:**
-  - `flatRenderColumns()` (không tham số) = đúng 12 cột mặc định, đúng thứ tự.
-  - `flatRenderColumns([...])` lọc + sắp theo catalog; **bỏ key lạ**.
+  - `flatRenderColumns()` (không tham số) = đúng **16 cột mặc định**, đúng thứ tự §4.
+  - `flatRenderColumns([...])` lọc + sắp theo catalog; **bỏ key lạ**; cột ẩn bật lên chen đúng
+    vị trí logic (B).
   - Golden: file có `sttFile` chạy 1..N liên tục qua nhiều hóa đơn/lô.
   - `tongSauThue` = thtien+tsuatTien (ca số lớn > 2^53); thiếu vế → trống.
   - Dòng hàng giữ **thứ tự mảng vào** (không sắp lại theo stt).
+  - **Định dạng xlsx:** XML có style tiêu đề đậm, `<sheetView>` freeze dòng 1 + cột 1,
+    `<cols>` width, numFmt `#,##0` cho cột tiền. Kiểm bằng chuỗi XML sinh ra.
   - Cập nhật golden cũ của thứ tự cột (đổi có chủ đích — ghi rõ).
 - **`apps/api`:** `/exports` với `cols` hợp lệ → file đúng tập; `cols` có key lạ → bị loại;
-  không `cols` → tập mặc định; RBAC 403 cho `ke_toan` giữ nguyên.
+  không `cols` → **tập 16 mặc định**; RBAC 403 cho `ke_toan` giữ nguyên.
 - **`apps/web`:** panel render đúng nhóm + tick mặc định; đổi lựa chọn → `createExport` nhận
   `cols` đúng; "Về mặc định" khôi phục; nhớ qua reload (localStorage); `ui-luat.test.ts` XANH.
 
@@ -160,16 +192,21 @@ catalog (một chỗ) — không đổi kiến trúc. **Cần chủ dự án xá
 1. Một nguồn: catalog là chỗ khai DUY NHẤT; web + export + api cùng dẫn xuất (sửa 1 nơi, cả 3 hưởng).
 2. Nhãn/thứ tự/mặc định đúng §4; không chuỗi nhãn rời trong màn.
 3. Chỉ token + primitive; panel không tô inline input/select; `ui-luat.test.ts` XANH.
-4. File xuất tuân `cols`; không `cols` → 12 mặc định; key lạ bị loại (an toàn).
+4. File xuất tuân `cols`; không `cols` → **16 mặc định**; key lạ bị loại (an toàn).
 5. `sttFile` 1..N toàn file; `tongSauThue` cộng chính xác (không ép float), thiếu vế → trống;
    dòng hàng giữ thứ tự mảng.
-6. Đa tenant nguyên vẹn; RBAC xuất nguyên vẹn.
-7. `make lint` + `make test` XANH toàn repo; không giảm phủ.
+6. **Định dạng xlsx dễ nhìn:** tiêu đề đậm + đóng băng dòng tiêu đề & cột STT; độ rộng cột hợp
+   lý; cột tiền phân tách nghìn. CSV giữ BOM.
+7. Đa tenant nguyên vẹn; RBAC xuất nguyên vẹn.
+8. `make lint` + `make test` XANH toàn repo; không giảm phủ.
 
 ## 10. Rủi ro / lưu ý
 
 - **Cộng thập phân chính xác:** cần helper cộng chuỗi số (kiểm tra `packages/**` có sẵn helper
   tiền/decimal trước khi tự viết — tránh nguồn thứ hai). Không dùng `parseFloat`.
+- **Mở rộng bộ ghi xlsx tay:** thêm style/freeze/`<cols>` vào OOXML thủ công (không thư viện
+  nặng) — cần cẩn thận styles.xml + cellXfs; test bằng chuỗi XML. Rủi ro nếu làm quá tay →
+  giữ mức "gọn mà rõ" (§7bis), không zebra/border.
 - **Đổi output có chủ đích:** golden test thứ tự/nội dung file SẼ đỏ → cập nhật cùng đơn vị,
   ghi rõ "đổi có chủ đích" (không âm thầm sửa golden để né).
 - **`convert`/profile kế toán** ngoài phạm vi — chỉ mẫu phẳng chịu `cols`. Ghi rõ để không
