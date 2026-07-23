@@ -11,11 +11,13 @@ import {
   Stat,
 } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
+import { loadExportCols, saveExportCols } from "../../lib/exportColsStore";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
 import { monthRangeOf, vnYearMonth } from "../../lib/period";
-import { canManageTaxAccounts } from "../../lib/rbac";
+import { canExport, canManageTaxAccounts } from "../../lib/rbac";
 import type { InvoiceFilter } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
+import { ChonCotXuat } from "./ChonCotXuat";
 import { FilterBar } from "./FilterBar";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { RangeSyncPanel } from "./RangeSyncPanel";
@@ -49,6 +51,14 @@ export function InvoicesPage() {
   const { me } = useAuth();
   // U27-B3: chỉ vai quản lý tài khoản thuế mới đồng bộ được (khớp RBAC server /tax-accounts).
   const canSync = canManageTaxAccounts(me?.role ?? "ke_toan");
+  const canExp = canExport(me?.role ?? "ke_toan");
+
+  // Cột xuất người dùng chọn (nhớ localStorage). Truyền vào nút Xuất + bước tự-tải sau đồng bộ.
+  const [cols, setCols] = useState<string[]>(loadExportCols);
+  const doiCols = (keys: string[]) => {
+    setCols(keys);
+    saveExportCols(keys);
+  };
   // U-K4 (yêu cầu 2) — mở màn LUÔN mặc định tháng hiện tại: giữ chiều/nguồn/MST đã lưu,
   // GHI ĐÈ kỳ = tháng này. filterStore đã bỏ nhớ tuNgay/denNgay nên kỳ cũ không lọt vào.
   const [filter, setFilter] = useState<InvoiceFilter>(() => ({
@@ -94,7 +104,7 @@ export function InvoicesPage() {
   const backfillRunning = backfill.state.kind === "dang_lay";
 
   const xuatSauDongBo = useMutation({
-    mutationFn: (f: InvoiceFilter) => taiXuatHoaDon("xlsx", f),
+    mutationFn: (f: InvoiceFilter) => taiXuatHoaDon("xlsx", f, undefined, cols),
   });
   const dongBoXong = backfillGoc.state.kind === "xong";
   useEffect(() => {
@@ -180,8 +190,19 @@ export function InvoicesPage() {
                 ) : undefined
               }
             />
-            {/* B2 (U27) — kết xuất TOÀN BỘ kết quả theo bộ lọc hiện tại. */}
-            <InvoiceExportButtons filter={filter} />
+            {/* B2 (U27) — kết xuất TOÀN BỘ kết quả theo bộ lọc hiện tại; "Chọn cột" tùy chỉnh
+                cột file (chỉ vai được kết xuất). */}
+            <div
+              style={{
+                display: "flex",
+                gap: "var(--sp-2)",
+                alignItems: "flex-start",
+                flexWrap: "wrap",
+              }}
+            >
+              {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
+              <InvoiceExportButtons filter={filter} cols={cols} />
+            </div>
           </div>
         )}
       </Card>

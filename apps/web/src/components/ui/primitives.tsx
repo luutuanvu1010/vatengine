@@ -179,6 +179,45 @@ export function Select({ label, hideLabel, co, id, children, ...rest }: SelectPr
   );
 }
 
+// --- Checkbox (ô tick) — dùng cho panel chọn cột xuất. Kiểu ở primitive, KHÔNG tô inline
+// trong features/ (phép kiểm ui-luat chặn style= trên input trong features/). ------------
+export function Checkbox({
+  label,
+  checked,
+  onChange,
+  id,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  id?: string;
+}) {
+  const genId = useId();
+  const cid = id ?? genId;
+  return (
+    <label
+      htmlFor={cid}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--sp-2)",
+        fontSize: "var(--fs-sm)",
+        color: "var(--text-secondary)",
+        cursor: "pointer",
+      }}
+    >
+      <input
+        id={cid}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ accentColor: "var(--brand-600)", width: 16, height: 16, cursor: "pointer" }}
+      />
+      {label}
+    </label>
+  );
+}
+
 // --- Nhãn section nhỏ (đầu mỗi Card: "BỘ LỌC" / "KẾT QUẢ"…) ---------------------------
 // Chữ nhỏ, in hoa, giãn chữ — dẫn hướng thị giác giữa các khối. Một primitive để 3 card dùng
 // chung, KHÔNG lặp style nội tuyến ở features/ (Luật ui.md: thiếu kiểu → thêm primitive).

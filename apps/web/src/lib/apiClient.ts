@@ -223,10 +223,20 @@ export const api = {
   // U30 — `ids` (tùy chọn) = các dòng người dùng đã tick. Gửi qua BODY vì hàng nghìn
   // uuid không nhét được vào query string. Không có ids ⇒ body vắng ⇒ server giữ hành vi
   // cũ (xuất theo bộ lọc). Server bỏ qua bộ lọc khi có ids (M2).
-  createExport(format: ExportFormat, filter: InvoiceFilter, ids?: string[]): Promise<ExportResult> {
+  // `cols` (tùy chọn) = cột người dùng chọn cho file phẳng; không có ⇒ server xuất 16 cột
+  // mặc định. Gửi qua BODY cùng `ids` (allowlist theo catalog ở server).
+  createExport(
+    format: ExportFormat,
+    filter: InvoiceFilter,
+    ids?: string[],
+    cols?: string[],
+  ): Promise<ExportResult> {
+    const body: { ids?: string[]; cols?: string[] } = {};
+    if (ids?.length) body.ids = ids;
+    if (cols?.length) body.cols = cols;
     return request("POST", "/exports", {
       query: { format, ...filterQuery(filter) },
-      body: ids?.length ? { ids } : undefined,
+      body: Object.keys(body).length ? body : undefined,
     });
   },
   // `ids` cùng hợp đồng với createExport (U30b) — /convert tôn trọng dòng đã chọn y hệt.

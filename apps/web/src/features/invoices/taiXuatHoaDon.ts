@@ -12,8 +12,14 @@ export async function taiXuatHoaDon(
   format: ExportFormat,
   filter: InvoiceFilter,
   ids?: string[],
+  cols?: string[],
 ): Promise<void> {
-  const res = await api.createExport(format, filter, ids && ids.length > 0 ? ids : undefined);
+  const res = await api.createExport(
+    format,
+    filter,
+    ids && ids.length > 0 ? ids : undefined,
+    cols && cols.length > 0 ? cols : undefined,
+  );
   const blob = await api.downloadExport(res.id);
   saveBlob(blob, tenFileXuat(filter, format));
 }
