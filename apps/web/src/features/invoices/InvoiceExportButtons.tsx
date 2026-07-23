@@ -10,17 +10,12 @@ import type { ExportFormat, InvoiceFilter } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
 import { taiXuatHoaDon } from "./taiXuatHoaDon";
 
-export function InvoiceExportButtons({
-  filter,
-  selectedIds = [],
-}: { filter: InvoiceFilter; selectedIds?: string[] }) {
+export function InvoiceExportButtons({ filter }: { filter: InvoiceFilter }) {
   const { me } = useAuth();
-  const coChon = selectedIds.length > 0;
   const run = useMutation({
-    // U30 — có tick dòng nào thì xuất ĐÚNG những dòng đó (server bỏ qua bộ lọc); không tick
-    // gì thì xuất toàn bộ kết quả theo bộ lọc. Luồng xuất+tải dùng chung (taiXuatHoaDon).
-    mutationFn: (format: ExportFormat) =>
-      taiXuatHoaDon(format, filter, coChon ? selectedIds : undefined),
+    // 2026-07-23 — bảng đã bỏ nên không còn chế độ "xuất dòng đã chọn": luôn xuất TOÀN BỘ
+    // kết quả theo bộ lọc hiện tại (server-side). Luồng xuất+tải dùng chung (taiXuatHoaDon).
+    mutationFn: (format: ExportFormat) => taiXuatHoaDon(format, filter),
   });
 
   // Guard UX: chỉ vai được kết xuất mới thấy nút (khớp route guard + rbac server).
@@ -33,10 +28,9 @@ export function InvoiceExportButtons({
         ? "Kết xuất thất bại. Thử lại."
         : null;
 
-  // Nhãn nói rõ đang xuất CÁI GÌ — người dùng không phải đoán giữa hai chế độ.
   const nhan = (format: ExportFormat, label: string) => {
     if (run.isPending && run.variables === format) return "Đang xuất…";
-    return coChon ? `Xuất ${selectedIds.length} hóa đơn đã chọn (${label})` : `Xuất ${label}`;
+    return `Xuất ${label}`;
   };
 
   return (

@@ -56,8 +56,23 @@ export function FilterBar({
       <ChonKy onChon={apKy} />
 
       <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "end" }}>
-        {/* U-K4 — "Lọc dữ liệu" (đọc nhẹ) đứng NGAY SAU ChonKy: hành động đọc dữ liệu ĐÃ CÓ,
-            tách bạch với "Đồng bộ và tải xuống" (kéo nặng từ Tổng cục Thuế) ở panel dưới. */}
+        {/* 2026-07-23 — bộ CHỌN NGÀY trả lại (day-level) BÊN CẠNH nút kỳ nhanh: sửa ngày rồi
+            bấm "Lọc dữ liệu" mới áp (đúng hợp đồng "sửa nháp → bấm Lọc", khác ChonKy áp ngay).
+            ChonKy áp kỳ nào thì draft.tuNgay/denNgay đổi theo, hai ô này hiện đúng khoảng đó. */}
+        <Field
+          label="Từ ngày"
+          type="date"
+          value={draft.tuNgay ?? ""}
+          onChange={(e) => set({ tuNgay: e.target.value || undefined })}
+        />
+        <Field
+          label="Đến ngày"
+          type="date"
+          value={draft.denNgay ?? ""}
+          onChange={(e) => set({ denNgay: e.target.value || undefined })}
+        />
+        {/* U-K4 — "Lọc dữ liệu" (đọc nhẹ): hành động đọc dữ liệu ĐÃ CÓ, tách bạch với
+            "Đồng bộ và tải xuống" (kéo nặng từ Tổng cục Thuế) ở panel dưới. */}
         <Button onClick={() => onApply(draft)}>Lọc dữ liệu</Button>
         <Select label="Chiều" value={draft.chieu ?? ""} onChange={(e) => setChieu(e.target.value)}>
           <option value="">Tất cả chiều</option>

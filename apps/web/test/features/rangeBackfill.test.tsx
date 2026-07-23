@@ -106,13 +106,7 @@ function panel(
   over: Partial<Parameters<typeof RangeSyncPanel>[0]["backfill"]> = {},
 ) {
   const start = vi.fn();
-  render(
-    <RangeSyncPanel
-      tuNgay="2026-01-01"
-      denNgay="2026-03-31"
-      backfill={{ state, lineResult: null, start, ...over }}
-    />,
-  );
+  render(<RangeSyncPanel backfill={{ state, lineResult: null, start, ...over }} />);
   return start;
 }
 

@@ -1,5 +1,8 @@
 // U-K4 — mặc định tháng hiện tại (yêu cầu 2) + đổi tên/vị trí nút + tự tải sau đồng bộ
 // (yêu cầu 3). Đồng hồ ghim cố định để "tháng hiện tại" xác định.
+//
+// 2026-07-23: Danh sách hóa đơn bỏ BẢNG — kỳ mặc định nay phản ánh ở GET /invoices/summary
+// (số đếm), không còn /invoices (list). Anchor chuyển từ ô bảng ("Cty Bán") sang số đếm.
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect, useRef } from "react";
@@ -19,7 +22,12 @@ const ACC: TaxAccountView = {
   ngayTao: "2026-07-01T00:00:00.000Z",
 };
 
-const EMPTY_SUMMARY = { byChieu: [], total: { count: 0, tongTtbso: null } };
+function summaryBody(count: number) {
+  return {
+    byChieu: [],
+    total: { count, tongTcthue: null, tongTthue: null, tongTtbso: null },
+  };
+}
 
 function j(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -48,9 +56,10 @@ function InvoicesPageAs({ vaiTro = "quan_tri" }: { vaiTro?: Role }) {
   return <InvoicesPage />;
 }
 
-/** Ghi lại mọi URL gọi ra để khẳng định hành vi mạng. */
+/** Ghi lại mọi URL gọi ra để khẳng định hành vi mạng. `empty` → summary count 0 (kích auto). */
 function mockApi(opts: { progressTong?: string; exportOk?: boolean; empty?: boolean } = {}) {
   const calls: { url: string; method: string }[] = [];
+  const count = opts.empty ? 0 : 1;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -85,45 +94,8 @@ function mockApi(opts: { progressTong?: string; exportOk?: boolean; empty?: bool
     }
     if (url.includes("/exports/")) return new Response("filebytes", { status: 200 });
     if (url.includes("/tax-accounts")) return j(200, [ACC]);
-    if (url.includes("/invoices/summary")) return j(200, EMPTY_SUMMARY);
-    // /invoices — rỗng khi opts.empty (để kích hoạt auto-backfill), ngược lại có 1 dòng.
-    if (opts.empty) return j(200, { rows: [], total: 0, limit: 50, offset: 0 });
-    return j(200, {
-      rows: [
-        {
-          id: "r1",
-          tenantId: "t",
-          nbmst: "0311772540",
-          nbten: "Cty Bán",
-          nmmst: "4201568932",
-          nmten: "Cty Mua",
-          khmshdon: "1",
-          khhdon: "C26TDA",
-          shdon: "0001",
-          tdlap: "2026-07-02T17:00:00.000Z",
-          ncnhat: null,
-          tgtcthue: "1000000",
-          tgtthue: "80000",
-          tgtttbso: "1080000",
-          ttcktmai: null,
-          dvtte: "VND",
-          tgia: null,
-          ttxly: 8,
-          tthai: 1,
-          chieu: "purchase",
-          nguon: "normal",
-          rawJson: {},
-          createdAt: "2026-07-03T00:00:00.000Z",
-          updatedAt: "2026-07-03T00:00:00.000Z",
-          tenHangDau: null,
-          soDongHang: 0,
-          hangHoa: [],
-        },
-      ],
-      total: 1,
-      limit: 50,
-      offset: 0,
-    });
+    if (url.includes("/invoices/summary")) return j(200, summaryBody(count));
+    return j(200, { rows: [], total: count, limit: 50, offset: 0 });
   });
   return { calls };
 }
@@ -140,15 +112,15 @@ describe("U-K4 — mặc định tháng hiện tại (yêu cầu 2)", () => {
     vi.restoreAllMocks();
   });
 
-  it("mở màn → truy vấn /invoices với kỳ = THÁNG HIỆN TẠI (giờ VN)", async () => {
+  it("mở màn → truy vấn summary với kỳ = THÁNG HIỆN TẠI (giờ VN)", async () => {
     const { calls } = mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Cty Bán");
+    await screen.findByText("Có 1 hóa đơn");
     await waitFor(() => {
       expect(
         calls.some(
           (c) =>
-            c.url.includes("/invoices?") &&
+            c.url.includes("/invoices/summary?") &&
             c.url.includes("tuNgay=2026-07-01") &&
             c.url.includes("denNgay=2026-07-31"),
         ),
@@ -161,13 +133,13 @@ describe("U-K4 — mặc định tháng hiện tại (yêu cầu 2)", () => {
     saveInvoiceFilter({ chieu: "purchase", tuNgay: "2020-01-01", denNgay: "2020-01-31" });
     const { calls } = mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Cty Bán");
+    await screen.findByText("Có 1 hóa đơn");
     await waitFor(() => {
-      expect(calls.some((c) => c.url.includes("/invoices?"))).toBe(true);
+      expect(calls.some((c) => c.url.includes("/invoices/summary?"))).toBe(true);
     });
     expect(calls.some((c) => c.url.includes("tuNgay=2020-01-01"))).toBe(false);
     expect(
-      calls.some((c) => c.url.includes("/invoices?") && c.url.includes("chieu=purchase")),
+      calls.some((c) => c.url.includes("/invoices/summary?") && c.url.includes("chieu=purchase")),
     ).toBe(true);
   });
 });
@@ -186,7 +158,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("nút áp bộ lọc nay tên 'Lọc dữ liệu', KHÔNG còn 'Áp dụng'", async () => {
     mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Cty Bán");
+    await screen.findByText("Có 1 hóa đơn");
     expect(screen.getByRole("button", { name: "Lọc dữ liệu" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Áp dụng" })).toBeNull();
   });
@@ -194,7 +166,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("'Lọc dữ liệu' CHỈ đọc — không gọi backfill/đồng bộ mạng", async () => {
     const { calls } = mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Cty Bán");
+    await screen.findByText("Có 1 hóa đơn");
     const truoc = calls.filter((c) => c.url.includes("/backfill")).length;
     await userEvent.click(screen.getByRole("button", { name: "Lọc dữ liệu" }));
     const sau = calls.filter((c) => c.url.includes("/backfill")).length;
@@ -204,7 +176,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("nút đồng bộ nay tên 'Đồng bộ và tải xuống'", async () => {
     mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Cty Bán");
+    await screen.findByText("Có 1 hóa đơn");
     expect(screen.getByRole("button", { name: "Đồng bộ và tải xuống" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Đồng bộ khoảng này" })).toBeNull();
   });
@@ -212,7 +184,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("bấm 'Đồng bộ và tải xuống' → backfill; hoàn thành → TỰ gọi xuất /exports cho bộ lọc hiện tại", async () => {
     const { calls } = mockApi({ progressTong: "hoan_thanh" });
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Cty Bán");
+    await screen.findByText("Có 1 hóa đơn");
     await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
     await waitFor(() => {
       expect(
@@ -223,7 +195,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   });
 
   it("AUTO-backfill khi RỖNG chạy tới hoàn thành → KHÔNG tự tải (chỉ thủ công mới tải)", async () => {
-    // Danh sách rỗng → auto-backfill THẬT chạy (progress 'hoan_thanh') nhưng KHÔNG bấm nút
+    // count 0 → auto-backfill THẬT chạy (progress 'hoan_thanh') nhưng KHÔNG bấm nút
     // → taiSauDongBo=false → tuyệt đối không có /exports. Đây là nhánh auto mà test trước bỏ sót.
     const { calls } = mockApi({ progressTong: "hoan_thanh", empty: true });
     renderWithProviders(<InvoicesPageAs />);
@@ -236,7 +208,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("tự-tải sau đồng bộ THẤT BẠI (xuất 403) → hiện thông báo lỗi, KHÔNG nuốt im lặng", async () => {
     const { calls } = mockApi({ progressTong: "hoan_thanh", exportOk: false });
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Cty Bán");
+    await screen.findByText("Có 1 hóa đơn");
     await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
     // Đã cố xuất (POST /exports) và bị 403 → phải hiện lỗi tải cho người dùng.
     await waitFor(() => {

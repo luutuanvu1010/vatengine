@@ -49,13 +49,9 @@ export interface RangeBackfill {
 }
 
 export function RangeSyncPanel({
-  tuNgay,
-  denNgay,
   backfill,
   loiTaiXuong,
 }: {
-  tuNgay: string;
-  denNgay: string;
   backfill: RangeBackfill;
   /** U-K4 — lỗi ở bước TỰ TẢI sau khi đồng bộ xong (đồng bộ vẫn thành công, chỉ tải hỏng).
    * Hiện tường minh thay vì nuốt im lặng như nút Xuất thủ công vẫn báo lỗi. */
@@ -65,14 +61,11 @@ export function RangeSyncPanel({
   const running = state.kind === "dang_lay";
   return (
     <div style={{ marginTop: "var(--sp-3)", display: "grid", gap: "var(--sp-2)" }}>
+      {/* 2026-07-23 — bỏ dòng caption mô tả khoảng: nút + thanh tiến độ đã tự nói rõ. */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", flexWrap: "wrap" }}>
         <Button onClick={start} disabled={running}>
           {running ? "Đang đồng bộ…" : "Đồng bộ và tải xuống"}
         </Button>
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>
-          Kéo hóa đơn + dòng hàng từ Tổng cục Thuế cho khoảng {tuNgay} → {denNgay} (chạy nền), xong
-          sẽ tự tải file
-        </span>
       </div>
 
       {loiTaiXuong ? <Alert tone="warning">{loiTaiXuong}</Alert> : null}

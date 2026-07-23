@@ -93,7 +93,10 @@ function mockApi(opts: {
   vaiTro?: Role;
 }) {
   const posts: string[] = [];
-  let invoiceCalls = 0;
+  // Bảng đã bỏ (2026-07-23): số đếm + "tự làm mới" nay đọc từ /invoices/summary, không
+  // còn /invoices (list). Đếm lần gọi summary để kiểm invalidate sau khi đồng bộ xong.
+  let summaryCalls = 0;
+  const count = opts.rows?.length ?? 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -129,12 +132,13 @@ function mockApi(opts: {
       });
     }
     if (url.includes("/tax-accounts")) return j(200, opts.accounts);
-    if (url.includes("/invoices/summary")) return j(200, EMPTY_SUMMARY);
-    invoiceCalls += 1;
-    const rows = opts.rows ?? [];
-    return j(200, { rows, total: rows.length, limit: 50, offset: 0 });
+    if (url.includes("/invoices/summary")) {
+      summaryCalls += 1;
+      return j(200, { ...EMPTY_SUMMARY, total: { ...EMPTY_SUMMARY.total, count } });
+    }
+    return j(200, { rows: opts.rows ?? [], total: count, limit: 50, offset: 0 });
   });
-  return { posts, invoiceCalls: () => invoiceCalls };
+  return { posts, summaryCalls: () => summaryCalls };
 }
 
 describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
@@ -155,11 +159,11 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     expect(posts).toContain("backfill-lines");
   });
 
-  it("danh sách CÓ dữ liệu → bấm nút 'Đồng bộ và tải xuống' → gọi backfill+backfill-lines (thủ công)", async () => {
+  it("CÓ dữ liệu (count>0) → bấm nút 'Đồng bộ và tải xuống' → gọi backfill+backfill-lines (thủ công)", async () => {
     const { posts } = mockApi({ accounts: [ACC], rows: [ROW] });
     renderWithProviders(<InvoicesPageAs />);
-    // list không rỗng → KHÔNG tự chạy; chờ bảng hiện rồi bấm nút.
-    await screen.findByText("VND");
+    // count>0 → KHÔNG tự chạy; chờ số đếm hiện rồi bấm nút.
+    await screen.findByText("Có 1 hóa đơn");
     expect(posts).toHaveLength(0); // chưa bấm → chưa gọi
     await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
     expect(await screen.findByRole("progressbar")).toBeInTheDocument();
@@ -167,12 +171,12 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     expect(posts).toContain("backfill-lines");
   });
 
-  it("backfill hoàn thành → TỰ làm mới danh sách hóa đơn (invalidate)", async () => {
+  it("backfill hoàn thành → TỰ làm mới số đếm (invalidate summary)", async () => {
     const api = mockApi({ accounts: [ACC], progressTong: "hoan_thanh" });
     renderWithProviders(<InvoicesPageAs />);
-    // Poll trả 'hoan_thanh' → banner "đã đồng bộ xong" + invalidate → /invoices gọi lại (>1).
+    // Poll trả 'hoan_thanh' → banner "đã đồng bộ xong" + invalidate → summary gọi lại (>1).
     expect(await screen.findByText(/Đã đồng bộ xong/)).toBeInTheDocument();
-    await vi.waitFor(() => expect(api.invoiceCalls()).toBeGreaterThan(1));
+    await vi.waitFor(() => expect(api.summaryCalls()).toBeGreaterThan(1));
   });
 
   it("kỳ rỗng + hết phiên thuế → nhắc kết nối lại, KHÔNG gọi API đồng bộ", async () => {
