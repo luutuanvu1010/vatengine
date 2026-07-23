@@ -10,11 +10,16 @@ import type { TenantRow } from "../../lib/types";
 
 const MST_RE = /^\d{10}$|^\d{13}$/;
 
+// Thông điệp kiểm ở CLIENT (dạng MST) — tách riêng vì nó không đến từ mã lỗi server.
+const MST_SAI_DANG = "Mã số thuế phải gồm 10 hoặc 13 chữ số.";
+
+// Ánh xạ MÃ LỖI server → tiếng người. `noUncheckedIndexedAccess` khiến truy cập trả
+// `string | undefined`, nên nơi dùng luôn có nhánh mặc định.
 const LOI: Record<string, string> = {
   da_co_du_lieu:
     "Không đổi được: doanh nghiệp này đã đồng bộ dữ liệu. Đổi MST sẽ bỏ rơi toàn bộ hoá đơn đã kéo về.",
   mst_da_ton_tai: "Mã số thuế này đã thuộc về doanh nghiệp khác trong hệ thống.",
-  mst_khong_hop_le: "Mã số thuế phải gồm 10 hoặc 13 chữ số.",
+  mst_khong_hop_le: MST_SAI_DANG,
   not_found: "Không tìm thấy doanh nghiệp này.",
 };
 
@@ -32,7 +37,7 @@ export function DoiMstDialog({ tenant, onDong, onXong }: Props) {
   async function gui() {
     const m = mst.trim();
     if (!MST_RE.test(m)) {
-      setLoi(LOI.mst_khong_hop_le);
+      setLoi(MST_SAI_DANG);
       return;
     }
     if (
