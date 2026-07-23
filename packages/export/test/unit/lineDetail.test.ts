@@ -1,15 +1,20 @@
+import { FLAT_EXPORT_COLUMNS } from "@vat/domain";
 import type { InvoiceLineLike } from "@vat/export";
-// Sheet PHẲNG (2026-07-21) — file xuất chỉ còn MỘT sheet: mỗi mặt hàng một dòng, kèm đủ
-// ngữ cảnh hóa đơn. Hóa đơn chưa có dòng hàng vẫn xuất MỘT dòng (không mất khỏi file).
-// Tiền/số lượng giữ CHUỖI, không ép float. Offline — fetchLines stub in-memory.
+// Sheet PHẲNG — file xuất chỉ còn MỘT sheet: mỗi mặt hàng một dòng, kèm đủ ngữ cảnh hóa đơn.
+// Cột dẫn xuất từ catalog @vat/domain: mặc định 16 cột "kê khai đầy đủ" (STT ở đầu); có thể
+// chọn hiện thêm cột ẩn. STT = số chạy TOÀN FILE 1..N. "Tổng tiền (sau thuế)" = thtien+tsuatTien.
+// Hóa đơn chưa có dòng hàng vẫn xuất MỘT dòng. Tiền/số giữ CHUỖI (không ép float). Offline.
 import { describe, expect, it } from "vitest";
-import { lineDetailRenderColumns } from "../../src/columns";
+import { congThapPhan, flatRenderColumns } from "../../src/columns";
 import { csvStreamWithLines } from "../../src/csv";
 import type { ExportRow } from "../../src/rows";
 import { toXlsxWithLinesFromBatches } from "../../src/xlsx";
 import { parseCsv, readXlsx, readXlsxSheetNames, utf8 } from "../helpers";
 
-const LINE_HEADERS = lineDetailRenderColumns().map((c) => c.header);
+const ALL_KEYS = FLAT_EXPORT_COLUMNS.map((c) => c.key);
+const ALL_HEADERS = flatRenderColumns(ALL_KEYS).map((c) => c.header);
+const DEFAULT_HEADERS = flatRenderColumns().map((c) => c.header);
+const iCol = (h: string) => ALL_HEADERS.indexOf(h);
 
 function row(over: Partial<ExportRow> = {}): ExportRow {
   return {
@@ -93,17 +98,52 @@ async function drain(stream: ReadableStream<Uint8Array>): Promise<string> {
   return utf8.decode(merged);
 }
 
-const iCol = (key: string) => LINE_HEADERS.indexOf(key);
+// Render TẤT CẢ cột (kiểm cột ẩn); lô kích thước tùy chọn (kiểm STT toàn file qua nhiều lô).
+const xlsxAll = (rows: ExportRow[], byId: Record<string, InvoiceLineLike[]>, size = 10) =>
+  toXlsxWithLinesFromBatches(batchesOf(rows, size), stubFetch(byId), ALL_KEYS);
+const csvAll = (rows: ExportRow[], byId: Record<string, InvoiceLineLike[]>, size = 10) =>
+  csvStreamWithLines(batchesOf(rows, size), stubFetch(byId), ALL_KEYS);
 
-describe("Cột sheet phẳng", () => {
-  it("có đủ cột nhận diện; KHÔNG có 'Số dòng hàng'; thứ tự thuế không lệch", () => {
-    for (const c of ["Ngày lập", "Số HĐ", "Tên người bán", "Tên hàng hóa/dịch vụ", "Số lượng"]) {
-      expect(LINE_HEADERS, `thiếu cột ${c}`).toContain(c);
+describe("Cột MẶC ĐỊNH (16, kê khai đầy đủ)", () => {
+  it("STT ở cột ĐẦU; đúng 16 cột theo thứ tự", () => {
+    expect(DEFAULT_HEADERS).toEqual([
+      "STT",
+      "Ngày lập",
+      "Ký hiệu HĐ",
+      "Số HĐ",
+      "Chiều",
+      "Người bán",
+      "MST người bán",
+      "Người mua",
+      "MST người mua",
+      "Hàng hóa/dịch vụ",
+      "Số lượng",
+      "Đơn giá",
+      "Thành tiền (trước thuế)",
+      "Thuế suất",
+      "Tiền thuế",
+      "Tổng tiền (sau thuế)",
+    ]);
+  });
+
+  it("cột lạ bị BỎ; rỗng → về mặc định", () => {
+    expect(flatRenderColumns(["shdon", "khong_ton_tai", "nbten"]).map((c) => c.header)).toEqual([
+      "Số HĐ",
+      "Người bán",
+    ]);
+    expect(flatRenderColumns([]).map((c) => c.header)).toEqual(DEFAULT_HEADERS);
+  });
+});
+
+describe("Cột ĐẦY ĐỦ (khi hiện hết)", () => {
+  it("có đủ cột nhận diện; KHÔNG 'Số dòng hàng'; thứ tự thuế không lệch", () => {
+    for (const c of ["Ngày lập", "Số HĐ", "Người bán", "Hàng hóa/dịch vụ", "Số lượng"]) {
+      expect(ALL_HEADERS, `thiếu cột ${c}`).toContain(c);
     }
-    expect(LINE_HEADERS).not.toContain("Số dòng hàng");
-    // "Mã thuế suất" ngay TRƯỚC "Thuế suất", "Tiền thuế dòng" ngay SAU.
+    expect(ALL_HEADERS).not.toContain("Số dòng hàng");
+    // "Mã thuế suất" ngay TRƯỚC "Thuế suất", "Tiền thuế" (dòng) ngay SAU.
     expect(iCol("Thuế suất")).toBe(iCol("Mã thuế suất") + 1);
-    expect(iCol("Tiền thuế dòng")).toBe(iCol("Thuế suất") + 1);
+    expect(iCol("Tiền thuế")).toBe(iCol("Thuế suất") + 1);
   });
 
   it("tiền CẤP HÓA ĐƠN mang nhãn '(cả HĐ)' để không cộng nhầm", () => {
@@ -113,27 +153,71 @@ describe("Cột sheet phẳng", () => {
       "Tiền thuế (cả HĐ)",
       "Tổng thanh toán (cả HĐ)",
     ]) {
-      expect(LINE_HEADERS, `thiếu cột ${c}`).toContain(c);
+      expect(ALL_HEADERS, `thiếu cột ${c}`).toContain(c);
     }
   });
 });
 
-// ---------------------------------------------------------------------------
-// U29 — mã thuế suất (ltsuat) phân biệt KCT/KKKNT/0% dù `tsuat` đều = 0.
-// ---------------------------------------------------------------------------
-describe("Mã thuế suất + tiền thuế dòng", () => {
-  it("KCT / KKKNT / 0% thật — cùng tsuat=0 — vẫn PHÂN BIỆT được nhờ mã thuế suất", async () => {
-    const bytes = await toXlsxWithLinesFromBatches(
-      batchesOf([row({ id: "a", shdon: "1" })], 10),
-      stubFetch({
-        a: [
-          line({ stt: 1, ltsuat: "KCT", tsuat: "0", tsuatTien: null }),
-          line({ stt: 2, ltsuat: "KKKNT", tsuat: "0", tsuatTien: null }),
-          line({ stt: 3, ltsuat: "0%", tsuat: "0", tsuatTien: "0" }),
-        ],
-      }),
+describe("STT chạy TOÀN FILE 1..N", () => {
+  it("liên tục qua nhiều hóa đơn + qua các LÔ (không reset)", async () => {
+    const invA = row({ id: "a", shdon: "100" });
+    const invB = row({ id: "b", shdon: "200" });
+    // Lô kích thước 1 → hai hóa đơn ở hai lô khác nhau; STT vẫn phải 1,2,3.
+    const detail = readXlsx(
+      await xlsxAll(
+        [invA, invB],
+        { a: [line({ stt: 1 }), line({ stt: 2 })], b: [line({ stt: 1 })] },
+        1,
+      ),
+      1,
     );
-    const detail = readXlsx(bytes, 1);
+    expect(detail.rows.slice(1).map((r) => r[iCol("STT")]?.value)).toEqual(["1", "2", "3"]);
+  });
+});
+
+describe("Tổng tiền (sau thuế) — mức DÒNG", () => {
+  it("= Thành tiền + Tiền thuế; thiếu một vế → TRỐNG (không bịa số)", async () => {
+    const detail = readXlsx(
+      await xlsxAll(
+        [row({ id: "a", shdon: "1" })],
+        {
+          a: [
+            line({ stt: 1, thtien: "2000", tsuatTien: "160" }),
+            line({ stt: 2, thtien: "1000", tsuatTien: null }),
+            line({ stt: 3, thtien: null, tsuatTien: "50" }),
+          ],
+        },
+        1,
+      ),
+      1,
+    );
+    const tong = detail.rows.slice(1).map((r) => r[iCol("Tổng tiền (sau thuế)")]?.value ?? "");
+    expect(tong).toEqual(["2160", "", ""]);
+  });
+
+  it("cộng CHÍNH XÁC số > 2^53 + thập phân (không ép float)", () => {
+    expect(congThapPhan("9007199254740993", "7")).toBe("9007199254741000");
+    expect(congThapPhan("100.5", "0.05")).toBe("100.55");
+    expect(congThapPhan("0", "0")).toBe("0");
+  });
+});
+
+describe("Mã thuế suất + tiền thuế dòng (đầy đủ)", () => {
+  it("KCT / KKKNT / 0% — cùng tsuat=0 — vẫn PHÂN BIỆT nhờ mã thuế suất", async () => {
+    const detail = readXlsx(
+      await xlsxAll(
+        [row({ id: "a", shdon: "1" })],
+        {
+          a: [
+            line({ stt: 1, ltsuat: "KCT", tsuat: "0", tsuatTien: null }),
+            line({ stt: 2, ltsuat: "KKKNT", tsuat: "0", tsuatTien: null }),
+            line({ stt: 3, ltsuat: "0%", tsuat: "0", tsuatTien: "0" }),
+          ],
+        },
+        1,
+      ),
+      1,
+    );
     const ma = detail.rows.slice(1).map((r) => r[iCol("Mã thuế suất")]?.value);
     const so = detail.rows.slice(1).map((r) => r[iCol("Thuế suất")]?.value);
     expect(so).toEqual(["0", "0", "0"]);
@@ -141,37 +225,29 @@ describe("Mã thuế suất + tiền thuế dòng", () => {
     expect(new Set(ma).size).toBe(3);
   });
 
-  it("mã thuế suất giữ nguyên CHUỖI 'KCT' (không ép số)", async () => {
-    const bytes = await toXlsxWithLinesFromBatches(
-      batchesOf([row({ id: "a", shdon: "1" })], 10),
-      stubFetch({ a: [line({ ltsuat: "KCT", tsuat: "0" })] }),
+  it("tiền thuế dòng: có giá trị → đúng; null → TRỐNG", async () => {
+    const detail = readXlsx(
+      await xlsxAll(
+        [row({ id: "a", shdon: "1" })],
+        { a: [line({ stt: 1, tsuatTien: "160" }), line({ stt: 2, tsuatTien: null })] },
+        1,
+      ),
+      1,
     );
-    expect(readXlsx(bytes, 1).rows[1]?.[iCol("Mã thuế suất")]?.value).toBe("KCT");
-  });
-
-  it("tiền thuế dòng: có giá trị → xuất đúng; null → ô TRỐNG", async () => {
-    const bytes = await toXlsxWithLinesFromBatches(
-      batchesOf([row({ id: "a", shdon: "1" })], 10),
-      stubFetch({ a: [line({ stt: 1, tsuatTien: "160" }), line({ stt: 2, tsuatTien: null })] }),
-    );
-    const detail = readXlsx(bytes, 1);
-    expect(detail.rows[1]?.[iCol("Tiền thuế dòng")]?.value).toBe("160");
-    expect(detail.rows[2]?.[iCol("Tiền thuế dòng")]?.value ?? "").toBe("");
+    expect(detail.rows[1]?.[iCol("Tiền thuế")]?.value).toBe("160");
+    expect(detail.rows[2]?.[iCol("Tiền thuế")]?.value ?? "").toBe("");
   });
 
   it("csv cũng mang mã thuế suất + tiền thuế dòng", async () => {
-    const inv = row({ id: "a", shdon: "1" });
     const text = await drain(
-      csvStreamWithLines(
-        batchesOf([inv], 10),
-        stubFetch({ a: [line({ ltsuat: "KKKNT", tsuat: "0", tsuatTien: "0" })] }),
-      ),
+      csvAll([row({ id: "a", shdon: "1" })], {
+        a: [line({ ltsuat: "KKKNT", tsuat: "0", tsuatTien: "0" })],
+      }),
     );
     const grid = parseCsv(text);
-    // Header là dòng 0 (một khối phẳng, không có nhãn khối phía trên).
     expect(grid[0]?.[iCol("Mã thuế suất")]).toBe("Mã thuế suất");
     expect(grid[1]?.[iCol("Mã thuế suất")]).toBe("KKKNT");
-    expect(grid[1]?.[iCol("Tiền thuế dòng")]).toBe("0");
+    expect(grid[1]?.[iCol("Tiền thuế")]).toBe("0");
   });
 });
 
@@ -179,48 +255,38 @@ describe("xlsx — MỘT sheet phẳng", () => {
   it("chỉ MỘT sheet; mỗi mặt hàng một dòng, kèm đúng ngữ cảnh hóa đơn", async () => {
     const invA = row({ id: "a", shdon: "100", nbten: "Bán A" });
     const invB = row({ id: "b", shdon: "200", nbten: "Bán B" });
-    const bytes = await toXlsxWithLinesFromBatches(
-      batchesOf([invA, invB], 10),
-      stubFetch({
-        a: [line({ stt: 1, ten: "A1" }), line({ stt: 2, ten: "A2" })],
-        b: [line({ stt: 1, ten: "B1" })],
-      }),
-    );
+    const bytes = await xlsxAll([invA, invB], {
+      a: [line({ stt: 1, ten: "A1" }), line({ stt: 2, ten: "A2" })],
+      b: [line({ stt: 1, ten: "B1" })],
+    });
     expect(readXlsxSheetNames(bytes)).toEqual(["Hóa đơn & hàng hóa"]);
     const detail = readXlsx(bytes, 1);
     expect(detail.rows.length).toBe(4); // header + 3 mặt hàng
     const shdon = detail.rows.slice(1).map((r) => r[iCol("Số HĐ")]?.value);
-    const ten = detail.rows.slice(1).map((r) => r[iCol("Tên hàng hóa/dịch vụ")]?.value);
-    const ban = detail.rows.slice(1).map((r) => r[iCol("Tên người bán")]?.value);
+    const ten = detail.rows.slice(1).map((r) => r[iCol("Hàng hóa/dịch vụ")]?.value);
+    const ban = detail.rows.slice(1).map((r) => r[iCol("Người bán")]?.value);
     expect(shdon).toEqual(["100", "100", "200"]);
     expect(ten).toEqual(["A1", "A2", "B1"]);
-    // Ngữ cảnh hóa đơn LẶP đúng theo dòng, không lẫn giữa hai HĐ.
     expect(ban).toEqual(["Bán A", "Bán A", "Bán B"]);
   });
 
   it("số lượng/thành tiền > 2^53 giữ CHÍNH XÁC (không ép float)", async () => {
     const big = "9007199254740993";
     const bigQty = "12345678901234567890";
-    const bytes = await toXlsxWithLinesFromBatches(
-      batchesOf([row({ id: "a", shdon: "1" })], 10),
-      stubFetch({ a: [line({ sluong: bigQty, thtien: big })] }),
+    const detail = readXlsx(
+      await xlsxAll([row({ id: "a", shdon: "1" })], { a: [line({ sluong: bigQty, thtien: big })] }),
+      1,
     );
-    const detail = readXlsx(bytes, 1);
-    expect(detail.rows[1]?.[iCol("Thành tiền")]?.value).toBe(big);
+    expect(detail.rows[1]?.[iCol("Thành tiền (trước thuế)")]?.value).toBe(big);
     expect(detail.rows[1]?.[iCol("Số lượng")]?.value).toBe(bigQty);
   });
 
-  it("hóa đơn KHÔNG có dòng hàng vẫn xuất MỘT dòng (không mất khỏi file), phần dòng để TRỐNG", async () => {
-    const bytes = await toXlsxWithLinesFromBatches(
-      batchesOf([row({ id: "a", shdon: "9", nbten: "Bán X" })], 10),
-      stubFetch({}), // không có dòng hàng
-    );
-    const detail = readXlsx(bytes, 1);
+  it("hóa đơn KHÔNG có dòng hàng vẫn xuất MỘT dòng; phần dòng TRỐNG", async () => {
+    const detail = readXlsx(await xlsxAll([row({ id: "a", shdon: "9", nbten: "Bán X" })], {}), 1);
     expect(detail.rows.length).toBe(2); // header + 1 dòng hóa đơn
-    // Ngữ cảnh hóa đơn CÓ; phần dòng hàng TRỐNG.
     expect(detail.rows[1]?.[iCol("Số HĐ")]?.value).toBe("9");
-    expect(detail.rows[1]?.[iCol("Tên người bán")]?.value).toBe("Bán X");
-    expect(detail.rows[1]?.[iCol("Tên hàng hóa/dịch vụ")]?.value ?? "").toBe("");
+    expect(detail.rows[1]?.[iCol("Người bán")]?.value).toBe("Bán X");
+    expect(detail.rows[1]?.[iCol("Hàng hóa/dịch vụ")]?.value ?? "").toBe("");
     expect(detail.rows[1]?.[iCol("Số lượng")]?.value ?? "").toBe("");
   });
 });
@@ -230,43 +296,35 @@ describe("csv — MỘT khối phẳng", () => {
     const invA = row({ id: "a", shdon: "100" });
     const invB = row({ id: "b", shdon: "200" });
     const text = await drain(
-      csvStreamWithLines(
-        batchesOf([invA, invB], 10),
-        stubFetch({
-          a: [line({ stt: 1, ten: "A1" }), line({ stt: 2, ten: "A2" })],
-          b: [line({ stt: 1, ten: "B1" })],
-        }),
-      ),
+      csvAll([invA, invB], {
+        a: [line({ stt: 1, ten: "A1" }), line({ stt: 2, ten: "A2" })],
+        b: [line({ stt: 1, ten: "B1" })],
+      }),
     );
     const grid = parseCsv(text);
-    expect(grid[0]).toEqual(LINE_HEADERS); // header ngay dòng đầu
-    const dataRows = grid.slice(1).filter((r) => r.length === LINE_HEADERS.length);
+    expect(grid[0]).toEqual(ALL_HEADERS); // header ngay dòng đầu
+    const dataRows = grid.slice(1).filter((r) => r.length === ALL_HEADERS.length);
     expect(dataRows.map((r) => r[iCol("Số HĐ")])).toEqual(["100", "100", "200"]);
-    expect(dataRows.map((r) => r[iCol("Tên hàng hóa/dịch vụ")])).toEqual(["A1", "A2", "B1"]);
+    expect(dataRows.map((r) => r[iCol("Hàng hóa/dịch vụ")])).toEqual(["A1", "A2", "B1"]);
   });
 
   it("csv giữ số lượng/thành tiền > 2^53 nguyên bản chuỗi", async () => {
     const big = "9007199254740993";
     const bigQty = "12345678901234567890";
-    const inv = row({ id: "a", shdon: "1" });
     const text = await drain(
-      csvStreamWithLines(
-        batchesOf([inv], 10),
-        stubFetch({ a: [line({ sluong: bigQty, thtien: big })] }),
-      ),
+      csvAll([row({ id: "a", shdon: "1" })], { a: [line({ sluong: bigQty, thtien: big })] }),
     );
     const grid = parseCsv(text);
     expect(grid[1]?.[iCol("Số lượng")]).toBe(bigQty);
-    expect(grid[1]?.[iCol("Thành tiền")]).toBe(big);
+    expect(grid[1]?.[iCol("Thành tiền (trước thuế)")]).toBe(big);
   });
 
   it("hóa đơn không dòng hàng → vẫn MỘT dòng, phần dòng để trống", async () => {
-    const inv = row({ id: "a", shdon: "9" });
-    const text = await drain(csvStreamWithLines(batchesOf([inv], 10), stubFetch({})));
+    const text = await drain(csvAll([row({ id: "a", shdon: "9" })], {}));
     const grid = parseCsv(text);
-    const dataRows = grid.slice(1).filter((r) => r.length === LINE_HEADERS.length);
+    const dataRows = grid.slice(1).filter((r) => r.length === ALL_HEADERS.length);
     expect(dataRows.length).toBe(1);
     expect(dataRows[0]?.[iCol("Số HĐ")]).toBe("9");
-    expect(dataRows[0]?.[iCol("Tên hàng hóa/dịch vụ")]).toBe("");
+    expect(dataRows[0]?.[iCol("Hàng hóa/dịch vụ")]).toBe("");
   });
 });

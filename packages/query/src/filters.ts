@@ -63,6 +63,10 @@ export const MAX_EXPORT_IDS = 1000;
 // thì bỏ hẳn `ids`, không gửi [] mơ hồ.
 export const exportSelectionSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(MAX_EXPORT_IDS).optional(),
+  // Cột người dùng chọn cho file xuất phẳng (key catalog @vat/domain). KHÔNG tin input:
+  // chỉ ép dạng chuỗi + trần số phần tử; ALLOWLIST theo catalog nằm ở @vat/export
+  // (`chonCotXuat` bỏ key lạ) — Zod chỉ chặn dạng, không thay allowlist.
+  cols: z.array(z.string().max(40)).max(64).optional(),
 });
 
 /** Bộ lọc U6 + danh sách ID chọn tay (U30). `ids` chỉ THU HẸP tập — xem buildWhere. */

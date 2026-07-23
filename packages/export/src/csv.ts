@@ -7,7 +7,7 @@ import {
   EMPTY_LINE,
   type LineDetailRow,
   type RenderColumn,
-  lineDetailRenderColumns,
+  flatRenderColumns,
   lineInvoiceContext,
   nativeRenderColumns,
 } from "./columns";
@@ -96,7 +96,6 @@ export function csvStreamFor<T>(
 // ------------------------- Wrapper native (U7, giữ API cũ) ------------------------- //
 
 const NATIVE = nativeRenderColumns();
-const LINE_COLS = lineDetailRenderColumns();
 
 /** Dòng tiêu đề (nhãn cột) mẫu native. Kèm BOM. */
 export function csvHeaderLine(): string {
@@ -127,10 +126,13 @@ export function csvStream(batches: AsyncIterable<ExportRow[]>): ReadableStream<U
 export function csvStreamWithLines(
   invoiceBatches: AsyncIterable<ExportRow[]>,
   fetchLines: (ids: string[]) => Promise<Map<string, InvoiceLineLike[]>>,
+  cols?: readonly string[] | null,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
+  const columns = flatRenderColumns(cols);
   const it = invoiceBatches[Symbol.asyncIterator]();
   let daGuiHeader = false;
+  let stt = 0; // STT chạy TOÀN FILE 1..N — bền qua stream lô-by-lô.
   return new ReadableStream<Uint8Array>({
     // MỖI lần pull PHẢI enqueue hoặc close (nếu không, Web Streams không gọi lại pull → treo).
     // Vòng for cho một pull vượt qua các lô rỗng cho tới khi enqueue được một chunk / đóng.
@@ -138,7 +140,7 @@ export function csvStreamWithLines(
       for (;;) {
         if (!daGuiHeader) {
           daGuiHeader = true;
-          controller.enqueue(encoder.encode(csvHeaderLineFor(LINE_COLS)));
+          controller.enqueue(encoder.encode(csvHeaderLineFor(columns)));
           return;
         }
         const { value, done } = await it.next();
@@ -152,11 +154,11 @@ export function csvStreamWithLines(
           const ctx = lineInvoiceContext(inv);
           const lines = linesByInvoice.get(inv.id) ?? [];
           if (lines.length === 0) {
-            chunk += csvRowLineFor(LINE_COLS, { ...EMPTY_LINE, ...ctx });
+            chunk += csvRowLineFor(columns, { ...EMPTY_LINE, ...ctx, sttFile: ++stt });
           } else {
             for (const l of lines) {
-              const detailRow: LineDetailRow = { ...l, ...ctx };
-              chunk += csvRowLineFor(LINE_COLS, detailRow);
+              const detailRow: LineDetailRow = { ...l, ...ctx, sttFile: ++stt };
+              chunk += csvRowLineFor(columns, detailRow);
             }
           }
         }

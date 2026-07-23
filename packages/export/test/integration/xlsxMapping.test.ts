@@ -1,18 +1,21 @@
+import { withTenant } from "@vat/db";
 // ÁNH XẠ FILE XUẤT (sheet phẳng 2026-07-21) — canh ĐÚNG và ĐỦ, đi qua đường thật:
 // PGlite → iterateInvoices → encoder xlsx → đọc lại file. Mỗi mặt hàng một dòng, kèm đủ
 // ngữ cảnh hóa đơn; tiền cấp hóa đơn LẶP mỗi dòng, nhãn "(cả HĐ)".
 //
 // Cách canh hoán đổi: MỖI trường mang một giá trị NHẬN DIỆN RIÊNG. Hai cột đổi chỗ là lộ
 // ngay — không cần biết trước lỗi ở đâu. (Đã kiểm chứng test có răng bằng đột biến.)
-import { withTenant } from "@vat/db";
+import { FLAT_EXPORT_COLUMNS } from "@vat/domain";
 import { beforeEach, describe, expect, it } from "vitest";
-import { lineDetailRenderColumns } from "../../src/columns";
+import { flatRenderColumns } from "../../src/columns";
 import { fetchLinesForInvoices } from "../../src/lineRows";
 import { iterateInvoices } from "../../src/rows";
 import { toXlsxWithLinesFromBatches } from "../../src/xlsx";
 import { type Db, freshDb, makeTenant, readXlsx, seedInvoice, seedLine } from "../helpers";
 
-const HEADERS = lineDetailRenderColumns().map((c) => c.header);
+// Kiểm ánh xạ ĐẦY ĐỦ → render TẤT CẢ cột (kể cả cột ẩn mặc định).
+const ALL_KEYS = FLAT_EXPORT_COLUMNS.map((c) => c.key);
+const HEADERS = flatRenderColumns(ALL_KEYS).map((c) => c.header);
 const NB_TEN = "AAA Người Bán";
 const NM_TEN = "BBB Người Mua";
 const HANG_1 = "CCC Xăng E10";
@@ -29,8 +32,10 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
 
   async function xuat() {
     return withTenant(db, tenantA, async (tx) =>
-      toXlsxWithLinesFromBatches(iterateInvoices(tx, tenantA, {}), (ids) =>
-        fetchLinesForInvoices(tx, tenantA, ids),
+      toXlsxWithLinesFromBatches(
+        iterateInvoices(tx, tenantA, {}),
+        (ids) => fetchLinesForInvoices(tx, tenantA, ids),
+        ALL_KEYS,
       ),
     );
   }
@@ -74,9 +79,9 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
       expect(at(r, "Ký hiệu HĐ")).toBe("K26XYZ");
       expect(at(r, "Số HĐ")).toBe("778899");
       expect(at(r, "MST người bán")).toBe("1111111111");
-      expect(at(r, "Tên người bán")).toBe(NB_TEN);
+      expect(at(r, "Người bán")).toBe(NB_TEN);
       expect(at(r, "MST người mua")).toBe("2222222222");
-      expect(at(r, "Tên người mua")).toBe(NM_TEN);
+      expect(at(r, "Người mua")).toBe(NM_TEN);
       expect(at(r, "Tiền tệ")).toBe("USD");
       expect(at(r, "Trạng thái xử lý (mã)")).toBe("7");
       expect(at(r, "Trạng thái HĐ (mã)")).toBe("9");
@@ -90,9 +95,9 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
 
     // Chi tiết TỪNG dòng khác nhau — số lượng của DÒNG, không phải tổng.
     expect(at(1, "STT")).toBe("1");
-    expect(at(1, "Tên hàng hóa/dịch vụ")).toBe(HANG_1);
+    expect(at(1, "Hàng hóa/dịch vụ")).toBe(HANG_1);
     expect(at(1, "Số lượng")).toBe("42.492");
-    expect(at(2, "Tên hàng hóa/dịch vụ")).toBe(HANG_2);
+    expect(at(2, "Hàng hóa/dịch vụ")).toBe(HANG_2);
     expect(at(2, "Số lượng")).toBe("20.433");
 
     // KHÔNG còn cột "Số dòng hàng".
@@ -125,7 +130,7 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
     const header = sheet.rows[0]?.map((c) => c.value) ?? [];
     const data = sheet.rows[1]?.map((c) => c.value) ?? [];
     expect(data.length).toBe(header.length);
-    expect(data[header.indexOf("Tên người bán")]).toBe(NB_TEN);
+    expect(data[header.indexOf("Người bán")]).toBe(NB_TEN);
     expect(data[header.indexOf("Số HĐ")]).toBe("9");
     expect(data[header.indexOf("Nguồn")]).toBe("normal");
   });
@@ -138,8 +143,8 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
     const at = (nhan: string) => sheet.rows[1]?.[header.indexOf(nhan)]?.value;
     expect(sheet.rows.length).toBe(2); // header + 1 dòng hóa đơn
     expect(at("Số HĐ")).toBe("555");
-    expect(at("Tên người bán")).toBe(NB_TEN);
-    expect(at("Tên hàng hóa/dịch vụ") ?? "").toBe(""); // phần dòng hàng trống
+    expect(at("Người bán")).toBe(NB_TEN);
+    expect(at("Hàng hóa/dịch vụ") ?? "").toBe(""); // phần dòng hàng trống
   });
 
   it("mỗi dòng hàng kèm đúng ngữ cảnh của HĐ CHÍNH nó (hai HĐ khác người bán)", async () => {
@@ -167,12 +172,12 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
     const rA = byShdon.get("100") as number;
     const rB = byShdon.get("200") as number;
 
-    expect(at(rA, "Tên người bán")).toBe("AAA Bán");
+    expect(at(rA, "Người bán")).toBe("AAA Bán");
     expect(at(rA, "Chiều")).toBe("sold");
-    expect(at(rA, "Tên hàng hóa/dịch vụ")).toBe("Vé xem phim");
+    expect(at(rA, "Hàng hóa/dịch vụ")).toBe("Vé xem phim");
     expect(at(rA, "ĐVT")).toBe("vé");
     expect(at(rA, "Số lượng")).toBe("3");
-    expect(at(rB, "Tên người bán")).toBe("BBB Bán");
+    expect(at(rB, "Người bán")).toBe("BBB Bán");
     expect(at(rB, "Chiều")).toBe("purchase");
   });
 });

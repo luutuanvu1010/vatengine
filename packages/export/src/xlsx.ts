@@ -9,7 +9,7 @@ import {
   EMPTY_LINE,
   LINE_DETAIL_SECTION,
   type RenderColumn,
-  lineDetailRenderColumns,
+  flatRenderColumns,
   lineInvoiceContext,
   nativeRenderColumns,
 } from "./columns";
@@ -166,7 +166,6 @@ export async function toXlsxFromBatchesFor(
 
 const NATIVE = nativeRenderColumns();
 const NATIVE_SHEET = "HoaDon";
-const LINE_COLS = lineDetailRenderColumns();
 
 /** Encode CẢ tập hóa đơn thành bytes xlsx (mẫu native). */
 export function toXlsx(rows: ExportRow[]): Uint8Array {
@@ -188,20 +187,24 @@ export function toXlsxFromBatches(batches: AsyncIterable<ExportRow[]>): Promise<
 export async function toXlsxWithLinesFromBatches(
   invoiceBatches: AsyncIterable<ExportRow[]>,
   fetchLines: (ids: string[]) => Promise<Map<string, InvoiceLineLike[]>>,
+  cols?: readonly string[] | null,
 ): Promise<Uint8Array> {
   // MỘT sheet phẳng (2026-07-21): mỗi mặt hàng một dòng, kèm đủ ngữ cảnh hóa đơn. Hóa đơn
   // chưa có dòng hàng vẫn xuất MỘT dòng (EMPTY_LINE) — không được biến mất khỏi file.
-  let body = headerRowXml(LINE_COLS);
+  // `cols` = cột người dùng chọn (rỗng → 16 mặc định). `sttFile` = STT chạy toàn file 1..N.
+  const columns = flatRenderColumns(cols);
+  let body = headerRowXml(columns);
   let r = 2;
+  let stt = 0;
   for await (const batch of invoiceBatches) {
     const linesByInvoice = await fetchLines(batch.map((x) => x.id));
     for (const inv of batch) {
       const ctx = lineInvoiceContext(inv);
       const lines = linesByInvoice.get(inv.id) ?? [];
       if (lines.length === 0) {
-        body += dataRowXml(LINE_COLS, { ...EMPTY_LINE, ...ctx }, r++);
+        body += dataRowXml(columns, { ...EMPTY_LINE, ...ctx, sttFile: ++stt }, r++);
       } else {
-        for (const l of lines) body += dataRowXml(LINE_COLS, { ...l, ...ctx }, r++);
+        for (const l of lines) body += dataRowXml(columns, { ...l, ...ctx, sttFile: ++stt }, r++);
       }
     }
   }

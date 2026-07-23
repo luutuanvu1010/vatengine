@@ -6,9 +6,11 @@
 // ở đây (.claude/rules/ui.md "một nguồn sự thật cho trường hoá đơn"). Danh sách/nhãn/thứ tự
 // GIỮ NGUYÊN hành vi cũ; chỉ đổi NGUỒN của nó.
 import {
+  type FlatExportCol,
   INVOICE_FIELDS,
   type InvoiceField,
   type InvoiceFieldKind,
+  chonCotXuat,
   fieldsForExport,
 } from "@vat/domain";
 import type { HangHoaTomTat } from "@vat/query";
@@ -170,9 +172,10 @@ export type LineOrEmpty = {
   [K in keyof InvoiceLineLike]: InvoiceLineLike[K] | null;
 };
 
-// Một dòng của sheet phẳng = ngữ cảnh hóa đơn + (một mặt hàng HOẶC rỗng nếu HĐ chưa có dòng).
+// Một dòng của sheet phẳng = ngữ cảnh hóa đơn + (một mặt hàng HOẶC rỗng nếu HĐ chưa có dòng)
+// + `sttFile` (số chạy TOÀN FILE 1..N do encoder bơm trước khi mã hóa từng dòng).
 // NGUỒN CỘT DUY NHẤT cho cả xlsx lẫn csv — không nhân đôi danh sách cột.
-export type LineDetailRow = LineOrEmpty & LineInvoiceContext;
+export type LineDetailRow = LineOrEmpty & LineInvoiceContext & { sttFile?: number };
 
 /** Tên sheet phẳng — dùng chung xlsx (tên sheet) + csv (nhãn khối). */
 export const LINE_DETAIL_SECTION = "Hóa đơn & hàng hóa";
@@ -207,40 +210,83 @@ const numCell = (v: string | number | null | undefined): ExportCell =>
  * gộp thành một chữ số `0`, không phân biệt nổi. `ltsuat` là thứ duy nhất tách được. */
 const dateCell = (d: Date | null): ExportCell => (d ? { t: "str", v: formatDate(d) } : BLANK);
 
-export function lineDetailRenderColumns(): RenderColumn<LineDetailRow>[] {
-  return [
-    // Ngữ cảnh hóa đơn — đứng TRƯỚC, mỗi dòng tự đủ thông tin lọc/pivot.
-    { header: "Ngày lập", money: false, cell: (r) => dateCell(r.tdlap) },
-    { header: "Ngày cập nhật", money: false, cell: (r) => dateCell(r.ncnhat) },
-    { header: "Ký hiệu mẫu số", money: false, cell: (r) => strCell(r.khmshdon) },
-    { header: "Ký hiệu HĐ", money: false, cell: (r) => strCell(r.khhdon) },
-    { header: "Số HĐ", money: false, cell: (r) => strCell(r.shdon) },
-    { header: "MST người bán", money: false, cell: (r) => strCell(r.nbmst) },
-    { header: "Tên người bán", money: false, cell: (r) => strCell(r.nbten) },
-    { header: "MST người mua", money: false, cell: (r) => strCell(r.nmmst) },
-    { header: "Tên người mua", money: false, cell: (r) => strCell(r.nmten) },
-    // Chi tiết TỪNG mặt hàng — "Số lượng" nay là số lượng CỦA DÒNG (không phải tổng).
-    { header: "STT", money: false, cell: (r) => numCell(r.stt) },
-    { header: "Tên hàng hóa/dịch vụ", money: false, cell: (r) => strCell(r.ten) },
-    { header: "ĐVT", money: false, cell: (r) => strCell(r.dvtinh) },
-    { header: "Số lượng", money: false, cell: (r) => numCell(r.sluong) },
-    { header: "Đơn giá", money: true, cell: (r) => numCell(r.dgia) },
-    { header: "Thành tiền", money: true, cell: (r) => numCell(r.thtien) },
-    { header: "Mã thuế suất", money: false, cell: (r) => strCell(r.ltsuat) },
-    { header: "Thuế suất", money: false, cell: (r) => numCell(r.tsuat) },
-    { header: "Tiền thuế dòng", money: true, cell: (r) => numCell(r.tsuatTien) },
-    // Phân loại + trạng thái hóa đơn.
-    { header: "Chiều", money: false, cell: (r) => strCell(r.chieu) },
-    { header: "Nguồn", money: false, cell: (r) => strCell(r.nguon) },
-    { header: "Tiền tệ", money: false, cell: (r) => strCell(r.dvtte) },
-    { header: "Trạng thái xử lý (mã)", money: false, cell: (r) => numCell(r.ttxly) },
-    { header: "Trạng thái HĐ (mã)", money: false, cell: (r) => numCell(r.tthai) },
-    // TIỀN CẤP HÓA ĐƠN — LẶP mỗi dòng của cùng HĐ; nhãn "(cả HĐ)" để KHÔNG cộng nhầm.
-    { header: "Tiền chưa thuế (cả HĐ)", money: true, cell: (r) => numCell(r.tgtcthue) },
-    { header: "Chiết khấu (cả HĐ)", money: true, cell: (r) => numCell(r.ttcktmai) },
-    { header: "Tiền thuế (cả HĐ)", money: true, cell: (r) => numCell(r.tgtthue) },
-    { header: "Tổng thanh toán (cả HĐ)", money: true, cell: (r) => numCell(r.tgtttbso) },
-  ];
+// Cộng hai chuỗi số thập phân CHÍNH XÁC (BigInt, KHÔNG parseFloat — tiền numeric có thể
+// >2^53). Giữ dấu + phần thập phân; cắt số 0 thừa cuối. Dùng cho "Tổng tiền (sau thuế)".
+function tachThapPhan(s: string): { val: bigint; scale: number } {
+  const neg = s.startsWith("-");
+  const [i, f = ""] = (neg ? s.slice(1) : s).split(".");
+  const digits = `${i}${f}`.replace(/^0+(?=\d)/, "") || "0";
+  return { val: BigInt(digits) * (neg ? -1n : 1n), scale: f.length };
+}
+function dinhDangThapPhan(v: bigint, scale: number): string {
+  if (scale === 0) return v.toString();
+  const neg = v < 0n;
+  const s = (neg ? -v : v).toString().padStart(scale + 1, "0");
+  const phanNguyen = s.slice(0, s.length - scale);
+  const phanThap = s.slice(s.length - scale).replace(/0+$/, "");
+  return `${neg ? "-" : ""}${phanNguyen}${phanThap ? `.${phanThap}` : ""}`;
+}
+export function congThapPhan(a: string, b: string): string {
+  const pa = tachThapPhan(a);
+  const pb = tachThapPhan(b);
+  const scale = Math.max(pa.scale, pb.scale);
+  const na = pa.val * 10n ** BigInt(scale - pa.scale);
+  const nb = pb.val * 10n ** BigInt(scale - pb.scale);
+  return dinhDangThapPhan(na + nb, scale);
+}
+
+/** "Tổng tiền (sau thuế)" mức DÒNG = thtien + tsuatTien. Thiếu một vế → trống (không bịa số). */
+function tongSauThue(r: LineDetailRow): ExportCell {
+  if (r.thtien === null || r.thtien === undefined) return BLANK;
+  if (r.tsuatTien === null || r.tsuatTien === undefined) return BLANK;
+  return { t: "num", v: congThapPhan(String(r.thtien), String(r.tsuatTien)) };
+}
+
+// Ánh xạ key catalog (@vat/domain FLAT_EXPORT_COLUMNS) → hàm sinh ô. `sttFile` đọc số encoder
+// bơm vào; `sttDong` = `stt` gốc GDT; `tongSauThue` là cột TÍNH. Còn lại đọc thẳng trường
+// cùng tên trên LineDetailRow. Đây là chỗ DUY NHẤT gắn logic ô cho từng cột.
+const O_THEO_KEY: Record<string, (r: LineDetailRow) => ExportCell> = {
+  sttFile: (r) => numCell(r.sttFile),
+  tdlap: (r) => dateCell(r.tdlap),
+  ncnhat: (r) => dateCell(r.ncnhat),
+  khmshdon: (r) => strCell(r.khmshdon),
+  khhdon: (r) => strCell(r.khhdon),
+  shdon: (r) => strCell(r.shdon),
+  chieu: (r) => strCell(r.chieu),
+  nguon: (r) => strCell(r.nguon),
+  nbten: (r) => strCell(r.nbten),
+  nbmst: (r) => strCell(r.nbmst),
+  nmten: (r) => strCell(r.nmten),
+  nmmst: (r) => strCell(r.nmmst),
+  sttDong: (r) => numCell(r.stt),
+  ten: (r) => strCell(r.ten),
+  dvtinh: (r) => strCell(r.dvtinh),
+  sluong: (r) => numCell(r.sluong),
+  dgia: (r) => numCell(r.dgia),
+  thtien: (r) => numCell(r.thtien),
+  ltsuat: (r) => strCell(r.ltsuat),
+  tsuat: (r) => numCell(r.tsuat),
+  tsuatTien: (r) => numCell(r.tsuatTien),
+  tongSauThue,
+  dvtte: (r) => strCell(r.dvtte),
+  ttxly: (r) => numCell(r.ttxly),
+  tthai: (r) => numCell(r.tthai),
+  tgtcthue: (r) => numCell(r.tgtcthue),
+  ttcktmai: (r) => numCell(r.ttcktmai),
+  tgtthue: (r) => numCell(r.tgtthue),
+  tgtttbso: (r) => numCell(r.tgtttbso),
+};
+
+/** Cột render sheet phẳng — DẪN XUẤT từ catalog `@vat/domain`. `cols` = key người dùng chọn
+ * (bỏ key lạ, sắp theo thứ tự catalog); rỗng/thiếu → 16 cột mặc định. `money` (numFmt tiền)
+ * suy từ `kieu === "tien"`. */
+export function flatRenderColumns(cols?: readonly string[] | null): RenderColumn<LineDetailRow>[] {
+  return chonCotXuat(cols).map((c: FlatExportCol) => {
+    const cell = O_THEO_KEY[c.key];
+    // Catalog thêm cột mà quên gắn ô ⇒ hỏng to (cột trống im lặng). Fail-loud.
+    if (!cell) throw new Error(`Thiếu hàm sinh ô cho cột xuất: ${c.key}`);
+    return { header: c.nhan, money: c.kieu === "tien", cell };
+  });
 }
 
 /** Chuẩn hóa một ô theo cột + hàng. null/undefined → trống (không giá trị giả). */

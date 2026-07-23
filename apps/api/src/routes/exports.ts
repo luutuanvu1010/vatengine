@@ -54,11 +54,11 @@ function exportKey(tenantId: string, id: string): string {
 // hai route phải hiểu "chọn dòng" y hệt nhau, chép logic sang nơi thứ hai là mời gọi
 // lệch hành vi. Body vắng (client cũ) hoặc không phải JSON → coi như không chọn gì.
 async function docChonDong(c: { req: { json: () => Promise<unknown> } }): Promise<
-  { ok: true; ids?: string[] } | { ok: false }
+  { ok: true; ids?: string[]; cols?: string[] } | { ok: false }
 > {
   const rawBody = await c.req.json().catch(() => ({}));
   const chon = exportSelectionSchema.safeParse(rawBody);
-  return chon.success ? { ok: true, ids: chon.data.ids } : { ok: false };
+  return chon.success ? { ok: true, ids: chon.data.ids, cols: chon.data.cols } : { ok: false };
 }
 
 export function exportsRoutes(deps: AppDeps) {
@@ -98,6 +98,7 @@ export function exportsRoutes(deps: AppDeps) {
     const chon = await docChonDong(c);
     if (!chon.ok) return c.json({ error: "bad_request" }, 400);
     const ids = chon.ids;
+    const cols = chon.cols; // cột chọn cho file phẳng (csv/xlsx); allowlist ở @vat/export.
 
     // M2 (chốt 2026-07-20): có ids ⇒ BỎ QUA bộ lọc. Lựa chọn cụ thể hơn ý định; giao cả
     // hai sẽ cho file ít hơn con số "đã chọn N" đang hiển thị → mất niềm tin.
@@ -120,7 +121,7 @@ export function exportsRoutes(deps: AppDeps) {
           // MỘT sheet phẳng (2026-07-21): mỗi mặt hàng một dòng, kèm đủ ngữ cảnh hóa đơn.
           // Một pass qua generator hóa đơn + fetchLines lô-by-lô.
           const batches = iterateInvoices(tx, tenantId, selection);
-          await storage.put(key, csvStreamWithLines(batches, fetchLines));
+          await storage.put(key, csvStreamWithLines(batches, fetchLines, cols));
         } else if (format === "xml.zip" || format === "html.zip") {
           const batches = iterateInvoices(tx, tenantId, selection);
           const render =
@@ -143,7 +144,7 @@ export function exportsRoutes(deps: AppDeps) {
         } else {
           // XLSX: sheet "HoaDon" + sheet "Chi tiết dòng hàng" (U23-B).
           const batches = iterateInvoices(tx, tenantId, selection);
-          await storage.put(key, await toXlsxWithLinesFromBatches(batches, fetchLines));
+          await storage.put(key, await toXlsxWithLinesFromBatches(batches, fetchLines, cols));
         }
         // Audit "xuất dữ liệu" (append). KHÔNG log raw_json/token (security.md). U12:
         // mask chi_tiet — filter tự do (vd nbmst) có thể chứa giá trị nhạy cảm.

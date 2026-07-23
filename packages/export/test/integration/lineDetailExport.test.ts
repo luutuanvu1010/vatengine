@@ -3,14 +3,15 @@
 // dòng hàng của tenant B, kể cả khi B có dữ liệu. Offline (PGlite), KHÔNG mạng (testing.md).
 import { dongHangHoa } from "@vat/db";
 import { beforeEach, describe, expect, it } from "vitest";
-import { lineDetailRenderColumns } from "../../src/columns";
+import { flatRenderColumns } from "../../src/columns";
 import { csvStreamWithLines } from "../../src/csv";
 import { fetchLinesForInvoices } from "../../src/lineRows";
 import { iterateInvoices } from "../../src/rows";
 import { toXlsxWithLinesFromBatches } from "../../src/xlsx";
 import { type Db, freshDb, makeTenant, parseCsv, readXlsx, seedInvoice, utf8 } from "../helpers";
 
-const LINE_HEADERS = lineDetailRenderColumns().map((c) => c.header);
+// Render mặc định (16 cột) — test này chỉ kiểm cách ly tenant qua nội dung + header khớp.
+const LINE_HEADERS = flatRenderColumns().map((c) => c.header);
 const NO_FILTER = {} as Parameters<typeof iterateInvoices>[2];
 
 async function seedLine(db: Db, tenantId: string, hoaDonId: string, ten: string) {

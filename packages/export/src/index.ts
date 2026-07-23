@@ -13,7 +13,8 @@ export { type RenderColumn, nativeRenderColumns } from "./columns";
 export {
   LINE_DETAIL_SECTION,
   type LineDetailRow,
-  lineDetailRenderColumns,
+  congThapPhan,
+  flatRenderColumns,
 } from "./columns";
 export {
   CSV_BOM,
