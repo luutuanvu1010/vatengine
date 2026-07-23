@@ -518,3 +518,16 @@ SELECT count(*) FROM nguoi_dung WHERE mat_khau_tam_het_han IS NOT NULL;  -- ph�
 Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_doi_mat_khau` ở `apps/web`
 (`auth-context.tsx`, `DoiMatKhauCard.tsx`). Trước đó thì KHÔNG — gỡ sớm là cho một mật khẩu
 6 số quá hạn bỗng đăng nhập được.
+
+---
+
+### [2026-07-23] Trang đăng nhập: "Ghi nhớ đăng nhập" + "Quên mật khẩu?" đang TẠM ẨN
+
+- **Trạng thái:** Tạm ẩn UI — chưa triển khai chức năng.
+- **Bối cảnh:** Chủ dự án yêu cầu (phiên Cowork 2026-07-23) ẩn hai dòng "Ghi nhớ đăng nhập (sắp có)" và "Quên mật khẩu? (sắp có)" ở `apps/web/src/features/auth/LoginPage.tsx` để làm sau, tránh nhãn "(sắp có)" gây rối mắt trên màn đăng nhập. Chỗ render đã thay bằng comment mốc, không xoá logic backend nào.
+- **Việc còn nợ khi làm thật:**
+  - *Ghi nhớ đăng nhập:* cần backend hỗ trợ phiên dài hạn (remember-me cookie/refresh) — hiện phiên hết khi tải lại (ADR-0003). Không bật UI trước khi backend sẵn sàng.
+  - *Quên mật khẩu:* cần luồng đặt lại mật khẩu qua email (token 1 lần, hết hạn) — phụ thuộc hạ tầng gửi email (xem mục AWS SES trong backlog này) và trang đặt lại mật khẩu.
+- **Đề xuất hướng xử lý:** Khi quyết định làm, tách thành đơn vị U riêng (kế hoạch → TDD → review chéo), khôi phục UI ở `LoginPage.tsx` và nối vào endpoint tương ứng.
+- **Mức ưu tiên đề xuất:** Trung bình (tiện lợi người dùng, không chặn vận hành).
+- **Nguồn phát hiện:** Phiên Cowork 2026-07-23 — refactor trang đăng nhập theo yêu cầu chủ dự án.
