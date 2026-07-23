@@ -115,7 +115,7 @@ describe("U-K4 — mặc định tháng hiện tại (yêu cầu 2)", () => {
   it("mở màn → truy vấn summary với kỳ = THÁNG HIỆN TẠI (giờ VN)", async () => {
     const { calls } = mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     await waitFor(() => {
       expect(
         calls.some(
@@ -133,7 +133,7 @@ describe("U-K4 — mặc định tháng hiện tại (yêu cầu 2)", () => {
     saveInvoiceFilter({ chieu: "purchase", tuNgay: "2020-01-01", denNgay: "2020-01-31" });
     const { calls } = mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     await waitFor(() => {
       expect(calls.some((c) => c.url.includes("/invoices/summary?"))).toBe(true);
     });
@@ -158,7 +158,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("nút áp bộ lọc nay tên 'Lọc dữ liệu', KHÔNG còn 'Áp dụng'", async () => {
     mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     expect(screen.getByRole("button", { name: "Lọc dữ liệu" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Áp dụng" })).toBeNull();
   });
@@ -166,7 +166,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("'Lọc dữ liệu' CHỈ đọc — không gọi backfill/đồng bộ mạng", async () => {
     const { calls } = mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     const truoc = calls.filter((c) => c.url.includes("/backfill")).length;
     await userEvent.click(screen.getByRole("button", { name: "Lọc dữ liệu" }));
     const sau = calls.filter((c) => c.url.includes("/backfill")).length;
@@ -176,7 +176,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("nút đồng bộ nay tên 'Đồng bộ và tải xuống'", async () => {
     mockApi();
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     expect(screen.getByRole("button", { name: "Đồng bộ và tải xuống" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Đồng bộ khoảng này" })).toBeNull();
   });
@@ -184,7 +184,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("bấm 'Đồng bộ và tải xuống' → backfill; hoàn thành → TỰ gọi xuất /exports cho bộ lọc hiện tại", async () => {
     const { calls } = mockApi({ progressTong: "hoan_thanh" });
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
     await waitFor(() => {
       expect(
@@ -208,7 +208,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
   it("tự-tải sau đồng bộ THẤT BẠI (xuất 403) → hiện thông báo lỗi, KHÔNG nuốt im lặng", async () => {
     const { calls } = mockApi({ progressTong: "hoan_thanh", exportOk: false });
     renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
     // Đã cố xuất (POST /exports) và bị 403 → phải hiện lỗi tải cho người dùng.
     await waitFor(() => {

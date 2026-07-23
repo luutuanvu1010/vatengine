@@ -1,7 +1,15 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Card, EmptyState, ErrorState, Loading } from "../../components/ui/primitives";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  ErrorState,
+  Loading,
+  SectionLabel,
+  Stat,
+} from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
 import { monthRangeOf, vnYearMonth } from "../../lib/period";
@@ -25,6 +33,16 @@ export function kyThangHienTai(homNay: Date = new Date()): { tuNgay: string; den
  * thủ chiều sâu, vẫn phải kiểm để không âm thầm mục ruỗng). */
 export function nenHienPanelDongBo(filter: InvoiceFilter, canSync: boolean): boolean {
   return canSync && !!filter.tuNgay && !!filter.denNgay;
+}
+
+/** Nhãn "kỳ đang xem" cho badge — suy TỪ filter đã có ở client (KHÔNG gọi thêm API).
+ * "2026-07-01"/"2026-07-31" → "01/07 – 31/07/2026". Thiếu kỳ → null (không hiện badge). */
+export function nhanBadgeKy(tuNgay?: string, denNgay?: string): string | null {
+  if (!tuNgay || !denNgay) return null;
+  const [, m1, d1] = tuNgay.split("-");
+  const [y2, m2, d2] = denNgay.split("-");
+  if (!d1 || !m1 || !d2 || !m2 || !y2) return null;
+  return `${d1}/${m1} – ${d2}/${m2}/${y2}`;
 }
 
 export function InvoicesPage() {
@@ -86,6 +104,9 @@ export function InvoicesPage() {
     }
   }, [dongBoXong, taiSauDongBo, filter, xuatSauDongBo]);
 
+  // Badge kỳ đang xem — mặc định BẬT; suy từ filter (client), không gọi thêm API.
+  const badgeKy = nhanBadgeKy(filter.tuNgay, filter.denNgay);
+
   return (
     <div>
       <PageHeader
@@ -93,21 +114,13 @@ export function InvoicesPage() {
         subtitle="Hóa đơn điện tử kéo trực tiếp từ Tổng cục Thuế"
       />
 
+      {/* (a) Bộ lọc — đọc dữ liệu ĐÃ có (nhẹ). */}
       <Card style={{ marginBottom: "var(--sp-4)" }}>
+        <SectionLabel>Bộ lọc</SectionLabel>
         <FilterBar value={filter} onApply={applyFilter} />
-        {nenHienPanelDongBo(filter, canSync) && (
-          <RangeSyncPanel
-            backfill={backfill}
-            loiTaiXuong={
-              xuatSauDongBo.isError
-                ? "Đã đồng bộ xong nhưng tải file không thành công — bấm nút Xuất Excel/CSV để tải lại."
-                : null
-            }
-          />
-        )}
         <div
           style={{
-            marginTop: "var(--sp-3)",
+            marginTop: "var(--sp-4)",
             fontSize: "var(--fs-xs)",
             color: "var(--text-disabled)",
           }}
@@ -116,7 +129,24 @@ export function InvoicesPage() {
         </div>
       </Card>
 
+      {/* (b) Đồng bộ từ Tổng cục Thuế — kéo mới (nặng, chạy nền). Card riêng, chỉ vai đồng bộ. */}
+      {nenHienPanelDongBo(filter, canSync) && (
+        <Card style={{ marginBottom: "var(--sp-4)" }}>
+          <SectionLabel>Đồng bộ từ Tổng cục Thuế</SectionLabel>
+          <RangeSyncPanel
+            backfill={backfill}
+            loiTaiXuong={
+              xuatSauDongBo.isError
+                ? "Đã đồng bộ xong nhưng tải file không thành công — bấm nút Xuất Excel/CSV để tải lại."
+                : null
+            }
+          />
+        </Card>
+      )}
+
+      {/* (c) Kết quả + Xuất — số đếm là tiêu điểm (Stat). Đủ 4 trạng thái. */}
       <Card>
+        <SectionLabel>Kết quả</SectionLabel>
         {summary.isPending ? (
           <Loading />
         ) : summary.isError ? (
@@ -125,7 +155,7 @@ export function InvoicesPage() {
           <EmptyState
             message={
               backfillRunning
-                ? "Đang đồng bộ khoảng đã lọc từ Tổng cục Thuế — số liệu sẽ cập nhật khi lấy xong (xem tiến độ ở khung lọc phía trên)."
+                ? "Đang đồng bộ khoảng đã lọc từ Tổng cục Thuế — số liệu sẽ cập nhật khi lấy xong (xem tiến độ ở khung Đồng bộ phía trên)."
                 : "Không có hóa đơn khớp bộ lọc. Thử mở rộng kỳ hoặc bỏ bớt điều kiện."
             }
           />
@@ -134,14 +164,22 @@ export function InvoicesPage() {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center",
-              gap: "var(--sp-3)",
+              alignItems: "flex-start",
+              gap: "var(--sp-6)",
               flexWrap: "wrap",
             }}
           >
-            <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
-              Có {count} hóa đơn
-            </span>
+            <Stat
+              value={count}
+              label="hóa đơn khớp bộ lọc"
+              badge={
+                badgeKy ? (
+                  <Badge>
+                    <span className="tabular">Kỳ {badgeKy}</span>
+                  </Badge>
+                ) : undefined
+              }
+            />
             {/* B2 (U27) — kết xuất TOÀN BỘ kết quả theo bộ lọc hiện tại. */}
             <InvoiceExportButtons filter={filter} />
           </div>

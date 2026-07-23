@@ -163,7 +163,7 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     const { posts } = mockApi({ accounts: [ACC], rows: [ROW] });
     renderWithProviders(<InvoicesPageAs />);
     // count>0 → KHÔNG tự chạy; chờ số đếm hiện rồi bấm nút.
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     expect(posts).toHaveLength(0); // chưa bấm → chưa gọi
     await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
     expect(await screen.findByRole("progressbar")).toBeInTheDocument();

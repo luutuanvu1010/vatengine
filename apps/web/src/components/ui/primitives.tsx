@@ -117,22 +117,40 @@ const srOnly: React.CSSProperties = {
   border: 0,
 };
 
+// Cỡ bề rộng tối thiểu cho ô lọc — để hàng lọc TỰ XUỐNG HÀNG gọn thay vì dồn một hàng dài
+// (min-width là gợi ý wrap, không có token spacing tương ứng nên khai TẬP TRUNG ở đây, KHÔNG
+// rải px vào features/). Ô có `co` sẽ chiếm trọn bề rộng đó (width:100%) để trông cân.
+const OMIN: Record<"sm" | "md" | "lg", number> = { sm: 120, md: 150, lg: 168 };
+type CoO = keyof typeof OMIN;
+
+/** Style ô nhập/chọn khi có `co`: giữ nguyên oNhapCss + lấp đầy min-width. */
+function oNhapVoiCo(co?: CoO): React.CSSProperties {
+  return co ? { ...oNhapCss, width: "100%", boxSizing: "border-box" } : oNhapCss;
+}
+function boc(co?: CoO): React.CSSProperties {
+  return co
+    ? { display: "inline-grid", gap: "var(--sp-1)", minWidth: OMIN[co] }
+    : { display: "inline-grid", gap: "var(--sp-1)" };
+}
+
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   /** Ẩn nhãn về mặt thị giác (vẫn đọc được cho trình đọc màn hình). */
   hideLabel?: boolean;
+  /** Cỡ bề rộng tối thiểu (sm/md/lg) — bật hành vi wrap gọn trong thanh lọc. */
+  co?: CoO;
 }
 
 /** Ô nhập gọn cho thanh lọc — khác `TextField` (khối, nhãn to) ở chỗ inline + nhãn ẩn được. */
-export function Field({ label, hideLabel, id, ...rest }: FieldProps) {
+export function Field({ label, hideLabel, co, id, ...rest }: FieldProps) {
   const genId = useId();
   const inputId = id ?? genId;
   return (
-    <span style={{ display: "inline-grid", gap: "var(--sp-1)" }}>
+    <span style={boc(co)}>
       <label htmlFor={inputId} style={hideLabel ? srOnly : nhanCss}>
         {label}
       </label>
-      <input id={inputId} {...rest} style={oNhapCss} />
+      <input id={inputId} {...rest} style={oNhapVoiCo(co)} />
     </span>
   );
 }
@@ -141,20 +159,168 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
   hideLabel?: boolean;
   children: ReactNode;
+  /** Cỡ bề rộng tối thiểu (sm/md/lg) — bật hành vi wrap gọn trong thanh lọc. */
+  co?: CoO;
 }
 
 /** Ô chọn primitive — `<select>` gốc (cảm ứng tốt, không cần thư viện UI nặng). */
-export function Select({ label, hideLabel, id, children, ...rest }: SelectProps) {
+export function Select({ label, hideLabel, co, id, children, ...rest }: SelectProps) {
   const genId = useId();
   const selectId = id ?? genId;
   return (
-    <span style={{ display: "inline-grid", gap: "var(--sp-1)" }}>
+    <span style={boc(co)}>
       <label htmlFor={selectId} style={hideLabel ? srOnly : nhanCss}>
         {label}
       </label>
-      <select id={selectId} {...rest} style={oNhapCss}>
+      <select id={selectId} {...rest} style={oNhapVoiCo(co)}>
         {children}
       </select>
+    </span>
+  );
+}
+
+// --- Nhãn section nhỏ (đầu mỗi Card: "BỘ LỌC" / "KẾT QUẢ"…) ---------------------------
+// Chữ nhỏ, in hoa, giãn chữ — dẫn hướng thị giác giữa các khối. Một primitive để 3 card dùng
+// chung, KHÔNG lặp style nội tuyến ở features/ (Luật ui.md: thiếu kiểu → thêm primitive).
+export function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h2
+      style={{
+        fontSize: "var(--fs-sm)",
+        fontWeight: "var(--fw-bold)",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        color: "var(--text-tertiary)",
+        marginBottom: "var(--sp-4)",
+      }}
+    >
+      {children}
+    </h2>
+  );
+}
+
+// --- Stat / KPI (số đếm là tiêu điểm — brief §5) --------------------------------------
+// Số lớn (`--fs-3xl`, tabular) + nhãn phụ; `badge` tuỳ chọn xếp dưới (vd pill "Kỳ …").
+export function Stat({
+  value,
+  label,
+  badge,
+}: {
+  value: string | number;
+  label: string;
+  badge?: ReactNode;
+}) {
+  return (
+    <div style={{ display: "grid", gap: "var(--sp-3)" }}>
+      <div
+        style={{ display: "flex", alignItems: "baseline", gap: "var(--sp-3)", flexWrap: "wrap" }}
+      >
+        <span
+          className="tabular"
+          style={{
+            fontSize: "var(--fs-3xl)",
+            lineHeight: 1,
+            fontWeight: "var(--fw-extrabold)",
+            color: "var(--text-primary)",
+          }}
+        >
+          {value}
+        </span>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}>{label}</span>
+      </div>
+      {badge}
+    </div>
+  );
+}
+
+// --- Badge / Chip (pill) --------------------------------------------------------------
+// Pill nhỏ cho nhãn phụ (kỳ đang xem, tách theo chiều…). Tone neutral mặc định; info/success
+// dùng cho tách-theo-chiều nếu chủ dự án bật (mặc định TẮT).
+type BadgeTone = "neutral" | "info" | "success";
+const badgeTone: Record<BadgeTone, { bg: string; border: string; fg: string }> = {
+  neutral: {
+    bg: "var(--surface-muted)",
+    border: "var(--border-subtle)",
+    fg: "var(--text-secondary)",
+  },
+  info: { bg: "var(--info-50)", border: "var(--info-200)", fg: "var(--info-700)" },
+  success: { bg: "var(--success-50)", border: "var(--success-200)", fg: "var(--success-700)" },
+};
+
+export function Badge({ tone = "neutral", children }: { tone?: BadgeTone; children: ReactNode }) {
+  const s = badgeTone[tone];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--sp-2)",
+        alignSelf: "start",
+        padding: "var(--sp-1) var(--sp-3)",
+        background: s.bg,
+        border: `1px solid ${s.border}`,
+        borderRadius: "var(--radius-pill)",
+        fontSize: "var(--fs-xs)",
+        fontWeight: "var(--fw-semibold)",
+        color: s.fg,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+// --- Segmented control (nhóm nút liền khối, 1 mục đang chọn nổi lên) -------------------
+// Dùng cho nhóm Tháng/Quý/Năm (mockup). Bấm là gọi onChange NGAY cả khi mục đó ĐANG chọn —
+// vì ở ChonKy mỗi lần bấm còn "áp kỳ hiện tại" chứ không chỉ đổi lựa chọn.
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: ReadonlyArray<{ value: T; label: string }>;
+  value: T;
+  onChange: (value: T) => void;
+  ariaLabel?: string;
+}) {
+  return (
+    <span
+      aria-label={ariaLabel}
+      style={{
+        display: "inline-flex",
+        background: "var(--surface-muted)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-md)",
+        padding: 2,
+        gap: 2,
+      }}
+    >
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(o.value)}
+            style={{
+              padding: "var(--sp-2) var(--sp-4)",
+              fontSize: "var(--fs-sm)",
+              fontWeight: "var(--fw-semibold)",
+              fontFamily: "inherit",
+              border: "none",
+              borderRadius: "var(--radius-sm)",
+              cursor: "pointer",
+              background: active ? "var(--surface-card)" : "transparent",
+              color: active ? "var(--brand-700)" : "var(--text-secondary)",
+              boxShadow: active ? "var(--shadow-sm)" : "none",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </span>
   );
 }

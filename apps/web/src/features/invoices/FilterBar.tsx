@@ -28,13 +28,11 @@ export function FilterBar({
   const [draft, setDraft] = useState<InvoiceFilter>(value);
   const set = (patch: Partial<InvoiceFilter>) => setDraft((d) => ({ ...d, ...patch }));
 
-  // Kỳ chọn xong áp NGAY (giữ hành vi cũ: bấm Tháng/Quý/Năm → lọc liền). Các ô còn lại
-  // (chiều/nguồn/MST) vẫn theo hợp đồng "sửa bản nháp → bấm Lọc dữ liệu".
-  const apKy = (r: DateRange) => {
-    const next = { ...draft, ...r };
-    setDraft(next);
-    onApply(next);
-  };
+  // Thống nhất hợp đồng tương tác (ui.md "Hợp đồng tương tác nhất quán" + CHUAN §D5): MỌI
+  // thay đổi — KỂ CẢ chọn kỳ — chỉ cập nhật BẢN NHÁP; bấm "Lọc dữ liệu" mới áp. Hết cảnh
+  // "nút kỳ áp tức thì còn ô khác thì chờ" (anti-pattern chuẩn cấm). ChonKy chỉ điền
+  // tuNgay/denNgay vào nháp, không tự fetch.
+  const capNhatKyNhap = (r: DateRange) => setDraft((d) => ({ ...d, ...r }));
 
   // B1 (U27) — CHIỀU quyết định ô MST nào liên quan: mua vào chỉ lọc theo người bán,
   // bán ra chỉ lọc theo người mua. Ẩn ô còn lại VÀ dọn giá trị của nó để không lọc
@@ -52,66 +50,91 @@ export function FilterBar({
   const showNmmst = draft.chieu !== "purchase";
 
   return (
-    <div style={{ display: "grid", gap: "var(--sp-3)" }}>
-      <ChonKy onChon={apKy} />
+    <div style={{ display: "grid", gap: "var(--sp-4)" }}>
+      <ChonKy onChon={capNhatKyNhap} />
 
-      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "end" }}>
-        {/* 2026-07-23 — bộ CHỌN NGÀY trả lại (day-level) BÊN CẠNH nút kỳ nhanh: sửa ngày rồi
-            bấm "Lọc dữ liệu" mới áp (đúng hợp đồng "sửa nháp → bấm Lọc", khác ChonKy áp ngay).
-            ChonKy áp kỳ nào thì draft.tuNgay/denNgay đổi theo, hai ô này hiện đúng khoảng đó. */}
-        <Field
-          label="Từ ngày"
-          type="date"
-          value={draft.tuNgay ?? ""}
-          onChange={(e) => set({ tuNgay: e.target.value || undefined })}
-        />
-        <Field
-          label="Đến ngày"
-          type="date"
-          value={draft.denNgay ?? ""}
-          onChange={(e) => set({ denNgay: e.target.value || undefined })}
-        />
-        {/* U-K4 — "Lọc dữ liệu" (đọc nhẹ): hành động đọc dữ liệu ĐÃ CÓ, tách bạch với
-            "Đồng bộ và tải xuống" (kéo nặng từ Tổng cục Thuế) ở panel dưới. */}
-        <Button onClick={() => onApply(draft)}>Lọc dữ liệu</Button>
-        <Select label="Chiều" value={draft.chieu ?? ""} onChange={(e) => setChieu(e.target.value)}>
-          <option value="">Tất cả chiều</option>
-          {luaChon("chieu").map(([v, nhan]) => (
-            <option key={v} value={v}>
-              {nhan}
-            </option>
-          ))}
-        </Select>
-        <Select
-          label="Nguồn"
-          value={draft.nguon ?? ""}
-          onChange={(e) => set({ nguon: (e.target.value || undefined) as Nguon | undefined })}
-        >
-          <option value="">Mọi nguồn</option>
-          {luaChon("nguon").map(([v, nhan]) => (
-            <option key={v} value={v}>
-              {nhan}
-            </option>
-          ))}
-        </Select>
-        {showNbmst ? (
+      {/* Hairline ngăn nhóm "kỳ nhanh" với nhóm "khoảng ngày + lọc" — tách nhẹ, không kẻ nặng. */}
+      <div style={{ borderTop: "1px solid var(--border-subtle)" }} />
+
+      {/* Hàng lọc chi tiết: HAI nhóm con trong cùng container flex-wrap (gap --sp-4) — nhóm
+          "khoảng ngày" và nhóm "điều kiện" — để mỗi nhóm giữ khối riêng và tự xuống hàng gọn
+          (mỗi ô có min-width qua `co`). ChonKy điền tuNgay/denNgay vào bản nháp; TẤT CẢ chỉ áp
+          khi bấm "Lọc dữ liệu" — hợp đồng tương tác nhất quán (ui.md/CHUAN §D5). */}
+      <div style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap", alignItems: "end" }}>
+        {/* Nhóm khoảng ngày */}
+        <div style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap", alignItems: "end" }}>
           <Field
-            label="MST người bán"
-            hideLabel
-            placeholder="MST người bán"
-            value={draft.nbmst ?? ""}
-            onChange={(e) => set({ nbmst: e.target.value || undefined })}
+            label="Từ ngày"
+            type="date"
+            co="md"
+            value={draft.tuNgay ?? ""}
+            onChange={(e) => set({ tuNgay: e.target.value || undefined })}
           />
-        ) : null}
-        {showNmmst ? (
           <Field
-            label="MST người mua"
-            hideLabel
-            placeholder="MST người mua"
-            value={draft.nmmst ?? ""}
-            onChange={(e) => set({ nmmst: e.target.value || undefined })}
+            label="Đến ngày"
+            type="date"
+            co="md"
+            value={draft.denNgay ?? ""}
+            onChange={(e) => set({ denNgay: e.target.value || undefined })}
           />
-        ) : null}
+        </div>
+
+        {/* Nhóm điều kiện */}
+        <div style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap", alignItems: "end" }}>
+          <Select
+            label="Chiều"
+            co="md"
+            value={draft.chieu ?? ""}
+            onChange={(e) => setChieu(e.target.value)}
+          >
+            <option value="">Tất cả chiều</option>
+            {luaChon("chieu").map(([v, nhan]) => (
+              <option key={v} value={v}>
+                {nhan}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Nguồn"
+            co="md"
+            value={draft.nguon ?? ""}
+            onChange={(e) => set({ nguon: (e.target.value || undefined) as Nguon | undefined })}
+          >
+            <option value="">Mọi nguồn</option>
+            {luaChon("nguon").map(([v, nhan]) => (
+              <option key={v} value={v}>
+                {nhan}
+              </option>
+            ))}
+          </Select>
+          {showNbmst ? (
+            <Field
+              label="MST người bán"
+              hideLabel
+              co="lg"
+              placeholder="MST người bán"
+              value={draft.nbmst ?? ""}
+              onChange={(e) => set({ nbmst: e.target.value || undefined })}
+            />
+          ) : null}
+          {showNmmst ? (
+            <Field
+              label="MST người mua"
+              hideLabel
+              co="lg"
+              placeholder="MST người mua"
+              value={draft.nmmst ?? ""}
+              onChange={(e) => set({ nmmst: e.target.value || undefined })}
+            />
+          ) : null}
+        </div>
+
+        {/* U-K4 — "Lọc dữ liệu" (đọc nhẹ): đứng LIỀN SAU nhóm điều kiện (theo dòng chảy, đúng
+            mockup) — KHÔNG đẩy ra sát mép để khỏi lẻ loi. Lời gọi Button mặc định (variant +
+            onClick), secondary để khác trọng số với "Đồng bộ và tải xuống" (primary). */}
+        <Button variant="secondary" onClick={() => onApply(draft)}>
+          Lọc dữ liệu
+        </Button>
       </div>
     </div>
   );

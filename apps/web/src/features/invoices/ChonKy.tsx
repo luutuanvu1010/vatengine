@@ -1,11 +1,12 @@
 // U-K3 — bộ chọn kỳ (yêu cầu 1): chọn Tháng/Quý/Năm CỤ THỂ, kể cả kỳ QUÁ KHỨ, bằng
-// dropdown gốc (cảm ứng tốt). Ba nút Tháng/Quý/Năm giữ vai trò cũ — bấm là áp kỳ HIỆN TẠI
-// ngay (PARITY với hành vi đang chạy) VÀ đồng thời đổi độ chi tiết để chọn kỳ khác.
+// dropdown gốc (cảm ứng tốt). Segmented Tháng/Quý/Năm đổi độ chi tiết + phát khoảng kỳ ra
+// cha qua `onChon`. Việc ÁP là của cha: FilterBar đưa vào BẢN NHÁP, chỉ fetch khi bấm "Lọc
+// dữ liệu" — thống nhất hợp đồng tương tác ui.md/CHUAN §D5 (không còn áp tức thì).
 //
 // Kỳ suy qua period.ts (hàm THUẦN nhận kỳ tường minh) — component không tự tính lịch, không
 // gọi Date.now bên trong (nhận `homNay` để test xác định; production để rơi về new Date()).
 import { useState } from "react";
-import { Button, Select } from "../../components/ui/primitives";
+import { SegmentedControl, Select } from "../../components/ui/primitives";
 import {
   type DateRange,
   monthRangeOf,
@@ -46,7 +47,7 @@ export function ChonKy({
     else onChon(yearRangeOf(y));
   };
 
-  // Nút kỳ nhanh: đổi độ chi tiết VÀ áp kỳ HIỆN TẠI ngay (giữ hành vi cũ của 3 nút).
+  // Kỳ nhanh: đổi độ chi tiết + phát kỳ HIỆN TẠI ra cha (cha đưa vào nháp, áp khi bấm Lọc).
   const chonNhanh = (level: DoChiTiet) => {
     setDoChiTiet(level);
     setNam(namNay);
@@ -68,16 +69,29 @@ export function ChonKy({
         margin: 0,
       }}
     >
-      <span style={{ display: "flex", gap: "var(--sp-1)" }}>
-        <Button variant="secondary" onClick={() => chonNhanh("thang")}>
-          Tháng
-        </Button>
-        <Button variant="secondary" onClick={() => chonNhanh("quy")}>
-          Quý
-        </Button>
-        <Button variant="secondary" onClick={() => chonNhanh("nam")}>
-          Năm
-        </Button>
+      {/* Nhóm "kỳ nhanh" dạng segmented control (khớp mockup): nhãn nhỏ + hộp liền khối. */}
+      <span style={{ display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
+        <span
+          style={{
+            fontSize: "var(--fs-xs)",
+            fontWeight: "var(--fw-semibold)",
+            color: "var(--text-disabled)",
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+          }}
+        >
+          Kỳ nhanh
+        </span>
+        <SegmentedControl<DoChiTiet>
+          ariaLabel="Kỳ nhanh"
+          value={doChiTiet}
+          onChange={chonNhanh}
+          options={[
+            { value: "thang", label: "Tháng" },
+            { value: "quy", label: "Quý" },
+            { value: "nam", label: "Năm" },
+          ]}
+        />
       </span>
 
       <Select

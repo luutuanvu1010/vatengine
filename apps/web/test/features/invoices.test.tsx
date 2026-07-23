@@ -4,8 +4,18 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { InvoicesPage } from "../../src/features/invoices/InvoicesPage";
+import { InvoicesPage, nhanBadgeKy } from "../../src/features/invoices/InvoicesPage";
 import { renderWithProviders } from "../helpers/renderApp";
+
+describe("nhanBadgeKy — nhãn kỳ đang xem (thuần, suy từ filter)", () => {
+  it("format 'dd/MM – dd/MM/yyyy'", () => {
+    expect(nhanBadgeKy("2026-07-01", "2026-07-31")).toBe("01/07 – 31/07/2026");
+  });
+  it("thiếu kỳ → null (không hiện badge)", () => {
+    expect(nhanBadgeKy(undefined, "2026-07-31")).toBeNull();
+    expect(nhanBadgeKy("2026-07-01", undefined)).toBeNull();
+  });
+});
 
 let fetchMock: { mock: { calls: unknown[][] } };
 
@@ -35,36 +45,46 @@ describe("Danh sách hóa đơn — chỉ số đếm (2026-07-23)", () => {
     vi.restoreAllMocks();
   });
 
-  it("hiện SỐ ĐẾM từ summary; KHÔNG hiện 'Tổng thanh toán'; KHÔNG có bảng", async () => {
+  it("hiện SỐ ĐẾM (Stat) từ summary; KHÔNG hiện 'Tổng thanh toán'; KHÔNG có bảng", async () => {
     mockCount(3);
     renderWithProviders(<InvoicesPage />);
-    expect(await screen.findByText("Có 3 hóa đơn")).toBeInTheDocument();
+    // Số đếm nay là Stat: số lớn "3" + nhãn phụ "hóa đơn khớp bộ lọc".
+    expect(await screen.findByText("hóa đơn khớp bộ lọc")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.queryByText(/Tổng thanh toán/)).toBeNull();
     // Không render bảng → không có tiêu đề cột đặc trưng của bảng.
     expect(screen.queryByText("Hàng hóa, dịch vụ")).toBeNull();
+    // Badge kỳ đang xem (mặc định BẬT) — suy từ filter, không gọi thêm API.
+    // Khớp RIÊNG badge ("Kỳ dd/MM…"), không dính nhãn "Kỳ nhanh" của segmented control.
+    expect(screen.getByText(/^Kỳ \d{2}\//)).toBeInTheDocument();
   });
 
   it("B4: KHÔNG có ô tìm tự do 'tên đối tác/số HĐ' — chỉ MST bán/mua", async () => {
     mockCount(1);
     renderWithProviders(<InvoicesPage />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
     expect(screen.queryByPlaceholderText(/tên đối tác/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText("MST người bán")).toBeInTheDocument();
     expect(screen.getByLabelText("MST người mua")).toBeInTheDocument();
   });
 
-  it("chọn kỳ 'Năm' → gọi /invoices/summary kèm tuNgay/denNgay", async () => {
+  // Hợp đồng tương tác nhất quán (ui.md/CHUAN §D5): chọn kỳ chỉ CẬP NHẬT BẢN NHÁP, KHÔNG
+  // fetch tức thì; phải bấm "Lọc dữ liệu" mới áp — giống mọi ô lọc khác.
+  it("chọn kỳ 'Năm' KHÔNG fetch ngay; bấm 'Lọc dữ liệu' mới gọi summary với kỳ NĂM", async () => {
     mockCount(1);
     renderWithProviders(<InvoicesPage />);
-    await screen.findByText("Có 1 hóa đơn");
+    await screen.findByText("hóa đơn khớp bộ lọc");
+
+    // Query kỳ-năm = tuNgay=YYYY-01-01 & denNgay=YYYY-12-31 (khoảng tháng không thể có cả hai).
+    const laKyNam = (c: unknown[]) => /tuNgay=\d{4}-01-01&denNgay=\d{4}-12-31/.test(String(c[0]));
+
+    // Bấm "Năm" nhưng CHƯA bấm Lọc dữ liệu → chưa được có truy vấn kỳ-năm nào.
     await userEvent.click(screen.getByRole("button", { name: "Năm" }));
-    await waitFor(() => {
-      const called = fetchMock.mock.calls.some((c) => {
-        const u = String(c[0]);
-        return u.includes("/invoices/summary?") && u.includes("tuNgay=") && u.includes("denNgay=");
-      });
-      expect(called).toBe(true);
-    });
+    expect(fetchMock.mock.calls.some(laKyNam)).toBe(false);
+
+    // Bấm "Lọc dữ liệu" → nay mới áp bản nháp → summary gọi với kỳ NĂM.
+    await userEvent.click(screen.getByRole("button", { name: "Lọc dữ liệu" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(laKyNam)).toBe(true));
   });
 
   it("trạng thái rỗng khi không có hóa đơn (count 0)", async () => {

@@ -60,12 +60,16 @@ export function RangeSyncPanel({
   const { state, lineResult, start } = backfill;
   const running = state.kind === "dang_lay";
   return (
-    <div style={{ marginTop: "var(--sp-3)", display: "grid", gap: "var(--sp-2)" }}>
-      {/* 2026-07-23 — bỏ dòng caption mô tả khoảng: nút + thanh tiến độ đã tự nói rõ. */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", flexWrap: "wrap" }}>
+    <div style={{ display: "grid", gap: "var(--sp-2)" }}>
+      {/* Nút primary (kéo NẶNG, chính của panel) + câu phụ giải thích hành động chạy nền. */}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-4)", flexWrap: "wrap" }}>
         <Button onClick={start} disabled={running}>
           {running ? "Đang đồng bộ…" : "Đồng bộ và tải xuống"}
         </Button>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)", maxWidth: 520 }}>
+          Kéo dữ liệu mới trực tiếp từ máy chủ thuế cho khoảng kỳ đã chọn (chạy nền), rồi tự tải
+          file khi xong.
+        </span>
       </div>
 
       {loiTaiXuong ? <Alert tone="warning">{loiTaiXuong}</Alert> : null}
