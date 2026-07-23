@@ -31,6 +31,8 @@
   --text-secondary: #3c4043;
   --text-tertiary: #5f6368;
   --text-disabled: #80868b;
+  /* Chữ trên nền màu đậm (brand/success…) — token ngữ nghĩa để features/ thôi gõ "#fff". */
+  --text-on-brand: #ffffff;
   /* border + surface */
   --border-strong: #bdc1c6;
   --border: #dadce0;

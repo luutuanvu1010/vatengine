@@ -19,7 +19,7 @@ function LinkButton({ href, children }: { href: string; children: ReactNode }) {
         padding: "var(--sp-3) var(--sp-5)",
         fontSize: "var(--fs-base)",
         fontWeight: "var(--fw-semibold)",
-        color: "#fff",
+        color: "var(--text-on-brand)",
         background: "var(--brand-600)",
         border: "1px solid transparent",
         borderRadius: "var(--radius-md)",

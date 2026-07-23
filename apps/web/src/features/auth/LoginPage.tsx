@@ -200,7 +200,7 @@ export function LoginPage() {
         style={{
           display: isMobile ? "none" : "grid",
           background: "var(--brand-600)",
-          color: "#fff",
+          color: "var(--text-on-brand)",
           alignContent: "center",
           gap: "var(--sp-6)",
           padding: "var(--sp-12)",

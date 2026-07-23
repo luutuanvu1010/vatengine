@@ -2,6 +2,7 @@
 // tập, không lọc cục bộ 50 dòng đang xem — lọc client sẽ khiến người dùng tưởng đã lọc hết
 // rồi xuất thiếu dữ liệu). Bám design token, không hardcode màu.
 import { useEffect, useRef, useState } from "react";
+import { Field } from "../../components/ui/primitives";
 import type { SortBy } from "../../types/api";
 
 export type LoaiLoc = "text" | "select" | "range" | "none";
@@ -56,16 +57,6 @@ const nutMuc: React.CSSProperties = {
   borderRadius: "var(--radius-sm)",
   fontSize: "var(--fs-sm)",
   color: "var(--text-secondary)",
-  width: "100%",
-};
-
-const oNhap: React.CSSProperties = {
-  padding: "var(--sp-2)",
-  fontSize: "var(--fs-sm)",
-  fontFamily: "inherit",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-sm)",
-  background: "var(--surface-card)",
   width: "100%",
 };
 
@@ -148,8 +139,9 @@ export function ColumnMenu(p: ColumnMenuProps) {
 
           {p.loaiLoc === "text" && (
             <>
-              <input
-                style={oNhap}
+              <Field
+                label={`Lọc ${p.nhan}`}
+                hideLabel
                 value={nhap}
                 placeholder="Chứa…"
                 onChange={(e) => setNhap(e.target.value)}
@@ -169,15 +161,17 @@ export function ColumnMenu(p: ColumnMenuProps) {
           {p.loaiLoc === "range" && (
             <>
               {/* Giá trị truyền lên dạng "tu|den" — trang cha tách ra thành hai tham số. */}
-              <input
-                style={oNhap}
+              <Field
+                label={`${p.nhan} từ`}
+                hideLabel
                 inputMode="decimal"
                 placeholder="Từ…"
                 value={nhap.split("|")[0] ?? ""}
                 onChange={(e) => setNhap(`${e.target.value}|${nhap.split("|")[1] ?? ""}`)}
               />
-              <input
-                style={oNhap}
+              <Field
+                label={`${p.nhan} đến`}
+                hideLabel
                 inputMode="decimal"
                 placeholder="Đến…"
                 value={nhap.split("|")[1] ?? ""}

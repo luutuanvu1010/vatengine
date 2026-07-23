@@ -134,7 +134,7 @@ export function SettingsPage() {
               disabled={saving}
               style={{
                 background: "var(--brand-600)",
-                color: "#fff",
+                color: "var(--text-on-brand)",
                 border: "none",
                 borderRadius: "var(--radius-md)",
                 padding: "var(--sp-2) var(--sp-4)",
