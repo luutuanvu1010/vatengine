@@ -152,6 +152,16 @@ export const adminApi = {
     return request("POST", `/admin/tenants/${id}/gui-link-dat-mat-khau`);
   },
 
+  /** Đổi MST của tenant (sửa lỗi gõ nhầm lúc đăng ký). Backend chặn nếu tenant đã từng đồng
+   * bộ; nếu có kết nối thuế chưa đồng bộ thì tự xoá (username tự gán = MST cũ nên giữ lại
+   * là kết nối chết). Xem spec 2026-07-23. */
+  doiMst(
+    id: string,
+    mst: string,
+  ): Promise<{ ok: true; mst_cu: string; mst_moi: string; so_tk_thue_da_xoa: number }> {
+    return request("POST", `/admin/tenants/${id}/doi-mst`, { body: { mst } });
+  },
+
   /**
    * Sửa metadata. CHỈ `ten` / `goi_dich_vu` / `ghi_chu`.
    * KHÔNG có `email` (D4) và KHÔNG có `mst`: MST là khoá tự nhiên (1 MST ↔ 1 tenant), và

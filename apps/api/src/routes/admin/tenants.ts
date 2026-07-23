@@ -33,6 +33,10 @@ const patchSchema = z
   })
   .strict();
 
+// MST 10 hoặc 13 chữ số — verbatim theo spec, khớp `dangKy.ts`.
+const MST_RE = /^\d{10}$|^\d{13}$/;
+const doiMstSchema = z.object({ mst: z.string() }).strict();
+
 /** Ánh xạ path → hành động máy trạng thái. Path dùng gạch nối (quy ước URL), hành động
  * dùng gạch dưới (quy ước định danh) — khai một chỗ để hai bên không trôi khỏi nhau. */
 const HANH_DONG_THEO_PATH: Record<string, HanhDongAdmin> = {
@@ -276,6 +280,55 @@ export function adminTenantsRoutes(deps: AppDeps) {
         da_gui_thu: kq.daGuiThu,
         het_han: kq.hetHan.toISOString(),
       });
+    } finally {
+      await close();
+    }
+  });
+
+  // ── Đổi MST ────────────────────────────────────────────────────────────────────────
+  // Cửa hẹp sửa lỗi gõ nhầm MST lúc đăng ký (spec 2026-07-23). Mọi chốt ép ở hàm DB
+  // `doi_mst_tenant`: chặn khi tenant đã từng đồng bộ (`lan_dong_bo` — KHÔNG chạm `hoa_don`,
+  // ranh giới pháp lý), UNIQUE bắt trùng MST, và xoá `tai_khoan_thue` trong cùng giao dịch
+  // (username tự gán = MST cũ nên giữ lại là kết nối chết). Route chỉ validate dạng MST và
+  // dịch lỗi DB sang HTTP.
+  r.post("/:id/doi-mst", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    const parsed = doiMstSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "bad_request" }, 400);
+    const mst = parsed.data.mst.trim();
+    if (!MST_RE.test(mst)) return c.json({ error: "mst_khong_hop_le" }, 400);
+
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      let row: { mst_cu: string; mst_moi: string; so_tk_thue_da_xoa: number };
+      try {
+        const res = (await db.execute(
+          sql`select mst_cu, mst_moi, so_tk_thue_da_xoa from doi_mst_tenant(${id}::uuid, ${mst})`,
+        )) as { rows: Array<typeof row> };
+        const r0 = res.rows[0];
+        if (!r0) return c.json({ error: "not_found" }, 404);
+        row = r0;
+      } catch (err) {
+        // Hàm DB ném qua RAISE EXCEPTION — thông điệp gốc ở `.cause.message` (drizzle bọc),
+        // lỗi UNIQUE ở `.cause.code` (như dangKy.ts). KHÔNG bắt lỗi khác: lỗi hạ tầng thật
+        // vẫn phải nổi lên app.onError → 500.
+        const cause = (err as { cause?: { code?: string; message?: string } })?.cause;
+        const msg = cause?.message ?? "";
+        if (msg.includes("khong_thay")) return c.json({ error: "not_found" }, 404);
+        if (msg.includes("da_co_du_lieu")) return c.json({ error: "da_co_du_lieu" }, 409);
+        if (cause?.code === "23505") return c.json({ error: "mst_da_ton_tai" }, 409);
+        throw err;
+      }
+
+      await ghiAuditAdmin(db, {
+        hanhDong: "doi_mst_tenant",
+        doiTuong: id,
+        nguoiThucHien: c.get("adminId"),
+        // MST là định danh doanh nghiệp, KHÔNG phải dữ liệu cá nhân (QĐ-17) ⇒ ghi cũ→mới.
+        chiTiet: { cu: row.mst_cu, moi: row.mst_moi, tk_thue_da_xoa: row.so_tk_thue_da_xoa },
+      });
+      return c.json({ ok: true, ...row });
     } finally {
       await close();
     }
