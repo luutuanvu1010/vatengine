@@ -3,10 +3,21 @@
 // Chặn theo `lan_dong_bo` (đã từng đồng bộ), KHÔNG chạm `hoa_don` — ranh giới pháp lý cứng
 // cấm đường quản trị tới bảng hoá đơn (chốt 2026-07-15). Role riêng `doi_mst_api`, hàm
 // KHÔNG mang tiền tố `admin_` (không đảo danh sách admin_* mà 0011 khoá bằng test bất biến).
-import { lanDongBo, nguoiDung, taiKhoanThue, tenants } from "@vat/db";
+import { auditLogAdmin, lanDongBo, nguoiDung, taiKhoanThue, tenants } from "@vat/db";
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { type Db, freshDb, makeTenant } from "../helpers";
+import { createApp } from "../../src/app";
+import {
+  type Db,
+  adminTokenFor,
+  bearer,
+  freshDb,
+  injectDb,
+  makeEnv,
+  makeTenant,
+  seedSuperAdmin,
+  tokenFor,
+} from "../helpers";
 
 /** Tạo một tài khoản thuế cho tenant, trả id — `lan_dong_bo` cần nó (FK not-null). */
 async function themTaiKhoanThue(
@@ -120,5 +131,97 @@ describe("hàm DB doi_mst_tenant", () => {
       select count(*)::int n from information_schema.role_table_grants
       where grantee = 'doi_mst_api' and table_name = 'hoa_don'`)) as { rows: Array<{ n: number }> };
     expect(r.rows[0]?.n).toBe(0);
+  });
+});
+
+describe("POST /admin/tenants/:id/doi-mst", () => {
+  let db: Db;
+  let app: ReturnType<typeof createApp>;
+  let token: string;
+  let tenantId: string;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    app = createApp(injectDb(db));
+    const adminId = await seedSuperAdmin(db, "chu@vatengine.vn", "mat-khau-chu");
+    token = await adminTokenFor(adminId);
+    tenantId = await makeTenant(db, "Cty Thử", "0100000001");
+    await db.insert(nguoiDung).values({ tenantId, email: "a@b.vn", vaiTro: "quan_tri" });
+  });
+
+  const doi = (mst: unknown, id = tenantId, hdr = bearer(token)) =>
+    app.request(
+      `/admin/tenants/${id}/doi-mst`,
+      {
+        method: "POST",
+        headers: { ...hdr, "content-type": "application/json" },
+        body: JSON.stringify({ mst }),
+      },
+      makeEnv(),
+    );
+
+  it("đổi thành công → 200 + cũ/mới + số tk xoá", async () => {
+    const res = await doi("0100000002");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      mst_cu: "0100000001",
+      mst_moi: "0100000002",
+      so_tk_thue_da_xoa: 0,
+    });
+  });
+
+  it("🔴 token KHÁCH bị từ chối (route sau requireSuperAdmin)", async () => {
+    const kh = bearer(await tokenFor(tenantId, { role: "quan_tri" }));
+    const res = await doi("0100000002", tenantId, kh);
+    expect(res.status).toBe(401);
+  });
+
+  it("🔴 đã đồng bộ → 409 da_co_du_lieu", async () => {
+    const [k] = await db
+      .insert(taiKhoanThue)
+      .values({ tenantId, username: "0100000001", loai: "chinh" })
+      .returning({ id: taiKhoanThue.id });
+    await db.insert(lanDongBo).values({
+      tenantId,
+      taikhoanId: k?.id as string,
+      chieu: "purchase",
+      tuNgay: new Date("2026-01-01"),
+      denNgay: new Date("2026-01-31"),
+    });
+    const res = await doi("0100000002");
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "da_co_du_lieu" });
+  });
+
+  it("trùng MST tenant khác → 409 mst_da_ton_tai", async () => {
+    await makeTenant(db, "Cty B", "0100000099");
+    const res = await doi("0100000099");
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "mst_da_ton_tai" });
+  });
+
+  it.each(["123", "abcdefghij", "01000000011", ""])(
+    "MST sai dạng %s → 400 mst_khong_hop_le",
+    async (mst) => {
+      const res = await doi(mst);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "mst_khong_hop_le" });
+    },
+  );
+
+  it("tenant không tồn tại → 404", async () => {
+    const res = await doi("0100000002", crypto.randomUUID());
+    expect(res.status).toBe(404);
+  });
+
+  it("ghi audit doi_mst_tenant cũ→mới", async () => {
+    await doi("0100000002");
+    const rows = await db.select().from(auditLogAdmin);
+    const a = rows.find((x) => x.hanhDong === "doi_mst_tenant");
+    expect(a).toBeDefined();
+    const s = JSON.stringify(a?.chiTiet);
+    expect(s).toContain("0100000001");
+    expect(s).toContain("0100000002");
   });
 });

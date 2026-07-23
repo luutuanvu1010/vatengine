@@ -23,6 +23,7 @@ const NHAN: Record<string, string> = {
   cap_mat_khau_tam: "Cấp mật khẩu tạm (đã ngừng)",
   reset_mat_khau_tenant: "Cấp lại mật khẩu tạm (đã ngừng)",
   gui_link_dat_mat_khau: "Gửi liên kết đặt mật khẩu",
+  doi_mst_tenant: "Đổi mã số thuế",
   sua_metadata_tenant: "Sửa thông tin doanh nghiệp",
 };
 

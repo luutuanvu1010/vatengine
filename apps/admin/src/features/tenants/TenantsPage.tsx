@@ -9,6 +9,7 @@ import { useState } from "react";
 import { AdminApiError, adminApi } from "../../lib/adminApiClient";
 import type { KetQuaGuiThuDatMatKhau, TenantRow, TrangThaiTenant } from "../../lib/types";
 import { DaGuiThuDialog } from "./DaGuiThuDialog";
+import { DoiMstDialog } from "./DoiMstDialog";
 
 const TAB: Array<{ ma: TrangThaiTenant | "tat_ca"; nhan: string }> = [
   // "Chờ duyệt" đứng đầu VÀ là mặc định: đó là việc cần làm của chủ dự án, không phải
@@ -88,6 +89,7 @@ export function TenantsPage() {
   // Nhớ tenant vừa thao tác để nút "Gửi lại thư" trong hộp thoại biết gửi cho AI. Thiếu
   // nó thì nút đó hoặc phải đóng hộp thoại đi tìm lại hàng, hoặc gửi nhầm người.
   const [tenantDangThaoTac, setTenantDangThaoTac] = useState<string | null>(null);
+  const [doiMstTenant, setDoiMstTenant] = useState<TenantRow | null>(null);
   const [loiThaoTac, setLoiThaoTac] = useState<string | null>(null);
 
   const ds = useQuery({
@@ -265,6 +267,25 @@ export function TenantsPage() {
                             {NHAN_NUT[hd]}
                           </button>
                         ))}
+                        {/* Đổi MST — nút RIÊNG, không thuộc máy trạng thái (nó không đổi
+                            trạng thái). Backend là chốt thật: chặn khi tenant đã đồng bộ,
+                            trả thông điệp rõ. ẨN ở `tu_choi`: đó là trạng thái CUỐI, tenant
+                            đã chết — sửa MST cho nó vô nghĩa (muốn dùng thì đăng ký lại). */}
+                        {t.trang_thai !== "tu_choi" && (
+                          <button
+                            type="button"
+                            onClick={() => setDoiMstTenant(t)}
+                            style={{
+                              padding: "0.3rem 0.7rem",
+                              background: "var(--nen-noi-2)",
+                              color: "var(--chu)",
+                              border: "1px solid var(--vien)",
+                              fontSize: "var(--fs-sm)",
+                            }}
+                          >
+                            Đổi MST
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -283,6 +304,22 @@ export function TenantsPage() {
             if (tenantDangThaoTac) {
               thaoTac.mutate({ hanhDong: "gui_lai_link", id: tenantDangThaoTac });
             }
+          }}
+        />
+      )}
+
+      {doiMstTenant && (
+        <DoiMstDialog
+          tenant={doiMstTenant}
+          onDong={() => setDoiMstTenant(null)}
+          onXong={(soTkXoa) => {
+            setDoiMstTenant(null);
+            setLoiThaoTac(
+              soTkXoa > 0
+                ? `Đã đổi MST và ngắt ${soTkXoa} kết nối Tổng cục Thuế. Khách cần kết nối lại.`
+                : "Đã đổi mã số thuế.",
+            );
+            void qc.invalidateQueries({ queryKey: ["tenants"] });
           }}
         />
       )}

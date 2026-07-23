@@ -20,6 +20,7 @@ vi.mock("../../src/lib/adminApiClient", async (importOriginal) => {
       khoaTenant: vi.fn(),
       moKhoaTenant: vi.fn(),
       guiLaiLinkDatMatKhau: vi.fn(),
+      doiMst: vi.fn(),
       suaMetadata: vi.fn(),
       docAudit: vi.fn(),
     },
@@ -343,5 +344,69 @@ describe("Trang nhật ký quản trị", () => {
     api.docAudit.mockRejectedValue(new AdminApiError(500));
     renderAudit();
     expect(await screen.findByRole("alert")).toHaveTextContent(/Không tải được nhật ký/i);
+  });
+});
+
+describe("Đổi MST", () => {
+  it("bấm 'Đổi MST' → hiện dialog nhập MST mới", async () => {
+    api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
+    renderTenants();
+    await userEvent.click(await screen.findByRole("button", { name: "Đổi MST" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText(/mã số thuế mới/i)).toBeInTheDocument();
+  });
+
+  it("đổi thành công → gọi API đúng id+mst, đóng dialog, nạp lại danh sách", async () => {
+    api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
+    api.doiMst.mockResolvedValue({
+      ok: true,
+      mst_cu: "0100000001",
+      mst_moi: "0100000002",
+      so_tk_thue_da_xoa: 0,
+    });
+    renderTenants();
+    await userEvent.click(await screen.findByRole("button", { name: "Đổi MST" }));
+    const hop = within(await screen.findByRole("dialog"));
+    await userEvent.type(hop.getByLabelText(/mã số thuế mới/i), "0100000002");
+    await userEvent.click(hop.getByRole("button", { name: "Đổi MST" }));
+    await waitFor(() => expect(api.doiMst).toHaveBeenCalledWith(tenant().id, "0100000002"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("🔴 409 đã đồng bộ → hiện thông điệp KHÔNG đổi được, KHÔNG đóng dialog", async () => {
+    api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
+    api.doiMst.mockRejectedValue(new AdminApiError(409, "da_co_du_lieu"));
+    renderTenants();
+    await userEvent.click(await screen.findByRole("button", { name: "Đổi MST" }));
+    const hop = within(await screen.findByRole("dialog"));
+    await userEvent.type(hop.getByLabelText(/mã số thuế mới/i), "0100000002");
+    await userEvent.click(hop.getByRole("button", { name: "Đổi MST" }));
+    await waitFor(() => expect(hop.getByText(/đã có dữ liệu|đã đồng bộ/i)).toBeInTheDocument());
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("409 trùng MST → thông điệp trùng", async () => {
+    api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
+    api.doiMst.mockRejectedValue(new AdminApiError(409, "mst_da_ton_tai"));
+    renderTenants();
+    await userEvent.click(await screen.findByRole("button", { name: "Đổi MST" }));
+    const hop = within(await screen.findByRole("dialog"));
+    await userEvent.type(hop.getByLabelText(/mã số thuế mới/i), "0100000099");
+    await userEvent.click(hop.getByRole("button", { name: "Đổi MST" }));
+    await waitFor(() =>
+      expect(hop.getByText(/đã thuộc về doanh nghiệp khác/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("MST sai dạng → báo tại chỗ, KHÔNG gọi API", async () => {
+    api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
+    renderTenants();
+    await userEvent.click(await screen.findByRole("button", { name: "Đổi MST" }));
+    const hop = within(await screen.findByRole("dialog"));
+    await userEvent.type(hop.getByLabelText(/mã số thuế mới/i), "123");
+    await userEvent.click(hop.getByRole("button", { name: "Đổi MST" }));
+    // Bám cả câu lỗi qua role=alert — chuỗi "10 hoặc 13 chữ số" cũng có trong NHÃN ô nhập.
+    expect(hop.getByRole("alert")).toHaveTextContent(/Mã số thuế phải gồm 10 hoặc 13 chữ số/i);
+    expect(api.doiMst).not.toHaveBeenCalled();
   });
 });
