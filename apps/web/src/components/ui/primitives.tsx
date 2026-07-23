@@ -1,6 +1,11 @@
 // Bộ primitive UI dùng chung — bám 07-DESIGN_TOKENS (chỉ dùng biến --…, không hardcode
 // hex). Nhất quán mọi màn: cùng nút/thẻ/cảnh báo/trạng thái (brief §5).
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+} from "react";
 import { useId } from "react";
 import { vi } from "../../lib/i18n/vi";
 
@@ -79,6 +84,78 @@ export function TextField({ label, id, ...rest }: TextFieldProps) {
         }}
       />
     </div>
+  );
+}
+
+// Ô nhập/chọn dùng trong thanh lọc: gọn (inline), nhãn có thể ẩn về mặt thị giác nhưng
+// LUÔN gắn `htmlFor`↔`id` để trình đọc màn hình đọc được (a11y — Luật ui.md). Kiểu đến từ
+// token, không tô nội tuyến ở nơi dùng (features/ bị phép kiểm convention chặn `style=`).
+const nhanCss: React.CSSProperties = {
+  fontSize: "var(--fs-sm)",
+  fontWeight: "var(--fw-semibold)",
+  color: "var(--text-secondary)",
+};
+const oNhapCss: React.CSSProperties = {
+  padding: "var(--sp-2) var(--sp-3)",
+  fontSize: "var(--fs-sm)",
+  fontFamily: "inherit",
+  color: "var(--text-primary)",
+  background: "var(--surface-card)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius-md)",
+};
+
+const srOnly: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
+interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
+  label: string;
+  /** Ẩn nhãn về mặt thị giác (vẫn đọc được cho trình đọc màn hình). */
+  hideLabel?: boolean;
+}
+
+/** Ô nhập gọn cho thanh lọc — khác `TextField` (khối, nhãn to) ở chỗ inline + nhãn ẩn được. */
+export function Field({ label, hideLabel, id, ...rest }: FieldProps) {
+  const genId = useId();
+  const inputId = id ?? genId;
+  return (
+    <span style={{ display: "inline-grid", gap: "var(--sp-1)" }}>
+      <label htmlFor={inputId} style={hideLabel ? srOnly : nhanCss}>
+        {label}
+      </label>
+      <input id={inputId} {...rest} style={oNhapCss} />
+    </span>
+  );
+}
+
+interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  label: string;
+  hideLabel?: boolean;
+  children: ReactNode;
+}
+
+/** Ô chọn primitive — `<select>` gốc (cảm ứng tốt, không cần thư viện UI nặng). */
+export function Select({ label, hideLabel, id, children, ...rest }: SelectProps) {
+  const genId = useId();
+  const selectId = id ?? genId;
+  return (
+    <span style={{ display: "inline-grid", gap: "var(--sp-1)" }}>
+      <label htmlFor={selectId} style={hideLabel ? srOnly : nhanCss}>
+        {label}
+      </label>
+      <select id={selectId} {...rest} style={oNhapCss}>
+        {children}
+      </select>
+    </span>
   );
 }
 

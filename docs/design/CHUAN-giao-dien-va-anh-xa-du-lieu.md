@@ -156,8 +156,8 @@ Nguyên tắc: **không viết lại toàn bộ frontend**. Dựng khung rồi *
 | **U-K0** | Chốt & tạo `.claude/rules/ui.md` + tài liệu Registry (từ tài liệu này) | Có "gốc" thành văn, có hiệu lực |
 | **U-K1** ✅ | Dựng Registry miền hoá đơn; **`EXPORT_COLUMNS` dẫn xuất từ Registry** (không đổi hành vi file xuất — có test giữ nguyên đầu ra) | Một nguồn sự thật, đã chứng minh không phá xuất |
 | **U-K2** ✅ | `InvoiceTable` + allowlist sắp/lọc **đọc Registry** thay vì khai tay | Bảng & server cùng nguồn; nhãn hết lệch |
-| **U-K3** | Bổ sung primitive `Select`/`Field`; `FilterBar` dùng primitive + pattern `ChonKy` | Yêu cầu (1) rơi ra tự nhiên |
-| **U-K4** | Áp hợp đồng tương tác + mặc định tháng hiện tại + đổi tên nút + tự tải sau đồng bộ | Yêu cầu (2)(3) hoàn tất |
+| **U-K3** ✅ | Bổ sung primitive `Select`/`Field`; `FilterBar` dùng primitive + pattern `ChonKy` | Yêu cầu (1) rơi ra tự nhiên |
+| **U-K4** ✅ | Áp hợp đồng tương tác + mặc định tháng hiện tại + đổi tên nút + tự tải sau đồng bộ | Yêu cầu (2)(3) hoàn tất |
 | **U-K5** *(tùy chọn)* | Bộ lọc lên URL; chỉ mục `(tenant_id, tdlap)` | Chia sẻ được + nhanh ở quy mô lớn |
 
 Mỗi đơn vị đều theo vòng lặp chuẩn của dự án (viết test trước → hiện thực tối thiểu → `make lint && make test` → review chéo → commit nhỏ). Có thể dừng ở bất kỳ đơn vị nào mà hệ thống vẫn chạy.
@@ -288,3 +288,22 @@ Ngược lại, một ý tưởng **trượt cổng** trông như: "thêm riêng
 `dvtte`, `ttxly`, `tthai` server sắp được nhưng bảng **chưa** mời sắp — khoảng lệch này có từ U31, U-K2 chỉ biến nó thành **dữ liệu thấy được** thay vì ẩn trong JSX. Bật thêm là quyết định sản phẩm, không phải việc của refactor.
 
 **Nhãn ngắn (`nhanNgan`) là có chủ ý, không phải trôi.** Bảng hẹp nên hiện "Tổng TT", file xuất hiện "Tổng thanh toán" — nhưng cả hai nay sinh từ **một** khai báo `tgtttbso`, nên không thể lệch ngẫu nhiên nữa. Muốn bảng hiện nhãn đầy đủ: xoá đúng dòng `nhanNgan` trong Registry, một nơi.
+
+### U-K3 (xong) — primitive Select/Field + bộ chọn kỳ dropdown (yêu cầu 1)
+
+- **Primitive mới** `Select` + `Field` (`components/ui/primitives.tsx`): `<select>`/`<input>` gốc (cảm ứng tốt), nhãn gắn `htmlFor`↔`id`, ẩn nhãn được (`hideLabel`) mà vẫn đọc cho trình đọc màn hình. Chỉ token.
+- **`period.ts`**: thêm hàm THUẦN nhận kỳ tường minh — `monthRangeOf(y,m)`/`quarterRangeOf(y,q)`/`yearRangeOf(y)`; hàm cũ (`monthRange(ref)`…) gọi lại chúng → một hiện thực, có test khẳng định hai đường cho cùng kết quả. Kỳ phi lý (tháng 0/13, quý 5) ném (fail-loud).
+- **`ChonKy`**: chọn Tháng/Quý/Năm CỤ THỂ (kể cả quá khứ) qua dropdown Năm (5 năm gần nhất) + Tháng/Quý. Ba nút Tháng/Quý/Năm giữ nguyên vai trò cũ — bấm là áp kỳ HIỆN TẠI ngay (PARITY: `invoices.test.tsx` vẫn xanh).
+- **`FilterBar`**: bỏ `selectStyle`/`inputStyle` nội tuyến, dùng `ChonKy` + `Select`/`Field`. Lựa chọn chiều/nguồn lấy từ `INVOICE_FIELDS[].enum` (một nguồn).
+- **Phép kiểm convention** (`test/conventions/ui-luat.test.ts`): quét `features/**` cấm hex cứng + cấm `style=` trên `<input>/<select>`. Nay là test trong `make test` → cổng bắt buộc (khoảng hở #2 của AUDIT-hooks đã vá).
+- **Dọn kèm** (chủ dự án duyệt mở phạm vi): thêm token `--text-on-brand`, thay 4 chỗ `color:"#fff"` (SupportCenter/LoginPage/SettingsPage/TaxAccountsPage) — **không đổi pixel** (token = `#ffffff`); `ColumnMenu` 3 ô lọc chuyển sang `Field`. Cần để phép kiểm convention xanh mà không nới.
+
+### U-K4 (xong) — mặc định tháng hiện tại + đổi tên nút + tự tải (yêu cầu 2, 3)
+
+- **(2) Mặc định tháng hiện tại:** `InvoicesPage` khởi tạo bộ lọc = (đã lưu chiều/nguồn/MST) **ghi đè** kỳ = `kyThangHienTai()` (tháng hiện tại giờ VN). `filterStore` **bỏ nhớ** `tuNgay/denNgay` (vẫn nhớ chiều/nguồn/MST) — kỳ cũ không lọt vào, mở màn luôn là tháng này.
+- **(3a) "Áp dụng" → "Lọc dữ liệu"** đặt ngay sau `ChonKy`: hành động **đọc nhẹ** (dữ liệu đã có), không gọi mạng đồng bộ.
+- **(3b) "Đồng bộ khoảng này" → "Đồng bộ và tải xuống":** sau backfill **thủ công** (bấm nút) hoàn thành → tự xuất+tải file cho bộ lọc đang xem. Auto-backfill lúc rỗng **KHÔNG** tự tải (tránh bất ngờ tải mỗi lần mở màn rỗng). Tái dùng `taiXuatHoaDon` — **không bộ xuất thứ hai** (nút Xuất Excel/CSV và tự-tải cùng gọi một hàm).
+
+Hợp đồng tương tác (ui.md) hiện rõ: **đọc nhẹ** ("Lọc dữ liệu") tách bạch trực quan với **kéo nặng** ("Đồng bộ và tải xuống"). Guard hiển thị panel tách thành hàm thuần `nenHienPanelDongBo` (test cả hai nhánh).
+
+**Ba yêu cầu ban đầu hoàn tất:** (1) chọn kỳ dropdown — K3; (2) mặc định tháng hiện tại + (3) đổi tên nút + tự tải — K4.

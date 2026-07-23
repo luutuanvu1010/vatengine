@@ -4,12 +4,11 @@
 // kết xuất (canExport); server vẫn là biên tin cậy (403 → báo không có quyền).
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "../../components/ui/primitives";
-import { ApiError, api } from "../../lib/apiClient";
-import { saveBlob } from "../../lib/download";
+import { ApiError } from "../../lib/apiClient";
 import { canExport } from "../../lib/rbac";
 import type { ExportFormat, InvoiceFilter } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
-import { tenFileXuat } from "./exportFilename";
+import { taiXuatHoaDon } from "./taiXuatHoaDon";
 
 export function InvoiceExportButtons({
   filter,
@@ -18,13 +17,10 @@ export function InvoiceExportButtons({
   const { me } = useAuth();
   const coChon = selectedIds.length > 0;
   const run = useMutation({
-    mutationFn: async (format: ExportFormat) => {
-      // U30 — có tick dòng nào thì xuất ĐÚNG những dòng đó (server bỏ qua bộ lọc);
-      // không tick gì thì giữ hành vi cũ: xuất toàn bộ kết quả theo bộ lọc.
-      const res = await api.createExport(format, filter, coChon ? selectedIds : undefined);
-      const blob = await api.downloadExport(res.id);
-      saveBlob(blob, tenFileXuat(filter, format));
-    },
+    // U30 — có tick dòng nào thì xuất ĐÚNG những dòng đó (server bỏ qua bộ lọc); không tick
+    // gì thì xuất toàn bộ kết quả theo bộ lọc. Luồng xuất+tải dùng chung (taiXuatHoaDon).
+    mutationFn: (format: ExportFormat) =>
+      taiXuatHoaDon(format, filter, coChon ? selectedIds : undefined),
   });
 
   // Guard UX: chỉ vai được kết xuất mới thấy nút (khớp route guard + rbac server).

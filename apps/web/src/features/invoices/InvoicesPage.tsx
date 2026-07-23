@@ -1,11 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Pagination } from "../../components/ui/Pagination";
 import { Card, EmptyState, ErrorState, Loading } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
 import { formatMoney } from "../../lib/format";
+import { monthRangeOf, vnYearMonth } from "../../lib/period";
 import { canManageTaxAccounts } from "../../lib/rbac";
 import type { InvoiceFilter, InvoiceSort } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
@@ -13,15 +14,34 @@ import { FilterBar } from "./FilterBar";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { InvoiceTable } from "./InvoiceTable";
 import { RangeSyncPanel } from "./RangeSyncPanel";
+import { taiXuatHoaDon } from "./taiXuatHoaDon";
 import { useRangeBackfill } from "./useRangeBackfill";
 
 const LIMIT = 50;
+
+/** Kỳ mặc định = THÁNG HIỆN TẠI theo giờ VN (yêu cầu 2). Tách ra để test ghim đồng hồ. */
+export function kyThangHienTai(homNay: Date = new Date()): { tuNgay: string; denNgay: string } {
+  const { y, m } = vnYearMonth(homNay);
+  return monthRangeOf(y, m);
+}
+
+/** Panel "Đồng bộ và tải xuống" chỉ hiện khi có quyền đồng bộ VÀ có đủ khoảng kỳ. Tách hàm
+ * thuần để test được cả nhánh guard (sau U-K4 kỳ luôn có sẵn ở luồng thật — đây là phòng
+ * thủ chiều sâu, vẫn phải kiểm để không âm thầm mục ruỗng). */
+export function nenHienPanelDongBo(filter: InvoiceFilter, canSync: boolean): boolean {
+  return canSync && !!filter.tuNgay && !!filter.denNgay;
+}
 
 export function InvoicesPage() {
   const { me } = useAuth();
   // U27-B3: chỉ vai quản lý tài khoản thuế mới đồng bộ được (khớp RBAC server /tax-accounts).
   const canSync = canManageTaxAccounts(me?.role ?? "ke_toan");
-  const [filter, setFilter] = useState<InvoiceFilter>(() => loadInvoiceFilter());
+  // U-K4 (yêu cầu 2) — mở màn LUÔN mặc định tháng hiện tại: giữ chiều/nguồn/MST đã lưu,
+  // GHI ĐÈ kỳ = tháng này. filterStore đã bỏ nhớ tuNgay/denNgay nên kỳ cũ không lọt vào.
+  const [filter, setFilter] = useState<InvoiceFilter>(() => ({
+    ...loadInvoiceFilter(),
+    ...kyThangHienTai(),
+  }));
   const [offset, setOffset] = useState(0);
   // U30 — lựa chọn dòng để xuất. CỐ Ý để ở state trang, KHÔNG localStorage: đây là dữ
   // liệu tenant, để sót lại sau khi đổi phiên là lỗ hổng (multi-tenant.md H-B.3).
@@ -99,12 +119,35 @@ export function InvoicesPage() {
   // U22 B7 — MỘT instance hook (tránh backfill trùng): nút "Đồng bộ khoảng này" + tự chạy
   // khi kỳ đã lọc RỖNG (không để màn rỗng gây hiểu nhầm). Hook tự lo trường hợp thiếu khoảng.
   // Gate cả auto-backfill lẫn panel để ke_toan không tự kích hoạt gọi API rồi 403.
-  const backfill = useRangeBackfill({
+  const backfillGoc = useRangeBackfill({
     tuNgay: filter.tuNgay,
     denNgay: filter.denNgay,
     auto: listEmpty && canSync,
   });
+
+  // U-K4 (yêu cầu 3b) — "Đồng bộ và tải xuống": sau khi backfill THỦ CÔNG hoàn thành, tự
+  // xuất + tải file cho bộ lọc đang xem. CHỈ khi người dùng BẤM nút (không phải auto-backfill
+  // lúc rỗng — nếu không mỗi lần mở màn rỗng sẽ bất ngờ tải file). Tái dùng taiXuatHoaDon.
+  const [taiSauDongBo, setTaiSauDongBo] = useState(false);
+  const backfill = {
+    ...backfillGoc,
+    start: () => {
+      setTaiSauDongBo(true);
+      backfillGoc.start();
+    },
+  };
   const backfillRunning = backfill.state.kind === "dang_lay";
+
+  const xuatSauDongBo = useMutation({
+    mutationFn: (f: InvoiceFilter) => taiXuatHoaDon("xlsx", f),
+  });
+  const dongBoXong = backfillGoc.state.kind === "xong";
+  useEffect(() => {
+    if (dongBoXong && taiSauDongBo) {
+      setTaiSauDongBo(false);
+      xuatSauDongBo.mutate(filter);
+    }
+  }, [dongBoXong, taiSauDongBo, filter, xuatSauDongBo]);
 
   return (
     <div>
@@ -115,8 +158,17 @@ export function InvoicesPage() {
 
       <Card style={{ marginBottom: "var(--sp-4)" }}>
         <FilterBar value={filter} onApply={applyFilter} />
-        {canSync && filter.tuNgay && filter.denNgay && (
-          <RangeSyncPanel tuNgay={filter.tuNgay} denNgay={filter.denNgay} backfill={backfill} />
+        {nenHienPanelDongBo(filter, canSync) && filter.tuNgay && filter.denNgay && (
+          <RangeSyncPanel
+            tuNgay={filter.tuNgay}
+            denNgay={filter.denNgay}
+            backfill={backfill}
+            loiTaiXuong={
+              xuatSauDongBo.isError
+                ? "Đã đồng bộ xong nhưng tải file không thành công — bấm nút Xuất Excel/CSV để tải lại."
+                : null
+            }
+          />
         )}
         <div
           style={{

@@ -4,16 +4,10 @@
 import type { InvoiceFilter } from "../types/api";
 
 const KEY = "vat.invoiceFilter";
-const ALLOWED: (keyof InvoiceFilter)[] = [
-  "chieu",
-  "nguon",
-  "tuNgay",
-  "denNgay",
-  "ttxly",
-  "tthai",
-  "nbmst",
-  "nmmst",
-];
+// U-K4 (yêu cầu 2) — KHÔNG nhớ `tuNgay`/`denNgay`: mở màn LUÔN mặc định tháng hiện tại
+// (InvoicesPage ghi đè kỳ), nên nhớ kỳ cũ vừa thừa vừa gây lệch với ý "xem tháng này".
+// Vẫn nhớ chiều/nguồn/MST + mã trạng thái như trước.
+const ALLOWED: (keyof InvoiceFilter)[] = ["chieu", "nguon", "ttxly", "tthai", "nbmst", "nmmst"];
 
 export function loadInvoiceFilter(): InvoiceFilter {
   try {

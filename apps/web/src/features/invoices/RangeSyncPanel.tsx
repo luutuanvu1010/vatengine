@@ -52,19 +52,30 @@ export function RangeSyncPanel({
   tuNgay,
   denNgay,
   backfill,
-}: { tuNgay: string; denNgay: string; backfill: RangeBackfill }) {
+  loiTaiXuong,
+}: {
+  tuNgay: string;
+  denNgay: string;
+  backfill: RangeBackfill;
+  /** U-K4 — lỗi ở bước TỰ TẢI sau khi đồng bộ xong (đồng bộ vẫn thành công, chỉ tải hỏng).
+   * Hiện tường minh thay vì nuốt im lặng như nút Xuất thủ công vẫn báo lỗi. */
+  loiTaiXuong?: string | null;
+}) {
   const { state, lineResult, start } = backfill;
   const running = state.kind === "dang_lay";
   return (
     <div style={{ marginTop: "var(--sp-3)", display: "grid", gap: "var(--sp-2)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", flexWrap: "wrap" }}>
         <Button onClick={start} disabled={running}>
-          {running ? "Đang đồng bộ…" : "Đồng bộ khoảng này"}
+          {running ? "Đang đồng bộ…" : "Đồng bộ và tải xuống"}
         </Button>
         <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>
-          Kéo hóa đơn + dòng hàng từ Tổng cục Thuế cho khoảng {tuNgay} → {denNgay} (chạy nền)
+          Kéo hóa đơn + dòng hàng từ Tổng cục Thuế cho khoảng {tuNgay} → {denNgay} (chạy nền), xong
+          sẽ tự tải file
         </span>
       </div>
+
+      {loiTaiXuong ? <Alert tone="warning">{loiTaiXuong}</Alert> : null}
 
       {running && (
         <ProgressBar

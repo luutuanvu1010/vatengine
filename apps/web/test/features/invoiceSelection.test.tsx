@@ -160,7 +160,7 @@ describe("U30 — chọn dòng trên bảng hóa đơn", () => {
     await u.click(rowBox("0001"));
     expect(thanhChon()?.textContent).toContain("Đã chọn 1 hóa đơn");
 
-    await u.click(screen.getByRole("button", { name: /Áp dụng/i }));
+    await u.click(screen.getByRole("button", { name: /Lọc dữ liệu/i }));
     expect(thanhChon()).toBeNull();
   });
 

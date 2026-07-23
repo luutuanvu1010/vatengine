@@ -34,20 +34,20 @@ describe("B1 — ẩn ô MST theo chiều lọc", () => {
     expect(screen.getByLabelText("MST người mua")).toBeInTheDocument();
   });
 
-  it("đã nhập MST người mua rồi đổi sang Mua vào → nmmst bị xóa khỏi filter khi Áp dụng", async () => {
+  it("đã nhập MST người mua rồi đổi sang Mua vào → nmmst bị xóa khỏi filter khi Lọc dữ liệu", async () => {
     const { onApply } = setup({ nmmst: "4201568932" });
     await userEvent.selectOptions(screen.getByLabelText("Chiều"), "purchase");
-    await userEvent.click(screen.getByRole("button", { name: "Áp dụng" }));
+    await userEvent.click(screen.getByRole("button", { name: "Lọc dữ liệu" }));
     expect(onApply).toHaveBeenCalledTimes(1);
     const arg = onApply.mock.calls[0]?.[0] as InvoiceFilter;
     expect(arg.nmmst).toBeUndefined();
     expect(arg.chieu).toBe("purchase");
   });
 
-  it("đã nhập MST người bán rồi đổi sang Bán ra → nbmst bị xóa khỏi filter khi Áp dụng", async () => {
+  it("đã nhập MST người bán rồi đổi sang Bán ra → nbmst bị xóa khỏi filter khi Lọc dữ liệu", async () => {
     const { onApply } = setup({ nbmst: "0311772540" });
     await userEvent.selectOptions(screen.getByLabelText("Chiều"), "sold");
-    await userEvent.click(screen.getByRole("button", { name: "Áp dụng" }));
+    await userEvent.click(screen.getByRole("button", { name: "Lọc dữ liệu" }));
     const arg = onApply.mock.calls[0]?.[0] as InvoiceFilter;
     expect(arg.nbmst).toBeUndefined();
     expect(arg.chieu).toBe("sold");

@@ -39,7 +39,7 @@ function Stepper({ current }: { current: number }) {
                 justifyContent: "center",
                 fontSize: "var(--fs-xs)",
                 fontWeight: "var(--fw-bold)",
-                color: done || active ? "#fff" : "var(--text-tertiary)",
+                color: done || active ? "var(--text-on-brand)" : "var(--text-tertiary)",
                 background: done
                   ? "var(--success-600)"
                   : active

@@ -1,20 +1,22 @@
 // Bộ lọc chuẩn (dùng chung mọi màn danh sách/summary/đối chiếu). B4: KHÔNG ô tìm tự do
 // "tên đối tác/số HĐ" (backend không hỗ trợ) — chỉ các trường filters.ts chấp nhận:
-// chiều/nguồn/khoảng ngày/MST bán/MST mua. Nút kỳ nhanh Tháng/Quý/Năm → tuNgay/denNgay.
+// chiều/nguồn/khoảng ngày/MST bán/MST mua.
+//
+// U-K3: kỳ chọn qua pattern `ChonKy` (Tháng/Quý/Năm dạng dropdown, chọn kỳ bất kỳ kể cả quá
+// khứ); ô nhập/chọn dùng primitive `Select`/`Field` — KHÔNG tô kiểu nội tuyến (phép kiểm
+// convention `test/conventions/ui-luat.test.ts` chặn `style=` trên input/select trong
+// features/). Lựa chọn chiều/nguồn lấy từ Registry miền hoá đơn (một nguồn, không khai lại).
+import { INVOICE_FIELDS } from "@vat/domain";
 import { useState } from "react";
-import { Button } from "../../components/ui/primitives";
-import { monthRange, quarterRange, yearRange } from "../../lib/period";
+import { Button, Field, Select } from "../../components/ui/primitives";
+import type { DateRange } from "../../lib/period";
 import type { Chieu, InvoiceFilter, Nguon } from "../../types/api";
+import { ChonKy } from "./ChonKy";
 
-const selectStyle: React.CSSProperties = {
-  padding: "var(--sp-2) var(--sp-3)",
-  fontSize: "var(--fs-sm)",
-  fontFamily: "inherit",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-md)",
-  background: "var(--surface-card)",
-};
-const inputStyle: React.CSSProperties = { ...selectStyle };
+/** Lựa chọn enum của một trường trong Registry (chiều/nguồn) — một nguồn, không gõ lại. */
+function luaChon(key: string): ReadonlyArray<readonly [string, string]> {
+  return INVOICE_FIELDS.find((f) => f.key === key)?.enum ?? [];
+}
 
 export function FilterBar({
   value,
@@ -25,7 +27,10 @@ export function FilterBar({
 }) {
   const [draft, setDraft] = useState<InvoiceFilter>(value);
   const set = (patch: Partial<InvoiceFilter>) => setDraft((d) => ({ ...d, ...patch }));
-  const applyPeriod = (r: { tuNgay: string; denNgay: string }) => {
+
+  // Kỳ chọn xong áp NGAY (giữ hành vi cũ: bấm Tháng/Quý/Năm → lọc liền). Các ô còn lại
+  // (chiều/nguồn/MST) vẫn theo hợp đồng "sửa bản nháp → bấm Lọc dữ liệu".
+  const apKy = (r: DateRange) => {
     const next = { ...draft, ...r };
     setDraft(next);
     onApply(next);
@@ -48,85 +53,50 @@ export function FilterBar({
 
   return (
     <div style={{ display: "grid", gap: "var(--sp-3)" }}>
-      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "center" }}>
-        <fieldset
-          aria-label="Kỳ nhanh"
-          style={{ display: "flex", gap: "var(--sp-1)", border: "none", padding: 0, margin: 0 }}
-        >
-          <Button variant="secondary" onClick={() => applyPeriod(monthRange(new Date()))}>
-            Tháng
-          </Button>
-          <Button variant="secondary" onClick={() => applyPeriod(quarterRange(new Date()))}>
-            Quý
-          </Button>
-          <Button variant="secondary" onClick={() => applyPeriod(yearRange(new Date()))}>
-            Năm
-          </Button>
-        </fieldset>
+      <ChonKy onChon={apKy} />
 
-        <label style={{ display: "inline-flex", gap: "var(--sp-1)", alignItems: "center" }}>
-          <span className="sr-only">Từ ngày</span>
-          <input
-            type="date"
-            aria-label="Từ ngày"
-            style={inputStyle}
-            value={draft.tuNgay ?? ""}
-            onChange={(e) => set({ tuNgay: e.target.value || undefined })}
-          />
-        </label>
-        <span aria-hidden="true">–</span>
-        <label style={{ display: "inline-flex", gap: "var(--sp-1)", alignItems: "center" }}>
-          <span className="sr-only">Đến ngày</span>
-          <input
-            type="date"
-            aria-label="Đến ngày"
-            style={inputStyle}
-            value={draft.denNgay ?? ""}
-            onChange={(e) => set({ denNgay: e.target.value || undefined })}
-          />
-        </label>
-      </div>
-
-      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "center" }}>
-        <select
-          aria-label="Chiều"
-          style={selectStyle}
-          value={draft.chieu ?? ""}
-          onChange={(e) => setChieu(e.target.value)}
-        >
+      <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "end" }}>
+        {/* U-K4 — "Lọc dữ liệu" (đọc nhẹ) đứng NGAY SAU ChonKy: hành động đọc dữ liệu ĐÃ CÓ,
+            tách bạch với "Đồng bộ và tải xuống" (kéo nặng từ Tổng cục Thuế) ở panel dưới. */}
+        <Button onClick={() => onApply(draft)}>Lọc dữ liệu</Button>
+        <Select label="Chiều" value={draft.chieu ?? ""} onChange={(e) => setChieu(e.target.value)}>
           <option value="">Tất cả chiều</option>
-          <option value="purchase">Mua vào</option>
-          <option value="sold">Bán ra</option>
-        </select>
-        <select
-          aria-label="Nguồn"
-          style={selectStyle}
+          {luaChon("chieu").map(([v, nhan]) => (
+            <option key={v} value={v}>
+              {nhan}
+            </option>
+          ))}
+        </Select>
+        <Select
+          label="Nguồn"
           value={draft.nguon ?? ""}
           onChange={(e) => set({ nguon: (e.target.value || undefined) as Nguon | undefined })}
         >
           <option value="">Mọi nguồn</option>
-          <option value="normal">HĐĐT thường</option>
-          <option value="sco">Máy tính tiền</option>
-        </select>
+          {luaChon("nguon").map(([v, nhan]) => (
+            <option key={v} value={v}>
+              {nhan}
+            </option>
+          ))}
+        </Select>
         {showNbmst ? (
-          <input
-            aria-label="MST người bán"
+          <Field
+            label="MST người bán"
+            hideLabel
             placeholder="MST người bán"
-            style={inputStyle}
             value={draft.nbmst ?? ""}
             onChange={(e) => set({ nbmst: e.target.value || undefined })}
           />
         ) : null}
         {showNmmst ? (
-          <input
-            aria-label="MST người mua"
+          <Field
+            label="MST người mua"
+            hideLabel
             placeholder="MST người mua"
-            style={inputStyle}
             value={draft.nmmst ?? ""}
             onChange={(e) => set({ nmmst: e.target.value || undefined })}
           />
         ) : null}
-        <Button onClick={() => onApply(draft)}>Áp dụng</Button>
       </div>
     </div>
   );
