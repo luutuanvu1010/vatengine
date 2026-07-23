@@ -1,6 +1,6 @@
-// B1 (U27) — Ẩn ô MST không liên quan theo CHIỀU lọc, và dọn giá trị ô đã ẩn để không
-// lọc ngầm bằng trường đã ẩn. purchase (mua vào) ẩn nmmst (người mua); sold (bán ra) ẩn
-// nbmst (người bán); chiều rỗng hiện cả hai. FilterBar là component thuần — render trực tiếp.
+// B1 (U27) — Ẩn ô MST không liên quan theo CHIỀU lọc, và dọn giá trị ô đã ẩn để không lọc
+// ngầm bằng trường đã ẩn. 2026-07-23: Chiều là SEGMENTED [Mua vào | Bán ra] (bỏ "Tất cả"),
+// MẶC ĐỊNH Mua vào. Mua vào ẩn nmmst (người mua); Bán ra ẩn nbmst (người bán).
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -13,30 +13,31 @@ function setup(value: InvoiceFilter = {}) {
   return { onApply };
 }
 
-describe("B1 — ẩn ô MST theo chiều lọc", () => {
-  it("Chiều 'Tất cả' (rỗng) → hiện cả hai ô MST", () => {
+describe("B1 — ẩn ô MST theo chiều lọc (segmented, mặc định Mua vào)", () => {
+  it("MẶC ĐỊNH Mua vào → chỉ hiện MST người bán (ẩn MST người mua)", () => {
     setup({});
     expect(screen.getByLabelText("MST người bán")).toBeInTheDocument();
-    expect(screen.getByLabelText("MST người mua")).toBeInTheDocument();
-  });
-
-  it("Mua vào → KHÔNG render ô MST người mua, giữ ô MST người bán", async () => {
-    setup({});
-    await userEvent.selectOptions(screen.getByLabelText("Chiều"), "purchase");
     expect(screen.queryByLabelText("MST người mua")).toBeNull();
-    expect(screen.getByLabelText("MST người bán")).toBeInTheDocument();
   });
 
-  it("Bán ra → KHÔNG render ô MST người bán, giữ ô MST người mua", async () => {
+  it("bấm 'Bán ra' → KHÔNG render MST người bán, giữ MST người mua", async () => {
     setup({});
-    await userEvent.selectOptions(screen.getByLabelText("Chiều"), "sold");
+    await userEvent.click(screen.getByRole("button", { name: "Bán ra" }));
     expect(screen.queryByLabelText("MST người bán")).toBeNull();
     expect(screen.getByLabelText("MST người mua")).toBeInTheDocument();
   });
 
-  it("đã nhập MST người mua rồi đổi sang Mua vào → nmmst bị xóa khỏi filter khi Lọc dữ liệu", async () => {
-    const { onApply } = setup({ nmmst: "4201568932" });
-    await userEvent.selectOptions(screen.getByLabelText("Chiều"), "purchase");
+  it("Bán ra rồi bấm 'Mua vào' → quay lại chỉ MST người bán", async () => {
+    setup({ chieu: "sold" });
+    expect(screen.getByLabelText("MST người mua")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Mua vào" }));
+    expect(screen.queryByLabelText("MST người mua")).toBeNull();
+    expect(screen.getByLabelText("MST người bán")).toBeInTheDocument();
+  });
+
+  it("đang Bán ra có MST người mua → bấm 'Mua vào' → nmmst bị xóa khi Lọc dữ liệu", async () => {
+    const { onApply } = setup({ chieu: "sold", nmmst: "4201568932" });
+    await userEvent.click(screen.getByRole("button", { name: "Mua vào" }));
     await userEvent.click(screen.getByRole("button", { name: "Lọc dữ liệu" }));
     expect(onApply).toHaveBeenCalledTimes(1);
     const arg = onApply.mock.calls[0]?.[0] as InvoiceFilter;
@@ -44,9 +45,9 @@ describe("B1 — ẩn ô MST theo chiều lọc", () => {
     expect(arg.chieu).toBe("purchase");
   });
 
-  it("đã nhập MST người bán rồi đổi sang Bán ra → nbmst bị xóa khỏi filter khi Lọc dữ liệu", async () => {
-    const { onApply } = setup({ nbmst: "0311772540" });
-    await userEvent.selectOptions(screen.getByLabelText("Chiều"), "sold");
+  it("đang Mua vào có MST người bán → bấm 'Bán ra' → nbmst bị xóa khi Lọc dữ liệu", async () => {
+    const { onApply } = setup({ chieu: "purchase", nbmst: "0311772540" });
+    await userEvent.click(screen.getByRole("button", { name: "Bán ra" }));
     await userEvent.click(screen.getByRole("button", { name: "Lọc dữ liệu" }));
     const arg = onApply.mock.calls[0]?.[0] as InvoiceFilter;
     expect(arg.nbmst).toBeUndefined();

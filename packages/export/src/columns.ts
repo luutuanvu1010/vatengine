@@ -244,6 +244,13 @@ function tongSauThue(r: LineDetailRow): ExportCell {
   return { t: "num", v: congThapPhan(String(r.thtien), String(r.tsuatTien)) };
 }
 
+// Nhãn VN cho `chieu` lấy TỪ Registry (@vat/domain) — file xuất hiện "Mua vào"/"Bán ra" thay
+// mã gốc "purchase"/"sold" (chủ dự án 2026-07-23). Một nguồn: khớp nhãn bộ lọc/bảng. Giá trị
+// lạ (chưa map) → giữ nguyên, không nuốt.
+const CHIEU_NHAN: Record<string, string> = Object.fromEntries(
+  (INVOICE_FIELDS.find((f) => f.key === "chieu")?.enum ?? []).map(([v, nhan]) => [v, nhan]),
+);
+
 // Ánh xạ key catalog (@vat/domain FLAT_EXPORT_COLUMNS) → hàm sinh ô. `sttFile` đọc số encoder
 // bơm vào; `sttDong` = `stt` gốc GDT; `tongSauThue` là cột TÍNH. Còn lại đọc thẳng trường
 // cùng tên trên LineDetailRow. Đây là chỗ DUY NHẤT gắn logic ô cho từng cột.
@@ -254,7 +261,7 @@ const O_THEO_KEY: Record<string, (r: LineDetailRow) => ExportCell> = {
   khmshdon: (r) => strCell(r.khmshdon),
   khhdon: (r) => strCell(r.khhdon),
   shdon: (r) => strCell(r.shdon),
-  chieu: (r) => strCell(r.chieu),
+  chieu: (r) => strCell(CHIEU_NHAN[r.chieu] ?? r.chieu),
   nguon: (r) => strCell(r.nguon),
   nbten: (r) => strCell(r.nbten),
   nbmst: (r) => strCell(r.nbmst),

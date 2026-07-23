@@ -85,7 +85,7 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
       expect(at(r, "Tiền tệ")).toBe("USD");
       expect(at(r, "Trạng thái xử lý (mã)")).toBe("7");
       expect(at(r, "Trạng thái HĐ (mã)")).toBe("9");
-      expect(at(r, "Chiều")).toBe("sold");
+      expect(at(r, "Chiều")).toBe("Bán ra");
       expect(at(r, "Nguồn")).toBe("normal");
       expect(at(r, "Tiền chưa thuế (cả HĐ)")).toBe("111");
       expect(at(r, "Chiết khấu (cả HĐ)")).toBe("222");
@@ -173,11 +173,11 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
     const rB = byShdon.get("200") as number;
 
     expect(at(rA, "Người bán")).toBe("AAA Bán");
-    expect(at(rA, "Chiều")).toBe("sold");
+    expect(at(rA, "Chiều")).toBe("Bán ra");
     expect(at(rA, "Hàng hóa/dịch vụ")).toBe("Vé xem phim");
     expect(at(rA, "ĐVT")).toBe("vé");
     expect(at(rA, "Số lượng")).toBe("3");
     expect(at(rB, "Người bán")).toBe("BBB Bán");
-    expect(at(rB, "Chiều")).toBe("purchase");
+    expect(at(rB, "Chiều")).toBe("Mua vào");
   });
 });

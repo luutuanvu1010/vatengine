@@ -59,12 +59,13 @@ export function InvoicesPage() {
     setCols(keys);
     saveExportCols(keys);
   };
-  // U-K4 (yêu cầu 2) — mở màn LUÔN mặc định tháng hiện tại: giữ chiều/nguồn/MST đã lưu,
-  // GHI ĐÈ kỳ = tháng này. filterStore đã bỏ nhớ tuNgay/denNgay nên kỳ cũ không lọt vào.
-  const [filter, setFilter] = useState<InvoiceFilter>(() => ({
-    ...loadInvoiceFilter(),
-    ...kyThangHienTai(),
-  }));
+  // U-K4 (yêu cầu 2) — mở màn LUÔN mặc định tháng hiện tại: giữ nguồn/MST đã lưu, GHI ĐÈ kỳ =
+  // tháng này. Chiều MẶC ĐỊNH = Mua vào (bỏ "Tất cả"): giữ chiều đã lưu nếu có, chưa có → Mua
+  // vào (chủ dự án 2026-07-23). filterStore đã bỏ nhớ tuNgay/denNgay nên kỳ cũ không lọt vào.
+  const [filter, setFilter] = useState<InvoiceFilter>(() => {
+    const daLuu = loadInvoiceFilter();
+    return { ...daLuu, chieu: daLuu.chieu ?? "purchase", ...kyThangHienTai() };
+  });
 
   // 2026-07-23 (chủ dự án) — Danh sách hóa đơn KHÔNG còn hiện bảng: chỉ SỐ ĐẾM + nút
   // Xuất/Đồng bộ. Số đếm lấy từ /invoices/summary (total.count) → bỏ hẳn query danh sách.

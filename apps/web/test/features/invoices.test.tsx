@@ -64,8 +64,9 @@ describe("Danh sách hóa đơn — chỉ số đếm (2026-07-23)", () => {
     renderWithProviders(<InvoicesPage />);
     await screen.findByText("hóa đơn khớp bộ lọc");
     expect(screen.queryByPlaceholderText(/tên đối tác/i)).not.toBeInTheDocument();
+    // Mặc định Mua vào (2026-07-23) → chỉ MST người bán liên quan; MST người mua ẩn.
     expect(screen.getByLabelText("MST người bán")).toBeInTheDocument();
-    expect(screen.getByLabelText("MST người mua")).toBeInTheDocument();
+    expect(screen.queryByLabelText("MST người mua")).toBeNull();
   });
 
   // Hợp đồng tương tác nhất quán (ui.md/CHUAN §D5): chọn kỳ chỉ CẬP NHẬT BẢN NHÁP, KHÔNG

@@ -8,7 +8,7 @@
 // features/). Lựa chọn chiều/nguồn lấy từ Registry miền hoá đơn (một nguồn, không khai lại).
 import { INVOICE_FIELDS } from "@vat/domain";
 import { useState } from "react";
-import { Button, Field, Select } from "../../components/ui/primitives";
+import { Button, Field, SegmentedControl, Select } from "../../components/ui/primitives";
 import type { DateRange } from "../../lib/period";
 import type { Chieu, InvoiceFilter, Nguon } from "../../types/api";
 import { ChonKy } from "./ChonKy";
@@ -25,7 +25,12 @@ export function FilterBar({
   value: InvoiceFilter;
   onApply: (next: InvoiceFilter) => void;
 }) {
-  const [draft, setDraft] = useState<InvoiceFilter>(value);
+  // Chiều mặc định = Mua vào (bỏ "Tất cả chiều"): filter luôn có chiều để nút segmented đúng
+  // và ô MST liên quan hiển thị đúng ngay từ đầu (chủ dự án 2026-07-23).
+  const [draft, setDraft] = useState<InvoiceFilter>(() => ({
+    ...value,
+    chieu: value.chieu ?? "purchase",
+  }));
   const set = (patch: Partial<InvoiceFilter>) => setDraft((d) => ({ ...d, ...patch }));
 
   // Thống nhất hợp đồng tương tác (ui.md "Hợp đồng tương tác nhất quán" + CHUAN §D5): MỌI
@@ -81,19 +86,25 @@ export function FilterBar({
 
         {/* Nhóm điều kiện */}
         <div style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap", alignItems: "end" }}>
-          <Select
-            label="Chiều"
-            co="md"
-            value={draft.chieu ?? ""}
-            onChange={(e) => setChieu(e.target.value)}
-          >
-            <option value="">Tất cả chiều</option>
-            {luaChon("chieu").map(([v, nhan]) => (
-              <option key={v} value={v}>
-                {nhan}
-              </option>
-            ))}
-          </Select>
+          {/* Chiều: segmented Mua vào/Bán ra (bỏ "Tất cả" — mặc định Mua vào, vẫn chuyển được).
+              Nhãn lấy từ Registry (một nguồn). Chỉ cập nhật nháp; áp khi bấm "Lọc dữ liệu". */}
+          <span style={{ display: "flex", flexDirection: "column", gap: "var(--sp-1)" }}>
+            <span
+              style={{
+                fontSize: "var(--fs-sm)",
+                fontWeight: "var(--fw-semibold)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              Chiều
+            </span>
+            <SegmentedControl<Chieu>
+              ariaLabel="Chiều"
+              value={(draft.chieu ?? "purchase") as Chieu}
+              onChange={(v) => setChieu(v)}
+              options={luaChon("chieu").map(([v, nhan]) => ({ value: v as Chieu, label: nhan }))}
+            />
+          </span>
           <Select
             label="Nguồn"
             co="md"
