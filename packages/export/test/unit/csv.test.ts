@@ -94,10 +94,10 @@ describe("toCsv", () => {
     expect(grid[1]?.[iNbten]).toBe(tricky);
   });
 
-  it("ngày xuất chuỗi UTC", () => {
+  it("ngày xuất chuỗi ngày VN 'dd/mm/yyyy'", () => {
     const grid = parseCsv(utf8.decode(toCsv([row({ tdlap: new Date("2026-04-12T09:05:03Z") })])));
     const iTdlap = EXPORT_COLUMNS.findIndex((c) => c.key === "tdlap");
-    expect(grid[1]?.[iTdlap]).toBe("2026-04-12 09:05:03");
+    expect(grid[1]?.[iTdlap]).toBe("12/04/2026");
   });
 });
 

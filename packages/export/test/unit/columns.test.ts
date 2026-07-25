@@ -144,11 +144,11 @@ describe("cellFor — chuẩn hóa ô (không ép float)", () => {
     expect(cellFor(c, row({ nbten: null }))).toEqual({ t: "blank" });
   });
 
-  it("ngày → ô chuỗi UTC 'YYYY-MM-DD HH:mm:ss'", () => {
+  it("ngày → ô chuỗi ngày VN 'dd/mm/yyyy'", () => {
     const c = col("tdlap");
     expect(cellFor(c, row({ tdlap: new Date("2026-04-12T09:05:03Z") }))).toEqual({
       t: "str",
-      v: "2026-04-12 09:05:03",
+      v: "12/04/2026",
     });
   });
 
@@ -156,7 +156,7 @@ describe("cellFor — chuẩn hóa ô (không ép float)", () => {
     const c = col("ncnhat");
     expect(cellFor(c, row({ ncnhat: new Date("2026-05-01T10:00:00Z") }))).toEqual({
       t: "str",
-      v: "2026-05-01 10:00:00",
+      v: "01/05/2026",
     });
     expect(cellFor(c, row({ ncnhat: null }))).toEqual({ t: "blank" });
   });
@@ -200,8 +200,16 @@ describe("U29 — chiết khấu (ttcktmai)", () => {
 });
 
 describe("formatDate", () => {
-  it("định dạng UTC ổn định", () => {
-    expect(formatDate(new Date("2026-01-02T03:04:05Z"))).toBe("2026-01-02 03:04:05");
+  it("định dạng ngày VN 'dd/mm/yyyy' (cộng +7h)", () => {
+    expect(formatDate(new Date("2026-01-02T03:04:05Z"))).toBe("02/01/2026");
+  });
+
+  // Hồi quy bug 2026-07-25: hóa đơn VN ngày D được GDT lưu là (D-1)T17:00:00Z. Nếu in
+  // theo UTC (thiếu +7h) thì hóa đơn VN 1/7 bị in nhầm thành 30/6 — đúng lỗi người dùng
+  // gặp khi lọc 1/7–2/7 mà file xuất vẫn hiện 30/6.
+  it("hóa đơn VN nửa đêm (lưu 17:00Z hôm trước) → đúng ngày VN, không lùi 1 ngày", () => {
+    expect(formatDate(new Date("2026-06-30T17:00:00Z"))).toBe("01/07/2026");
+    expect(formatDate(new Date("2026-06-29T17:00:00Z"))).toBe("30/06/2026");
   });
 });
 

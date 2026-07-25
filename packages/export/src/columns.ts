@@ -81,13 +81,14 @@ function moTaHangHoa(h: HangHoaTomTat): string {
   return `${ten} — ${h.sluong}`;
 }
 
-/** Định dạng Date → chuỗi UTC ổn định "YYYY-MM-DD HH:mm:ss" (không phụ thuộc múi giờ chạy). */
+/** Khoảnh khắc UTC → chuỗi ngày VN "dd/mm/yyyy" (UTC+7). GDT lưu `tdlap`/`ncnhat` là
+ * khoảnh khắc UTC của ngày VN (hóa đơn VN ngày D → `(D-1)T17:00:00Z`); cộng +7h rồi đọc
+ * getUTC* → đúng ngày lịch VN, ổn định không phụ thuộc múi giờ máy chạy. Đối xứng với
+ * `formatDateVN` ở apps/web. Bỏ phần giờ vì `tdlap` luôn là nửa đêm giờ VN. */
 export function formatDate(d: Date): string {
   const p = (n: number, w = 2) => String(n).padStart(w, "0");
-  return (
-    `${p(d.getUTCFullYear(), 4)}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ` +
-    `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`
-  );
+  const vn = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+  return `${p(vn.getUTCDate())}/${p(vn.getUTCMonth() + 1)}/${p(vn.getUTCFullYear(), 4)}`;
 }
 
 // Cột RENDER tổng quát: encoder (csv/xlsx) chỉ cần `header` (nhãn) + `money` (có áp numFmt

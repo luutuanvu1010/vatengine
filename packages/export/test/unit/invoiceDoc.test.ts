@@ -119,7 +119,7 @@ describe("T11 — xml/html phủ đủ EXPORT_COLUMNS sau khi mở rộng (U29)"
 
   it("xml mang đúng GIÁ TRỊ của 5 cột U29 (không phải thẻ rỗng)", () => {
     const xml = invoiceToXml(row, []);
-    expect(xml).toContain("<ncnhat>2026-05-01 10:00:00</ncnhat>");
+    expect(xml).toContain("<ncnhat>01/05/2026</ncnhat>");
     expect(xml).toContain("<ttcktmai>60257129</ttcktmai>");
     expect(xml).toContain("<hangHoa>Xăng E10 RON 95 — 62.925</hangHoa>");
     // Giữ đủ phần thập phân (M1) — không làm tròn thành 63.

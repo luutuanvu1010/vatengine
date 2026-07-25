@@ -13,6 +13,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.7",
+    date: "2026-07-25",
+    title: "Sửa ngày trên file xuất",
+    changes: [
+      "Ngày trên file Excel/CSV xuất ra nay hiển thị đúng theo ngày Việt Nam (dd/mm/yyyy), không còn lệch lùi 1 ngày với hóa đơn lập vào đầu ngày.",
+    ],
+    kind: "fix",
+  },
+  {
     version: "v1.6",
     date: "2026-07-23",
     title: "Chọn kỳ nhanh hơn & thao tác rõ ràng hơn",

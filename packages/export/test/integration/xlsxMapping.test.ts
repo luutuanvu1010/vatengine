@@ -73,8 +73,8 @@ describe("Ánh xạ sheet phẳng — mọi cột đúng nguồn, không sót/kh
 
     // Ngữ cảnh hóa đơn + tiền (cả HĐ) LẶP đúng ở CẢ hai dòng.
     for (const r of [1, 2]) {
-      expect(at(r, "Ngày lập")).toBe("2026-07-01 03:00:00");
-      expect(at(r, "Ngày cập nhật")).toBe("2026-07-02 04:00:00");
+      expect(at(r, "Ngày lập")).toBe("01/07/2026");
+      expect(at(r, "Ngày cập nhật")).toBe("02/07/2026");
       expect(at(r, "Ký hiệu mẫu số")).toBe("5");
       expect(at(r, "Ký hiệu HĐ")).toBe("K26XYZ");
       expect(at(r, "Số HĐ")).toBe("778899");
