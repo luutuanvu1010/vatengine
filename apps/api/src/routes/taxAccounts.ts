@@ -78,6 +78,10 @@ const loginSchema = z.object({
 const backfillSchema = z.object({
   tuNgay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "tuNgay phải YYYY-MM-DD"),
   denNgay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "denNgay phải YYYY-MM-DD"),
+  // force: re-sync MỌI tháng trong khoảng, BỎ QUA coverage "đã phủ". Dùng để lấy lại
+  // phần production hụt (GDT 429/subrequest làm phiên cũ ghi thiếu) — upsert idempotent
+  // hợp thêm, không nhân đôi. Mặc định false = hành vi cũ (chỉ tháng còn thiếu).
+  force: z.boolean().optional().default(false),
 });
 
 export function taxAccountsRoutes(deps: AppDeps) {
@@ -508,9 +512,12 @@ export function taxAccountsRoutes(deps: AppDeps) {
         const msgs: SyncJobMessage[] = [];
         const monthsNeeded = new Set<string>();
         for (const dir of directions) {
-          const missing = await missingMonths(tx, tenantId, id, dir, windows);
-          for (const w of missing) monthsNeeded.add(w.period);
-          msgs.push(...buildBackfillMessages({ tenantId, taikhoanId: id }, missing, [dir]));
+          // force → lấy MỌI tháng trong khoảng (bỏ coverage); ngược lại chỉ tháng còn thiếu.
+          const target = parsed.data.force
+            ? windows
+            : await missingMonths(tx, tenantId, id, dir, windows);
+          for (const w of target) monthsNeeded.add(w.period);
+          msgs.push(...buildBackfillMessages({ tenantId, taikhoanId: id }, target, [dir]));
         }
         return { kind: "ok" as const, msgs, months: [...monthsNeeded].sort() };
       });
@@ -558,6 +565,7 @@ export function taxAccountsRoutes(deps: AppDeps) {
             tongSoThang: outcome.months.length,
             tuNgay: parsed.data.tuNgay,
             denNgay: parsed.data.denNgay,
+            force: parsed.data.force,
           }),
         });
       });

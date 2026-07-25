@@ -224,6 +224,40 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     expect(store.size).toBe(0); // không tạo tracker khi không có gì để lấy
   });
 
+  it("force=true → re-sync CẢ tháng đã phủ (bỏ coverage) để lấy lại phần production hụt", async () => {
+    const t = await makeTenant(db, "DN A", "0100000001");
+    const acc = await seedTaxAccount(db, t, { username: "0311772540", ...VALID_TOKEN });
+    // Cả 3 tháng đã 'completed' cả 2 chiều — bình thường backfill sẽ bỏ qua (0 job).
+    for (const p of ["2026-01", "2026-02", "2026-03"]) {
+      await seedRun(db, { tenantId: t, taikhoanId: acc, chieu: "purchase", period: p });
+      await seedRun(db, { tenantId: t, taikhoanId: acc, chieu: "sold", period: p });
+    }
+    const { queue, batches } = fakeQueue();
+    const { factory, store } = fakeTracker();
+    const app = createApp(injectDb(db, undefined, undefined, factory));
+    const res = await post(
+      app,
+      acc,
+      t,
+      makeEnv({ SYNC_QUEUE: queue, BACKFILL_TRACKER: {} as DurableObjectNamespace }),
+      { ...BODY, force: true },
+    );
+
+    expect(res.status).toBe(202);
+    const b = (await res.json()) as { thangCanLay: string[]; tongSoThang: number };
+    expect(b.thangCanLay).toEqual(["2026-01", "2026-02", "2026-03"]); // dù đã phủ vẫn lấy lại
+    expect(b.tongSoThang).toBe(3);
+    expect(batches).toHaveLength(6); // 3 tháng × 2 chiều — upsert idempotent hợp thêm phần thiếu
+
+    // Audit ghi rõ đây là backfill CƯỠNG BỨC (force) để truy vết.
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.tenantId, t), eq(auditLog.hanhDong, "backfill_khoi_tao")));
+    expect(audits).toHaveLength(1);
+    expect((audits[0]?.chiTiet as { force?: boolean } | null)?.force).toBe(true);
+  });
+
   it("khác tenant → 404, KHÔNG enqueue (cách ly AC3)", async () => {
     const a = await makeTenant(db, "DN A", "0100000001");
     const bTen = await makeTenant(db, "DN B", "0100000002");
