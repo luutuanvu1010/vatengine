@@ -155,6 +155,9 @@ describe("chunkSync — syncChunk + vòng đời run delta (Task 5)", () => {
       totalQuanSat: 5,
       soHdMoi: 2,
       soHdCapNhat: 0,
+      // Final review delta-sync — pass-through queryInvoicesChunk().pages: Task 6 dùng
+      // để cộng dồn trần tổng-trang chặn enqueue vô hạn (TRAN_TONG_TRANG_DELTA).
+      pages: 1,
     });
     expect((await db.select().from(hoaDon)).length).toBe(2);
 

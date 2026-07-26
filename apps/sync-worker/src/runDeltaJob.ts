@@ -19,7 +19,12 @@
 // @vat/gdt-client + @vat/sync). Phân loại lỗi bằng nhãn có kiểu (`classifyFailure` /
 // `ChunkOutcome.failureKind`) — KHÔNG dò chuỗi lỗi tại đây.
 import type { InvoiceDirection } from "@vat/gdt-client";
-import { buildDetailMessages, classifyFailure, decideAudit } from "@vat/sync";
+import {
+  TRAN_TONG_TRANG_DELTA,
+  buildDetailMessages,
+  classifyFailure,
+  decideAudit,
+} from "@vat/sync";
 import type {
   AuditSyncMessage,
   ChunkOutcome,
@@ -249,16 +254,25 @@ export async function runAuditJob(deps: DeltaJobDeps, msg: AuditSyncMessage): Pr
   }
 }
 
-/** Message NỐI chuỗi sau một lô thành công. `state`/`bpAttempt` được LOẠI BỎ khỏi bản
- * sao (destructuring) thay vì gán `undefined`: message nào cũng đi qua JSON của queue,
- * giữ hình dạng sạch để so khớp và để `bpAttempt` khởi động lại từ 0 sau tiến độ thật. */
-function messageKeTiep(msg: DeltaPullMessage, kq: ChunkOutcome): VatSyncQueueMessage {
-  const { state: _state, bpAttempt: _bpAttempt, ...goc } = msg;
+/** Message NỐI chuỗi sau một lô thành công. `state`/`bpAttempt`/`trangDaKeo` được LOẠI
+ * BỎ khỏi bản sao (destructuring) thay vì gán `undefined`: message nào cũng đi qua JSON
+ * của queue, giữ hình dạng sạch để so khớp và để `bpAttempt` khởi động lại từ 0 sau tiến
+ * độ thật. `trangMoi` = tổng trang cộng dồn ĐÃ QUA trần kiểm ở `runDeltaJob` (gọi hàm
+ * này nghĩa là chưa vượt trần). */
+function messageKeTiep(
+  msg: DeltaPullMessage,
+  kq: ChunkOutcome,
+  trangMoi: number,
+): VatSyncQueueMessage {
+  const { state: _state, bpAttempt: _bpAttempt, trangDaKeo: _trangDaKeo, ...goc } = msg;
 
-  // Chưa hết trang → kéo tiếp CHÍNH họ này từ con trỏ mới.
-  if (!kq.done) return { ...goc, ...(kq.state ? { state: kq.state } : {}) };
+  // Chưa hết trang → kéo tiếp CHÍNH họ này từ con trỏ mới, mang tiếp trần tổng-trang
+  // CỘNG DỒN (per-family) sang message kế.
+  if (!kq.done) return { ...goc, ...(kq.state ? { state: kq.state } : {}), trangDaKeo: trangMoi };
 
-  // Hết trang họ này mà còn họ chờ → chuyển họ, con trỏ về đầu.
+  // Hết trang họ này mà còn họ chờ → CHUYỂN HỌ, con trỏ về đầu. Trần tổng-trang RESET về
+  // 0 (KHÔNG mang `trangDaKeo` — vắng mặt = 0): trần là PER-FAMILY, không cộng dồn xuyên
+  // họ (một chuỗi kéo normal xong rồi sang sco là hai chuỗi độc lập về mặt trần).
   const [ke, ...conLai] = msg.conLai;
   if (ke) return { ...goc, family: ke, conLai };
 
@@ -306,7 +320,7 @@ export async function runDeltaJob(deps: DeltaJobDeps, msg: DeltaPullMessage): Pr
       // ≠ zone Pro). Chunk theo trang lẽ ra đã đưa một lô xuống dưới trần — nếu vẫn
       // đụng, hạ DELTA_CHUNK_PAGES. KHÔNG log token/nội dung hóa đơn (security.md).
       console.warn(
-        `[delta] local_limit: chunkPages=${deps.chunkPages} kỳ=${msg.period} họ=${msg.family} — kiểm gói Workers (Paid≠zone Pro) + hạ DELTA_CHUNK_PAGES nếu tái diễn`,
+        `[delta] local_limit: tenant=${msg.tenantId} chunkPages=${deps.chunkPages} kỳ=${msg.period} họ=${msg.family} — kiểm gói Workers (Paid≠zone Pro) + hạ DELTA_CHUNK_PAGES nếu tái diễn`,
       );
     }
     // Lỗi tạm: KHÔNG enqueue message nối tiếp — message HIỆN TẠI (còn nguyên `state`)
@@ -329,8 +343,26 @@ export async function runDeltaJob(deps: DeltaJobDeps, msg: DeltaPullMessage): Pr
     }
   }
 
+  // Trần TỔNG-TRANG cộng dồn cho MỘT chuỗi cùng-họ (final review, chặn enqueue vô hạn):
+  // mirror `MAX_PAGES=2000` của `queryOne` legacy — `state` GDT có thể pathological
+  // (không bao giờ hết trang) nên chuỗi enqueue-lại-chính-mình cần một điểm dừng cứng.
+  // `msg.trangDaKeo` thiếu (message cũ đang bay lúc deploy) coi là 0; `kq.pages` thiếu
+  // (không nên xảy ra ở nhánh ok, nhưng phòng hờ) coi bằng `deps.chunkPages`.
+  const trangMoi = (msg.trangDaKeo ?? 0) + (kq.pages ?? deps.chunkPages);
+  if (!kq.done && trangMoi >= TRAN_TONG_TRANG_DELTA) {
+    // KHÔNG log token/nội dung hóa đơn (security.md) — chỉ metadata tenant/kỳ/họ.
+    console.warn(
+      `[delta] tran_tong_trang: tenant=${msg.tenantId} ky=${msg.period} ho=${msg.family} trangDaKeo=${trangMoi} tran=${TRAN_TONG_TRANG_DELTA} — dung chuoi, KHONG enqueue tiep`,
+    );
+    await deps.chotRun(msg.tenantId, msg.lanDongBoId, {
+      trangThai: "failed",
+      thongDiepLoi: `chuỗi delta vượt trần tổng trang (${TRAN_TONG_TRANG_DELTA} trang, họ ${msg.family}) — dừng để chặn enqueue vô hạn (state GDT pathological)`,
+    });
+    return { kind: "completed" }; // ack — đã chốt run có kiểm soát, không phải lỗi tạm
+  }
+
   try {
-    await deps.enqueue([messageKeTiep(msg, kq)]);
+    await deps.enqueue([messageKeTiep(msg, kq, trangMoi)]);
   } catch (err) {
     // Mất message nối chuỗi = chuỗi ĐỨT im lặng (run treo `running`). Retry cả lô —
     // upsert idempotent nên kéo lại cùng trang không nhân đôi hóa đơn.

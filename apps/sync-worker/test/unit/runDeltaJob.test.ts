@@ -10,6 +10,7 @@
 //  - phân nhánh consumer: audit/delta KHÔNG được rơi vào nhánh header (runScheduledSync).
 import { GdtError } from "@vat/gdt-client";
 import type { InvoiceDirection } from "@vat/gdt-client";
+import { TRAN_TONG_TRANG_DELTA } from "@vat/sync";
 import type {
   AuditSyncMessage,
   ChunkOutcome,
@@ -452,7 +453,9 @@ describe("runDeltaJob — kéo MỘT lô rồi nối chuỗi", () => {
     const out = await runDeltaJob(deps, DELTA);
     expect(out.kind).toBe("completed");
     expect(calls.enqueue).toHaveLength(1);
-    expect((calls.enqueue[0] ?? [])[0]).toEqual({ ...DELTA, state: "trang-2" });
+    // trangDaKeo: DELTA không mang trường này (coi = 0) + kq không set `pages` → rơi về
+    // deps.chunkPages (40, xem makeDeps) — trần tổng-trang cộng dồn (10a-c bên dưới).
+    expect((calls.enqueue[0] ?? [])[0]).toEqual({ ...DELTA, state: "trang-2", trangDaKeo: 40 });
     expect(calls.recordResult).toEqual([true]);
   });
 
@@ -560,6 +563,42 @@ describe("runDeltaJob — kéo MỘT lô rồi nối chuỗi", () => {
     expect(calls.recordResult).toEqual([false]);
     expect(calls.keoChunk[0]?.state).toBe("trang-5");
     expect(calls.enqueue).toEqual([]);
+  });
+
+  it("(10a) trần tổng-trang: trangDaKeo GẦN trần + chunk CHƯA done → chotRun failed, KHÔNG enqueue", async () => {
+    const { deps, calls } = makeDeps({
+      keoChunk: async () => chunkOk({ done: false, state: "trang-ke", pages: 40 }),
+    });
+    const msg: DeltaPullMessage = { ...DELTA, trangDaKeo: TRAN_TONG_TRANG_DELTA - 5 };
+    const out = await runDeltaJob(deps, msg);
+    expect(out.kind).toBe("completed"); // ack — KHÔNG retry (đã chốt run, dừng chuỗi có kiểm soát)
+    expect(calls.enqueue).toEqual([]);
+    expect(calls.chotRun).toEqual([
+      { lanDongBoId: "ldb-1", trangThai: "failed", thongDiepLoi: expect.any(String) },
+    ]);
+  });
+
+  it("(10b) trần tổng-trang: DƯỚI trần → enqueue message kế mang trangDaKeo cộng đúng", async () => {
+    const { deps, calls } = makeDeps({
+      keoChunk: async () => chunkOk({ done: false, state: "trang-ke", pages: 10 }),
+    });
+    const msg: DeltaPullMessage = { ...DELTA, trangDaKeo: 100 };
+    const out = await runDeltaJob(deps, msg);
+    expect(out.kind).toBe("completed");
+    expect(calls.chotRun).toEqual([]);
+    const next = (calls.enqueue[0] ?? [])[0] as DeltaPullMessage;
+    expect(next.trangDaKeo).toBe(110);
+    expect(next.state).toBe("trang-ke");
+  });
+
+  it("(10c) trần tổng-trang: CHUYỂN family (hết trang, còn conLai) → trangDaKeo RESET về 0 (thiếu trường = 0)", async () => {
+    const { deps, calls } = makeDeps({ keoChunk: async () => chunkOk({ done: true, pages: 3 }) });
+    const msg: DeltaPullMessage = { ...DELTA, trangDaKeo: 900 };
+    const out = await runDeltaJob(deps, msg);
+    expect(out.kind).toBe("completed");
+    const next = (calls.enqueue[0] ?? [])[0] as DeltaPullMessage;
+    expect(next.family).toBe("sco");
+    expect(next.trangDaKeo).toBeUndefined(); // vắng mặt = 0 theo hợp đồng message
   });
 
   it("(4/9 mirror) token hết hạn → needs_reauth; breaker mở → backpressure + breakerSkip", async () => {

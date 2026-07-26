@@ -90,7 +90,24 @@ export interface DeltaPullMessage {
   prevCount: number;
   /** Đẩy lùi (backpressure) — cùng ngữ nghĩa SyncJobMessage.bpAttempt. */
   bpAttempt?: number;
+  /**
+   * Tổng số TRANG đã kéo CỘNG DỒN qua các message của MỘT chuỗi cùng-họ (family) —
+   * mirror `MAX_PAGES=2000` của `queryOne` legacy (`packages/gdt-client/src/query.ts`):
+   * `state` GDT có thể pathological (không bao giờ kết thúc) → không có trần, chuỗi
+   * enqueue-lại-chính-mình có thể lặp vô hạn. Optional để TƯƠNG THÍCH message đang bay
+   * lúc deploy (chưa mang trường này) — thiếu coi là 0. Consumer (`runDeltaJob`) chốt
+   * `TRAN_TONG_TRANG_DELTA` khi trần này bị vượt.
+   */
+  trangDaKeo?: number;
 }
+
+/**
+ * Trần TỔNG SỐ TRANG cộng dồn cho MỘT chuỗi delta cùng-họ (per-family) — chặn enqueue
+ * vô hạn khi GDT trả `state` pathological (không bao giờ hết trang). Mirror
+ * `MAX_PAGES=2000` của `queryOne` legacy (`packages/gdt-client/src/query.ts`). Vượt trần
+ * → `runDeltaJob` chốt run `failed` thay vì enqueue tiếp.
+ */
+export const TRAN_TONG_TRANG_DELTA = 2000;
 
 /** Mọi hình dạng message hợp lệ trên queue vat-sync (header U5/U22 + detail U26 + audit/delta U3-U9). */
 export type VatSyncQueueMessage =

@@ -140,6 +140,11 @@ export interface ChunkOutcome {
   totalQuanSat?: number | null;
   soHdMoi?: number;
   soHdCapNhat?: number;
+  /** Số TRANG đã kéo trong LÔ này (pass-through `queryInvoicesChunk().pages`) — Task 6
+   * dùng để cộng dồn `trangDaKeo` chặn chuỗi delta enqueue vô hạn (trần
+   * `TRAN_TONG_TRANG_DELTA`, xem syncJob.ts). Chỉ có ở nhánh ok (thất bại không kéo được
+   * trang nào tính được). */
+  pages?: number;
   failureKind?: "session_expired" | "rate_limited" | "transient" | "local_limit";
   thongDiepLoi?: string;
   detailCandidates: DetailCandidate[];
@@ -245,6 +250,7 @@ export async function syncChunk<
         totalQuanSat: chunk.total,
         soHdMoi,
         soHdCapNhat,
+        pages: chunk.pages,
         detailCandidates,
       };
     });
