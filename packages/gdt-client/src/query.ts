@@ -75,6 +75,88 @@ export function buildSearch(dateFrom: string, dateTo: string, ttxly?: number): s
   return parts.join(";");
 }
 
+/** Một trang thô đã qua kiểm hợp đồng mềm — dùng chung bởi `queryOne`,
+ * `queryInvoicesChunk` và `queryInvoiceTotal`. */
+interface EnvelopePage {
+  datas: Array<Record<string, unknown>>;
+  state?: string;
+  total: number | null;
+}
+
+/**
+ * Gọi 1 trang của 1 endpoint (không tự phân trang). Giữ NGUYÊN xử lý
+ * 401/lỗi HTTP/parse/contract-soft trước đây nằm trong ruột `queryOne`,
+ * thêm parse `total` (oracle mềm — Task 2/`queryInvoiceTotal`).
+ */
+async function fetchPage(
+  transport: GdtTransport,
+  token: string,
+  endpoint: string,
+  search: string,
+  size: number,
+  state: string | undefined,
+  opts?: RetryOptions,
+): Promise<EnvelopePage> {
+  const query = new URLSearchParams({ sort: DEFAULT_SORT, size: String(size), search });
+  if (state) query.set("state", state);
+
+  const res = await fetchWithRetry(
+    transport,
+    `${BASE}${endpoint}?${query.toString()}`,
+    { method: "GET", headers: { authorization: `Bearer ${token}` } },
+    opts,
+  );
+
+  if (res.status === 401) {
+    throw new GdtError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", "SESSION_EXPIRED");
+  }
+  if (!res.ok) {
+    // KHÔNG nuốt lỗi HTTP im lặng (gdt-adapter.md): trích thông điệp lỗi GDT để chẩn
+    // đoán lệch contract/tham số. Body lỗi GDT dạng JSON {timestamp,message,details,
+    // path,requestId} → CHỈ lấy `message` (mô tả lỗi), KHÔNG dump body thô (giảm bề mặt
+    // rò rỉ — thong_diep_loi chưa qua maskSensitive; review contract-guardian 2026-07-15).
+    let detail = "";
+    try {
+      const raw = await res.text();
+      try {
+        const j = JSON.parse(raw) as { message?: unknown };
+        detail = typeof j.message === "string" ? j.message.slice(0, 200) : "";
+      } catch {
+        detail = raw.replace(/\s+/g, " ").trim().slice(0, 120);
+      }
+    } catch {
+      /* body không đọc được — giữ nguyên chỉ status */
+    }
+    throw new GdtError(
+      `Truy vấn ${endpoint} lỗi (HTTP ${res.status})${detail ? ` — GDT: ${detail}` : ""}.`,
+      "HTTP_ERROR",
+      res.status,
+    );
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    throw new GdtError(`Phản hồi không hợp lệ từ ${endpoint} (HTTP ${res.status}).`);
+  }
+
+  // Kiểm hợp đồng MỀM: thiếu 'datas' chỉ cảnh báo, KHÔNG throw/không mở
+  // circuit breaker (ngoại lệ invoice_envelope, .claude/rules/gdt-adapter.md).
+  const missing = missingContractKeys(data, "invoice_envelope");
+  if (missing.length > 0) {
+    console.warn(
+      `Phong bì hóa đơn từ ${endpoint} thiếu ${JSON.stringify(missing)} so với hợp đồng kỳ vọng (invoice_envelope). Coi là rỗng, KHÔNG mở circuit breaker — điểm còn mơ hồ chưa xác nhận thủ công, xem .claude/rules/gdt-adapter.md.`,
+    );
+  }
+
+  return {
+    datas: Array.isArray(data.datas) ? (data.datas as Array<Record<string, unknown>>) : [],
+    ...(typeof data.state === "string" ? { state: data.state } : {}),
+    total: typeof data.total === "number" ? data.total : null,
+  };
+}
+
 /** Gọi 1 endpoint và tự phân trang bằng con trỏ `state` tới khi hết dữ liệu. */
 async function queryOne(
   transport: GdtTransport,
@@ -101,64 +183,11 @@ async function queryOne(
     }
     pages += 1;
 
-    const query = new URLSearchParams({ sort: DEFAULT_SORT, size: String(size), search });
-    if (state) query.set("state", state);
+    const page = await fetchPage(transport, token, endpoint, search, size, state, opts);
+    rows.push(...page.datas);
 
-    const res = await fetchWithRetry(
-      transport,
-      `${BASE}${endpoint}?${query.toString()}`,
-      { method: "GET", headers: { authorization: `Bearer ${token}` } },
-      opts,
-    );
-
-    if (res.status === 401) {
-      throw new GdtError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", "SESSION_EXPIRED");
-    }
-    if (!res.ok) {
-      // KHÔNG nuốt lỗi HTTP im lặng (gdt-adapter.md): trích thông điệp lỗi GDT để chẩn
-      // đoán lệch contract/tham số. Body lỗi GDT dạng JSON {timestamp,message,details,
-      // path,requestId} → CHỈ lấy `message` (mô tả lỗi), KHÔNG dump body thô (giảm bề mặt
-      // rò rỉ — thong_diep_loi chưa qua maskSensitive; review contract-guardian 2026-07-15).
-      let detail = "";
-      try {
-        const raw = await res.text();
-        try {
-          const j = JSON.parse(raw) as { message?: unknown };
-          detail = typeof j.message === "string" ? j.message.slice(0, 200) : "";
-        } catch {
-          detail = raw.replace(/\s+/g, " ").trim().slice(0, 120);
-        }
-      } catch {
-        /* body không đọc được — giữ nguyên chỉ status */
-      }
-      throw new GdtError(
-        `Truy vấn ${endpoint} lỗi (HTTP ${res.status})${detail ? ` — GDT: ${detail}` : ""}.`,
-        "HTTP_ERROR",
-        res.status,
-      );
-    }
-
-    let data: Record<string, unknown>;
-    try {
-      data = (await res.json()) as Record<string, unknown>;
-    } catch {
-      throw new GdtError(`Phản hồi không hợp lệ từ ${endpoint} (HTTP ${res.status}).`);
-    }
-
-    // Kiểm hợp đồng MỀM: thiếu 'datas' chỉ cảnh báo, KHÔNG throw/không mở
-    // circuit breaker (ngoại lệ invoice_envelope, .claude/rules/gdt-adapter.md).
-    const missing = missingContractKeys(data, "invoice_envelope");
-    if (missing.length > 0) {
-      console.warn(
-        `Phong bì hóa đơn từ ${endpoint} thiếu ${JSON.stringify(missing)} so với hợp đồng kỳ vọng (invoice_envelope). Coi là rỗng, KHÔNG mở circuit breaker — điểm còn mơ hồ chưa xác nhận thủ công, xem .claude/rules/gdt-adapter.md.`,
-      );
-    }
-
-    const datas = Array.isArray(data.datas) ? (data.datas as Array<Record<string, unknown>>) : [];
-    rows.push(...datas);
-
-    state = typeof data.state === "string" ? data.state : undefined;
-    if (datas.length < size || !state) break;
+    state = page.state;
+    if (page.datas.length < size || !state) break;
   }
 
   if (truncated) {
@@ -170,6 +199,99 @@ async function queryOne(
   }
 
   return rows;
+}
+
+/** Endpoint của một họ (normal | sco) theo chiều — một nguồn từ INVOICE_ENDPOINTS. */
+export function familyEndpoint(direction: InvoiceDirection, family: "normal" | "sco"): string {
+  if (family === "normal") return INVOICE_ENDPOINTS[direction];
+  return INVOICE_ENDPOINTS[direction === "purchase" ? "scoPurchase" : "scoSold"];
+}
+
+export interface InvoiceChunkResult {
+  rows: InvoiceRow[];
+  /** Con trỏ để nối tiếp lần gọi sau. `undefined` = họ này ĐÃ HẾT trang. */
+  state?: string;
+  /** `total` GDT trả gần nhất trong lô này — oracle mềm, có thể bất ổn giữa các trang. */
+  total: number | null;
+  pages: number;
+}
+
+/**
+ * Delta-sync (Task 5/6): kéo TỐI ĐA `maxPages` trang của MỘT họ endpoint
+ * (normal | sco), nối tiếp từ con trỏ `state` truyền vào. KHÔNG khử trùng
+ * chéo lô (tầng upsert idempotent U4/U5 lo việc đó); mỗi row gắn
+ * `_source`/`_direction` như `queryInvoices`. 401 (kể cả giữa lô) → GdtError
+ * SESSION_EXPIRED, không nuốt.
+ */
+export async function queryInvoicesChunk(
+  transport: GdtTransport,
+  token: string,
+  params: {
+    direction: InvoiceDirection;
+    family: "normal" | "sco";
+    dateFrom: string;
+    dateTo: string;
+    state?: string;
+    maxPages: number;
+    size?: number;
+  },
+  opts?: RetryOptions,
+): Promise<InvoiceChunkResult> {
+  const size = params.size ?? DEFAULT_SIZE;
+  const endpoint = familyEndpoint(params.direction, params.family);
+  const search = buildSearch(params.dateFrom, params.dateTo);
+  const rows: InvoiceRow[] = [];
+  let state = params.state;
+  let total: number | null = null;
+  let pages = 0;
+
+  while (pages < params.maxPages) {
+    if (pages > 0) await pace(opts?.minIntervalMs, opts?.sleepFn);
+    const page = await fetchPage(transport, token, endpoint, search, size, state, opts);
+    pages += 1;
+    if (page.total !== null) total = page.total;
+    for (const r of page.datas) {
+      rows.push({ ...r, _source: params.family, _direction: params.direction });
+    }
+    state = page.state;
+    if (page.datas.length < size || !state) return { rows, total, pages }; // hết trang
+  }
+  return { rows, ...(state ? { state } : {}), total, pages };
+}
+
+/**
+ * Delta-sync (Task 5/6): hỏi `total` của một họ endpoint bằng 1 request
+ * (size=1) — dùng làm oracle mềm để phát hiện lệch số lượng, KHÔNG dùng làm
+ * nguồn chân lý cứng. `sco` trả HTTP 404 (endpoint không áp dụng cho tài
+ * khoản này) → `null`; mọi lỗi khác (kể cả `normal` 404) propagate.
+ */
+export async function queryInvoiceTotal(
+  transport: GdtTransport,
+  token: string,
+  params: {
+    direction: InvoiceDirection;
+    family: "normal" | "sco";
+    dateFrom: string;
+    dateTo: string;
+  },
+  opts?: RetryOptions,
+): Promise<number | null> {
+  const endpoint = familyEndpoint(params.direction, params.family);
+  try {
+    const page = await fetchPage(
+      transport,
+      token,
+      endpoint,
+      buildSearch(params.dateFrom, params.dateTo),
+      1,
+      undefined,
+      opts,
+    );
+    return page.total;
+  } catch (err) {
+    if (params.family === "sco" && err instanceof GdtError && err.httpStatus === 404) return null;
+    throw err;
+  }
 }
 
 /** Khóa tự nhiên hóa đơn ở tầng adapter (5 trường; tenant_id thêm ở tầng DB U4/U5). */

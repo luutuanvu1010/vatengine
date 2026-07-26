@@ -26,7 +26,11 @@ export { GdtContractDriftError, GdtError } from "./errors";
 export { type RetryOptions, fetchWithRetry, pace, retryAfterMs } from "./http";
 export {
   buildSearch,
+  familyEndpoint,
   queryInvoices,
+  queryInvoiceTotal,
+  queryInvoicesChunk,
+  type InvoiceChunkResult,
   type InvoiceDirection,
   type InvoiceQueryParams,
   type InvoiceRow,
