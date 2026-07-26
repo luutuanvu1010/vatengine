@@ -6,6 +6,12 @@ export {
   // Nhận diện trần nền tảng Workers (subrequest) — tầng job dùng để KHÔNG tính lỗi
   // cục bộ vào circuit breaker GDT (sự cố 2026-07-18).
   laTranNenTangCucBo,
+  // Task 6 — phân loại lỗi thành nhãn CÓ KIỂU (session_expired/rate_limited/
+  // local_limit/transient) để tầng điều phối job quyết định mà KHÔNG phải dò chuỗi
+  // lỗi (mong manh). Đã dùng nội bộ bởi sync()/syncChunk; runAuditJob (apps/sync-worker)
+  // cần đúng cùng bảng ánh xạ đó cho lỗi ném giữa vòng audit — export để MỘT nguồn
+  // sự thật, không nhân đôi logic phân loại ở tầng app.
+  classifyFailure,
   type DetailCandidate,
   type InvoiceChange,
   type SyncOptions,

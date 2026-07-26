@@ -2,18 +2,47 @@
 // transport egress T0, limiter theo tenant) + đọc sổ đăng ký tenant để lập lịch.
 // KHÔNG test-cover (test tiêm fake/PGlite trực tiếp vào runJob/enumerate).
 import { tenants, withTenant } from "@vat/db";
-import { createDirectCfTransport } from "@vat/gdt-client";
-import { adapterFetchDetail, persistInvoiceLines, sync } from "@vat/sync";
+import { createDirectCfTransport, queryInvoiceTotal } from "@vat/gdt-client";
+import {
+  adapterFetchDetail,
+  chotDeltaRun,
+  demHoaDonTheoNguon,
+  ghiAuditDu,
+  moDeltaRun,
+  persistInvoiceLines,
+  sync,
+  syncChunk,
+} from "@vat/sync";
+import type { AuditSyncMessage, DeltaPullMessage } from "@vat/sync";
 import { eq } from "drizzle-orm";
 import { egressHealthClient } from "./egressHealth";
 import type { EgressProbeDeps } from "./egressProbe";
-import { QUEUE_MAX_BATCH_BYTES, QUEUE_MAX_BATCH_COUNT, chunkForQueue } from "./fanout";
+import {
+  QUEUE_MAX_BATCH_BYTES,
+  QUEUE_MAX_BATCH_COUNT,
+  chunkForQueue,
+  parseNonNegInt,
+} from "./fanout";
 import { dbRecorder, loadAccountToken } from "./recorder";
+import type { DeltaJobDeps } from "./runDeltaJob";
 import type { RunDetailJobDeps } from "./runDetailJob";
 import { resolveSyncRetryConfig } from "./syncRetryConfig";
 import { tenantLimiterClient } from "./tenantLimiter";
 import { throttledTransport } from "./throttledTransport";
-import type { AnyDb, DetailSyncMessage, Env, RunJobDeps, SyncJobMessage } from "./types";
+import type {
+  AnyDb,
+  DetailSyncMessage,
+  Env,
+  RunJobDeps,
+  SyncJobMessage,
+  VatSyncQueueMessage,
+} from "./types";
+
+/** Task 6 — số TRANG tối đa mỗi lô delta khi var `DELTA_CHUNK_PAGES` trống/hỏng.
+ * 40 trang × size mặc định là biên THẬN TRỌNG dưới trần subrequest/invocation của gói
+ * Paid (~1000): còn chỗ cho retry adapter + ghi DB + gọi Durable Object trong cùng lần
+ * gọi Worker. CHƯA KIỂM CHỨNG số tối ưu — hạ qua var khi thấy `local_limit`. */
+export const DEFAULT_DELTA_CHUNK_PAGES = 40;
 
 // Egress T0 (direct-cf) — điểm gọi GDT DUY NHẤT đi qua adapter (gdt-adapter.md).
 const transport = createDirectCfTransport();
@@ -108,5 +137,73 @@ export function makeDetailJobDeps(env: Env, db: AnyDb, msg: DetailSyncMessage): 
       withTenant(db, tenantId, (tx) => persistInvoiceLines(tx, tenantId, hoaDonId, lines)),
     markTokenDead: (m, reason) =>
       dbRecorder(db).reauthRuntime({ tenantId: m.tenantId, taikhoanId: m.taikhoanId }, reason),
+  };
+}
+
+/**
+ * Task 6 (delta-sync) — deps cho MỘT message audit hoặc delta. Cùng khuôn `makeJobDeps`:
+ * limiter bound theo tenant, transport bọc `throttledTransport` (1 permit / request GDT
+ * — U28), db bound vào mọi hàm chạm DB, retry/giãn nhịp lấy từ vars (U25 AC3).
+ *
+ * Khác `makeJobDeps` ở chỗ job KHÔNG kéo cả kỳ trong một lần gọi: mỗi lô tối đa
+ * `DELTA_CHUNK_PAGES` trang rồi tự enqueue message nối tiếp vào CÙNG queue `vat-sync`
+ * (chia lô ≤100 msg/≤256KB, KHÔNG jitter — nhịp đã do permit + backpressure giữ).
+ */
+export function makeDeltaJobDeps(
+  env: Env,
+  db: AnyDb,
+  msg: AuditSyncMessage | DeltaPullMessage,
+): DeltaJobDeps {
+  const limiter = tenantLimiterClient(env.TENANT_LIMITER, msg.tenantId);
+  const throttled = throttledTransport(transport, limiter);
+  const retry = resolveSyncRetryConfig(env);
+  const enqueue = async (msgs: VatSyncQueueMessage[]) => {
+    for (const chunk of chunkForQueue(msgs, QUEUE_MAX_BATCH_COUNT, QUEUE_MAX_BATCH_BYTES)) {
+      await env.SYNC_QUEUE.sendBatch(chunk.map((body) => ({ body })));
+    }
+  };
+  return {
+    now: () => Date.now(),
+    loadAccount: (m) => loadAccountToken(db, m, env.TOKEN_KEK),
+    limiter,
+    recorder: dbRecorder(db),
+    layTotal: (token, direction, family, dateFrom, dateTo) =>
+      queryInvoiceTotal(throttled, token, { direction, family, dateFrom, dateTo }, retry),
+    demTheoNguon: (tenantId, direction, period) =>
+      withTenant(db, tenantId, (tx) => demHoaDonTheoNguon(tx, tenantId, direction, period)),
+    moRun: (m) =>
+      moDeltaRun(db, m.tenantId, {
+        taikhoanId: m.taikhoanId,
+        direction: m.direction,
+        dateFrom: m.dateFrom,
+        dateTo: m.dateTo,
+      }),
+    ghiDu: (m) =>
+      ghiAuditDu(db, m.tenantId, {
+        taikhoanId: m.taikhoanId,
+        direction: m.direction,
+        dateFrom: m.dateFrom,
+        dateTo: m.dateTo,
+      }),
+    chotRun: (tenantId, lanDongBoId, kq) => chotDeltaRun(db, tenantId, lanDongBoId, kq),
+    keoChunk: (m, token) =>
+      syncChunk({
+        db,
+        transport: throttled,
+        token,
+        tenantId: m.tenantId,
+        taikhoanId: m.taikhoanId,
+        direction: m.direction,
+        family: m.family,
+        dateFrom: m.dateFrom,
+        dateTo: m.dateTo,
+        lanDongBoId: m.lanDongBoId,
+        ...(m.state ? { state: m.state } : {}),
+        maxPages: parseNonNegInt(env.DELTA_CHUNK_PAGES, DEFAULT_DELTA_CHUNK_PAGES),
+        retry,
+      }),
+    enqueue,
+    enqueueDetail: (msgs: DetailSyncMessage[]) => enqueue(msgs),
+    chunkPages: parseNonNegInt(env.DELTA_CHUNK_PAGES, DEFAULT_DELTA_CHUNK_PAGES),
   };
 }

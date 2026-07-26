@@ -29,6 +29,10 @@ export interface Env extends LimiterEnv, SyncRetryEnv {
   FANOUT_JITTER_SPREAD_SEC?: string;
   FANOUT_BACKPRESSURE_DELAY_SEC?: string;
   FANOUT_MAX_BACKPRESSURE?: string;
+  // Task 6 (delta-sync) — số TRANG tối đa mỗi lô `syncChunk`. Chia job theo trang là
+  // fix bền cho "Too many subrequests by single Worker invocation" (sự cố 2026-07-18):
+  // một lần gọi Worker chỉ kéo ≤ chừng này trang thay vì cả tháng. Bỏ trống → 40.
+  DELTA_CHUNK_PAGES?: string;
 }
 
 // Db bất kỳ (pg/Hyperdrive khi chạy; PGlite khi test). sync()/withTenant là generic
@@ -115,7 +119,10 @@ export interface RunJobDeps {
 //    thoáng qua đẩy job vào dead-letter oan). Thay `skipped_breaker` cũ (vốn ack/bỏ tick
 //    → mất cả kỳ đồng bộ khi breaker chỉ mở tạm).
 export type JobOutcome =
-  | { kind: "completed"; lanDongBoId: string; soHdMoi: number; soHdCapNhat: number }
+  // Task 6: các trường số liệu là TÙY CHỌN — vòng audit/lô delta cũng trả `completed`
+  // nhưng không có run id/số đếm riêng (audit không mở run; số của lô delta đã cộng
+  // dồn thẳng vào run row bởi syncChunk). Job header vẫn điền đủ như trước.
+  | { kind: "completed"; lanDongBoId?: string; soHdMoi?: number; soHdCapNhat?: number }
   | { kind: "needs_reauth"; reason: string }
   | { kind: "retry_backpressure"; reason: "rate_limited" | "breaker_open" }
   | { kind: "retry"; reason: string };

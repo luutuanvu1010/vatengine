@@ -17,7 +17,13 @@
 // Logic (schedule/runJob/fanout/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
 import { isDetailMessage } from "@vat/sync";
 import { getDbFromHyperdrive } from "./db";
-import { listActiveTenantIds, makeDetailJobDeps, makeEgressProbeDeps, makeJobDeps } from "./deps";
+import {
+  listActiveTenantIds,
+  makeDeltaJobDeps,
+  makeDetailJobDeps,
+  makeEgressProbeDeps,
+  makeJobDeps,
+} from "./deps";
 import { dlqConsume } from "./dlqConsumer";
 import { EgressHealth, egressHealthClient } from "./egressHealth";
 import { runEgressProbe } from "./egressProbe";
@@ -28,10 +34,13 @@ import {
   chunkForQueue,
   consumerAction,
   jitterDelaySeconds,
+  phanLoaiMessage,
   resolveFanoutConfig,
 } from "./fanout";
+import type { QueueAction } from "./fanout";
 import { isEgressBlocked } from "./health";
 import { replayDeadLetters } from "./replay";
+import { runAuditJob, runDeltaJob } from "./runDeltaJob";
 import { detailConsumerAction, runDetailJob } from "./runDetailJob";
 import { runScheduledSync } from "./runJob";
 import { buildMessages, currentPeriodWindow, enumerateDueAccounts } from "./schedule";
@@ -158,14 +167,40 @@ export default {
         const bpAttempt = body.bpAttempt ?? 0;
         const actionOpts = { backpressureDelaySeconds, bpAttempt, maxBackpressure };
         try {
-          // U26 — CÙNG queue chở 2 loại message: `kind:"detail"` (pha 2, MỘT hóa đơn /
-          // message, 1 permit / request) và header (không `kind` — tương thích lùi).
-          const action = isDetailMessage(body)
-            ? detailConsumerAction(
-                await runDetailJob(makeDetailJobDeps(env, db, body), body),
+          // CÙNG queue chở 4 loại message — phân nhánh qua `phanLoaiMessage` (fanout.ts,
+          // có test chốt THỨ TỰ: audit/delta là siêu tập cấu trúc của header nên nhánh
+          // `header` PHẢI đứng cuối, xem chú thích ở đó):
+          //  - U26 `kind:"detail"` (pha 2, MỘT hóa đơn / message, 1 permit / request);
+          //  - Task 6 `kind:"audit"` (đối chiếu total GDT ↔ count DB, quyết kéo/dừng);
+          //  - Task 6 `kind:"delta"` (kéo MỘT lô ≤ DELTA_CHUNK_PAGES trang rồi nối chuỗi);
+          //  - header (không `kind` — job cả kỳ, tương thích lùi).
+          const daPhanLoai = phanLoaiMessage(body);
+          let action: QueueAction;
+          switch (daPhanLoai.loai) {
+            case "detail":
+              action = detailConsumerAction(
+                await runDetailJob(makeDetailJobDeps(env, db, daPhanLoai.msg), daPhanLoai.msg),
                 actionOpts,
-              )
-            : consumerAction(await runScheduledSync(makeJobDeps(env, db, body), body), actionOpts);
+              );
+              break;
+            case "audit":
+              action = consumerAction(
+                await runAuditJob(makeDeltaJobDeps(env, db, daPhanLoai.msg), daPhanLoai.msg),
+                actionOpts,
+              );
+              break;
+            case "delta":
+              action = consumerAction(
+                await runDeltaJob(makeDeltaJobDeps(env, db, daPhanLoai.msg), daPhanLoai.msg),
+                actionOpts,
+              );
+              break;
+            default:
+              action = consumerAction(
+                await runScheduledSync(makeJobDeps(env, db, daPhanLoai.msg), daPhanLoai.msg),
+                actionOpts,
+              );
+          }
           if (action.type === "reenqueue") {
             await env.SYNC_QUEUE.send(
               { ...body, bpAttempt: action.bpAttempt },

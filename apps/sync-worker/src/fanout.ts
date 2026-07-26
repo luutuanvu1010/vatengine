@@ -1,8 +1,41 @@
 // H-B.4 — Fan-out job đồng bộ nền: chia lô gửi hàng đợi, giãn tải theo tenant, và
 // ánh xạ outcome → hành động hàng đợi (tách backpressure khỏi lỗi thật). THUẦN LOGIC,
 // không phụ thuộc runtime Cloudflare → test offline. Áp dụng ở wiring index.ts.
-import type { VatSyncQueueMessage } from "@vat/sync";
+import { isAuditMessage, isDeltaMessage, isDetailMessage } from "@vat/sync";
+import type {
+  AuditSyncMessage,
+  DeltaPullMessage,
+  DetailSyncMessage,
+  SyncJobMessage,
+  VatSyncQueueMessage,
+} from "@vat/sync";
 import type { JobOutcome } from "./types";
+
+/** Nhánh xử lý của MỘT message trên queue `vat-sync`, KÈM message đã thu hẹp kiểu. */
+export type MessageDaPhanLoai =
+  | { loai: "detail"; msg: DetailSyncMessage }
+  | { loai: "audit"; msg: AuditSyncMessage }
+  | { loai: "delta"; msg: DeltaPullMessage }
+  | { loai: "header"; msg: SyncJobMessage };
+
+/**
+ * Phân loại message → nhánh consumer. TÁCH khỏi wiring `index.ts` để TEST ĐƯỢC, vì
+ * đây là chỗ duy nhất TypeScript KHÔNG bảo vệ được:
+ *
+ * `AuditSyncMessage`/`DeltaPullMessage` là SIÊU TẬP cấu trúc của `SyncJobMessage`
+ * (đủ tenantId/taikhoanId/direction/dateFrom/dateTo/period), còn message header hợp lệ
+ * thì KHÔNG có `kind` (tương thích lùi). Hệ quả: nếu thiếu/đặt sai thứ tự một guard,
+ * message audit/delta rơi vào nhánh header và âm thầm chạy như job đồng bộ CẢ THÁNG —
+ * KHÔNG lỗi biên dịch, KHÔNG lỗi runtime, chỉ sai hành vi. `header` PHẢI là nhánh
+ * CUỐI (fallthrough), mọi `kind` đã biết phải được nhận diện TRƯỚC. Trả kèm `msg` đã
+ * thu hẹp để nơi gọi dùng được ngay, KHÔNG phải `as` (ép kiểu là chỗ bug này ẩn vào).
+ */
+export function phanLoaiMessage(body: VatSyncQueueMessage): MessageDaPhanLoai {
+  if (isDetailMessage(body)) return { loai: "detail", msg: body };
+  if (isAuditMessage(body)) return { loai: "audit", msg: body };
+  if (isDeltaMessage(body)) return { loai: "delta", msg: body };
+  return { loai: "header", msg: body };
+}
 
 // Giới hạn một lần `Queue.sendBatch` (Cloudflare Queues): ≤100 message VÀ ≤256KB tổng.
 // Vượt bất kỳ giới hạn nào → sendBatch lỗi. Chia trước khi gửi để cron enqueue nhiều
