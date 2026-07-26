@@ -1,4 +1,4 @@
-import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { tenantIsolationPolicy } from "./_rls";
 import { taiKhoanThue } from "./taiKhoanThue";
 import { tenants } from "./tenants";
@@ -49,6 +49,13 @@ export const lanDongBo = pgTable(
     soHdCapNhat: integer("so_hd_cap_nhat").notNull().default(0),
     trangThai: text("trang_thai").notNull().default("running"),
     thongDiepLoi: text("thong_diep_loi"),
+    /** Delta-sync (spec 2026-07-26): con trỏ tiếp tục giữa các lô kéo —
+     * { family: "normal"|"sco", state: string|null, totalQuanSat: number|null }.
+     * NULL với run thường (full-month legacy). */
+    checkpoint: jsonb("checkpoint"),
+    /** 'sync' = run kéo dữ liệu; 'audit' = run kiểm-đủ (không kéo — tháng đã đủ so
+     * total GDT). Cho phép UI phân biệt "đủ, không cần kéo" với "đã kéo xong". */
+    loai: text("loai").notNull().default("sync"),
     batDau: timestamp("bat_dau", { withTimezone: true }).notNull().defaultNow(),
     ketThuc: timestamp("ket_thuc", { withTimezone: true }),
   },
