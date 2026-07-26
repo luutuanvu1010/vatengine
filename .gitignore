@@ -29,3 +29,6 @@ coverage/
 
 # macOS
 .DS_Store
+
+# Dữ liệu đối chiếu thật (hóa đơn MST thật) — không bao giờ commit
+docs/doi_chieu_data/
