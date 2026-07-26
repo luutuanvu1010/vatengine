@@ -90,4 +90,14 @@ describe("Thẻ 'Kết quả' — 4 số thống kê (Task 13)", () => {
     expect(screen.getByText("Tổng thanh toán")).toBeTruthy();
     expect(screen.getByText("—")).toBeTruthy();
   });
+
+  // 2026-07-26 (chủ dự án): nút Xuất phải đứng ở HÀNG HÀNH ĐỘNG cạnh "Đồng bộ từ Thuế"
+  // (bị cụm 4 Stat đẩy khuất khi nằm trong thẻ Kết quả). Chốt cả hai nút cùng hiện diện.
+  it("nút Xuất Excel/CSV hiện cạnh nút Đồng bộ từ Thuế (hàng hành động)", async () => {
+    mockApi({ count: 10, tongTcthue: "1", tongTthue: "1", tongTtbso: "1" });
+    renderWithProviders(<InvoicesPageAs />);
+    expect(await screen.findByRole("button", { name: "Đồng bộ từ Thuế" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Xuất Excel" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Xuất CSV" })).toBeTruthy();
+  });
 });

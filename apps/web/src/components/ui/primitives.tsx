@@ -244,10 +244,14 @@ export function Stat({
   value,
   label,
   badge,
+  co = "md",
 }: {
   value: string | number;
   label: string;
   badge?: ReactNode;
+  /** Cỡ số: "md" (tiêu điểm, mặc định) | "sm" (đứng cụm nhiều số — 2026-07-26, cụm 4 số
+   * thẻ Kết quả cần vừa một hàng thay vì 4 số cỡ 3xl tràn dòng). Một nơi, không tô đè. */
+  co?: "md" | "sm";
 }) {
   return (
     <div style={{ display: "grid", gap: "var(--sp-3)" }}>
@@ -257,7 +261,7 @@ export function Stat({
         <span
           className="tabular"
           style={{
-            fontSize: "var(--fs-3xl)",
+            fontSize: co === "sm" ? "var(--fs-xl)" : "var(--fs-3xl)",
             lineHeight: 1,
             fontWeight: "var(--fw-extrabold)",
             color: "var(--text-primary)",

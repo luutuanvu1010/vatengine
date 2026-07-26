@@ -122,17 +122,24 @@ export function InvoicesPage() {
           value={filter}
           onApply={applyFilter}
           hanhDongPhu={
-            nenHienPanelDongBo(filter, canSync) ? (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-1)" }}>
-                <Button onClick={backfill.start} disabled={backfillRunning}>
-                  {backfillRunning ? "Đang đồng bộ…" : "Đồng bộ từ Thuế"}
-                </Button>
-                <InfoTip
-                  label="Giải thích đồng bộ"
-                  text="Kiểm tra và kéo phần còn thiếu từ máy chủ thuế cho kỳ đã chọn — chạy nền."
-                />
-              </span>
-            ) : undefined
+            /* Hàng hành động cạnh "Lọc dữ liệu": Đồng bộ (kéo nặng, vai quản trị) + Xuất
+               (đọc nhẹ — tải dữ liệu ĐÃ có; InvoiceExportButtons tự ẩn theo canExport).
+               Yêu cầu chủ dự án 2026-07-26: nút xuất đứng cạnh nút đồng bộ cho dễ thấy. */
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-2)" }}>
+              {nenHienPanelDongBo(filter, canSync) && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-1)" }}>
+                  <Button onClick={backfill.start} disabled={backfillRunning}>
+                    {backfillRunning ? "Đang đồng bộ…" : "Đồng bộ từ Thuế"}
+                  </Button>
+                  <InfoTip
+                    label="Giải thích đồng bộ"
+                    text="Kiểm tra và kéo phần còn thiếu từ máy chủ thuế cho kỳ đã chọn — chạy nền."
+                  />
+                </span>
+              )}
+              {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
+              <InvoiceExportButtons filter={filter} cols={cols} />
+            </span>
           }
         />
         {nenHienPanelDongBo(filter, canSync) && <RangeSyncPanel backfill={backfill} />}
@@ -165,51 +172,42 @@ export function InvoicesPage() {
         ) : (
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
               gap: "var(--sp-6)",
-              flexWrap: "wrap",
+              alignItems: "start",
             }}
           >
-            {/* Task 13 — cụm 4 số: đếm + 3 tổng tiền (đã có sẵn ở summary.total). Nhãn tiền
-                từ Registry (`labelOf` — ui.md nhãn một-nguồn), tiền in ĐẦY ĐỦ (formatMoney). */}
-            <div
-              style={{
-                display: "flex",
-                gap: "var(--sp-6)",
-                flexWrap: "wrap",
-                alignItems: "flex-start",
-              }}
-            >
-              <Stat
-                value={formatMoney(String(count))}
-                label="hóa đơn khớp bộ lọc"
-                badge={
-                  badgeKy ? (
-                    <Badge>
-                      <span className="tabular">Kỳ {badgeKy}</span>
-                    </Badge>
-                  ) : undefined
-                }
-              />
-              <Stat value={tienStat(summary.data?.total.tongTcthue)} label={labelOf("tgtcthue")} />
-              <Stat value={tienStat(summary.data?.total.tongTthue)} label={labelOf("tgtthue")} />
-              <Stat value={tienStat(summary.data?.total.tongTtbso)} label={labelOf("tgtttbso")} />
-            </div>
-            {/* B2 (U27) — kết xuất TOÀN BỘ kết quả theo bộ lọc hiện tại; "Tùy chỉnh cột" chọn
-                cột vào file (chỉ vai được kết xuất). */}
-            <div
-              style={{
-                display: "flex",
-                gap: "var(--sp-2)",
-                alignItems: "flex-start",
-                flexWrap: "wrap",
-              }}
-            >
-              {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
-              <InvoiceExportButtons filter={filter} cols={cols} />
-            </div>
+            {/* Task 13 + chỉnh 2026-07-26 — cụm 4 số xếp LƯỚI tự co (auto-fit): số đếm là
+                tiêu điểm (cỡ md), 3 tổng tiền cỡ sm để vừa MỘT hàng màn thường, tự xuống
+                hàng gọn ở màn hẹp. Nhãn tiền từ Registry (`labelOf` — nhãn một-nguồn), tiền
+                in ĐẦY ĐỦ (formatMoney). Cụm xuất đã chuyển lên hàng hành động thẻ Tra cứu. */}
+            <Stat
+              value={formatMoney(String(count))}
+              label="hóa đơn khớp bộ lọc"
+              badge={
+                badgeKy ? (
+                  <Badge>
+                    <span className="tabular">Kỳ {badgeKy}</span>
+                  </Badge>
+                ) : undefined
+              }
+            />
+            <Stat
+              co="sm"
+              value={tienStat(summary.data?.total.tongTcthue)}
+              label={labelOf("tgtcthue")}
+            />
+            <Stat
+              co="sm"
+              value={tienStat(summary.data?.total.tongTthue)}
+              label={labelOf("tgtthue")}
+            />
+            <Stat
+              co="sm"
+              value={tienStat(summary.data?.total.tongTtbso)}
+              label={labelOf("tgtttbso")}
+            />
           </div>
         )}
       </Card>
