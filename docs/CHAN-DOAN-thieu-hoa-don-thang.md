@@ -118,8 +118,8 @@ Bài học phương pháp: giả thuyết "cắt-ngang-cụm ngày" nghe hợp l
 2. Tìm section **Plan** (hoặc **Subscriptions** tuỳ phiên bản)
 3. Ghi rõ tên gói hiện tại: **Workers Paid** hay **Workers Free**
    - **Lưu ý quan trọng:** Gói **Workers Paid** ≠ gói **zone Pro/Business**. Hai cái này **độc lập**. Một tài khoản có thể "zone Pro" nhưng "Workers Free", hoặc ngược lại.
-   - Subrequest limit của **Workers Free: 50/request**
-   - Subrequest limit của **Workers Paid: 600/request** (1.2M/tháng)
+   - Subrequest limit của **Workers Free: 50/invocation**
+   - Subrequest limit của **Workers Paid: 1000/invocation** (theo tài liệu Cloudflare Workers Limits — đối chiếu lại trang docs khi kiểm vì con số có thể thay đổi)
 
 **Ngữ cảnh chẩn đoán:** Chủ dự án khẳng định tenant này "đã Paid", nhưng production log hôm 2026-07-18 ghi `local_limit` n=61 lần "Too many subrequests" trong `lan_dong_bo` (cron tháng 6). Điều này **chưa giải thích được** — hoặc gói thực tế là Free, hoặc có nguyên nhân khác (rate-limit GDT, overload request). Bước nghiệm thu phải **xác minh thực tế gói + lưu chứng minh**.
 
@@ -134,7 +134,7 @@ npx wrangler tail vat-sync-worker --search "local_limit"
 **Giải thích:**
 - Lệnh này **tails real-time logs** từ worker `vat-sync-worker` trên production/staging
 - `--search "local_limit"` **lọc chỉ dòng chứa** từ khóa `local_limit` (tín hiệu bị giới hạn subrequest)
-- Log này **đã được nhúng** trong `packages/sync/src/runDeltaJob.ts` nhánh `local_limit` (`console.log("local_limit: ...")` khi catch lỗi 429)
+- Log này **đã được nhúng** trong `apps/sync-worker/src/runDeltaJob.ts` nhánh `failureKind === "local_limit"` (`console.warn("[delta] local_limit: ...")` — trần nền tảng Workers, KHÔNG phải 429 của GDT)
 - Chạy lệnh trên, rồi kích hoạt delta-sync tháng 6 trong dashboard → **ghi lại count n và thời điểm**
 
 ### (c) Khung kết luận (để điền sau mỗi lần kiểm tra)
