@@ -45,3 +45,11 @@ export {
   type BackfillMonthStatus,
   type BackfillProgress,
 } from "./coverage";
+// Task 4 — quyết định vòng kiểm audit (delta-sync) + đếm DB theo nguồn (Task 6 dùng).
+export {
+  TRAN_VONG_DELTA,
+  decideAudit,
+  demHoaDonTheoNguon,
+  type FamilyObservation,
+  type AuditDecision,
+} from "./audit";
