@@ -44,6 +44,14 @@ import type {
  * gọi Worker. CHƯA KIỂM CHỨNG số tối ưu — hạ qua var khi thấy `local_limit`. */
 export const DEFAULT_DELTA_CHUNK_PAGES = 40;
 
+/** Số trang mỗi lô, từ var env. CHẶN 0: `syncChunk` với `maxPages = 0` không kéo trang
+ * nào nhưng vẫn trả `state` cũ ⇒ `done: false` ⇒ runDeltaJob enqueue lại chính message
+ * VÔ HẠN (vòng lặp queue không tiến triển). `parseNonNegInt` coi "0" là hợp lệ nên phải
+ * kẹp sàn ở đây, không dựa vào người đặt var. */
+function soTrangMoiLo(env: Env): number {
+  return Math.max(1, parseNonNegInt(env.DELTA_CHUNK_PAGES, DEFAULT_DELTA_CHUNK_PAGES));
+}
+
 // Egress T0 (direct-cf) — điểm gọi GDT DUY NHẤT đi qua adapter (gdt-adapter.md).
 const transport = createDirectCfTransport();
 
@@ -199,11 +207,11 @@ export function makeDeltaJobDeps(
         dateTo: m.dateTo,
         lanDongBoId: m.lanDongBoId,
         ...(m.state ? { state: m.state } : {}),
-        maxPages: parseNonNegInt(env.DELTA_CHUNK_PAGES, DEFAULT_DELTA_CHUNK_PAGES),
+        maxPages: soTrangMoiLo(env),
         retry,
       }),
     enqueue,
     enqueueDetail: (msgs: DetailSyncMessage[]) => enqueue(msgs),
-    chunkPages: parseNonNegInt(env.DELTA_CHUNK_PAGES, DEFAULT_DELTA_CHUNK_PAGES),
+    chunkPages: soTrangMoiLo(env),
   };
 }

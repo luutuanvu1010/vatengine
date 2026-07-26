@@ -306,6 +306,38 @@ describe("runAuditJob — vòng kiểm đối chiếu total GDT ↔ count DB", (
     expect(calls.chotRun).toEqual([{ lanDongBoId: "ldb-1", trangThai: "completed" }]);
   });
 
+  it("(2d) enqueue THẤT BẠI ngay sau khi mở run → retry VÀ chốt run vừa mở là failed (không để run mồ côi treo 'running')", async () => {
+    // Nếu chỉ retry: lượt sau `msg.lanDongBoId` vẫn undefined → moRun lần nữa → run
+    // trước treo `running` vĩnh viễn, làm nhiễu sổ đồng bộ. Phải tự dọn.
+    const { deps, calls } = makeDeps({
+      totals: { normal: 10, sco: 5 },
+      dem: { normal: 3, sco: 2 },
+      enqueue: async () => {
+        throw new Error("queue hong");
+      },
+    });
+    const out = await runAuditJob(deps, AUDIT);
+    expect(out.kind).toBe("retry");
+    expect(calls.moRun).toBe(1);
+    expect(calls.chotRun).toEqual([
+      { lanDongBoId: "ldb-moi", trangThai: "failed", thongDiepLoi: expect.any(String) },
+    ]);
+  });
+
+  it("(2e) enqueue thất bại khi DÙNG LẠI run đang mở (vòng ≥1) → retry, KHÔNG chốt run (lượt sau nối tiếp được)", async () => {
+    const { deps, calls } = makeDeps({
+      totals: { normal: 10, sco: 5 },
+      dem: { normal: 8, sco: 5 },
+      enqueue: async () => {
+        throw new Error("queue hong");
+      },
+    });
+    const out = await runAuditJob(deps, { ...AUDIT, vong: 1, lanDongBoId: "ldb-1", prevCount: 5 });
+    expect(out.kind).toBe("retry");
+    expect(calls.moRun).toBe(0);
+    expect(calls.chotRun).toEqual([]);
+  });
+
   it("(4) token HẾT HẠN (pre-flight) → KHÔNG chạm GDT, ghi cần đăng nhập lại", async () => {
     const { deps, calls } = makeDeps({
       account: { tokenHienTai: "jwt-het-han", tokenHetHan: new Date(NOW - 1000) },

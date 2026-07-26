@@ -192,25 +192,40 @@ export async function runAuditJob(deps: DeltaJobDeps, msg: AuditSyncMessage): Pr
 
     // KÉO — mở run (vòng 0) hoặc dùng run sẵn; enqueue MỘT message kéo họ đầu, các họ
     // còn lại xếp `conLai` (một họ đang kéo tại một thời điểm → không dồn dập GDT).
-    const lanDongBoId = msg.lanDongBoId ?? (await deps.moRun(msg));
+    const runCoSan = msg.lanDongBoId;
+    const lanDongBoId = runCoSan ?? (await deps.moRun(msg));
     const [family, ...conLai] = quyetDinh.families;
     if (!family) return { kind: "completed" }; // decideAudit "keo" luôn có ≥1 họ (phòng hờ)
-    await deps.enqueue([
-      {
-        kind: "delta",
-        tenantId: msg.tenantId,
-        taikhoanId: msg.taikhoanId,
-        direction: msg.direction,
-        dateFrom: msg.dateFrom,
-        dateTo: msg.dateTo,
-        period: msg.period,
-        lanDongBoId,
-        family,
-        conLai,
-        vong: msg.vong + 1,
-        prevCount: dem.normal + dem.sco,
-      },
-    ]);
+    try {
+      await deps.enqueue([
+        {
+          kind: "delta",
+          tenantId: msg.tenantId,
+          taikhoanId: msg.taikhoanId,
+          direction: msg.direction,
+          dateFrom: msg.dateFrom,
+          dateTo: msg.dateTo,
+          period: msg.period,
+          lanDongBoId,
+          family,
+          conLai,
+          vong: msg.vong + 1,
+          prevCount: dem.normal + dem.sco,
+        },
+      ]);
+    } catch (err) {
+      // Run VỪA mở nhưng message kéo KHÔNG vào được queue: lượt giao lại vẫn có
+      // `msg.lanDongBoId` undefined nên sẽ mở run MỚI ⇒ run này treo `running` vĩnh
+      // viễn, làm nhiễu sổ đồng bộ. Tự dọn (chốt failed) trước khi trả retry. Nếu là
+      // run CÓ SẴN (vòng ≥1) thì KHÔNG chốt — lượt sau còn nối tiếp vào đúng run đó.
+      if (!runCoSan) {
+        await deps.chotRun(msg.tenantId, lanDongBoId, {
+          trangThai: "failed",
+          thongDiepLoi: "khong enqueue duoc message keo lo dau (run vua mo, se mo lai o luot sau)",
+        });
+      }
+      throw err; // để catch ngoài phân loại (transient → retry + ghi thất bại limiter)
+    }
     return { kind: "completed" };
   } catch (err) {
     return xuLyLoiAudit(deps, msg, err);
