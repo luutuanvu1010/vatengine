@@ -20,12 +20,17 @@ export { listInvoicesMissingLines, type MissingLinesResult } from "./missingLine
 export {
   type SyncJobMessage,
   type DetailSyncMessage,
+  type AuditSyncMessage,
+  type DeltaPullMessage,
   type VatSyncQueueMessage,
   type PeriodWindow,
   currentPeriodWindow,
   buildSyncMessages,
   buildDetailMessages,
   isDetailMessage,
+  isAuditMessage,
+  isDeltaMessage,
+  buildAuditMessages,
   // U22 — backfill khoảng lọc quá khứ: tách khoảng thành cửa sổ tháng đầy đủ + dựng job.
   monthlyWindows,
   buildBackfillMessages,

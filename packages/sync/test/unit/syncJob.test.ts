@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildSyncMessages, currentPeriodWindow } from "../../src/syncJob";
+import {
+  buildAuditMessages,
+  buildSyncMessages,
+  currentPeriodWindow,
+  isAuditMessage,
+  isDeltaMessage,
+  monthlyWindows,
+} from "../../src/syncJob";
 
 describe("currentPeriodWindow — kỳ tháng hiện tại theo giờ VN", () => {
   it("giữa tháng: dateFrom=01, dateTo=ngày cuối, period=YYYY-MM", () => {
@@ -50,5 +57,32 @@ describe("buildSyncMessages — một message / (tài khoản × chiều), tenan
       "t1:a1:purchase",
       "t2:a2:purchase",
     ]);
+  });
+});
+
+describe("buildAuditMessages — một message / (tháng × chiều), vong 0", () => {
+  it("buildAuditMessages: 1 msg / (tháng × chiều), vong 0, kind audit", () => {
+    const ws = monthlyWindows("2026-06-01", "2026-07-31"); // 2 tháng
+    const msgs = buildAuditMessages({ tenantId: "t1", taikhoanId: "a1" }, ws, ["purchase", "sold"]);
+    expect(msgs).toHaveLength(4);
+    expect(msgs[0]).toMatchObject({
+      kind: "audit",
+      tenantId: "t1",
+      taikhoanId: "a1",
+      direction: "purchase",
+      period: "2026-06",
+      dateFrom: "01/06/2026",
+      dateTo: "30/06/2026",
+      vong: 0,
+    });
+  });
+});
+
+describe("type guards — isAuditMessage, isDeltaMessage", () => {
+  it("guards phân nhánh đúng và không nhận nhầm nhau/legacy", () => {
+    expect(isAuditMessage({ kind: "audit" })).toBe(true);
+    expect(isDeltaMessage({ kind: "delta" })).toBe(true);
+    expect(isAuditMessage({ kind: "detail" })).toBe(false);
+    expect(isDeltaMessage({ period: "2026-06" })).toBe(false); // header legacy không kind
   });
 });

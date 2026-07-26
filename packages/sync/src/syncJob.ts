@@ -49,14 +49,71 @@ export interface DetailSyncMessage {
   bpAttempt?: number;
 }
 
-/** Mọi hình dạng message hợp lệ trên queue vat-sync (header U5/U22 + detail U26). */
-export type VatSyncQueueMessage = SyncJobMessage | DetailSyncMessage;
+/** Kiểm tra trạng thái đồng bộ một khoảng ngày × chiều (Task 3, U6-U7). */
+export interface AuditSyncMessage {
+  kind: "audit";
+  tenantId: string;
+  taikhoanId: string;
+  direction: InvoiceDirection;
+  dateFrom: string;
+  dateTo: string;
+  period: string; // "YYYY-MM"
+  /** 0 = kiểm đầu; ≥1 = kiểm lại sau vòng kéo thứ `vong`. */
+  vong: number;
+  /** Run đang mở (chỉ vong ≥ 1). */
+  lanDongBoId?: string;
+  /** Tổng count DB ở lần kiểm trước (xét bão hòa). */
+  prevCount?: number;
+  /** Đẩy lùi (backpressure) — cùng ngữ nghĩa SyncJobMessage.bpAttempt. */
+  bpAttempt?: number;
+}
+
+/** Kéo chi tiết từ một họ hóa đơn (normal|sco) trong một vòng đồng bộ (Task 3, U6-U9). */
+export interface DeltaPullMessage {
+  kind: "delta";
+  tenantId: string;
+  taikhoanId: string;
+  direction: InvoiceDirection;
+  dateFrom: string;
+  dateTo: string;
+  period: string; // "YYYY-MM"
+  lanDongBoId: string;
+  /** Họ đang kéo (normal|sco). */
+  family: "normal" | "sco";
+  /** Họ chờ kéo sau họ này. */
+  conLai: ("normal" | "sco")[];
+  /** Con trỏ GDT; undefined = đầu họ. */
+  state?: string;
+  /** Vòng hiện tại (1-based). */
+  vong: number;
+  /** Count DB lúc audit mở vòng này (chuyển tiếp cho re-audit). */
+  prevCount: number;
+  /** Đẩy lùi (backpressure) — cùng ngữ nghĩa SyncJobMessage.bpAttempt. */
+  bpAttempt?: number;
+}
+
+/** Mọi hình dạng message hợp lệ trên queue vat-sync (header U5/U22 + detail U26 + audit/delta U3-U9). */
+export type VatSyncQueueMessage =
+  | SyncJobMessage
+  | DetailSyncMessage
+  | AuditSyncMessage
+  | DeltaPullMessage;
 
 /** Phân nhánh consumer: chỉ tin `kind === "detail"`; mọi thứ khác coi là header. */
 export function isDetailMessage(body: unknown): body is DetailSyncMessage {
   return (
     typeof body === "object" && body !== null && (body as { kind?: unknown }).kind === "detail"
   );
+}
+
+/** Phân nhánh: chỉ tin `kind === "audit"`. */
+export function isAuditMessage(body: unknown): body is AuditSyncMessage {
+  return typeof body === "object" && body !== null && (body as { kind?: unknown }).kind === "audit";
+}
+
+/** Phân nhánh: chỉ tin `kind === "delta"`. */
+export function isDeltaMessage(body: unknown): body is DeltaPullMessage {
+  return typeof body === "object" && body !== null && (body as { kind?: unknown }).kind === "delta";
 }
 
 /**
@@ -193,6 +250,27 @@ export function buildSyncMessages(
       dateFrom: window.dateFrom,
       dateTo: window.dateTo,
       period: window.period,
+    })),
+  );
+}
+
+/** Dựng message audit cho MỘT tài khoản qua NHIỀU cửa sổ tháng × nhiều chiều (Task 3, U6-U7).
+ * Một message / (tháng × chiều), vong=0 (kiểm đầu), không gắn vòng kéo (lanDongBoId). */
+export function buildAuditMessages(
+  account: { tenantId: string; taikhoanId: string },
+  windows: PeriodWindow[],
+  directions: InvoiceDirection[],
+): AuditSyncMessage[] {
+  return windows.flatMap((w) =>
+    directions.map((direction) => ({
+      kind: "audit" as const,
+      tenantId: account.tenantId,
+      taikhoanId: account.taikhoanId,
+      direction,
+      dateFrom: w.dateFrom,
+      dateTo: w.dateTo,
+      period: w.period,
+      vong: 0,
     })),
   );
 }
