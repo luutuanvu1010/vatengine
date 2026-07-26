@@ -1,6 +1,7 @@
 // U-K4 — luồng xuất + tải DÙNG CHUNG (một nguồn): createExport(format, filter) →
-// downloadExport(id) → saveBlob. Nút "Xuất Excel/CSV" (InvoiceExportButtons) và bước tự-tải
-// sau "Đồng bộ và tải xuống" (InvoicesPage) cùng gọi hàm này — không viết bộ xuất thứ hai.
+// downloadExport(id) → saveBlob. Dùng bởi nút "Xuất Excel/CSV" (InvoiceExportButtons).
+// Task 12 (2026-07-26) — bước tự-tải sau đồng bộ ở InvoicesPage đã BỎ (đồng bộ và xuất
+// tách bạch); hàm này vẫn là NƠI DUY NHẤT gọi export — không viết bộ xuất thứ hai.
 import { api } from "../../lib/apiClient";
 import { saveBlob } from "../../lib/download";
 import type { ExportFormat, InvoiceFilter } from "../../types/api";

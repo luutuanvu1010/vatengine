@@ -66,7 +66,11 @@ export function deriveRangeBackfillState(x: {
       case "hoan_thanh":
         return { kind: "xong" };
       default: {
-        const thangHienTai = x.progress.thang.find((t) => t.trangThai !== "xong")?.period;
+        // Task 12 §4 — "du" (tháng đã đủ, GDT không còn gì để kéo — Task 8) TÍNH LÀ ĐÃ XONG
+        // cho mục đích "đang lấy tháng nào": không được coi là tháng-hiện-tại-đang-chạy.
+        const thangHienTai = x.progress.thang.find(
+          (t) => t.trangThai !== "xong" && t.trangThai !== "du",
+        )?.period;
         return {
           kind: "dang_lay",
           soXong: x.progress.soXong,
@@ -105,6 +109,9 @@ export function useRangeBackfill(opts: {
   // boolean) nên tự "reset" khi đổi khoảng — không cần effect (tránh vòng lặp + exhaustive-deps).
   const [clickedRange, setClickedRange] = useState<string | null>(null);
   const manual = hasRange && clickedRange === rangeKey;
+  // `lan` tăng mỗi lần bấm → queryKey đổi → chạy lượt MỚI kể cả cùng khoảng (sửa lỗi
+  // staleTime Infinity nuốt lần bấm thứ hai — Task 12 spec 2026-07-26 §4).
+  const [lan, setLan] = useState(0);
 
   const accounts = useQuery({
     queryKey: ["tax-accounts"],
@@ -118,7 +125,7 @@ export function useRangeBackfill(opts: {
 
   // Khởi tạo: chạy MỘT lần cho mỗi khoảng khi được kích hoạt (staleTime vô hạn, không retry).
   const startQ = useQuery({
-    queryKey: ["range-backfill", tuNgay, denNgay],
+    queryKey: ["range-backfill", tuNgay, denNgay, lan],
     queryFn: async () => {
       const account = acc as TaxAccountView;
       const khoang = await api.backfillTaxAccount(account.id, {
@@ -175,6 +182,11 @@ export function useRangeBackfill(opts: {
   return {
     state,
     lineResult: startQ.data ? startQ.data.dongHang : null,
-    start: () => setClickedRange(rangeKey),
+    // Mỗi lần bấm là MỘT LƯỢT MỚI (kể cả cùng khoảng, kể cả sau khi lượt trước đã "xong") —
+    // tăng `lan` đổi queryKey nên useQuery chạy lại thay vì trả cache staleTime vô hạn.
+    start: () => {
+      setClickedRange(rangeKey);
+      setLan((n) => n + 1);
+    },
   };
 }

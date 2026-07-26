@@ -144,7 +144,7 @@ describe("U-K4 — mặc định tháng hiện tại (yêu cầu 2)", () => {
   });
 });
 
-describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tải xuống (kéo nặng) (yêu cầu 3)", () => {
+describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ từ Thuế (kéo nặng) (yêu cầu 3)", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-07-15T08:00:00.000Z"));
@@ -173,49 +173,33 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ và tả
     expect(sau).toBe(truoc);
   });
 
-  it("nút đồng bộ nay tên 'Đồng bộ và tải xuống'", async () => {
+  // Task 12 (2026-07-26) — thẻ "Tra cứu hóa đơn" GỘP lọc + đồng bộ; nút đồng bộ đổi tên
+  // "Đồng bộ từ Thuế" và cơ chế TỰ TẢI FILE sau khi xong đã bỏ hoàn toàn (đồng bộ và xuất
+  // là hai hành động tách bạch — xem invoiceRangeSync.test.tsx cho kịch bản đầy đủ).
+  it("nút đồng bộ nay tên 'Đồng bộ từ Thuế'", async () => {
     mockApi();
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
-    expect(screen.getByRole("button", { name: "Đồng bộ và tải xuống" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Đồng bộ từ Thuế" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Đồng bộ và tải xuống" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Đồng bộ khoảng này" })).toBeNull();
   });
 
-  it("bấm 'Đồng bộ và tải xuống' → backfill; hoàn thành → TỰ gọi xuất /exports cho bộ lọc hiện tại", async () => {
+  it("bấm 'Đồng bộ từ Thuế' → backfill; hoàn thành → KHÔNG tự gọi xuất /exports", async () => {
     const { calls } = mockApi({ progressTong: "hoan_thanh" });
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
-    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
-    await waitFor(() => {
-      expect(
-        calls.some((c) => c.method === "POST" && c.url.includes("/exports")),
-        "backfill xong phải tự kích hoạt xuất",
-      ).toBe(true);
-    });
+    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Thuế" }));
+    await screen.findByText(/Đã đồng bộ xong/);
+    expect(calls.some((c) => c.method === "POST" && c.url.includes("/exports"))).toBe(false);
   });
 
-  it("AUTO-backfill khi RỖNG chạy tới hoàn thành → KHÔNG tự tải (chỉ thủ công mới tải)", async () => {
-    // count 0 → auto-backfill THẬT chạy (progress 'hoan_thanh') nhưng KHÔNG bấm nút
-    // → taiSauDongBo=false → tuyệt đối không có /exports. Đây là nhánh auto mà test trước bỏ sót.
+  it("AUTO-backfill khi RỖNG chạy tới hoàn thành → KHÔNG tự tải (tự-tải đã bỏ hoàn toàn)", async () => {
     const { calls } = mockApi({ progressTong: "hoan_thanh", empty: true });
     renderWithProviders(<InvoicesPageAs />);
     // Chờ auto-backfill kích hoạt (POST /backfill) rồi poll xong.
     await waitFor(() => expect(calls.some((c) => c.url.includes("/backfill"))).toBe(true));
     await waitFor(() => expect(calls.some((c) => c.url.includes("/backfill/"))).toBe(true));
     expect(calls.some((c) => c.method === "POST" && c.url.includes("/exports"))).toBe(false);
-  });
-
-  it("tự-tải sau đồng bộ THẤT BẠI (xuất 403) → hiện thông báo lỗi, KHÔNG nuốt im lặng", async () => {
-    const { calls } = mockApi({ progressTong: "hoan_thanh", exportOk: false });
-    renderWithProviders(<InvoicesPageAs />);
-    await screen.findByText("hóa đơn khớp bộ lọc");
-    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
-    // Đã cố xuất (POST /exports) và bị 403 → phải hiện lỗi tải cho người dùng.
-    await waitFor(() => {
-      expect(calls.some((c) => c.method === "POST" && c.url.includes("/exports"))).toBe(true);
-    });
-    expect(
-      await screen.findByText(/tải file.*không thành công|không tải được|lỗi tải/i),
-    ).toBeTruthy();
   });
 });

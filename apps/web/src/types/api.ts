@@ -210,7 +210,7 @@ export interface TaxLoginResult {
 }
 
 // U22 B7 — theo dõi tiến độ backfill header theo tháng (mirror apps/api GET /backfill/:id).
-export type BackfillMonthStatus = "cho" | "dang_chay" | "xong" | "loi";
+export type BackfillMonthStatus = "cho" | "dang_chay" | "xong" | "du" | "loi";
 export interface BackfillProgress {
   backfillId: string;
   thang: { period: string; trangThai: BackfillMonthStatus }[];

@@ -4,7 +4,10 @@
 // POST /backfill {tuNgay,denNgay} (tháng thiếu header — U22) + POST /backfill-lines (hóa
 // đơn thiếu dòng hàng — U26), rồi poll GET /backfill/:id hiện tiến độ. Trình bày thuần —
 // logic ở useRangeBackfill (deriveRangeBackfillState). Presentational: nhận state từ hook.
-import { Alert, Button } from "../../components/ui/primitives";
+// Task 12 — nút "Đồng bộ từ Thuế" chuyển lên hàng nút của FilterBar (thẻ "Tra cứu hóa đơn"
+// gộp lọc + đồng bộ); panel này CHỈ còn tiến độ + cảnh báo. Cơ chế tự-tải-file sau đồng bộ
+// (và `loiTaiXuong`) đã bỏ hoàn toàn — người dùng bấm nút Xuất riêng khi cần.
+import { Alert } from "../../components/ui/primitives";
 import type { LineBackfillResult, RangeBackfillState } from "./useRangeBackfill";
 import { formatPeriod } from "./useRangeBackfill";
 
@@ -48,32 +51,11 @@ export interface RangeBackfill {
   start: () => void;
 }
 
-export function RangeSyncPanel({
-  backfill,
-  loiTaiXuong,
-}: {
-  backfill: RangeBackfill;
-  /** U-K4 — lỗi ở bước TỰ TẢI sau khi đồng bộ xong (đồng bộ vẫn thành công, chỉ tải hỏng).
-   * Hiện tường minh thay vì nuốt im lặng như nút Xuất thủ công vẫn báo lỗi. */
-  loiTaiXuong?: string | null;
-}) {
-  const { state, lineResult, start } = backfill;
+export function RangeSyncPanel({ backfill }: { backfill: RangeBackfill }) {
+  const { state, lineResult } = backfill;
   const running = state.kind === "dang_lay";
   return (
     <div style={{ display: "grid", gap: "var(--sp-2)" }}>
-      {/* Nút primary (kéo NẶNG, chính của panel) + câu phụ giải thích hành động chạy nền. */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-4)", flexWrap: "wrap" }}>
-        <Button onClick={start} disabled={running}>
-          {running ? "Đang đồng bộ…" : "Đồng bộ và tải xuống"}
-        </Button>
-        <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)", maxWidth: 520 }}>
-          Kéo dữ liệu mới trực tiếp từ máy chủ thuế cho khoảng kỳ đã chọn (chạy nền), rồi tự tải
-          file khi xong.
-        </span>
-      </div>
-
-      {loiTaiXuong ? <Alert tone="warning">{loiTaiXuong}</Alert> : null}
-
       {running && (
         <ProgressBar
           soXong={state.soXong}

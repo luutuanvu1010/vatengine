@@ -7,6 +7,7 @@
 // convention `test/conventions/ui-luat.test.ts` chặn `style=` trên input/select trong
 // features/). Lựa chọn chiều/nguồn lấy từ Registry miền hoá đơn (một nguồn, không khai lại).
 import { INVOICE_FIELDS } from "@vat/domain";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { Button, Field, SegmentedControl, Select } from "../../components/ui/primitives";
 import type { DateRange } from "../../lib/period";
@@ -21,9 +22,14 @@ function luaChon(key: string): ReadonlyArray<readonly [string, string]> {
 export function FilterBar({
   value,
   onApply,
+  hanhDongPhu,
 }: {
   value: InvoiceFilter;
   onApply: (next: InvoiceFilter) => void;
+  /** Task 12 — hành động liền sau "Lọc dữ liệu" trong CÙNG thẻ (vd nút "Đồng bộ từ Thuế" +
+   * InfoTip). Cho phép InvoicesPage gộp lọc + đồng bộ vào một thẻ mà không FilterBar phải
+   * biết gì về đồng bộ (giữ tách bạch trách nhiệm — chỉ nhận ReactNode để render). */
+  hanhDongPhu?: ReactNode;
 }) {
   // Chiều mặc định = Mua vào (bỏ "Tất cả chiều"): filter luôn có chiều để nút segmented đúng
   // và ô MST liên quan hiển thị đúng ngay từ đầu (chủ dự án 2026-07-23).
@@ -141,11 +147,12 @@ export function FilterBar({
         </div>
 
         {/* U-K4 — "Lọc dữ liệu" (đọc nhẹ): đứng LIỀN SAU nhóm điều kiện (theo dòng chảy, đúng
-            mockup) — KHÔNG đẩy ra sát mép để khỏi lẻ loi. Lời gọi Button mặc định (variant +
-            onClick), secondary để khác trọng số với "Đồng bộ và tải xuống" (primary). */}
+            mockup) — KHÔNG đẩy ra sát mép để khỏi lẻ loi. Variant secondary để khác trọng số
+            với "Đồng bộ từ Thuế" (primary, truyền qua `hanhDongPhu` — Task 12). */}
         <Button variant="secondary" onClick={() => onApply(draft)}>
           Lọc dữ liệu
         </Button>
+        {hanhDongPhu}
       </div>
     </div>
   );

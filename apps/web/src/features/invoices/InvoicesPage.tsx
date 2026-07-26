@@ -1,11 +1,13 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import {
   Badge,
+  Button,
   Card,
   EmptyState,
   ErrorState,
+  InfoTip,
   Loading,
   SectionLabel,
   Stat,
@@ -21,7 +23,6 @@ import { ChonCotXuat } from "./ChonCotXuat";
 import { FilterBar } from "./FilterBar";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { RangeSyncPanel } from "./RangeSyncPanel";
-import { taiXuatHoaDon } from "./taiXuatHoaDon";
 import { useRangeBackfill } from "./useRangeBackfill";
 
 /** Kỳ mặc định = THÁNG HIỆN TẠI theo giờ VN (yêu cầu 2). Tách ra để test ghim đồng hồ. */
@@ -30,7 +31,7 @@ export function kyThangHienTai(homNay: Date = new Date()): { tuNgay: string; den
   return monthRangeOf(y, m);
 }
 
-/** Panel "Đồng bộ và tải xuống" chỉ hiện khi có quyền đồng bộ VÀ có đủ khoảng kỳ. Tách hàm
+/** Nút/panel "Đồng bộ từ Thuế" chỉ hiện khi có quyền đồng bộ VÀ có đủ khoảng kỳ. Tách hàm
  * thuần để test được cả nhánh guard (sau U-K4 kỳ luôn có sẵn ở luồng thật — đây là phòng
  * thủ chiều sâu, vẫn phải kiểm để không âm thầm mục ruỗng). */
 export function nenHienPanelDongBo(filter: InvoiceFilter, canSync: boolean): boolean {
@@ -83,37 +84,17 @@ export function InvoicesPage() {
   // Rỗng = đã tải xong summary và đếm được 0. Dùng để tự đồng bộ (không để màn rỗng gây hiểu nhầm).
   const khongCoHoaDon = summary.isSuccess && count === 0;
 
-  // U22 B7 — MỘT instance hook (tránh backfill trùng): nút "Đồng bộ và tải xuống" + tự chạy
+  // U22 B7 — MỘT instance hook (tránh backfill trùng): nút "Đồng bộ từ Thuế" + tự chạy
   // khi kỳ đã lọc RỖNG. Gate cả auto-backfill lẫn panel để ke_toan không tự gọi API rồi 403.
-  const backfillGoc = useRangeBackfill({
+  // Task 12 — bỏ cơ chế tự-tải-file sau đồng bộ (taiSauDongBo/xuatSauDongBo/loiTaiXuong):
+  // đồng bộ (kéo) và xuất (tải) là hai hành động khác bản chất, tách bạch theo hợp đồng
+  // tương tác ui.md — người dùng bấm nút Xuất ở thẻ Kết quả khi cần file.
+  const backfill = useRangeBackfill({
     tuNgay: filter.tuNgay,
     denNgay: filter.denNgay,
     auto: khongCoHoaDon && canSync,
   });
-
-  // U-K4 (yêu cầu 3b) — "Đồng bộ và tải xuống": sau khi backfill THỦ CÔNG hoàn thành, tự
-  // xuất + tải file cho bộ lọc đang xem. CHỈ khi người dùng BẤM nút (không phải auto-backfill
-  // lúc rỗng — nếu không mỗi lần mở màn rỗng sẽ bất ngờ tải file). Tái dùng taiXuatHoaDon.
-  const [taiSauDongBo, setTaiSauDongBo] = useState(false);
-  const backfill = {
-    ...backfillGoc,
-    start: () => {
-      setTaiSauDongBo(true);
-      backfillGoc.start();
-    },
-  };
   const backfillRunning = backfill.state.kind === "dang_lay";
-
-  const xuatSauDongBo = useMutation({
-    mutationFn: (f: InvoiceFilter) => taiXuatHoaDon("xlsx", f, undefined, cols),
-  });
-  const dongBoXong = backfillGoc.state.kind === "xong";
-  useEffect(() => {
-    if (dongBoXong && taiSauDongBo) {
-      setTaiSauDongBo(false);
-      xuatSauDongBo.mutate(filter);
-    }
-  }, [dongBoXong, taiSauDongBo, filter, xuatSauDongBo]);
 
   // Badge kỳ đang xem — mặc định BẬT; suy từ filter (client), không gọi thêm API.
   const badgeKy = nhanBadgeKy(filter.tuNgay, filter.denNgay);
@@ -125,10 +106,28 @@ export function InvoicesPage() {
         subtitle="Hóa đơn điện tử kéo trực tiếp từ Tổng cục Thuế"
       />
 
-      {/* (a) Bộ lọc — đọc dữ liệu ĐÃ có (nhẹ). */}
+      {/* (a) Tra cứu hóa đơn — lọc (đọc nhẹ) + đồng bộ (kéo nặng) trong MỘT thẻ; hai nút
+          tách bạch theo hợp đồng tương tác ui.md. Ghi chú dài → InfoTip (spec 2026-07-26). */}
       <Card style={{ marginBottom: "var(--sp-4)" }}>
-        <SectionLabel>Bộ lọc</SectionLabel>
-        <FilterBar value={filter} onApply={applyFilter} />
+        <SectionLabel>Tra cứu hóa đơn</SectionLabel>
+        <FilterBar
+          value={filter}
+          onApply={applyFilter}
+          hanhDongPhu={
+            nenHienPanelDongBo(filter, canSync) ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-1)" }}>
+                <Button onClick={backfill.start} disabled={backfillRunning}>
+                  {backfillRunning ? "Đang đồng bộ…" : "Đồng bộ từ Thuế"}
+                </Button>
+                <InfoTip
+                  label="Giải thích đồng bộ"
+                  text="Kiểm tra và kéo phần còn thiếu từ máy chủ thuế cho kỳ đã chọn — chạy nền."
+                />
+              </span>
+            ) : undefined
+          }
+        />
+        {nenHienPanelDongBo(filter, canSync) && <RangeSyncPanel backfill={backfill} />}
         <div
           style={{
             marginTop: "var(--sp-4)",
@@ -139,21 +138,6 @@ export function InvoicesPage() {
           Đã ghi nhớ bộ lọc gần nhất · Giờ hiển thị theo VN (UTC+7)
         </div>
       </Card>
-
-      {/* (b) Đồng bộ từ Tổng cục Thuế — kéo mới (nặng, chạy nền). Card riêng, chỉ vai đồng bộ. */}
-      {nenHienPanelDongBo(filter, canSync) && (
-        <Card style={{ marginBottom: "var(--sp-4)" }}>
-          <SectionLabel>Đồng bộ từ Tổng cục Thuế</SectionLabel>
-          <RangeSyncPanel
-            backfill={backfill}
-            loiTaiXuong={
-              xuatSauDongBo.isError
-                ? "Đã đồng bộ xong nhưng tải file không thành công — bấm nút Xuất Excel/CSV để tải lại."
-                : null
-            }
-          />
-        </Card>
-      )}
 
       {/* (c) Kết quả + Xuất — số đếm là tiêu điểm (Stat). Đủ 4 trạng thái. */}
       <Card>

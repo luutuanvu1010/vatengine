@@ -1,7 +1,6 @@
 // U22 B7 — Máy trạng thái THUẦN `deriveRangeBackfillState` (mọi tổ hợp) + RangeSyncPanel
 // (presentational: nhận state từ hook) render đúng từng trạng thái. Offline, không mạng.
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { RangeSyncPanel } from "../../src/features/invoices/RangeSyncPanel";
 import {
@@ -110,18 +109,20 @@ function panel(
   return start;
 }
 
-describe("RangeSyncPanel — render từng trạng thái + nút", () => {
-  it("idle → nút 'Đồng bộ và tải xuống'; bấm → gọi start", async () => {
-    const start = panel({ kind: "idle" });
-    const btn = screen.getByRole("button", { name: "Đồng bộ và tải xuống" });
-    await userEvent.click(btn);
-    expect(start).toHaveBeenCalledOnce();
+// Task 12 — nút "Đồng bộ từ Thuế" chuyển ra khỏi RangeSyncPanel (nay ở hàng nút của
+// FilterBar trong InvoicesPage — xem invoiceRangeSync.test.tsx). Panel này CHỈ còn tiến
+// độ + cảnh báo (thuần presentational, không có nút/không gọi `start`).
+describe("RangeSyncPanel — render từng trạng thái (thuần tiến độ + cảnh báo)", () => {
+  it("idle → không hiện gì (chưa có tiến độ, chưa có cảnh báo)", () => {
+    panel({ kind: "idle" });
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
   });
-  it("dang_lay → thanh tiến độ + X/N tháng + tháng hiện tại; nút khóa", () => {
+  it("dang_lay → thanh tiến độ + X/N tháng + tháng hiện tại; KHÔNG có nút", () => {
     panel({ kind: "dang_lay", soXong: 1, tong: 3, thangHienTai: "2026-02" });
     expect(screen.getByRole("progressbar")).toHaveAttribute("value", "1");
     expect(screen.getByText("02/2026")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Đang đồng bộ…" })).toBeDisabled();
+    expect(screen.queryByRole("button")).toBeNull();
   });
   it("phien_het_han → nhắc kết nối lại", () => {
     panel({ kind: "phien_het_han" });

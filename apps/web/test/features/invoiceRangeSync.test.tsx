@@ -1,10 +1,13 @@
 // U22 B7 — "chọn khoảng thời gian thì cũng chạy đồng bộ được cho khoảng đó" (chủ dự án),
 // NAY có thanh tiến độ + TỰ chạy khi danh sách RỖNG. Khi bộ lọc đủ tuNgay+denNgay: nút
-// "Đồng bộ và tải xuống" (bấm tay khi có dữ liệu) HOẶC tự chạy (khi rỗng) → gọi CẢ HAI
-// POST /backfill {tuNgay,denNgay} (U22) + POST /backfill-lines (U26), poll GET /backfill/:id
-// hiện tiến độ; xong → tự làm mới danh sách. Hết phiên → nhắc kết nối lại, KHÔNG gọi.
-// U27-B3: đồng bộ khoảng (nút + auto) CHỈ dành cho vai quản lý tài khoản thuế
-// (canManageTaxAccounts) — seed vai qua applyMe; vai ke_toan → không panel, không auto.
+// "Đồng bộ từ Thuế" (bấm tay khi có dữ liệu; Task 12 đổi tên từ "Đồng bộ và tải xuống")
+// HOẶC tự chạy (khi rỗng) → gọi CẢ HAI POST /backfill {tuNgay,denNgay} (U22) + POST
+// /backfill-lines (U26), poll GET /backfill/:id hiện tiến độ; xong → tự làm mới danh sách.
+// Hết phiên → nhắc kết nối lại, KHÔNG gọi. Task 12 (2026-07-26) — gộp lọc + đồng bộ vào MỘT
+// thẻ "Tra cứu hóa đơn" (bỏ thẻ đồng bộ riêng), bỏ cơ chế tự-tải-file sau đồng bộ, và bấm
+// nút lần hai sau khi xong phải chạy lượt MỚI (sửa lỗi staleTime Infinity — xem `lan` trong
+// useRangeBackfill.ts). U27-B3: đồng bộ khoảng (nút + auto) CHỈ dành cho vai quản lý tài
+// khoản thuế (canManageTaxAccounts) — seed vai qua applyMe; vai ke_toan → không panel, không auto.
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect, useRef } from "react";
@@ -108,6 +111,11 @@ function mockApi(opts: {
       posts.push("backfill");
       return j(202, { backfillId: "b1", thangCanLay: ["2026-03"], tongSoThang: 1 });
     }
+    // Task 12 — không còn tự-tải-file sau đồng bộ; theo dõi để kiểm KHÔNG bị gọi (kịch bản 2).
+    if (method === "POST" && url.includes("/exports")) {
+      posts.push("export");
+      return j(202, { id: "e1", key: "k", url: "u" });
+    }
     if (method === "GET" && url.includes("/backfill/")) {
       return j(200, {
         backfillId: "b1",
@@ -141,7 +149,7 @@ function mockApi(opts: {
   return { posts, summaryCalls: () => summaryCalls };
 }
 
-describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
+describe("Thẻ 'Tra cứu hóa đơn' — gộp lọc + đồng bộ, bỏ tự tải file, bấm lại được (Task 12)", () => {
   beforeEach(() => {
     saveInvoiceFilter({ tuNgay: "2026-03-01", denNgay: "2026-06-30" });
   });
@@ -150,23 +158,111 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     vi.restoreAllMocks();
   });
 
+  it("1. MỘT thẻ 'Tra cứu hóa đơn' chứa cả ô lọc lẫn nút Đồng bộ; không còn thẻ/nhãn cũ", async () => {
+    const { posts } = mockApi({ accounts: [ACC], rows: [ROW] });
+    renderWithProviders(<InvoicesPageAs />);
+    await screen.findByText("hóa đơn khớp bộ lọc");
+    expect(screen.getByText("Tra cứu hóa đơn")).toBeInTheDocument();
+    expect(screen.queryByText("Đồng bộ từ Tổng cục Thuế")).toBeNull();
+    expect(screen.queryByText(/Đồng bộ và tải xuống/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Đồng bộ từ Thuế" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lọc dữ liệu" })).toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
+
+  it("2. Bấm 'Đồng bộ từ Thuế' → POST backfill gọi; xong → KHÔNG tự tải file", async () => {
+    const { posts } = mockApi({ accounts: [ACC], rows: [ROW], progressTong: "hoan_thanh" });
+    renderWithProviders(<InvoicesPageAs />);
+    await screen.findByText("hóa đơn khớp bộ lọc");
+    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Thuế" }));
+    expect(await screen.findByText(/Đã đồng bộ xong/)).toBeInTheDocument();
+    expect(posts).toContain("backfill");
+    expect(posts.filter((p) => p === "export")).toHaveLength(0);
+  });
+
+  it("3. Bấm nút LẦN HAI sau khi xong → POST backfill gọi LẠI (chống staleTime cũ)", async () => {
+    const { posts } = mockApi({ accounts: [ACC], rows: [ROW], progressTong: "hoan_thanh" });
+    renderWithProviders(<InvoicesPageAs />);
+    await screen.findByText("hóa đơn khớp bộ lọc");
+    const nut = () => screen.getByRole("button", { name: "Đồng bộ từ Thuế" });
+    await userEvent.click(nut());
+    expect(await screen.findByText(/Đã đồng bộ xong/)).toBeInTheDocument();
+    const soLanSauLan1 = posts.filter((p) => p === "backfill").length;
+    expect(soLanSauLan1).toBeGreaterThan(0);
+    await userEvent.click(nut());
+    await vi.waitFor(() =>
+      expect(posts.filter((p) => p === "backfill").length).toBeGreaterThan(soLanSauLan1),
+    );
+  });
+
+  it("4. Tháng 'du' được đếm vào tiến độ đã-xong → banner 'Đã đồng bộ xong'", async () => {
+    const posts: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url.includes("/backfill-lines")) {
+        posts.push("backfill-lines");
+        return j(202, { soHoaDonThieu: 0, soDaXepHang: 0, conLai: 0 });
+      }
+      if (method === "POST" && url.includes("/backfill")) {
+        posts.push("backfill");
+        return j(202, { backfillId: "b1", thangCanLay: ["2026-03"], tongSoThang: 1 });
+      }
+      if (method === "GET" && url.includes("/backfill/")) {
+        return j(200, {
+          backfillId: "b1",
+          thang: [{ period: "2026-03", trangThai: "du" }],
+          soXong: 1,
+          tongSoThang: 1,
+          trangThaiTong: "hoan_thanh",
+        });
+      }
+      if (url.endsWith("/me")) {
+        return j(200, {
+          ten: "DN",
+          mst: "0311772540",
+          goiDichVu: null,
+          banQuyen: "Mặc định",
+          ghiChu: null,
+          role: "quan_tri",
+        });
+      }
+      if (url.includes("/tax-accounts")) return j(200, [ACC]);
+      if (url.includes("/invoices/summary")) {
+        return j(200, { ...EMPTY_SUMMARY, total: { ...EMPTY_SUMMARY.total, count: 1 } });
+      }
+      return j(200, { rows: [ROW], total: 1, limit: 50, offset: 0 });
+    });
+    renderWithProviders(<InvoicesPageAs />);
+    await screen.findByText("hóa đơn khớp bộ lọc");
+    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Thuế" }));
+    expect(await screen.findByText(/Đã đồng bộ xong/)).toBeInTheDocument();
+    expect(posts).toContain("backfill");
+  });
+
+  it("5. Icon ⓘ 'Giải thích đồng bộ' → focus → thấy tooltip 'kéo phần còn thiếu'", async () => {
+    mockApi({ accounts: [ACC], rows: [ROW] });
+    renderWithProviders(<InvoicesPageAs />);
+    await screen.findByText("hóa đơn khớp bộ lọc");
+    const trigger = screen.getByLabelText("Giải thích đồng bộ");
+    trigger.focus();
+    expect(await screen.findByText(/kéo phần còn thiếu/)).toBeInTheDocument();
+  });
+
+  it("6. Vai ke_toan → không thấy nút Đồng bộ (gate canSync giữ nguyên)", async () => {
+    const { posts } = mockApi({ accounts: [ACC], vaiTro: "ke_toan" }); // kỳ rỗng
+    renderWithProviders(<InvoicesPageAs vaiTro="ke_toan" />);
+    expect(await screen.findByText(/Không có hóa đơn khớp bộ lọc/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Đồng bộ/ })).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(posts).toHaveLength(0);
+  });
+
   it("kỳ rỗng + còn phiên → TỰ gọi backfill (khoảng)+backfill-lines, hiện thanh tiến độ", async () => {
     const { posts } = mockApi({ accounts: [ACC] });
     renderWithProviders(<InvoicesPageAs />);
     expect(await screen.findByRole("progressbar")).toBeInTheDocument();
     expect(await screen.findByText(/2029/)).toBeInTheDocument();
-    expect(posts).toContain("backfill");
-    expect(posts).toContain("backfill-lines");
-  });
-
-  it("CÓ dữ liệu (count>0) → bấm nút 'Đồng bộ và tải xuống' → gọi backfill+backfill-lines (thủ công)", async () => {
-    const { posts } = mockApi({ accounts: [ACC], rows: [ROW] });
-    renderWithProviders(<InvoicesPageAs />);
-    // count>0 → KHÔNG tự chạy; chờ số đếm hiện rồi bấm nút.
-    await screen.findByText("hóa đơn khớp bộ lọc");
-    expect(posts).toHaveLength(0); // chưa bấm → chưa gọi
-    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ và tải xuống" }));
-    expect(await screen.findByRole("progressbar")).toBeInTheDocument();
     expect(posts).toContain("backfill");
     expect(posts).toContain("backfill-lines");
   });
@@ -198,15 +294,5 @@ describe("Đồng bộ theo khoảng + thanh tiến độ (U22 B7)", () => {
     expect(nenHienPanelDongBo({ tuNgay: "2026-07-01" }, true)).toBe(false); // thiếu denNgay
     expect(nenHienPanelDongBo({ denNgay: "2026-07-31" }, true)).toBe(false); // thiếu tuNgay
     expect(nenHienPanelDongBo({}, true)).toBe(false); // thiếu cả hai
-  });
-
-  it("vai ke_toan → KHÔNG hiện panel VÀ không tự gọi backfill (U27-B3 AC6)", async () => {
-    const { posts } = mockApi({ accounts: [ACC], vaiTro: "ke_toan" }); // kỳ rỗng
-    renderWithProviders(<InvoicesPageAs vaiTro="ke_toan" />);
-    // Kỳ rỗng + vai không đủ quyền → auto KHÔNG chạy → hiện ô rỗng thường (không thanh tiến độ).
-    expect(await screen.findByText(/Không có hóa đơn khớp bộ lọc/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Đồng bộ và tải xuống/ })).toBeNull();
-    expect(screen.queryByRole("progressbar")).toBeNull();
-    expect(posts).toHaveLength(0);
   });
 });
