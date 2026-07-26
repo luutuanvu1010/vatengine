@@ -531,3 +531,19 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 - **Đề xuất hướng xử lý:** Khi quyết định làm, tách thành đơn vị U riêng (kế hoạch → TDD → review chéo), khôi phục UI ở `LoginPage.tsx` và nối vào endpoint tương ứng.
 - **Mức ưu tiên đề xuất:** Trung bình (tiện lợi người dùng, không chặn vận hành).
 - **Nguồn phát hiện:** Phiên Cowork 2026-07-23 — refactor trang đăng nhập theo yêu cầu chủ dự án.
+
+### [2026-07-26] Nợ nhỏ delta-sync (final review)
+
+- **Trạng thái:** Đề xuất — chưa triển khai. Ghi lại từ final whole-branch review của chuỗi delta-sync (Task 3/6, `apps/sync-worker/src/runDeltaJob.ts` + `packages/sync`), sau khi đã vá riêng finding "Important" (trần tổng-trang cộng dồn, xem `.superpowers/sdd/task-6-report.md` mục "Fix final review"). Các mục dưới đây là minor, không chặn, gom lại để không lạc phạm vi lượt vá đó.
+- **Danh sách (mỗi mục một câu, không thiết kế chi tiết — làm khi tới lượt):**
+  1. **429 giữa vòng audit không vào circuit breaker** — `xuLyLoiAudit` nhánh `rate_limited` chỉ trả `retry_backpressure`, không gọi `deps.limiter.recordResult(false)`, trong khi nhánh delta (`runDeltaJob`) có ghi nhận tương tự cho một số lỗi khác; cân nhắc unify hai nhánh audit/delta cho nhất quán ngữ nghĩa breaker.
+  2. **Thiếu cảnh báo khi audit vòng ≥1 mà `lanDongBoId` rỗng** — về lý thuyết bất khả đạt theo luồng hiện có (`runAuditJob` luôn set), nhưng không có `console.warn`/assertion phòng hờ nếu một producer tương lai vi phạm hợp đồng.
+  3. **Chưa có test chốt `bpAttempt` bị strip đúng khi nối chuỗi delta** — `messageKeTiep` xoá `bpAttempt` bằng destructuring nhưng test hiện có không assert tường minh trường này biến mất ở message kế tiếp (chỉ ngầm định qua `toEqual` không liệt kê nó).
+  4. **Lỗi hậu-GDT (DB/queue) trong `runAuditJob` bị tính vào breaker** — đã ghi ở mục 2 báo cáo Task 6 gốc, chưa quyết định thống nhất với `runDetailJob` (nơi lỗi DB KHÔNG tính vào breaker).
+  5. **`dlqConsume` chưa nguyên tử hoá `chotDeltaRun` trong transaction** — ghi sổ `dong_bo_that_bai`/`audit_log` và gọi `chotDeltaRun` là hai bước tách rời; lỗi giữa hai bước để lại trạng thái nửa vời (đã ghi sổ nhưng chưa chốt run, hoặc ngược lại nếu đổi thứ tự).
+  6. **Comment lỗi thời ở `packages/db/src/schema/dongBoThatBai.ts`** — cột `loai` ghi chú `// 'header' | 'detail'` nhưng thực tế đã nhận thêm `'audit' | 'delta'` từ Task 6 I2; nằm ngoài `apps/sync-worker` nên chưa sửa trong lượt vá liên quan.
+  7. **`mockApi.exportOk` (test fixture) và mock scenario "du" trùng lặp** — chưa DRY hoá giữa các file test dùng chung kịch bản audit "đủ".
+  8. **Nén row audit-"du" khi scale** — mỗi lần audit hội tụ "đủ" ghi một row `lan_dong_bo(loai='audit', completed)`; ở tenant chạy nhiều vòng lặp lại nhiều tháng, số row có thể tăng nhanh — cân nhắc nén/dọn định kỳ khi có bằng chứng về khối lượng thật.
+  9. **InfoTip (Task 11, `apps/web`) chưa đóng bằng phím Esc** — vi phạm nhẹ WCAG 1.4.13 (Content on Hover or Focus — phải dismissible bằng bàn phím); cần thêm `onKeyDown` xử lý Esc.
+- **Mức ưu tiên đề xuất:** Thấp (không mục nào chặn vận hành hiện tại; 1/4/5 liên quan độ tin cậy vận hành nên ưu tiên cao hơn trong nhóm này, 9 liên quan a11y).
+- **Nguồn phát hiện:** Final whole-branch review delta-sync, phiên 2026-07-26.

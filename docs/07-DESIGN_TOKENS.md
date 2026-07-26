@@ -44,6 +44,7 @@
 | `--text-secondary` | `#3c4043` | Chữ phụ |
 | `--text-tertiary` | `#5f6368` | Nhãn, caption |
 | `--text-disabled` | `#80868b` | Placeholder, mờ, "(chưa rõ)" |
+| `--text-on-brand` | `#ffffff` | Chữ TRÊN nền màu đậm (brand/success/danger…) — token ngữ nghĩa, thay vì hardcode `#fff` ở `features/` |
 | `--border-strong` | `#bdc1c6` | Viền input focus-off |
 | `--border` | `#dadce0` | Viền thẻ/bảng mặc định |
 | `--border-subtle` | `#e6e8eb` | Kẻ dòng bảng |
@@ -51,6 +52,7 @@
 | `--surface-card` | `#ffffff` | Nền thẻ/bảng |
 | `--surface-muted` | `#f1f3f4` | Nền phụ (chip, header bảng) |
 | `--surface-hover` | `#eef0f2` | Hover hàng/nút phụ |
+| `--surface-inverse` | `#202124` | Nền ĐẢO (đậm) — tooltip/popover nổi trên nền sáng (Task 11 InfoTip). Trùng giá trị `--text-primary` ở theme sáng **là chủ đích** — hai ngữ nghĩa khác nhau (chữ vs nền), không phải trùng lặp cần gộp |
 | `--neutral-chip-bg` | `#f1f3f4` | Nền chip trạng thái **chưa kiểm chứng** |
 | `--neutral-chip-fg` | `#3c4043` | Chữ chip trung tính |
 
@@ -100,9 +102,13 @@ Line-height: thân `1.5`, tiêu đề `1.25`.
   --warning-700:#b06000; --warning-800:#8a5a00; --warning-50:#fef7e0; --warning-200:#fde9a8;
   /* text */
   --text-primary:#202124; --text-secondary:#3c4043; --text-tertiary:#5f6368; --text-disabled:#80868b;
+  /* chữ TRÊN nền màu đậm (brand/success/danger…) */
+  --text-on-brand:#ffffff;
   /* border + surface */
   --border-strong:#bdc1c6; --border:#dadce0; --border-subtle:#e6e8eb;
   --surface-page:#f8f9fa; --surface-card:#ffffff; --surface-muted:#f1f3f4; --surface-hover:#eef0f2;
+  /* nền ĐẢO (đậm) — tooltip/popover nổi trên nền sáng; trùng --text-primary là chủ đích */
+  --surface-inverse:#202124;
   --neutral-chip-bg:#f1f3f4; --neutral-chip-fg:#3c4043;
   /* type */
   --font-sans:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
