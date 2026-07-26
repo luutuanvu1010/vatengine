@@ -6,6 +6,7 @@ import {
   isAuditMessage,
   isDeltaMessage,
   monthlyWindows,
+  previousPeriodWindow,
 } from "../../src/syncJob";
 
 describe("currentPeriodWindow — kỳ tháng hiện tại theo giờ VN", () => {
@@ -26,6 +27,19 @@ describe("currentPeriodWindow — kỳ tháng hiện tại theo giờ VN", () =>
   it("tháng 2 (28 ngày, 2026 không nhuận): dateTo=28", () => {
     const w = currentPeriodWindow(Date.UTC(2026, 1, 10, 3, 0, 0));
     expect(w.dateTo).toBe("28/02/2026");
+  });
+});
+
+describe("previousPeriodWindow — kỳ THÁNG LIỀN TRƯỚC theo giờ VN (Task 9, đóng A1)", () => {
+  it("giữa tháng 7 VN → kỳ 2026-06; 01/01 00:30 VN → 2025-12", () => {
+    const t1 = Date.UTC(2026, 6, 15); // 15/07/2026 UTC ≈ VN cùng ngày
+    expect(previousPeriodWindow(t1)).toEqual({
+      period: "2026-06",
+      dateFrom: "01/06/2026",
+      dateTo: "30/06/2026",
+    });
+    const t2 = Date.UTC(2025, 11, 31, 17, 30); // = 00:30 01/01/2026 giờ VN
+    expect(previousPeriodWindow(t2).period).toBe("2025-12");
   });
 });
 

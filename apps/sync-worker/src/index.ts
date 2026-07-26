@@ -15,7 +15,7 @@
 //    message.retry(), trần max_retries → dead-letter) · `ack` (xong / cần đăng nhập lại);
 //  - export TenantLimiter: Durable Object rate-limit/circuit-breaker theo tenant/MST.
 // Logic (schedule/runJob/fanout/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
-import { isDetailMessage } from "@vat/sync";
+import { buildAuditMessages, isDetailMessage } from "@vat/sync";
 import { getDbFromHyperdrive } from "./db";
 import {
   listActiveTenantIds,
@@ -43,7 +43,12 @@ import { replayDeadLetters } from "./replay";
 import { runAuditJob, runDeltaJob } from "./runDeltaJob";
 import { detailConsumerAction, runDetailJob } from "./runDetailJob";
 import { runScheduledSync } from "./runJob";
-import { buildMessages, currentPeriodWindow, enumerateDueAccounts } from "./schedule";
+import {
+  buildMessages,
+  currentPeriodWindow,
+  enumerateDueAccounts,
+  previousPeriodWindow,
+} from "./schedule";
 import { TenantLimiter } from "./tenantLimiter";
 import type { Env, VatSyncQueueMessage } from "./types";
 
@@ -100,6 +105,34 @@ export default {
       if (msgs.length > 0) {
         const { jitterSpreadSeconds } = resolveFanoutConfig(env);
         for (const chunk of chunkForQueue(msgs, QUEUE_MAX_BATCH_COUNT, QUEUE_MAX_BATCH_BYTES)) {
+          await env.SYNC_QUEUE.sendBatch(
+            chunk.map((body) => ({
+              body,
+              delaySeconds: jitterDelaySeconds(body.tenantId, jitterSpreadSeconds),
+            })),
+          );
+        }
+      }
+      // Task 9 — cron audit kỳ THÁNG LIỀN TRƯỚC mỗi ngày, cùng danh sách account đến
+      // hạn: vá hóa đơn người bán đẩy trễ (về sau khi kỳ tháng đó đã "đóng" theo
+      // enumerateDueAccounts của tick trước) — đóng lỗ hổng A1 (docs/CHAN-DOAN-thieu-
+      // hoa-don-thang.md). Chi phí 1-2 request GDT / (account × chiều) / ngày; audit
+      // phát hiện thiếu → tự kéo delta (consumer đã xử lý kind:"audit").
+      const prev = previousPeriodWindow(nowMs);
+      const auditMsgs = due.flatMap((a) =>
+        buildAuditMessages(
+          { tenantId: a.tenantId, taikhoanId: a.taikhoanId },
+          [prev],
+          ["purchase", "sold"],
+        ),
+      );
+      if (auditMsgs.length > 0) {
+        const { jitterSpreadSeconds } = resolveFanoutConfig(env);
+        for (const chunk of chunkForQueue(
+          auditMsgs,
+          QUEUE_MAX_BATCH_COUNT,
+          QUEUE_MAX_BATCH_BYTES,
+        )) {
           await env.SYNC_QUEUE.sendBatch(
             chunk.map((body) => ({
               body,

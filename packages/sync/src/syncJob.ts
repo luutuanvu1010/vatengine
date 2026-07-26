@@ -160,6 +160,22 @@ export function currentPeriodWindow(nowMs: number): PeriodWindow {
   };
 }
 
+/** Kỳ THÁNG LIỀN TRƯỚC theo giờ VN, tại `nowMs` (epoch ms) — cron audit để hóa đơn
+ * người bán đẩy trễ (về sau khi kỳ tháng đó đã "đóng") vẫn được vá lại tự động
+ * (đóng lỗ hổng A1, docs/CHAN-DOAN-thieu-hoa-don-thang.md). Cuộn năm khi tháng
+ * hiện tại là tháng 1 (01/2027 → kỳ liền trước 12/2026). */
+export function previousPeriodWindow(nowMs: number): PeriodWindow {
+  const vn = new Date(nowMs + VN_OFFSET_MS);
+  const year = vn.getUTCFullYear();
+  let prevYear = year;
+  let prevMonth0 = vn.getUTCMonth() - 1; // 0-based
+  if (prevMonth0 < 0) {
+    prevMonth0 = 11;
+    prevYear -= 1;
+  }
+  return monthWindow(prevYear, prevMonth0);
+}
+
 /** Cửa sổ THÁNG ĐẦY ĐỦ (01→cuối tháng) cho `(year, month0)` — month0 0-based, giờ VN.
  * Mirror công thức biên tháng của `currentPeriodWindow` (ngày cuối qua `Date.UTC(y,
  * m+1, 0)`), giữ ĐỘC LẬP để KHÔNG sửa `currentPeriodWindow` (U22-plan §7: cron +

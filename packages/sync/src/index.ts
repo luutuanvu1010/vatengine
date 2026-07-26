@@ -31,6 +31,7 @@ export {
   type VatSyncQueueMessage,
   type PeriodWindow,
   currentPeriodWindow,
+  previousPeriodWindow,
   buildSyncMessages,
   buildDetailMessages,
   isDetailMessage,

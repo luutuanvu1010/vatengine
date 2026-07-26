@@ -10,6 +10,8 @@ import type { AnyDb } from "./types";
 // mọi import sẵn có qua `./schedule` + test giữ nguyên.
 export {
   currentPeriodWindow,
+  // Task 9 — kỳ THÁNG LIỀN TRƯỚC (cron audit đóng lỗ hổng A1, docs/CHAN-DOAN).
+  previousPeriodWindow,
   buildSyncMessages as buildMessages,
   type PeriodWindow,
 } from "@vat/sync";
