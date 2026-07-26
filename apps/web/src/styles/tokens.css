@@ -41,6 +41,8 @@
   --surface-card: #ffffff;
   --surface-muted: #f1f3f4;
   --surface-hover: #eef0f2;
+  /* Nền đảo (đậm) — tooltip/popover nổi trên nền sáng (Task 11 InfoTip). */
+  --surface-inverse: #202124;
   --neutral-chip-bg: #f1f3f4;
   --neutral-chip-fg: #3c4043;
   /* type */

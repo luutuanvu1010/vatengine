@@ -6,7 +6,7 @@ import type {
   ReactNode,
   SelectHTMLAttributes,
 } from "react";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { vi } from "../../lib/i18n/vi";
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
@@ -455,5 +455,65 @@ export function ErrorState({ message, onRetry }: { message?: string; onRetry?: (
         </Button>
       ) : null}
     </div>
+  );
+}
+
+// --- InfoTip (ⓘ + tooltip) ------------------------------------------------------------
+// Ghi chú giải thích KHÔNG chiếm mặt tiền (Task 11): icon ⓘ nhỏ, hover/focus mới hiện.
+// a11y: trigger focus được (tabIndex 0), aria-describedby ↔ role="tooltip" khi mở.
+export function InfoTip({ text, label = "Giải thích" }: { text: string; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        tabIndex={0}
+        aria-label={label}
+        aria-describedby={open ? id : undefined}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        style={{
+          appearance: "none",
+          border: "none",
+          background: "transparent",
+          font: "inherit",
+          cursor: "help",
+          color: "var(--text-tertiary)",
+          fontSize: "var(--fs-sm)",
+          lineHeight: 1,
+          padding: "var(--sp-1)",
+        }}
+      >
+        ⓘ
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          id={id}
+          style={{
+            position: "absolute",
+            bottom: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginBottom: "var(--sp-2)",
+            width: "max-content",
+            maxWidth: 280,
+            padding: "var(--sp-2) var(--sp-3)",
+            borderRadius: "var(--radius-md)",
+            background: "var(--surface-inverse)",
+            color: "var(--text-on-brand)",
+            fontSize: "var(--fs-xs)",
+            zIndex: 10,
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
   );
 }
