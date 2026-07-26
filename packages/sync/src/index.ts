@@ -53,3 +53,16 @@ export {
   type FamilyObservation,
   type AuditDecision,
 } from "./audit";
+// Task 5 — syncChunk (kéo + upsert + commit MỖI LÔ) + vòng đời run delta
+// (moDeltaRun/ghiAuditDu/chotDeltaRun). Task 6 điều phối vòng lặp delta/audit dùng.
+export {
+  moDeltaRun,
+  ghiAuditDu,
+  chotDeltaRun,
+  syncChunk,
+  type DeltaRunParams,
+  type ChotDeltaRunKetQua,
+  type DeltaCheckpoint,
+  type ChunkOutcome,
+  type SyncChunkOptions,
+} from "./chunkSync";

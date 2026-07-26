@@ -133,7 +133,7 @@ function naturalKeyOf(m: {
   return [m.nbmst, m.khmshdon, m.khhdon, m.shdon, m.tdlap.toISOString()].join("|");
 }
 
-function parseDdmmyyyy(s: string): Date {
+export function parseDdmmyyyy(s: string): Date {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
   const d = m
     ? new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1])))
@@ -213,7 +213,7 @@ export function laTranNenTangCucBo(err: unknown): boolean {
  * - trần nền tảng Workers → `local_limit` (retry được, KHÔNG tính vào breaker GDT).
  * - mọi lỗi còn lại → `transient` (mạng/5xx khác/DB — retry cấp job an toàn, có trần
  *   lần thử của hàng đợi làm chốt chặn). */
-function classifyFailure(
+export function classifyFailure(
   err: unknown,
 ): "session_expired" | "rate_limited" | "transient" | "local_limit" {
   if (err instanceof GdtError && err.code === "SESSION_EXPIRED") return "session_expired";
@@ -224,7 +224,7 @@ function classifyFailure(
 
 /** Upsert idempotent một lô hóa đơn cho một tenant, trong transaction đã đặt ngữ
  * cảnh tenant. So khớp theo khóa tự nhiên; đếm mới/cập nhật; gom thay đổi trạng thái. */
-async function upsertBatch<
+export async function upsertBatch<
   TQuery extends PgQueryResultHKT,
   TFull extends Record<string, unknown>,
   TSchema extends TablesRelationalConfig,
