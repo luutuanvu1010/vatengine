@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { labelOf } from "@vat/domain";
 import { useState } from "react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import {
@@ -15,6 +16,7 @@ import {
 import { api } from "../../lib/apiClient";
 import { loadExportCols, saveExportCols } from "../../lib/exportColsStore";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
+import { formatMoney } from "../../lib/format";
 import { monthRangeOf, vnYearMonth } from "../../lib/period";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
 import type { InvoiceFilter } from "../../types/api";
@@ -24,6 +26,12 @@ import { FilterBar } from "./FilterBar";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { RangeSyncPanel } from "./RangeSyncPanel";
 import { useRangeBackfill } from "./useRangeBackfill";
+
+/** "12480350200" → "12.480.350.200 ₫"; null/rỗng → "—" (không giá trị giả). */
+export function tienStat(v: string | null | undefined): string {
+  const s = formatMoney(v ?? null);
+  return s ? `${s} ₫` : "—";
+}
 
 /** Kỳ mặc định = THÁNG HIỆN TẠI theo giờ VN (yêu cầu 2). Tách ra để test ghim đồng hồ. */
 export function kyThangHienTai(homNay: Date = new Date()): { tuNgay: string; denNgay: string } {
@@ -164,17 +172,31 @@ export function InvoicesPage() {
               flexWrap: "wrap",
             }}
           >
-            <Stat
-              value={count}
-              label="hóa đơn khớp bộ lọc"
-              badge={
-                badgeKy ? (
-                  <Badge>
-                    <span className="tabular">Kỳ {badgeKy}</span>
-                  </Badge>
-                ) : undefined
-              }
-            />
+            {/* Task 13 — cụm 4 số: đếm + 3 tổng tiền (đã có sẵn ở summary.total). Nhãn tiền
+                từ Registry (`labelOf` — ui.md nhãn một-nguồn), tiền in ĐẦY ĐỦ (formatMoney). */}
+            <div
+              style={{
+                display: "flex",
+                gap: "var(--sp-6)",
+                flexWrap: "wrap",
+                alignItems: "flex-start",
+              }}
+            >
+              <Stat
+                value={formatMoney(String(count))}
+                label="hóa đơn khớp bộ lọc"
+                badge={
+                  badgeKy ? (
+                    <Badge>
+                      <span className="tabular">Kỳ {badgeKy}</span>
+                    </Badge>
+                  ) : undefined
+                }
+              />
+              <Stat value={tienStat(summary.data?.total.tongTcthue)} label={labelOf("tgtcthue")} />
+              <Stat value={tienStat(summary.data?.total.tongTthue)} label={labelOf("tgtthue")} />
+              <Stat value={tienStat(summary.data?.total.tongTtbso)} label={labelOf("tgtttbso")} />
+            </div>
             {/* B2 (U27) — kết xuất TOÀN BỘ kết quả theo bộ lọc hiện tại; "Tùy chỉnh cột" chọn
                 cột vào file (chỉ vai được kết xuất). */}
             <div

@@ -1,6 +1,8 @@
 // Chủ dự án 2026-07-23: Danh sách hóa đơn KHÔNG còn hiện bảng — chỉ SỐ ĐẾM hóa đơn +
-// nút Xuất/Đồng bộ. Số đếm lấy từ GET /invoices/summary (total.count); bỏ "Tổng thanh
-// toán". Bộ chọn ngày (Từ/Đến ngày) trả lại ở FilterBar (test riêng: filterBarDatePicker).
+// nút Xuất/Đồng bộ. Số đếm lấy từ GET /invoices/summary (total.count). Bộ chọn ngày
+// (Từ/Đến ngày) trả lại ở FilterBar (test riêng: filterBarDatePicker).
+// Task 13 (2026-07-26): thẻ Kết quả nay hiện đủ 4 số (đếm + 3 tổng tiền), "Tổng thanh
+// toán" QUAY LẠI làm nhãn Stat (từ Registry) — test riêng: invoiceSummaryStats.test.tsx.
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -45,13 +47,15 @@ describe("Danh sách hóa đơn — chỉ số đếm (2026-07-23)", () => {
     vi.restoreAllMocks();
   });
 
-  it("hiện SỐ ĐẾM (Stat) từ summary; KHÔNG hiện 'Tổng thanh toán'; KHÔNG có bảng", async () => {
+  it("hiện SỐ ĐẾM (Stat) từ summary; 'Tổng thanh toán' là nhãn Stat (Task 13), KHÔNG có bảng", async () => {
     mockCount(3);
     renderWithProviders(<InvoicesPage />);
     // Số đếm nay là Stat: số lớn "3" + nhãn phụ "hóa đơn khớp bộ lọc".
     expect(await screen.findByText("hóa đơn khớp bộ lọc")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
-    expect(screen.queryByText(/Tổng thanh toán/)).toBeNull();
+    // Task 13 — "Tổng thanh toán" nay là NHÃN của Stat tiền (labelOf("tgtttbso")), không
+    // còn là tiêu đề cột bảng đã bỏ ở Task 12 — hai bối cảnh khác nhau, không mâu thuẫn.
+    expect(screen.getByText("Tổng thanh toán")).toBeInTheDocument();
     // Không render bảng → không có tiêu đề cột đặc trưng của bảng.
     expect(screen.queryByText("Hàng hóa, dịch vụ")).toBeNull();
     // Badge kỳ đang xem (mặc định BẬT) — suy từ filter, không gọi thêm API.
