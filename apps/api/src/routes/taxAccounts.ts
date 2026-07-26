@@ -12,13 +12,13 @@ import {
 } from "@vat/gdt-client";
 import {
   type PeriodWindow,
-  type SyncJobMessage,
+  type VatSyncQueueMessage,
+  buildAuditMessages,
   buildBackfillMessages,
   buildDetailMessages,
   buildSyncMessages,
   currentPeriodWindow,
   listInvoicesMissingLines,
-  missingMonths,
   monthlyWindows,
 } from "@vat/sync";
 import { and, count, eq } from "drizzle-orm";
@@ -471,12 +471,16 @@ export function taxAccountsRoutes(deps: AppDeps) {
     }
   });
 
-  // POST /tax-accounts/:id/backfill — U22: backfill ngầm khoảng lọc quá khứ. Tính các
-  // THÁNG CÒN THIẾU (mỗi chiều) trong khoảng (missingMonths, dựa lan_dong_bo — B3), enqueue
-  // job dạng SyncJobMessage cho các tháng đó (buildBackfillMessages — B2), tạo BackfillTracker
-  // DO (B4) để GET /backfill/:id theo dõi. API chỉ PRODUCER (stateless). Token phải CÒN HẠN
-  // (409 — job nền KHÔNG tự đăng nhập). Cách ly tenant (404). Audit (AC7). Idempotent (AC5):
-  // khoảng đã phủ hết → 0 job, backfillId=null (upsert U5 + coveredMonths bảo đảm an toàn).
+  // POST /tax-accounts/:id/backfill — U22, đường mặc định đổi sang DELTA (Task 7, spec
+  // 2026-07-26, docs/CHAN-DOAN-thieu-hoa-don-thang.md): KHÔNG còn tính "tháng còn thiếu"
+  // qua coverage nhị phân (missingMonths/lan_dong_bo — lỗ hổng A2 từng gây kẹt sau 6802 vì
+  // một chiều "hoàn thành" che tháng thật ra bị hụt). Mặc định enqueue MỘT job audit
+  // (kind:"audit", vong:0 — buildAuditMessages) mỗi (tháng × chiều) trong khoảng; audit rẻ
+  // (1-2 request GDT) tự quyết đủ/hụt ở sync-worker (Task 6). `force:true` giữ đường LEGACY
+  // cũ (buildBackfillMessages, header không `kind`, full-month) để re-sync toàn phần khi
+  // cần. Tạo BackfillTracker DO (B4) để GET /backfill/:id theo dõi. API chỉ PRODUCER
+  // (stateless). Token phải CÒN HẠN (409 — job nền KHÔNG tự đăng nhập). Cách ly tenant
+  // (404). Audit (AC7).
   r.post("/:id/backfill", async (c) => {
     const id = c.req.param("id");
     if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
@@ -497,8 +501,8 @@ export function taxAccountsRoutes(deps: AppDeps) {
     const directions = ["purchase", "sold"] as const;
     const { db, close } = await deps.getDb(c.env);
     try {
-      // Nạp tài khoản + kiểm token + tính tháng thiếu trong MỘT withTenant (cách ly tenant
-      // lớp 1 tường minh + RLS lớp 2). KHÔNG giữ transaction mở khi enqueue/gọi DO sau đó.
+      // Nạp tài khoản + kiểm token trong MỘT withTenant (cách ly tenant lớp 1 tường minh
+      // + RLS lớp 2). KHÔNG giữ transaction mở khi enqueue/gọi DO sau đó.
       const outcome = await withTenant(db, tenantId, async (tx) => {
         const rows = await tx
           .select({ tokenHetHan: taiKhoanThue.tokenHetHan })
@@ -509,23 +513,23 @@ export function taxAccountsRoutes(deps: AppDeps) {
         if (!acc.tokenHetHan || acc.tokenHetHan.getTime() <= Date.now()) {
           return { kind: "token_het_han" as const };
         }
-        const msgs: SyncJobMessage[] = [];
-        const monthsNeeded = new Set<string>();
-        for (const dir of directions) {
-          // force → lấy MỌI tháng trong khoảng (bỏ coverage); ngược lại chỉ tháng còn thiếu.
-          const target = parsed.data.force
-            ? windows
-            : await missingMonths(tx, tenantId, id, dir, windows);
-          for (const w of target) monthsNeeded.add(w.period);
-          msgs.push(...buildBackfillMessages({ tenantId, taikhoanId: id }, target, [dir]));
-        }
-        return { kind: "ok" as const, msgs, months: [...monthsNeeded].sort() };
+        // Delta-sync (spec 2026-07-26): mặc định KHÔNG bỏ tháng đã phủ nữa — mỗi tháng một
+        // job audit rẻ (1–2 request GDT) tự quyết đủ/hụt; coverage nhị phân là lỗ hổng A2
+        // đã gây kẹt 6802 (docs/CHAN-DOAN). force giữ đường legacy full-month.
+        const msgs: VatSyncQueueMessage[] = parsed.data.force
+          ? directions.flatMap((dir) =>
+              buildBackfillMessages({ tenantId, taikhoanId: id }, windows, [dir]),
+            )
+          : buildAuditMessages({ tenantId, taikhoanId: id }, windows, [...directions]);
+        return { kind: "ok" as const, msgs, months: windows.map((w) => w.period) };
       });
 
       if (outcome.kind === "not_found") return c.json({ error: "not_found" }, 404);
       if (outcome.kind === "token_het_han") return c.json({ error: "token_het_han" }, 409);
 
-      // Không tháng nào thiếu → KHÔNG tạo backfill, KHÔNG enqueue (idempotent an toàn AC5).
+      // Lý thuyết: monthlyWindows luôn trả ≥1 cửa sổ cho khoảng hợp lệ (kiểm ở trên) nên
+      // months rỗng KHÔNG xảy ra trên đường này — giữ nhánh phòng thủ (fail-safe), KHÔNG
+      // tạo backfill/tracker mồ côi nếu giả định đó sai trong tương lai.
       if (outcome.months.length === 0) {
         return c.json({ backfillId: null, thangCanLay: [], tongSoThang: 0 }, 202);
       }
@@ -553,6 +557,7 @@ export function taxAccountsRoutes(deps: AppDeps) {
         months: outcome.months,
         directions: [...directions],
         createdAtMs: Date.now(),
+        mode: parsed.data.force ? "force" : "delta",
       });
       // Audit khởi tạo backfill (AC7 — như hành động đồng bộ). KHÔNG đưa token vào chi tiết.
       await withTenant(db, tenantId, async (tx) => {

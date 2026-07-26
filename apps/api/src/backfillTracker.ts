@@ -7,13 +7,19 @@
 import type { InvoiceDirection } from "@vat/gdt-client";
 
 /** Định nghĩa một lần backfill do producer (B5) tạo. `tenantId` để chốt phạm vi khi
- * đọc (cách ly tenant). `months` = danh sách kỳ "YYYY-MM" CÒN THIẾU đã enqueue. */
+ * đọc (cách ly tenant). `months` = danh sách kỳ "YYYY-MM" đã enqueue (Task 7: không-force
+ * là MỌI tháng trong khoảng, không còn lọc "còn thiếu"). `mode` (Task 7, optional — def cũ
+ * trong DO trước Task 7 không có trường này, tương thích lùi): "delta" = đường mặc định
+ * (enqueue audit mỗi tháng, tự quyết đủ/hụt ở consumer); "force" = đường legacy full-month
+ * (header, bỏ coverage). initDef/readDef KHÔNG đọc trường này — chỉ mang theo để B6 (GET
+ * /backfill/:id) dùng sau nếu cần phân biệt hiển thị. */
 export interface BackfillDef {
   tenantId: string;
   taikhoanId: string;
   months: string[];
   directions: InvoiceDirection[];
   createdAtMs: number;
+  mode?: "delta" | "force";
 }
 
 /** Kết quả khởi tạo store-once. `conflict` = backfillId đã thuộc TENANT KHÁC → KHÔNG

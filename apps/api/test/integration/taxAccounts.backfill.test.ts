@@ -1,10 +1,13 @@
-// U22 B5 — POST /tax-accounts/:id/backfill: producer backfill khoảng lọc quá khứ. Tính
-// tháng CÒN THIẾU (mỗi chiều) trong khoảng → enqueue job (SyncJobMessage) + tạo
-// BackfillTracker DO để theo dõi. Token phải CÒN HẠN (409); cách ly tenant (404); audit
-// (AC7); idempotent: khoảng đã phủ → 0 job (AC5). Offline (PGlite + queue/tracker giả).
+// U22 B5 — POST /tax-accounts/:id/backfill: producer backfill khoảng lọc quá khứ.
+// Spec 2026-07-26 (Task 7, docs/CHAN-DOAN-thieu-hoa-don-thang.md): mặc định (không force)
+// KHÔNG còn bỏ qua tháng "đã phủ" theo coverage nhị phân (lỗ hổng A2) — mỗi tháng × chiều
+// trong khoảng luôn enqueue 1 job AUDIT (kind:"audit", vong:0) tự quyết đủ/hụt ở tầng
+// consumer. `force:true` giữ đường CŨ (header legacy, buildBackfillMessages, không `kind`)
+// để re-sync toàn phần khi cần. Tạo BackfillTracker DO để theo dõi. Token phải CÒN HẠN
+// (409); cách ly tenant (404); audit (AC7). Offline (PGlite + queue/tracker giả).
 import { TRANG_THAI_LAN_DONG_BO, auditLog, lanDongBo } from "@vat/db";
 import type { InvoiceDirection } from "@vat/gdt-client";
-import type { SyncJobMessage } from "@vat/sync";
+import type { VatSyncQueueMessage } from "@vat/sync";
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
@@ -22,14 +25,14 @@ import {
 } from "../helpers";
 
 function fakeQueue() {
-  const batches: { body: SyncJobMessage }[] = [];
+  const batches: { body: VatSyncQueueMessage }[] = [];
   const queue = {
     send: async () => {},
-    sendBatch: async (msgs: Iterable<{ body: SyncJobMessage }>) => {
+    sendBatch: async (msgs: Iterable<{ body: VatSyncQueueMessage }>) => {
       for (const m of msgs) batches.push(m);
     },
   };
-  return { queue: queue as unknown as Queue<SyncJobMessage>, batches };
+  return { queue: queue as unknown as Queue<VatSyncQueueMessage>, batches };
 }
 
 // Queue 429: producer chạm trần 5000 msg/giây/queue (bão backfill dồn dập).
@@ -39,7 +42,7 @@ function rateLimitedQueue() {
     sendBatch: async () => {
       throw new Error("Queue sendBatch failed: Too Many Requests");
     },
-  } as unknown as Queue<SyncJobMessage>;
+  } as unknown as Queue<VatSyncQueueMessage>;
 }
 
 /** Tracker giả in-memory dùng ĐÚNG logic thuần initDef/readDef (như DO thật); phơi
@@ -130,7 +133,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     expect(store.size).toBe(0); // enqueue lỗi trước init → không để tracker mồ côi
   });
 
-  it("chưa phủ tháng nào → enqueue N tháng × 2 chiều, tạo backfillId, lưu def tracker, 202", async () => {
+  it("chưa phủ tháng nào → enqueue N tháng × 2 chiều audit (kind:audit, vong:0), tạo backfillId, lưu def tracker, 202", async () => {
     const t = await makeTenant(db, "DN A", "0100000001");
     const acc = await seedTaxAccount(db, t, { username: "0311772540", ...VALID_TOKEN });
     const { queue, batches } = fakeQueue();
@@ -157,8 +160,16 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     expect(batches).toHaveLength(6); // 3 tháng × 2 chiều
     const msgs = batches.map((x) => x.body);
     expect(msgs.every((m) => m.tenantId === t && m.taikhoanId === acc)).toBe(true);
-    expect(new Set(msgs.map((m) => m.direction))).toEqual(new Set(["purchase", "sold"]));
-    expect(new Set(msgs.map((m) => m.period))).toEqual(new Set(["2026-01", "2026-02", "2026-03"]));
+    // Task 7: đường mặc định (không force) giờ dựng job AUDIT (kind:"audit", vong:0) —
+    // KHÔNG còn header legacy trực tiếp (đó là job dạng SyncJobMessage, không có `kind`).
+    expect(msgs.every((m) => "kind" in m && m.kind === "audit")).toBe(true);
+    expect(msgs.every((m) => "vong" in m && m.vong === 0)).toBe(true);
+    expect(new Set(msgs.map((m) => (m as { direction: string }).direction))).toEqual(
+      new Set(["purchase", "sold"]),
+    );
+    expect(new Set(msgs.map((m) => (m as { period: string }).period))).toEqual(
+      new Set(["2026-01", "2026-02", "2026-03"]),
+    );
 
     // Tracker đã lưu ĐÚNG def cho backfillId trả về.
     const def = store.get(b.backfillId);
@@ -169,45 +180,26 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     });
     expect(new Set(def?.directions)).toEqual(new Set(["purchase", "sold"]));
 
-    // Audit ghi hành động khởi tạo backfill (AC7).
+    // Audit ghi hành động khởi tạo backfill (AC7) — giữ nguyên trường force/tongSoThang.
     const audits = await db
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.tenantId, t), eq(auditLog.hanhDong, "backfill_khoi_tao")));
     expect(audits).toHaveLength(1);
+    expect(audits[0]?.chiTiet).toMatchObject({ force: false, tongSoThang: 3 });
   });
 
-  it("(AC5 idempotent) tháng đã phủ (completed cả 2 chiều) → CHỈ enqueue tháng còn thiếu", async () => {
+  it("(Task 7 — spec 2026-07-26) tháng ĐÃ phủ (completed cả 2 chiều) → KHÔNG còn bỏ qua: vẫn enqueue audit ĐỦ mọi tháng trong khoảng (bỏ coverage nhị phân A2)", async () => {
     const t = await makeTenant(db, "DN A", "0100000001");
     const acc = await seedTaxAccount(db, t, { username: "0311772540", ...VALID_TOKEN });
-    // 2026-01 đã đồng bộ đủ 2 chiều → không backfill lại.
-    await seedRun(db, { tenantId: t, taikhoanId: acc, chieu: "purchase", period: "2026-01" });
-    await seedRun(db, { tenantId: t, taikhoanId: acc, chieu: "sold", period: "2026-01" });
-
-    const { queue, batches } = fakeQueue();
-    const { factory } = fakeTracker();
-    const app = createApp(injectDb(db, undefined, undefined, factory));
-    const res = await post(
-      app,
-      acc,
-      t,
-      makeEnv({ SYNC_QUEUE: queue, BACKFILL_TRACKER: {} as DurableObjectNamespace }),
-    );
-
-    expect(res.status).toBe(202);
-    const b = (await res.json()) as { thangCanLay: string[]; tongSoThang: number };
-    expect(b.thangCanLay).toEqual(["2026-02", "2026-03"]); // 2026-01 bị loại
-    expect(b.tongSoThang).toBe(2);
-    expect(batches).toHaveLength(4); // 2 tháng × 2 chiều
-  });
-
-  it("khoảng ĐÃ phủ hết → 202 {backfillId:null, tongSoThang:0}, KHÔNG enqueue, KHÔNG tạo tracker", async () => {
-    const t = await makeTenant(db, "DN A", "0100000001");
-    const acc = await seedTaxAccount(db, t, { username: "0311772540", ...VALID_TOKEN });
-    for (const p of ["2026-01", "2026-02", "2026-03"]) {
+    // Cả 2 tháng trong khoảng ĐÃ đồng bộ đủ 2 chiều — trước Task 7 sẽ bị loại khỏi
+    // backfill (coverage nhị phân); từ Task 7, audit vẫn chạy lại vì rẻ (1-2 request GDT)
+    // và tự quyết đủ/hụt thay vì tin coverage nhị phân đã gây kẹt (docs/CHAN-DOAN).
+    for (const p of ["2026-01", "2026-02"]) {
       await seedRun(db, { tenantId: t, taikhoanId: acc, chieu: "purchase", period: p });
       await seedRun(db, { tenantId: t, taikhoanId: acc, chieu: "sold", period: p });
     }
+
     const { queue, batches } = fakeQueue();
     const { factory, store } = fakeTracker();
     const app = createApp(injectDb(db, undefined, undefined, factory));
@@ -216,18 +208,30 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
       acc,
       t,
       makeEnv({ SYNC_QUEUE: queue, BACKFILL_TRACKER: {} as DurableObjectNamespace }),
+      { tuNgay: "2026-01-01", denNgay: "2026-02-28" },
     );
 
     expect(res.status).toBe(202);
-    expect(await res.json()).toEqual({ backfillId: null, thangCanLay: [], tongSoThang: 0 });
-    expect(batches).toHaveLength(0);
-    expect(store.size).toBe(0); // không tạo tracker khi không có gì để lấy
+    const b = (await res.json()) as {
+      backfillId: string;
+      thangCanLay: string[];
+      tongSoThang: number;
+    };
+    expect(b.thangCanLay).toEqual(["2026-01", "2026-02"]); // ĐỦ mọi tháng, không loại tháng đã phủ
+    expect(b.tongSoThang).toBe(2);
+    expect(typeof b.backfillId).toBe("string"); // không còn backfillId:null khi "đã phủ"
+
+    expect(batches).toHaveLength(4); // 2 tháng × 2 chiều
+    const msgs = batches.map((x) => x.body);
+    expect(msgs.every((m) => "kind" in m && m.kind === "audit" && m.vong === 0)).toBe(true);
+    expect(store.size).toBe(1); // tracker vẫn tạo (không còn nhánh "không có gì để lấy")
   });
 
   it("force=true → re-sync CẢ tháng đã phủ (bỏ coverage) để lấy lại phần production hụt", async () => {
     const t = await makeTenant(db, "DN A", "0100000001");
     const acc = await seedTaxAccount(db, t, { username: "0311772540", ...VALID_TOKEN });
-    // Cả 3 tháng đã 'completed' cả 2 chiều — bình thường backfill sẽ bỏ qua (0 job).
+    // Cả 3 tháng đã 'completed' cả 2 chiều — force vẫn giữ đường LEGACY full-month
+    // (buildBackfillMessages, header không `kind`), khác đường mặc định (audit) ở trên.
     for (const p of ["2026-01", "2026-02", "2026-03"]) {
       await seedRun(db, { tenantId: t, taikhoanId: acc, chieu: "purchase", period: p });
       await seedRun(db, { tenantId: t, taikhoanId: acc, chieu: "sold", period: p });
@@ -248,6 +252,9 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
     expect(b.thangCanLay).toEqual(["2026-01", "2026-02", "2026-03"]); // dù đã phủ vẫn lấy lại
     expect(b.tongSoThang).toBe(3);
     expect(batches).toHaveLength(6); // 3 tháng × 2 chiều — upsert idempotent hợp thêm phần thiếu
+    // force = message dạng header LEGACY (SyncJobMessage), KHÔNG `kind` — khác audit.
+    const msgs = batches.map((x) => x.body);
+    expect(msgs.every((m) => !("kind" in m))).toBe(true);
 
     // Audit ghi rõ đây là backfill CƯỠNG BỨC (force) để truy vết.
     const audits = await db
@@ -255,7 +262,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
       .from(auditLog)
       .where(and(eq(auditLog.tenantId, t), eq(auditLog.hanhDong, "backfill_khoi_tao")));
     expect(audits).toHaveLength(1);
-    expect((audits[0]?.chiTiet as { force?: boolean } | null)?.force).toBe(true);
+    expect(audits[0]?.chiTiet).toMatchObject({ force: true, tongSoThang: 3 });
   });
 
   it("khác tenant → 404, KHÔNG enqueue (cách ly AC3)", async () => {
@@ -326,7 +333,7 @@ describe("POST /tax-accounts/:id/backfill — producer backfill (U22 B5)", () =>
       sendBatch: async () => {
         throw new Error("queue down");
       },
-    } as unknown as Queue<SyncJobMessage>;
+    } as unknown as Queue<VatSyncQueueMessage>;
     const { factory, store } = fakeTracker();
     const app = createApp(injectDb(db, undefined, undefined, factory));
     const res = await post(
