@@ -147,3 +147,29 @@ describe("deriveBackfillStatus — sinceMs bỏ qua lỗi CŨ trước khi backf
     expect(p.thang[0]?.trangThai).toBe("loi");
   });
 });
+
+// Task 8 — phân biệt 'du' (tháng đủ CHỈ nhờ audit-completed, không kéo gì) với 'xong'
+// (đã kéo ít nhất một chiều). Row completed KHÔNG có `loai` (legacy) tính như sync
+// (tương thích lùi).
+describe("deriveBackfillStatus — 'du' (đủ, không kéo) vs 'xong' (đã kéo)", () => {
+  it("tháng chỉ có audit-completed (mọi chiều) → 'du'; có sync-completed → 'xong'", () => {
+    const rows = [
+      { period: "2026-06", chieu: "purchase" as const, trangThai: "completed", loai: "audit" },
+      { period: "2026-06", chieu: "sold" as const, trangThai: "completed", loai: "audit" },
+      { period: "2026-07", chieu: "purchase" as const, trangThai: "completed", loai: "sync" },
+      { period: "2026-07", chieu: "sold" as const, trangThai: "completed", loai: "audit" },
+    ];
+    const p = deriveBackfillStatus(rows, ["purchase", "sold"], ["2026-06", "2026-07"]);
+    expect(p.thang).toEqual([
+      { period: "2026-06", trangThai: "du" },
+      { period: "2026-07", trangThai: "xong" },
+    ]);
+    expect(p.soXong).toBe(2); // du tính là xong
+    expect(p.trangThaiTong).toBe("hoan_thanh");
+  });
+
+  it("rows không có loai (legacy) → hành vi cũ ('xong')", () => {
+    const rows = [{ period: "2026-06", chieu: "purchase" as const, trangThai: "completed" }];
+    expect(deriveBackfillStatus(rows, ["purchase"], ["2026-06"]).thang[0]?.trangThai).toBe("xong");
+  });
+});

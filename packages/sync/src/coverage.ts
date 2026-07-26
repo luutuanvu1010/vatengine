@@ -119,12 +119,16 @@ export async function missingMonths<
 
 // ── B6: theo dõi tiến độ backfill (AC4) ──────────────────────────────────────────
 
-/** Trạng thái một tháng của backfill (frontend hiển thị). */
-export type BackfillMonthStatus = "cho" | "dang_chay" | "xong" | "loi";
+/** Trạng thái một tháng của backfill (frontend hiển thị).
+ * `"du"` = tháng ĐỦ so total GDT mà KHÔNG kéo gì — mọi chiều completed đều là
+ * run `loai='audit'` (kiểm-đủ). `"xong"` = đã kéo thật ít nhất một chiều
+ * (`loai='sync'`, hoặc legacy không có `loai`). `du` ⊂ nhóm-đã-xong (soXong đếm
+ * cả hai). */
+export type BackfillMonthStatus = "cho" | "dang_chay" | "xong" | "du" | "loi";
 
 export interface BackfillProgress {
   thang: { period: string; trangThai: BackfillMonthStatus }[];
-  /** Số tháng đã 'xong' (mọi chiều completed). */
+  /** Số tháng đã hoàn thành — đếm cả 'xong' (đã kéo) lẫn 'du' (đủ, không kéo). */
   soXong: number;
   tongSoThang: number;
   /** Tổng: hoan_thanh (tất cả xong) | can_dang_nhap_lai (token chết — ưu tiên báo) |
@@ -152,8 +156,11 @@ function reduceDirState(trangThais: string[]): DirState {
 
 /**
  * Suy tiến độ backfill (thuần, dễ test): từ các bản ghi `lan_dong_bo` (`{period, chieu,
- * trangThai}`), tính trạng thái TỪNG THÁNG trong `months` + trạng thái TỔNG (AC4). Một
- * tháng 'xong' khi MỌI chiều `completed`. Bản ghi ngoài `months` bị bỏ qua.
+ * trangThai, loai}`), tính trạng thái TỪNG THÁNG trong `months` + trạng thái TỔNG (AC4).
+ * Một tháng đạt "hoàn thành" khi MỌI chiều `completed`: nếu ÍT NHẤT MỘT chiều được phủ
+ * bởi run `loai !== 'audit'` (sync, hoặc legacy không có `loai` — tương thích lùi) →
+ * `"xong"` (đã kéo thật); nếu TẤT CẢ chiều chỉ được phủ bởi run `loai='audit'` (kiểm-đủ,
+ * không kéo) → `"du"` (Task 8, delta-sync). Bản ghi ngoài `months` bị bỏ qua.
  *
  * `sinceMs` (SỰ CỐ 2026-07-18): bản ghi THẤT BẠI/CẦN ĐĂNG NHẬP LẠI **cũ hơn thời điểm
  * backfill này được tạo** (`def.createdAtMs`) bị BỎ QUA — trước đó chúng làm GET
@@ -162,12 +169,22 @@ function reduceDirState(trangThais: string[]): DirState {
  * Không truyền `sinceMs` → hành vi cũ (tương thích lùi).
  */
 export function deriveBackfillStatus(
-  rows: { period: string; chieu: InvoiceDirection; trangThai: string; batDauMs?: number }[],
+  rows: {
+    period: string;
+    chieu: InvoiceDirection;
+    trangThai: string;
+    batDauMs?: number;
+    loai?: string;
+  }[],
   directions: InvoiceDirection[],
   months: string[],
   sinceMs?: number,
 ): BackfillProgress {
   const byKey = new Map<string, string[]>(); // "period|chieu" → danh sách trạng thái
+  // "period|chieu" mà có ÍT NHẤT MỘT bản ghi completed KHÔNG PHẢI audit (loai==='sync'
+  // hoặc thiếu loai — legacy tính như sync, tương thích lùi). Dùng để phân biệt
+  // 'du' (chỉ audit-completed) với 'xong' (đã kéo thật).
+  const coCompletedSync = new Set<string>();
   for (const r of rows) {
     const laLoiCu =
       sinceMs !== undefined &&
@@ -180,6 +197,9 @@ export function deriveBackfillStatus(
     const arr = byKey.get(k);
     if (arr) arr.push(r.trangThai);
     else byKey.set(k, [r.trangThai]);
+    if (r.trangThai === TRANG_THAI_LAN_DONG_BO.HOAN_THANH && r.loai !== "audit") {
+      coCompletedSync.add(k);
+    }
   }
 
   let anyReauth = false;
@@ -188,7 +208,8 @@ export function deriveBackfillStatus(
     const dirStates = directions.map((d) => reduceDirState(byKey.get(`${period}|${d}`) ?? []));
     let trangThai: BackfillMonthStatus;
     if (dirStates.length > 0 && dirStates.every((s) => s === "covered")) {
-      trangThai = "xong";
+      const coSync = directions.some((d) => coCompletedSync.has(`${period}|${d}`));
+      trangThai = coSync ? "xong" : "du";
     } else if (dirStates.some((s) => s === "reauth")) {
       trangThai = "loi";
       anyReauth = true;
@@ -204,7 +225,7 @@ export function deriveBackfillStatus(
     return { period, trangThai };
   });
 
-  const soXong = thang.filter((t) => t.trangThai === "xong").length;
+  const soXong = thang.filter((t) => t.trangThai === "xong" || t.trangThai === "du").length;
   const tongSoThang = months.length;
   let trangThaiTong: BackfillProgress["trangThaiTong"];
   if (anyReauth) trangThaiTong = "can_dang_nhap_lai";
@@ -251,6 +272,7 @@ export async function monthlyBackfillStatus<
       chieu: lanDongBo.chieu,
       trangThai: lanDongBo.trangThai,
       batDau: lanDongBo.batDau,
+      loai: lanDongBo.loai,
     })
     .from(lanDongBo)
     .where(
@@ -267,6 +289,7 @@ export async function monthlyBackfillStatus<
     chieu: r.chieu as InvoiceDirection,
     trangThai: r.trangThai,
     batDauMs: r.batDau.getTime(),
+    loai: r.loai,
   }));
   return deriveBackfillStatus(mapped, directions, months, sinceMs);
 }
