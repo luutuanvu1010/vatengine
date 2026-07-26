@@ -6,7 +6,7 @@ import {
   FLAT_EXPORT_COLUMNS,
   FLAT_EXPORT_DEFAULT_KEYS,
   FLAT_EXPORT_KEYS,
-  FlatExportCol,
+  type FlatExportCol,
   type FlatExportKieu,
   type FlatExportNhom,
   chonCotXuat,
