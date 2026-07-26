@@ -141,3 +141,9 @@ UI nói được câu thật: "Đang kiểm 3 tháng… 1 tháng hụt, đang k�
   production → count DB tăng 6802 → ≥6981 (mức probe đã chứng minh kéo được); đối chiếu
   lại với file công cụ thứ ba. Lưu ý khi kiểm: xuất đúng chiều **Mua vào** (file xuất
   sáng 26/07 là chiều Bán ra nên không so được với `MUA_VAO_4201969169.xlsx`).
+
+---
+
+## Amendment 2026-07-26 (sau final review, chủ dự án duyệt)
+
+- **§3.1.3 "ghi số hụt tường minh vào progress" — deviation có chủ đích:** số hụt sau 3 vòng chỉ ghi ở mức RUN (`lan_dong_bo.thong_diep_loi` + log vận hành), KHÔNG lộ ra progress/UI — tháng hiển thị "xong" vì tổng đã hội tụ tới mức GDT cho phép (`total` vốn bất ổn ±4% nên "hụt" có thể là ảo). Chủ dự án chọn phương án này 2026-07-26 thay vì thêm trường `hutConLai` vào payload progress. Nếu tương lai cần minh bạch hơn với người dùng cuối: xem mục backlog delta-sync.
