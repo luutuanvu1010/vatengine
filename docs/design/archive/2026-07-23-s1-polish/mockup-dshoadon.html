@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --brand-600:#c5221f;--brand-700:#a52714;--brand-800:#8e1714;--brand-50:#fcf6f5;
+  --danger-600:#d93025;--danger-50:#fce8e6;--danger-200:#f5c6c0;
+  --info-600:#1a73e8;--info-700:#1558b0;--info-50:#e8f0fe;--info-200:#c6dafc;
+  --success-600:#188038;--success-700:#256b3f;--success-50:#e6f4ea;--success-200:#a8dab5;
+  --warning-700:#b06000;--warning-800:#8a5a00;--warning-50:#fef7e0;--warning-200:#fde9a8;
+  --text-primary:#202124;--text-secondary:#3c4043;--text-tertiary:#5f6368;--text-disabled:#80868b;--text-on-brand:#fff;
+  --border-strong:#bdc1c6;--border:#dadce0;--border-subtle:#e6e8eb;
+  --surface-page:#f8f9fa;--surface-card:#fff;--surface-muted:#f1f3f4;--surface-hover:#eef0f2;
+  --neutral-chip-bg:#f1f3f4;--neutral-chip-fg:#3c4043;
+  --font-sans:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --fw-regular:400;--fw-medium:500;--fw-semibold:600;--fw-bold:700;--fw-extrabold:800;
+  --fs-xs:12px;--fs-sm:13px;--fs-base:16px;--fs-md:16px;--fs-lg:18px;--fs-xl:20px;--fs-2xl:24px;--fs-3xl:30px;
+  --lh-body:1.5;--lh-heading:1.25;
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:20px;--sp-6:24px;--sp-8:32px;--sp-10:40px;--sp-12:48px;
+  --radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:14px;--radius-pill:20px;--radius-full:9999px;
+  --shadow-sm:0 1px 2px rgba(60,64,67,.08),0 1px 3px rgba(60,64,67,.06);
+  --shadow-md:0 1px 3px rgba(60,64,67,.12),0 4px 8px rgba(60,64,67,.08);
+}
+*,*::before,*::after{box-sizing:border-box;}
+body{margin:0;font-family:var(--font-sans);font-size:var(--fs-base);line-height:var(--lh-body);color:var(--text-primary);background:var(--surface-page);-webkit-font-smoothing:antialiased;}
+h1,h2,h3,h4{line-height:var(--lh-heading);margin:0;}
+a{color:var(--info-600);text-decoration:none;}
+a:hover{color:var(--info-700);text-decoration:underline;}
+.tabular{font-variant-numeric:tabular-nums;}
+.hamb{display:none;}
+.overlay{display:none;}
+@media(max-width:767px){
+  .app-sb{position:fixed;top:0;left:0;height:100vh;z-index:50;overflow-y:auto;transition:transform .2s ease;}
+  .app-sb[data-open="false"]{transform:translateX(-100%);box-shadow:none;}
+  .app-sb[data-open="true"]{transform:translateX(0);box-shadow:var(--shadow-md);}
+  .hamb{display:inline-flex!important;}
+  .role-text{display:none!important;}
+  .company-pill{max-width:150px!important;}
+  .app-header{padding:var(--sp-3) var(--sp-4)!important;}
+  .app-main{padding:var(--sp-4)!important;}
+  .app-card{padding:var(--sp-4)!important;}
+  .overlay{display:block;}
+}
+</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:var(--surface-page);">
+
+  <!-- Overlay (mobile drawer) -->
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+    <button type="button" aria-label="Đóng menu" onClick="{{ closeDrawer }}" class="overlay" style="position:fixed;inset:0;z-index:40;border:none;background:rgba(32,33,36,.45);cursor:pointer;"></button>
+  </sc-if>
+
+  <!-- Sidebar -->
+  <nav aria-label="Điều hướng chính" class="app-sb" data-open="{{ drawerOpen }}" style="width:248px;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface-card);padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2);align-content:start;">
+    <div style="padding:var(--sp-2) var(--sp-3) var(--sp-3);">
+      <span style="display:inline-flex;align-items:center;gap:var(--sp-2);">
+        <span aria-hidden="true" style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;background:var(--brand-600);color:#fff;border-radius:var(--radius-xl);font-size:16px;">⚡</span>
+        <span style="font-size:var(--fs-lg);font-weight:var(--fw-extrabold);letter-spacing:-0.01em;">
+          <span style="color:var(--text-primary);">VAT</span><span style="color:var(--brand-600);">Engine</span>
+        </span>
+      </span>
+    </div>
+
+    <div style="display:grid;gap:var(--sp-1);">
+      <div style="text-transform:uppercase;letter-spacing:.06em;font-size:var(--fs-xs);color:var(--text-disabled);padding:0 var(--sp-3);margin-top:var(--sp-3);">Chính</div>
+      <a href="#" style="padding:var(--sp-3);border-radius:var(--radius-md);font-weight:var(--fw-semibold);font-size:var(--fs-base);text-decoration:none;color:var(--text-secondary);">Tổng quan</a>
+      <a href="#" style="padding:var(--sp-3);border-radius:var(--radius-md);font-weight:var(--fw-semibold);font-size:var(--fs-base);text-decoration:none;color:var(--brand-700);background:var(--brand-50);">Danh sách hóa đơn</a>
+      <a href="#" style="padding:var(--sp-3);border-radius:var(--radius-md);font-weight:var(--fw-semibold);font-size:var(--fs-base);text-decoration:none;color:var(--text-secondary);">Đối chiếu</a>
+      <sc-if value="{{ canExport }}" hint-placeholder-val="{{ true }}">
+        <a href="#" style="padding:var(--sp-3);border-radius:var(--radius-md);font-weight:var(--fw-semibold);font-size:var(--fs-base);text-decoration:none;color:var(--text-secondary);">Kết xuất &amp; Convert</a>
+      </sc-if>
+      <sc-if value="{{ canSync }}" hint-placeholder-val="{{ true }}">
+        <a href="#" style="padding:var(--sp-3);border-radius:var(--radius-md);font-weight:var(--fw-semibold);font-size:var(--fs-base);text-decoration:none;color:var(--text-secondary);">Kết nối tài khoản thuế</a>
+      </sc-if>
+    </div>
+
+    <div style="display:grid;gap:var(--sp-1);">
+      <div style="text-transform:uppercase;letter-spacing:.06em;font-size:var(--fs-xs);color:var(--text-disabled);padding:0 var(--sp-3);margin-top:var(--sp-3);">Hệ thống</div>
+      <a href="#" style="padding:var(--sp-3);border-radius:var(--radius-md);font-weight:var(--fw-semibold);font-size:var(--fs-base);text-decoration:none;color:var(--text-secondary);">Cài đặt chung</a>
+      <a href="#" style="padding:var(--sp-3);border-radius:var(--radius-md);font-weight:var(--fw-semibold);font-size:var(--fs-base);text-decoration:none;color:var(--text-secondary);">Giới thiệu &amp; Hỗ trợ</a>
+    </div>
+  </nav>
+
+  <!-- Main column -->
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+    <!-- Header -->
+    <header class="app-header" style="display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-6);border-bottom:1px solid var(--border);background:var(--surface-card);">
+      <button type="button" aria-label="Mở menu" onClick="{{ openDrawer }}" class="hamb" style="align-items:center;justify-content:center;width:40px;height:40px;flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;">
+        <span aria-hidden="true" style="display:grid;gap:4px;width:18px;">
+          <span style="height:2px;border-radius:2px;background:var(--text-secondary);"></span>
+          <span style="height:2px;border-radius:2px;background:var(--text-secondary);"></span>
+          <span style="height:2px;border-radius:2px;background:var(--text-secondary);"></span>
+        </span>
+      </button>
+      <div style="display:flex;align-items:center;gap:var(--sp-3);min-width:0;">
+        <span class="company-pill" title="MST 0312345678" style="padding:var(--sp-2) var(--sp-3);background:var(--surface-muted);border-radius:var(--radius-pill);font-size:var(--fs-sm);font-weight:var(--fw-semibold);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Công ty TNHH Kế toán An Bình</span>
+        <span class="role-text" style="font-size:var(--fs-sm);color:var(--text-tertiary);">{{ nhanVaiTro }}</span>
+        <button type="button" aria-label="Mở hồ sơ" style="width:32px;height:32px;border-radius:var(--radius-full);background:var(--brand-600);color:#fff;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:var(--fw-bold);cursor:pointer;">AB</button>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="app-main" style="flex:1;padding:var(--sp-6);max-width:1200px;width:100%;">
+      <!-- PageHeader -->
+      <header style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--sp-4);margin-bottom:var(--sp-6);">
+        <div>
+          <h1 style="font-size:var(--fs-2xl);font-weight:var(--fw-extrabold);">Danh sách hóa đơn</h1>
+          <p style="color:var(--text-tertiary);margin-top:var(--sp-1);margin-bottom:0;">Hóa đơn điện tử kéo trực tiếp từ Tổng cục Thuế</p>
+        </div>
+      </header>
+
+      <!-- (a) Bộ lọc -->
+      <section class="app-card" style="background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:var(--sp-6);margin-bottom:var(--sp-4);">
+        <div style="display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-4);">
+          <h2 style="font-size:var(--fs-sm);font-weight:var(--fw-bold);text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);">Bộ lọc</h2>
+        </div>
+
+        <div style="display:grid;gap:var(--sp-4);">
+          <!-- nhóm kỳ nhanh -->
+          <div style="display:flex;gap:var(--sp-4);flex-wrap:wrap;align-items:end;">
+            <fieldset aria-label="Chọn kỳ" style="display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:end;border:none;padding:0;margin:0;">
+              <span style="display:flex;flex-direction:column;gap:var(--sp-1);">
+                <span style="font-size:var(--fs-xs);font-weight:var(--fw-semibold);color:var(--text-disabled);text-transform:uppercase;letter-spacing:.04em;">Kỳ nhanh</span>
+                <span style="display:inline-flex;background:var(--surface-muted);border:1px solid var(--border);border-radius:var(--radius-md);padding:2px;gap:2px;">
+                  <button type="button" style="padding:var(--sp-2) var(--sp-4);font-size:var(--fs-sm);font-weight:var(--fw-semibold);font-family:inherit;border:none;border-radius:var(--radius-sm);cursor:pointer;background:var(--surface-card);color:var(--brand-700);box-shadow:var(--shadow-sm);">Tháng</button>
+                  <button type="button" style="padding:var(--sp-2) var(--sp-4);font-size:var(--fs-sm);font-weight:var(--fw-semibold);font-family:inherit;border:none;border-radius:var(--radius-sm);cursor:pointer;background:transparent;color:var(--text-secondary);">Quý</button>
+                  <button type="button" style="padding:var(--sp-2) var(--sp-4);font-size:var(--fs-sm);font-weight:var(--fw-semibold);font-family:inherit;border:none;border-radius:var(--radius-sm);cursor:pointer;background:transparent;color:var(--text-secondary);">Năm</button>
+                </span>
+              </span>
+              <span style="display:inline-flex;flex-direction:column;gap:var(--sp-1);">
+                <label style="font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text-secondary);">Năm</label>
+                <select style="padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);">
+                  <option>2026</option><option>2025</option><option>2024</option>
+                </select>
+              </span>
+              <span style="display:inline-flex;flex-direction:column;gap:var(--sp-1);">
+                <label style="font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text-secondary);">Tháng</label>
+                <select style="padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);">
+                  <option>Tháng 7</option><option>Tháng 6</option><option>Tháng 5</option>
+                </select>
+              </span>
+            </fieldset>
+          </div>
+
+          <div style="border-top:1px solid var(--border-subtle);"></div>
+
+          <!-- nhóm khoảng ngày + lọc + chiều/nguồn/mst -->
+          <div style="display:flex;gap:var(--sp-4);flex-wrap:wrap;align-items:end;">
+            <span style="display:inline-flex;flex-direction:column;gap:var(--sp-1);">
+              <label style="font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text-secondary);">Từ ngày</label>
+              <input type="date" value="2026-07-01" style="padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);">
+            </span>
+            <span style="display:inline-flex;flex-direction:column;gap:var(--sp-1);">
+              <label style="font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text-secondary);">Đến ngày</label>
+              <input type="date" value="2026-07-31" style="padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);">
+            </span>
+            <span style="display:inline-flex;flex-direction:column;gap:var(--sp-1);">
+              <label style="font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text-secondary);">Chiều</label>
+              <select style="padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);">
+                <option>Tất cả chiều</option><option>Mua vào</option><option>Bán ra</option>
+              </select>
+            </span>
+            <span style="display:inline-flex;flex-direction:column;gap:var(--sp-1);">
+              <label style="font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text-secondary);">Nguồn</label>
+              <select style="padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);">
+                <option>Mọi nguồn</option><option>Hóa đơn điện tử</option><option>Máy tính tiền</option>
+              </select>
+            </span>
+            <span style="display:inline-flex;flex-direction:column;gap:var(--sp-1);">
+              <label style="font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text-secondary);">MST người bán</label>
+              <input placeholder="MST người bán" style="padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);font-family:var(--font-mono);color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);width:150px;">
+            </span>
+            <!-- Lọc dữ liệu = đọc nhẹ → secondary -->
+            <button type="button" style="display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-5);font-size:var(--fs-base);font-weight:var(--fw-semibold);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;" style-hover="background:var(--surface-hover);">Lọc dữ liệu</button>
+          </div>
+        </div>
+
+        <div style="margin-top:var(--sp-4);font-size:var(--fs-xs);color:var(--text-disabled);">Đã ghi nhớ bộ lọc gần nhất · Giờ hiển thị theo VN (UTC+7)</div>
+      </section>
+
+      <!-- (b) Đồng bộ (kéo nặng) — chỉ vai quản lý tài khoản thuế -->
+      <sc-if value="{{ canSync }}" hint-placeholder-val="{{ true }}">
+        <section class="app-card" style="background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:var(--sp-6);margin-bottom:var(--sp-4);">
+          <div style="display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-3);">
+            <h2 style="font-size:var(--fs-sm);font-weight:var(--fw-bold);text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);">Đồng bộ từ Tổng cục Thuế</h2>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap;">
+            <button type="button" style="display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-5);font-size:var(--fs-base);font-weight:var(--fw-semibold);font-family:inherit;color:#fff;background:var(--brand-600);border:1px solid transparent;border-radius:var(--radius-md);cursor:pointer;box-shadow:var(--shadow-sm);white-space:nowrap;" style-hover="background:var(--brand-700);">Đồng bộ và tải xuống</button>
+            <span style="font-size:var(--fs-sm);color:var(--text-tertiary);max-width:520px;">Kéo dữ liệu mới trực tiếp từ máy chủ thuế cho khoảng kỳ đã chọn (chạy nền), rồi tự tải file khi xong.</span>
+          </div>
+        </section>
+      </sc-if>
+
+      <!-- (c) Kết quả + Xuất -->
+      <section class="app-card" style="background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:var(--sp-6);">
+        <div style="display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-4);">
+          <h2 style="font-size:var(--fs-sm);font-weight:var(--fw-bold);text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);">Kết quả</h2>
+        </div>
+
+        <sc-if value="{{ laLoading }}" hint-placeholder-val="{{ false }}">
+          <output aria-live="polite" style="display:block;padding:var(--sp-8);text-align:center;color:var(--text-tertiary);">Đang tải…</output>
+        </sc-if>
+
+        <sc-if value="{{ laError }}" hint-placeholder-val="{{ false }}">
+          <div role="alert" style="padding:var(--sp-6);text-align:center;display:grid;gap:var(--sp-3);justify-items:center;">
+            <div style="color:var(--brand-700);font-weight:var(--fw-semibold);">Đã xảy ra lỗi</div>
+            <div style="color:var(--text-tertiary);">Không đếm được hóa đơn.</div>
+            <button type="button" style="padding:var(--sp-3) var(--sp-5);font-size:var(--fs-base);font-weight:var(--fw-semibold);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;">Thử lại</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ laEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:var(--sp-8);text-align:center;color:var(--text-tertiary);">Không có hóa đơn khớp bộ lọc. Thử mở rộng kỳ hoặc bỏ bớt điều kiện.</div>
+        </sc-if>
+
+        <sc-if value="{{ laData }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-6);flex-wrap:wrap;">
+            <!-- Stat / KPI: số đếm là tiêu điểm -->
+            <div style="display:grid;gap:var(--sp-3);">
+              <div style="display:flex;align-items:baseline;gap:var(--sp-3);flex-wrap:wrap;">
+                <span class="tabular" style="font-size:var(--fs-3xl);line-height:1;font-weight:var(--fw-extrabold);color:var(--text-primary);">{{ count }}</span>
+                <span style="font-size:var(--fs-sm);color:var(--text-tertiary);">hóa đơn khớp bộ lọc</span>
+              </div>
+              <sc-if value="{{ hienBadgeKy }}" hint-placeholder-val="{{ true }}">
+                <span style="display:inline-flex;align-items:center;gap:var(--sp-2);align-self:start;padding:var(--sp-1) var(--sp-3);background:var(--surface-muted);border:1px solid var(--border-subtle);border-radius:var(--radius-pill);font-size:var(--fs-xs);font-weight:var(--fw-semibold);color:var(--text-secondary);">
+                  <span style="color:var(--text-disabled);text-transform:uppercase;letter-spacing:.04em;">Kỳ</span>
+                  <span class="tabular">{{ badgeKy }}</span>
+                </span>
+              </sc-if>
+              <sc-if value="{{ tachTheoChieu }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:var(--sp-1);">
+                  <span style="display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);background:var(--info-50);border:1px solid var(--info-200);border-radius:var(--radius-md);">
+                    <span style="font-size:var(--fs-sm);color:var(--info-700);">Mua vào</span>
+                    <span class="tabular" style="font-size:var(--fs-md);font-weight:var(--fw-bold);color:var(--info-700);">{{ muaVao }}</span>
+                  </span>
+                  <span style="display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);background:var(--success-50);border:1px solid var(--success-200);border-radius:var(--radius-md);">
+                    <span style="font-size:var(--fs-sm);color:var(--success-700);">Bán ra</span>
+                    <span class="tabular" style="font-size:var(--fs-md);font-weight:var(--fw-bold);color:var(--success-700);">{{ banRa }}</span>
+                  </span>
+                </div>
+              </sc-if>
+            </div>
+
+            <!-- Xuất = thứ cấp -->
+            <sc-if value="{{ canExport }}" hint-placeholder-val="{{ true }}">
+              <div style="display:inline-flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap;">
+                <button type="button" style="display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-5);font-size:var(--fs-base);font-weight:var(--fw-semibold);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;" style-hover="background:var(--surface-hover);">Xuất Excel</button>
+                <button type="button" style="display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-5);font-size:var(--fs-base);font-weight:var(--fw-semibold);font-family:inherit;color:var(--text-primary);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;" style-hover="background:var(--surface-hover);">Xuất CSV</button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200,&quot;height&quot;:760},&quot;vaiTro&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;quan_tri&quot;,&quot;ke_toan_truong&quot;,&quot;ke_toan&quot;],&quot;default&quot;:&quot;quan_tri&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Xem thử&quot;},&quot;trangThai&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;data&quot;,&quot;loading&quot;,&quot;empty&quot;,&quot;error&quot;],&quot;default&quot;:&quot;data&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Xem thử&quot;},&quot;hienBadgeKy&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Trình bày&quot;},&quot;tachTheoChieu&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Trình bày&quot;}}">
+class Component extends DCLogic {
+  state = { drawerOpen: false };
+  renderVals() {
+    const vai = this.props.vaiTro ?? "quan_tri";
+    const nhan = { ke_toan: "Kế toán", ke_toan_truong: "Kế toán trưởng", quan_tri: "Quản trị" }[vai] ?? "Quản trị";
+    const priv = vai === "ke_toan_truong" || vai === "quan_tri";
+    const tt = this.props.trangThai ?? "data";
+    const count = 128, muaVao = 74, banRa = 54;
+    return {
+      nhanVaiTro: nhan,
+      canSync: priv,
+      canExport: priv,
+      laLoading: tt === "loading",
+      laError: tt === "error",
+      laEmpty: tt === "empty",
+      laData: tt === "data",
+      count,
+      muaVao,
+      banRa,
+      badgeKy: "01/07 – 31/07/2026",
+      hienBadgeKy: this.props.hienBadgeKy ?? true,
+      tachTheoChieu: this.props.tachTheoChieu ?? false,
+      drawerOpen: this.state.drawerOpen,
+      openDrawer: () => this.setState({ drawerOpen: true }),
+      closeDrawer: () => this.setState({ drawerOpen: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -13,6 +13,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.8",
+    date: "2026-07-26",
+    title: "Đồng bộ thông minh — tự tìm và bù hóa đơn còn thiếu",
+    changes: [
+      'Nút "Đồng bộ từ Thuế" nay tự KIỂM TRA từng tháng trong kỳ đã chọn so với máy chủ Thuế: tháng nào đủ thì bỏ qua, tháng nào thiếu mới kéo bổ sung — nhanh hơn và không lặp lại việc đã làm.',
+      "Kéo dữ liệu theo từng phần nhỏ nối tiếp nhau, tự nối lại đúng chỗ khi máy chủ Thuế giới hạn tốc độ — hết cảnh đồng bộ nửa chừng rồi mất trắng.",
+      "Hằng ngày hệ thống tự rà lại tháng liền trước để bù hóa đơn người bán đẩy lên trễ.",
+      'Màn hóa đơn gộp thành một khung "Tra cứu hóa đơn": bộ lọc, nút Đồng bộ và nút Xuất Excel/CSV đứng cạnh nhau, kèm dấu ⓘ giải thích khi di chuột.',
+      "Phần Kết quả hiển thị đủ 4 con số: Số hóa đơn, Tiền chưa thuế, Tiền thuế, Tổng thanh toán cho đúng kỳ đang lọc.",
+      "Bỏ tự tải file sau đồng bộ — tải file chỉ qua nút Xuất, tránh tải trùng ngoài ý muốn.",
+    ],
+    kind: "feature",
+  },
+  {
     version: "v1.7",
     date: "2026-07-25",
     title: "Sửa ngày trên file xuất",

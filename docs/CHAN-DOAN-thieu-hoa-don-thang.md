@@ -141,7 +141,7 @@ npx wrangler tail vat-sync-worker --search "local_limit"
 
 | Tiêu chí | Chi tiết |
 |---|---|
-| **Gói Workers thực tế** | **CHƯA KIỂM CHỨNG — điền ở bước nghiệm thu (Task 14).** Ghi tên chính xác từ Dashboard Cloudflare (Workers Free / Paid) + ngày kiểm. |
+| **Gói Workers thực tế** | **Workers Paid — chủ dự án xác nhận ĐÃ NÂNG CẤP ngày 2026-07-26** (lời xác nhận trực tiếp trong phiên làm việc; trước đó là Free). Điều này GIẢI được mâu thuẫn cũ: sự cố "Too many subrequests" n=61 ngày 2026-07-18 xảy ra khi tài khoản còn Free (trần 50/invocation) — khớp hoàn toàn với chẩn đoán B3. Từ nay trần là 1000/invocation; `DELTA_CHUNK_PAGES=40` càng dư an toàn. |
 | **Bằng chứng lệnh + output** | **CHƯA KIỂM CHỨNG — điền ở bước nghiệm thu (Task 14).** Chạy lệnh `npx wrangler tail ...` ở trên trong lúc delta-sync tháng 6, ghi count n = [số lần "local_limit" xuất hiện] và timespan (từ...đến). Dán 3–5 dòng log mẫu. |
 | **Điều chỉnh DELTA_CHUNK_PAGES nếu cần** | **CHƯA KIỂM CHỨNG — điền ở bước nghiệm thu (Task 14).** Nếu n > 0 (vẫn hit limit): giảm `DELTA_CHUNK_PAGES` từ [hiện tại] xuống [mới đề xuất] để giảm subrequest/invocation. Nếu n = 0: ghi "Không cần điều chỉnh — gói đã đủ subrequest / lỗi 429 không tái xuất hiện." |
 
