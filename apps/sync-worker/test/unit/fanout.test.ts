@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BACKPRESSURE_DELAY_SEC,
+  DEFAULT_DELTA_CHUNK_PAGES,
   DEFAULT_JITTER_SPREAD_SEC,
   DEFAULT_MAX_BACKPRESSURE,
   QUEUE_MAX_BATCH_BYTES,
@@ -12,6 +13,7 @@ import {
   chunkForQueue,
   consumerAction,
   jitterDelaySeconds,
+  resolveDeltaChunkPages,
   resolveFanoutConfig,
 } from "../../src/fanout";
 import type { JobOutcome } from "../../src/types";
@@ -148,6 +150,22 @@ describe("H-B.6 — blockedAction", () => {
         { backpressureDelaySeconds: 60, maxBackpressure: 10 },
       ),
     ).toEqual({ type: "retry" });
+  });
+});
+
+describe("m3 — resolveDeltaChunkPages: hàm THUẦN, export được, test được (không còn coverage-exclude)", () => {
+  it('"0" → kẹp sàn 1 (maxPages=0 làm runDeltaJob enqueue lại chính message VÔ HẠN)', () => {
+    expect(resolveDeltaChunkPages({ DELTA_CHUNK_PAGES: "0" })).toBe(1);
+  });
+  it("undefined → mặc định 40", () => {
+    expect(resolveDeltaChunkPages({})).toBe(DEFAULT_DELTA_CHUNK_PAGES);
+    expect(DEFAULT_DELTA_CHUNK_PAGES).toBe(40);
+  });
+  it('"abc" (rác) → mặc định 40', () => {
+    expect(resolveDeltaChunkPages({ DELTA_CHUNK_PAGES: "abc" })).toBe(40);
+  });
+  it('"100" → dùng đúng giá trị env', () => {
+    expect(resolveDeltaChunkPages({ DELTA_CHUNK_PAGES: "100" })).toBe(100);
   });
 });
 

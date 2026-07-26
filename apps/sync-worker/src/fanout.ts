@@ -177,3 +177,24 @@ export function parseNonNegInt(s: string | undefined, dflt: number): number {
   const n = Number.parseInt(s, 10);
   return Number.isFinite(n) && n >= 0 ? n : dflt;
 }
+
+// m3 — Task 6: số TRANG tối đa mỗi lô delta khi var `DELTA_CHUNK_PAGES` trống/hỏng.
+// 40 trang × size mặc định là biên THẬN TRỌNG dưới trần subrequest/invocation của gói
+// Paid (~1000): còn chỗ cho retry adapter + ghi DB + gọi Durable Object trong cùng lần
+// gọi Worker. CHƯA KIỂM CHỨNG số tối ưu — hạ qua var khi thấy `local_limit`.
+export const DEFAULT_DELTA_CHUNK_PAGES = 40;
+
+export interface DeltaChunkEnv {
+  DELTA_CHUNK_PAGES?: string;
+}
+
+/** Số trang mỗi lô, từ var env. CHẶN 0: `syncChunk` với `maxPages = 0` không kéo trang
+ * nào nhưng vẫn trả `state` cũ ⇒ `done: false` ⇒ runDeltaJob enqueue lại chính message
+ * VÔ HẠN (vòng lặp queue không tiến triển). `parseNonNegInt` coi "0" là hợp lệ nên phải
+ * kẹp sàn ở đây, không dựa vào người đặt var.
+ *
+ * m3 — TÁCH khỏi `deps.ts` (nơi bị coverage-exclude toàn file vì là wiring) thành hàm
+ * THUẦN export ở đây để test được trực tiếp (trước đó `soTrangMoiLo` không có test). */
+export function resolveDeltaChunkPages(env: DeltaChunkEnv): number {
+  return Math.max(1, parseNonNegInt(env.DELTA_CHUNK_PAGES, DEFAULT_DELTA_CHUNK_PAGES));
+}

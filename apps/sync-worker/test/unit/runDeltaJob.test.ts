@@ -347,6 +347,18 @@ describe("runAuditJob — vòng kiểm đối chiếu total GDT ↔ count DB", (
     expect(calls.layTotal).toEqual([]);
     expect(calls.tryAcquire).toBe(0);
     expect(calls.reauthPreflight).toHaveLength(1);
+    // Vòng 0 KHÔNG có run mở (lanDongBoId undefined) → không có gì để chốt.
+    expect(calls.chotRun).toEqual([]);
+  });
+
+  it("(4-I1) audit VÒNG ≥1 (có lanDongBoId) + token HẾT HẠN (pre-flight) → CHỐT run 'can_dang_nhap_lai' (không để run treo 'running' vĩnh viễn)", async () => {
+    const { deps, calls } = makeDeps({
+      account: { tokenHienTai: "jwt-het-han", tokenHetHan: new Date(NOW - 1000) },
+    });
+    const out = await runAuditJob(deps, { ...AUDIT, vong: 1, lanDongBoId: "ldb-1", prevCount: 5 });
+    expect(out.kind).toBe("needs_reauth");
+    expect(calls.reauthPreflight).toHaveLength(1);
+    expect(calls.chotRun).toEqual([{ lanDongBoId: "ldb-1", trangThai: "can_dang_nhap_lai" }]);
   });
 
   it("(4b) tài khoản không tồn tại → retry, KHÔNG ghi reauth (tránh FK mồ côi)", async () => {
@@ -367,6 +379,20 @@ describe("runAuditJob — vòng kiểm đối chiếu total GDT ↔ count DB", (
     expect(out.kind).toBe("needs_reauth");
     expect(calls.reauthRuntime).toHaveLength(1);
     expect(calls.recordResult).toEqual([]);
+    // Vòng 0 KHÔNG có run mở → không có gì để chốt.
+    expect(calls.chotRun).toEqual([]);
+  });
+
+  it("(4c-I1) audit VÒNG ≥1, 401 giữa audit (layTotal ném SESSION_EXPIRED) → CHỐT run 'can_dang_nhap_lai' (run mở từ vòng trước không được treo mãi)", async () => {
+    const { deps, calls } = makeDeps({
+      layTotal: async () => {
+        throw new GdtError("het phien", "SESSION_EXPIRED", 401);
+      },
+    });
+    const out = await runAuditJob(deps, { ...AUDIT, vong: 1, lanDongBoId: "ldb-1", prevCount: 5 });
+    expect(out.kind).toBe("needs_reauth");
+    expect(calls.reauthRuntime).toHaveLength(1);
+    expect(calls.chotRun).toEqual([{ lanDongBoId: "ldb-1", trangThai: "can_dang_nhap_lai" }]);
   });
 
   it("(4d) 429 giữa audit → đẩy lùi (retry_backpressure)", async () => {
@@ -543,6 +569,11 @@ describe("runDeltaJob — kéo MỘT lô rồi nối chuỗi", () => {
     expect((await runDeltaJob(hetHan.deps, DELTA)).kind).toBe("needs_reauth");
     expect(hetHan.calls.reauthPreflight).toHaveLength(1);
     expect(hetHan.calls.keoChunk).toEqual([]);
+    // (I1) delta LUÔN có lanDongBoId → token chết ở pre-flight cũng phải chốt run,
+    // không chỉ 401 giữa chuỗi (kq.failureKind === "session_expired").
+    expect(hetHan.calls.chotRun).toEqual([
+      { lanDongBoId: DELTA.lanDongBoId, trangThai: "can_dang_nhap_lai" },
+    ]);
 
     const breaker = makeDeps({ permit: { allowed: false, reason: "breaker_open" } });
     expect(await runDeltaJob(breaker.deps, DELTA)).toEqual({

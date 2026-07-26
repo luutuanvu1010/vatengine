@@ -93,6 +93,13 @@ async function tienKiem(
     account.tokenHetHan.getTime() <= deps.now()
   ) {
     await deps.recorder.reauthPreflight(msg, "token_het_han");
+    // I1 — run mở từ vòng trước (delta LUÔN có lanDongBoId; audit chỉ có ở vòng ≥1)
+    // KHÔNG được treo `running` mãi khi token chết được phát hiện NGAY ở pre-flight
+    // (trước khi kịp chạm GDT/lô nào) — mirror hành vi chốt của runDeltaJob khi 401
+    // xảy ra GIỮA chuỗi.
+    if (msg.lanDongBoId) {
+      await deps.chotRun(msg.tenantId, msg.lanDongBoId, { trangThai: "can_dang_nhap_lai" });
+    }
     return { ok: false, outcome: { kind: "needs_reauth", reason: "token_het_han" } };
   }
 
@@ -126,6 +133,13 @@ async function xuLyLoiAudit(
   const loai = classifyFailure(err);
   if (loai === "session_expired") {
     await deps.recorder.reauthRuntime(msg, "session_expired");
+    // I1 — audit vòng ≥1 mang lanDongBoId của run ĐANG MỞ (mở từ vòng kéo trước đó);
+    // 401 giữa audit KHÔNG được để run đó treo `running` mãi (trước khi vá, hàm này
+    // chỉ trả `needs_reauth` mà không chạm `lan_dong_bo`). Vòng 0 không có run mở →
+    // không có gì để chốt (mirror `tienKiem`/nhánh session_expired của runDeltaJob).
+    if (msg.lanDongBoId) {
+      await deps.chotRun(msg.tenantId, msg.lanDongBoId, { trangThai: "can_dang_nhap_lai" });
+    }
     return { kind: "needs_reauth", reason: "session_expired" };
   }
   if (loai === "rate_limited") return { kind: "retry_backpressure", reason: "rate_limited" };
@@ -192,10 +206,13 @@ export async function runAuditJob(deps: DeltaJobDeps, msg: AuditSyncMessage): Pr
 
     // KÉO — mở run (vòng 0) hoặc dùng run sẵn; enqueue MỘT message kéo họ đầu, các họ
     // còn lại xếp `conLai` (một họ đang kéo tại một thời điểm → không dồn dập GDT).
+    // m2 — destructure `families` TRƯỚC `moRun`: `decideAudit` "keo" luôn có ≥1 họ
+    // (hiện BẤT KHẢ ĐẠT), nhưng nếu điều đó thay đổi, thứ tự này tránh mở một run RỒI
+    // MỚI phát hiện không có gì để kéo — không để lại run mồ côi treo `running`.
     const runCoSan = msg.lanDongBoId;
-    const lanDongBoId = runCoSan ?? (await deps.moRun(msg));
     const [family, ...conLai] = quyetDinh.families;
     if (!family) return { kind: "completed" }; // decideAudit "keo" luôn có ≥1 họ (phòng hờ)
+    const lanDongBoId = runCoSan ?? (await deps.moRun(msg));
     try {
       await deps.enqueue([
         {
