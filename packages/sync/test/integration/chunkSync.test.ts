@@ -7,7 +7,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { hoaDon, lanDongBo, taiKhoanThue, tenants } from "@vat/db";
 import { GdtError, INVOICE_ENDPOINTS } from "@vat/gdt-client";
 import type { GdtTransport } from "@vat/gdt-client";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -421,5 +421,99 @@ describe("chunkSync — syncChunk + vòng đời run delta (Task 5)", () => {
       ]);
       for (const x of ds) expect(x.batDau).toBeInstanceOf(Date);
     });
+  });
+});
+
+// U35 (A4.2) — delta-sync PHẢI đấu app.lan_dong_bo_id vào syncChunk (đã sẵn opts.lanDongBoId
+// từ moDeltaRun, chỉ cần truyền qua withTenant mở rộng) + gán so_phien_ban khi chotDeltaRun
+// hoàn thành. Kiểm bằng trigger DB thật (không mock).
+describe("U35 — delta-sync (syncChunk/chotDeltaRun/ghiAuditDu) đấu dây lịch sử + phiên bản", () => {
+  let db: Db;
+  let tenantId: string;
+  let taikhoanId: string;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    tenantId = await makeTenant(db, "Cty A", "0100000001");
+    taikhoanId = await makeTaxAccount(db, tenantId, "0100000001-user");
+  });
+
+  it("syncChunk đổi ttxly qua ON CONFLICT DO UPDATE (giữa hai run delta) → sinh lịch sử gắn ĐÚNG lanDongBoId của run gây thay đổi", async () => {
+    const lan1 = await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+    const { transport: t1 } = makeTransport(() =>
+      jsonRes({ datas: [inv("1", { ttxly: 8 })], total: 1, state: null }),
+    );
+    await syncChunk({
+      db,
+      transport: t1,
+      token: "jwt-token-test",
+      tenantId,
+      taikhoanId,
+      direction: "purchase",
+      family: "normal",
+      dateFrom: BASE_PARAMS.dateFrom,
+      dateTo: BASE_PARAMS.dateTo,
+      lanDongBoId: lan1,
+      maxPages: 1,
+      size: 2,
+    });
+
+    // Run delta THỨ HAI (kỳ khác trong đời thật, nhưng cùng khoảng ngày đủ để test) —
+    // ttxly đổi 8→6, upsertBatch đi đường UPDATE trực tiếp (đã tồn tại, SELECT thấy).
+    const lan2 = await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+    const { transport: t2 } = makeTransport(() =>
+      jsonRes({ datas: [inv("1", { ttxly: 6 })], total: 1, state: null }),
+    );
+    const out2 = await syncChunk({
+      db,
+      transport: t2,
+      token: "jwt-token-test",
+      tenantId,
+      taikhoanId,
+      direction: "purchase",
+      family: "normal",
+      dateFrom: BASE_PARAMS.dateFrom,
+      dateTo: BASE_PARAMS.dateTo,
+      lanDongBoId: lan2,
+      maxPages: 1,
+      size: 2,
+    });
+    expect(out2.soHdCapNhat).toBe(1);
+
+    const rows = await db.execute(
+      sql`select truong, gia_tri_cu, gia_tri_moi, lan_dong_bo_id from lich_su_thay_doi_hoa_don`,
+    );
+    expect(rows.rows).toHaveLength(1);
+    const row = rows.rows[0] as {
+      truong: string;
+      gia_tri_cu: number;
+      gia_tri_moi: number;
+      lan_dong_bo_id: string;
+    };
+    expect(row).toMatchObject({ truong: "ttxly", gia_tri_cu: 8, gia_tri_moi: 6 });
+    expect(row.lan_dong_bo_id).toBe(lan2); // gắn đúng run GÂY RA thay đổi, không phải lan1
+  });
+
+  it("chotDeltaRun hoàn thành → gán so_phien_ban tăng dần nguyên tử; failed → so_phien_ban vẫn NULL", async () => {
+    const lan1 = await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+    await chotDeltaRun(db, tenantId, lan1, { trangThai: "completed" });
+    const lan2 = await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+    await chotDeltaRun(db, tenantId, lan2, { trangThai: "completed" });
+    const lan3 = await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+    await chotDeltaRun(db, tenantId, lan3, { trangThai: "failed", thongDiepLoi: "429" });
+
+    const runs = await db.select().from(lanDongBo).where(eq(lanDongBo.tenantId, tenantId));
+    const byId = new Map(runs.map((r) => [r.id, r]));
+    expect(byId.get(lan1)?.soPhienBan).toBe(1);
+    expect(byId.get(lan2)?.soPhienBan).toBe(2);
+    expect(byId.get(lan3)?.soPhienBan).toBeNull();
+  });
+
+  it("ghiAuditDu ('đủ', không kéo gì) CŨNG gán so_phien_ban — nhất quán quy tắc 'khi hoàn thành' (chấp nhận phình nhanh hơn NIBOT, review C1)", async () => {
+    await ghiAuditDu(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+    const runs = await db.select().from(lanDongBo).where(eq(lanDongBo.tenantId, tenantId));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.loai).toBe("audit");
+    expect(runs[0]?.soPhienBan).toBe(1);
   });
 });

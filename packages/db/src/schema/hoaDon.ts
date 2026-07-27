@@ -9,7 +9,7 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
-import { HOA_DON_NATURAL_KEY_CONSTRAINT } from "../naturalKey";
+import { HOA_DON_NATURAL_KEY_CONSTRAINT, HOA_DON_TENANT_ID_CONSTRAINT } from "../naturalKey";
 import { tenantIsolationPolicy } from "./_rls";
 import { tenants } from "./tenants";
 
@@ -63,6 +63,11 @@ export const hoaDon = pgTable(
       t.shdon,
       t.tdlap,
     ),
+    // U35 — cần cho FK composite same-tenant (tenant_id, hoa_don_id) trên
+    // `lich_su_thay_doi_hoa_don` (multi-tenant.md): Postgres đòi UNIQUE/PK đúng khớp
+    // cột đích. `id` đã unique một mình (PK) nhưng FK composite cần UNIQUE khớp CHÍNH
+    // XÁC cặp (tenant_id, id).
+    unique(HOA_DON_TENANT_ID_CONSTRAINT).on(t.tenantId, t.id),
     index("hoa_don_tenant_idx").on(t.tenantId),
     tenantIsolationPolicy("hoa_don", t.tenantId),
   ],

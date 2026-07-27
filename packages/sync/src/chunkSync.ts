@@ -12,6 +12,7 @@ import type { GdtTransport, InvoiceDirection, RetryOptions } from "@vat/gdt-clie
 import { and, eq, gte, sql } from "drizzle-orm";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { capSoPhienBan } from "./soPhienBan";
 import { classifyFailure, parseDdmmyyyy, tomTatLoi, upsertBatch } from "./sync";
 import type { DetailCandidate } from "./sync";
 
@@ -177,6 +178,10 @@ export async function ghiAuditDu<
   TSchema extends TablesRelationalConfig,
 >(db: Db<TQuery, TFull, TSchema>, tenantId: string, p: DeltaRunParams): Promise<void> {
   await withTenant(db, tenantId, async (tx) => {
+    // U35 (A3.2) — luôn `trangThai='completed'` ⇒ gán số phiên bản, cùng quy tắc "khi
+    // hoàn thành" áp cho sync()/chotDeltaRun (nhất quán, không phân biệt loại run; chấp
+    // nhận phình nhanh hơn "V:554" đơn nhất của NIBOT — review C1).
+    const soPhienBan = await capSoPhienBan(tx, tenantId);
     await tx.insert(lanDongBo).values({
       tenantId,
       taikhoanId: p.taikhoanId,
@@ -187,6 +192,7 @@ export async function ghiAuditDu<
       loai: "audit",
       batDau: new Date(),
       ketThuc: new Date(),
+      soPhienBan,
     });
   });
 }
@@ -213,11 +219,18 @@ export async function chotDeltaRun<
   kq: ChotDeltaRunKetQua,
 ): Promise<void> {
   await withTenant(db, tenantId, async (tx) => {
+    // U35 (A3.2) — chỉ gán số phiên bản khi phiên THỰC SỰ hoàn thành (không gán cho
+    // failed/can_dang_nhap_lai — hiển thị "V:N" chỉ có ý nghĩa cho phiên đã xong).
+    const soPhienBan =
+      kq.trangThai === TRANG_THAI_LAN_DONG_BO.HOAN_THANH
+        ? await capSoPhienBan(tx, tenantId)
+        : undefined;
     await tx
       .update(lanDongBo)
       .set({
         trangThai: kq.trangThai,
         ...(kq.thongDiepLoi ? { thongDiepLoi: kq.thongDiepLoi } : {}),
+        ...(soPhienBan !== undefined ? { soPhienBan } : {}),
         ketThuc: new Date(),
       })
       .where(and(eq(lanDongBo.id, lanDongBoId), eq(lanDongBo.tenantId, tenantId)));
@@ -326,35 +339,43 @@ export async function syncChunk<
   }
 
   try {
-    return await withTenant(opts.db, opts.tenantId, async (tx) => {
-      const { soHdMoi, soHdCapNhat, detailCandidates } = await upsertBatch(
-        tx,
-        opts.tenantId,
-        chunk.rows,
-      );
-      await tx
-        .update(lanDongBo)
-        .set({
-          soHdMoi: sql`${lanDongBo.soHdMoi} + ${soHdMoi}`,
-          soHdCapNhat: sql`${lanDongBo.soHdCapNhat} + ${soHdCapNhat}`,
-          checkpoint: {
-            family: opts.family,
-            state: chunk.state ?? null,
-            totalQuanSat: chunk.total,
-          } satisfies DeltaCheckpoint,
-        })
-        .where(and(eq(lanDongBo.id, opts.lanDongBoId), eq(lanDongBo.tenantId, opts.tenantId)));
-      return {
-        trangThai: "ok" as const,
-        done: !chunk.state,
-        ...(chunk.state ? { state: chunk.state } : {}),
-        totalQuanSat: chunk.total,
-        soHdMoi,
-        soHdCapNhat,
-        pages: chunk.pages,
-        detailCandidates,
-      };
-    });
+    // U35 (A4.2) — đấu app.lan_dong_bo_id (biết SẴN từ moDeltaRun, TRƯỚC khi mở
+    // transaction) để trigger hoa_don_ghi_lich_su_thay_doi bám đúng phiên delta đang
+    // kéo lô này, không cần đảo thứ tự như sync() cũ (run row đã tồn tại từ moDeltaRun).
+    return await withTenant(
+      opts.db,
+      opts.tenantId,
+      async (tx) => {
+        const { soHdMoi, soHdCapNhat, detailCandidates } = await upsertBatch(
+          tx,
+          opts.tenantId,
+          chunk.rows,
+        );
+        await tx
+          .update(lanDongBo)
+          .set({
+            soHdMoi: sql`${lanDongBo.soHdMoi} + ${soHdMoi}`,
+            soHdCapNhat: sql`${lanDongBo.soHdCapNhat} + ${soHdCapNhat}`,
+            checkpoint: {
+              family: opts.family,
+              state: chunk.state ?? null,
+              totalQuanSat: chunk.total,
+            } satisfies DeltaCheckpoint,
+          })
+          .where(and(eq(lanDongBo.id, opts.lanDongBoId), eq(lanDongBo.tenantId, opts.tenantId)));
+        return {
+          trangThai: "ok" as const,
+          done: !chunk.state,
+          ...(chunk.state ? { state: chunk.state } : {}),
+          totalQuanSat: chunk.total,
+          soHdMoi,
+          soHdCapNhat,
+          pages: chunk.pages,
+          detailCandidates,
+        };
+      },
+      opts.lanDongBoId,
+    );
   } catch (err) {
     return {
       trangThai: "failed",

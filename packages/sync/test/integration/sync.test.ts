@@ -471,3 +471,98 @@ describe("sync — upsert idempotent (integration, PGlite)", () => {
     expect(runs[0]?.trangThai).toBe("failed");
   });
 });
+
+// U35 (A4.2) — sync() ĐẢO THỨ TỰ: mở lan_dong_bo 'running' + lấy id TRƯỚC upsertBatch,
+// đặt biến phiên app.lan_dong_bo_id NGAY (id sinh sẵn qua crypto.randomUUID() trước khi
+// mở transaction — không còn "tạo phiên SAU upsert" như trước U35), rồi upsert, rồi cập
+// nhật completed + so_phien_ban. Kiểm bằng trigger DB thật (không mock) — đúng tinh thần
+// "kiểm chứng bằng test tích hợp thật" của Hiến pháp.
+describe("U35 — sync() cũ đấu app.lan_dong_bo_id vào trigger lịch sử thay đổi", () => {
+  let db: Db;
+  let tenantId: string;
+  let taikhoanId: string;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    tenantId = await makeTenant(db, "Cty A", "0100000001");
+    taikhoanId = await makeTaxAccount(db, tenantId, "0100000001-user");
+  });
+
+  it("đường UPDATE trực tiếp (upsertBatch case đã tồn tại): đổi ttxly → sinh lịch sử gắn ĐÚNG lanDongBoId của lần sync gây ra thay đổi", async () => {
+    const t1 = makeTransport(onePage([inv("1", { ttxly: 8 })]));
+    const r1 = await sync({ db, transport: t1.transport, tenantId, taikhoanId, ...BASE_OPTS });
+    expect(r1.trangThai).toBe("completed");
+
+    const t2 = makeTransport(onePage([inv("1", { ttxly: 6 })]));
+    const r2 = await sync({ db, transport: t2.transport, tenantId, taikhoanId, ...BASE_OPTS });
+    expect(r2.trangThai).toBe("completed");
+    expect(r2.soHdCapNhat).toBe(1);
+
+    const hist = await db.execute(
+      sql`select truong, gia_tri_cu, gia_tri_moi, lan_dong_bo_id from lich_su_thay_doi_hoa_don`,
+    );
+    expect(hist.rows).toHaveLength(1);
+    const row = hist.rows[0] as {
+      truong: string;
+      gia_tri_cu: number;
+      gia_tri_moi: number;
+      lan_dong_bo_id: string;
+    };
+    expect(row).toMatchObject({ truong: "ttxly", gia_tri_cu: 8, gia_tri_moi: 6 });
+    // Gắn đúng phiên GÂY RA thay đổi (r2), KHÔNG phải r1 (phiên tạo hóa đơn ban đầu).
+    expect(row.lan_dong_bo_id).toBe(r2.lanDongBoId);
+    expect(row.lan_dong_bo_id).not.toBe(r1.lanDongBoId);
+  });
+
+  it("đường race ON CONFLICT DO UPDATE (H-B.2) CŨNG sinh lịch sử — trigger AFTER UPDATE kích hoạt cho cả hai nhánh upsert", async () => {
+    const t1 = makeTransport(onePage([inv("1", { ttxly: 8, tthai: 1 })]));
+    const r1 = await sync({ db, transport: t1.transport, tenantId, taikhoanId, ...BASE_OPTS });
+    expect(r1.trangThai).toBe("completed");
+
+    // raceBlindSelect ép sync thứ hai đi qua nhánh onConflictDoUpdate (upsertBatch coi
+    // hàng là "mới" vì SELECT bị che), với giá trị ttxly KHÁC — INSERT ON CONFLICT DO
+    // UPDATE là một UPDATE Postgres thật → trigger phải kích hoạt.
+    const t2 = makeTransport(onePage([inv("1", { ttxly: 6, tthai: 2 })]));
+    const r2 = await sync({
+      db: raceBlindSelect(db),
+      transport: t2.transport,
+      tenantId,
+      taikhoanId,
+      ...BASE_OPTS,
+    });
+    expect(r2.trangThai).toBe("completed");
+
+    const rows = await db.execute(
+      sql`select truong, gia_tri_moi, lan_dong_bo_id from lich_su_thay_doi_hoa_don order by truong`,
+    );
+    expect(rows.rows).toHaveLength(2); // ttxly + tthai cùng đổi
+    for (const r of rows.rows as Array<{ lan_dong_bo_id: string }>) {
+      expect(r.lan_dong_bo_id).toBe(r2.lanDongBoId);
+    }
+  });
+
+  it("hoàn thành → gán so_phien_ban TĂNG DẦN nguyên tử; thất bại → so_phien_ban vẫn NULL", async () => {
+    const t1 = makeTransport(onePage([inv("1")]));
+    const r1 = await sync({ db, transport: t1.transport, tenantId, taikhoanId, ...BASE_OPTS });
+    const t2 = makeTransport(onePage([inv("2")]));
+    const r2 = await sync({ db, transport: t2.transport, tenantId, taikhoanId, ...BASE_OPTS });
+
+    const runById = new Map(
+      (await db.select().from(lanDongBo).where(eq(lanDongBo.tenantId, tenantId))).map((r) => [
+        r.id,
+        r,
+      ]),
+    );
+    expect(runById.get(r1.lanDongBoId)?.soPhienBan).toBe(1);
+    expect(runById.get(r2.lanDongBoId)?.soPhienBan).toBe(2);
+
+    // Phiên thất bại (401) KHÔNG gán số phiên bản (chỉ gán khi 'completed').
+    const { transport: t3 } = makeTransport(() => new Response("{}", { status: 401 }));
+    const r3 = await sync({ db, transport: t3, tenantId, taikhoanId, ...BASE_OPTS });
+    expect(r3.trangThai).toBe("failed");
+    const failedRun = (
+      await db.select().from(lanDongBo).where(eq(lanDongBo.id, r3.lanDongBoId))
+    )[0];
+    expect(failedRun?.soPhienBan).toBeNull();
+  });
+});

@@ -6,7 +6,7 @@ import type {
   ReactNode,
   SelectHTMLAttributes,
 } from "react";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { vi } from "../../lib/i18n/vi";
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
@@ -517,6 +517,70 @@ export function InfoTip({ text, label = "Giải thích" }: { text: string; label
         >
           {text}
         </span>
+      )}
+    </span>
+  );
+}
+
+// --- Popover (nút bật/tắt + panel nổi) -------------------------------------------------
+// U35 — trích ra từ khuôn ColumnMenu (features/invoices/ColumnMenu.tsx): bật/tắt bằng
+// nút trigger, đóng khi bấm ra ngoài hoặc Esc. Dùng cho mọi bề mặt "nút → panel nổi"
+// dùng chung sau này (ui.md: thêm primitive khi thiếu, không tô kiểu nội tuyến rời rạc
+// trong features/).
+export interface PopoverProps {
+  /** Nút mở/đóng — nhận {open, toggle} để tự vẽ trạng thái (vd đổi nhãn khi mở). */
+  trigger: (state: { open: boolean; toggle: () => void }) => ReactNode;
+  children: ReactNode;
+  ariaLabel: string;
+  /** Panel bung sang trái hay phải mép nút trigger (mặc định trái). */
+  align?: "left" | "right";
+}
+
+export function Popover({ trigger, children, ariaLabel, align = "left" }: PopoverProps) {
+  const [open, setOpen] = useState(false);
+  const boc = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const ngoai = (e: MouseEvent) => {
+      if (boc.current && !boc.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", ngoai);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", ngoai);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  return (
+    <span ref={boc} style={{ position: "relative", display: "inline-block" }}>
+      {trigger({ open, toggle: () => setOpen((v) => !v) })}
+      {/* `<fieldset>` mang sẵn role="group" (cùng khuôn ColumnMenu.tsx) — không cần
+          role thủ công, và Biome a11y/useSemanticElements đòi phần tử ngữ nghĩa thật. */}
+      {open && (
+        <fieldset
+          aria-label={ariaLabel}
+          style={{
+            position: "absolute",
+            top: "100%",
+            [align]: 0,
+            zIndex: 20,
+            margin: 0,
+            marginTop: "var(--sp-2)",
+            minWidth: 320,
+            maxWidth: 400,
+            background: "var(--surface-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--shadow-md)",
+          }}
+        >
+          {children}
+        </fieldset>
       )}
     </span>
   );

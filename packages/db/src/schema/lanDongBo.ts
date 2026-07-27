@@ -1,4 +1,5 @@
-import { integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { LAN_DONG_BO_TENANT_ID_CONSTRAINT } from "../naturalKey";
 import { tenantIsolationPolicy } from "./_rls";
 import { taiKhoanThue } from "./taiKhoanThue";
 import { tenants } from "./tenants";
@@ -58,6 +59,15 @@ export const lanDongBo = pgTable(
     loai: text("loai").notNull().default("sync"),
     batDau: timestamp("bat_dau", { withTimezone: true }).notNull().defaultNow(),
     ketThuc: timestamp("ket_thuc", { withTimezone: true }),
+    /** U35 (A3.2) — số phiên bản đồng bộ, gán từ `bo_dem_phien_ban` khi phiên
+     * `trangThai='completed'`. NULL cho phiên cũ trước khi tính năng bật (backfill,
+     * A7) hoặc phiên chưa hoàn thành. Hiển thị "V:{so_phien_ban}". */
+    soPhienBan: integer("so_phien_ban"),
   },
-  (t) => [tenantIsolationPolicy("lan_dong_bo", t.tenantId)],
+  (t) => [
+    // U35 — nền cho FK composite same-tenant (tenant_id, lan_dong_bo_id) trên
+    // `lich_su_thay_doi_hoa_don` (multi-tenant.md), cùng lý do HOA_DON_TENANT_ID_CONSTRAINT.
+    unique(LAN_DONG_BO_TENANT_ID_CONSTRAINT).on(t.tenantId, t.id),
+    tenantIsolationPolicy("lan_dong_bo", t.tenantId),
+  ],
 );

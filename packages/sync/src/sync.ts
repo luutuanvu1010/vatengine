@@ -19,6 +19,7 @@ import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT, PgTransaction } from "drizzle-orm/pg-core";
 import { persistInvoiceLines } from "./detailLines";
 import { mapInvoiceRowToHoaDon } from "./mapInvoice";
+import { capSoPhienBan } from "./soPhienBan";
 
 type NewHoaDon = typeof hoaDon.$inferInsert;
 
@@ -545,40 +546,60 @@ export async function sync<
 
   // Bước 2 — upsert header + persist dòng hàng + ghi lịch sử NGUYÊN TỬ: mọi lỗi giữa
   // chừng → rollback, không có số đếm mà thiếu dữ liệu, không có hóa đơn/dòng ghi dở.
+  //
+  // U35 (A4.2, sửa theo review B1) — ĐẢO THỨ TỰ so với trước: `lanDongBoId` sinh SẴN
+  // (crypto.randomUUID(), cùng mẫu `apps/api` đã dùng — vd taxAccounts.ts) TRƯỚC khi mở
+  // transaction, để đấu vào `withTenant` mở rộng NGAY TỪ ĐẦU (set_config app.lan_dong_bo_id
+  // cùng lúc app.tenant_id). Bên trong: mở `lan_dong_bo` 'running' VỚI id đã biết TRƯỚC
+  // upsertBatch — bắt buộc để trigger `hoa_don_ghi_lich_su_thay_doi` bám đúng phiên (biến
+  // phiên đã có giá trị) VÀ để composite FK same-tenant trên `lich_su_thay_doi_hoa_don`
+  // hợp lệ (hàng `lan_dong_bo` phải tồn tại TRONG transaction trước khi trigger tham
+  // chiếu nó — nếu không sẽ vỡ FK, phát hiện qua test tích hợp thật khi viết đơn vị này).
+  // Rồi upsert, rồi cập nhật completed + so_phien_ban (nguyên tử, cùng transaction).
+  const lanDongBoId = crypto.randomUUID();
   try {
-    return await withTenant(db, tenantId, async (tx) => {
-      const { soHdMoi, soHdCapNhat, changes, detailCandidates } = await upsertBatch(
-        tx,
-        tenantId,
-        rows,
-      );
-      if (linesByKey) await persistLinesForBatch(tx, tenantId, rows, linesByKey);
-      const inserted = await tx
-        .insert(lanDongBo)
-        .values({
+    return await withTenant(
+      db,
+      tenantId,
+      async (tx) => {
+        await tx.insert(lanDongBo).values({
+          id: lanDongBoId,
           tenantId,
           taikhoanId,
           chieu: direction,
           tuNgay: meta.tuNgay,
           denNgay: meta.denNgay,
+          trangThai: TRANG_THAI_LAN_DONG_BO.DANG_CHAY,
+          batDau: meta.batDau,
+        });
+        const { soHdMoi, soHdCapNhat, changes, detailCandidates } = await upsertBatch(
+          tx,
+          tenantId,
+          rows,
+        );
+        if (linesByKey) await persistLinesForBatch(tx, tenantId, rows, linesByKey);
+        const soPhienBan = await capSoPhienBan(tx, tenantId);
+        await tx
+          .update(lanDongBo)
+          .set({
+            soHdMoi,
+            soHdCapNhat,
+            trangThai: TRANG_THAI_LAN_DONG_BO.HOAN_THANH,
+            ketThuc: new Date(),
+            soPhienBan,
+          })
+          .where(and(eq(lanDongBo.id, lanDongBoId), eq(lanDongBo.tenantId, tenantId)));
+        return {
+          lanDongBoId,
           soHdMoi,
           soHdCapNhat,
           trangThai: TRANG_THAI_LAN_DONG_BO.HOAN_THANH,
-          batDau: meta.batDau,
-          ketThuc: new Date(),
-        })
-        .returning({ id: lanDongBo.id });
-      const row = inserted[0];
-      if (!row) throw new Error("insert lan_dong_bo (completed) không trả về id");
-      return {
-        lanDongBoId: row.id,
-        soHdMoi,
-        soHdCapNhat,
-        trangThai: TRANG_THAI_LAN_DONG_BO.HOAN_THANH,
-        changes,
-        detailCandidates,
-      };
-    });
+          changes,
+          detailCandidates,
+        };
+      },
+      lanDongBoId,
+    );
   } catch (err) {
     return recordFailed(db, tenantId, meta, tomTatLoi(err), classifyFailure(err));
   }

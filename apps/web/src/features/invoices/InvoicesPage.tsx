@@ -23,6 +23,7 @@ import type { InvoiceFilter } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
 import { ChonCotXuat } from "./ChonCotXuat";
 import { FilterBar } from "./FilterBar";
+import { InvoiceChangesBadge } from "./InvoiceChangesBadge";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { RangeSyncPanel } from "./RangeSyncPanel";
 import { useRangeBackfill } from "./useRangeBackfill";
@@ -139,6 +140,7 @@ export function InvoicesPage() {
               )}
               {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
               <InvoiceExportButtons filter={filter} cols={cols} />
+              <InvoiceChangesBadge />
             </span>
           }
         />

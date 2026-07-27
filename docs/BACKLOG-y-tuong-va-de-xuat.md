@@ -592,3 +592,13 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 - **Đề xuất hướng xử lý:** khi tới lượt, cân nhắc cho `invoiceDoc.ts` dùng chung `tsuatTienChuan()`/định dạng percent từ `columns.ts` (hiện là hàm module-private, cần export thêm nếu tái dùng) — hoặc chấp nhận khác biệt có chủ đích nếu `xml.zip`/`html.zip` được coi là "bản dựng thô từ dữ liệu đã đồng bộ", không phải file kê khai.
 - **Mức ưu tiên đề xuất:** Thấp (đường xlsx/csv là đường kê khai/đối chiếu chính; xml/html là phụ).
 - **Nguồn phát hiện:** Rà soát phạm vi khi thực thi U35b, phiên 27/07.
+
+### [2026-07-27] `make test` (toàn repo, 12 workspace chạy đồng thời) có flakiness — `apps/sync-worker` ngẫu nhiên vài test đỏ, KHÔNG phải regression
+
+- **Trạng thái:** Ghi nhận — đã cô lập bằng chứng, chưa sửa (ngoài phạm vi U35).
+- **Triệu chứng:** Chạy `make test` (root, `npm run test --workspaces` — 12 workspace ĐỒNG THỜI) 3 lần liên tiếp trong cùng phiên: 2/3 lần `apps/sync-worker` báo đỏ 5–7 test (tập hợp KHÁC NHAU mỗi lần: lần 1 = `{recorderMask, loadAccountToken, enumerate, detailJob×3, runJob}`, lần 2 = `{detailJob×1, enumerate, recorderMask, runJob, loadAccountToken}`) trong khi TOÀN BỘ 11 workspace còn lại (gồm `packages/db` mang thay đổi U35 thật) LUÔN xanh cả 3 lần.
+- **Bằng chứng loại trừ regression:** chạy `npx vitest run` CHỈ RIÊNG `apps/sync-worker` (cô lập, không tranh chấp tài nguyên với 11 workspace khác) → **168/168 xanh, ổn định**, thời gian mỗi test NHANH HƠN RÕ RỆT (vd `loadAccountToken` ~2–6s cô lập vs ~10–30s trong lúc chạy đồng thời cả repo). Tập hợp test đỏ đổi ngẫu nhiên giữa các lần chạy đồng thời — dấu hiệu kinh điển của tranh chấp tài nguyên (nhiều PGlite WASM instance + thao tác giải mã token chạy song song), KHÔNG phải lỗi tất định trong mã.
+- **Không đụng gì trong `apps/sync-worker`/token vault/crypto ở U35** — U35 chỉ chạm `packages/db`, `packages/sync`, `packages/query`, `apps/api`, `apps/web`.
+- **Rủi ro nếu bỏ qua:** nếu CI cũng chạy `make test` với mức song song tương tự trên máy giới hạn tài nguyên, PR KHÔNG LIÊN QUAN tới `apps/sync-worker` có thể bị đỏ giả ngẫu nhiên, gây mất niềm tin vào cổng test.
+- **Đề xuất hướng xử lý:** khi tới lượt — (a) đo xem CI có tái hiện được flakiness này không (máy CI thường ít lõi hơn máy dev, có thể RÕ hơn); (b) cân nhắc giảm mức song song của `npm run test --workspaces` (vd `--workspaces --if-present` tuần tự hoặc giới hạn `--max-old-space-size`/số worker vitest) hoặc tách `apps/sync-worker` (nhóm test PGlite+crypto nặng nhất) chạy riêng.
+- **Nguồn phát hiện:** 3 lần chạy `make test` toàn repo khi đóng đơn vị U35, phiên 27/07.

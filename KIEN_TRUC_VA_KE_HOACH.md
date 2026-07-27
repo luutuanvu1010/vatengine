@@ -236,6 +236,8 @@ Tầng ứng dụng thiết kế phi trạng thái (stateless) để nhân bản
 
 **Giai đoạn 2 — Tự động hóa & đối chiếu.** Đồng bộ nền theo lịch, module đối chiếu (phát hiện hóa đơn thiếu, sai lệch thuế, hóa đơn hủy/thay thế), cảnh báo. Đây là bước biến công cụ tra cứu thành trợ lý kế toán.
 
+*Cập nhật (U35, 2026-07-27):* phần "cảnh báo" của P8 (mục 12b) — lưu vết + báo trong ứng dụng khi hóa đơn ĐỔI TRẠNG THÁI (`ttxly`/`tthai`) — đã hiện thực (trigger DB `hoa_don_ghi_lich_su_thay_doi`, bảng `lich_su_thay_doi_hoa_don`, badge/panel "Hóa đơn vừa thay đổi" trên màn Tra cứu). Cảnh báo lệch SỐ TIỀN (một phần khác của P8) chưa làm — xếp v2, xem `docs/plans/U35-plan.md` A2#3.
+
 **Giai đoạn 3 — Tích hợp.** API/webhook và bộ chuyển đổi định dạng để đẩy dữ liệu sang các phần mềm kế toán phổ biến; xuất theo nhiều mẫu chuẩn.
 
 **Giai đoạn 4 — Đa khách hàng & thương mại hóa.** Kích hoạt đầy đủ multi-tenant, quản lý gói dịch vụ và thanh toán, cổng đăng ký, quản trị vận hành, tuân thủ pháp lý (DPA, điều khoản dịch vụ). Chuyển sang kiến trúc mục 5 đầy đủ.

@@ -2,7 +2,7 @@
 // bằng khóa test. KHÔNG mạng, KHÔNG dữ liệu thật (testing.md). Db PGlite được TIÊM
 // vào app qua `createApp({ getDb })` để integration test đi qua route + auth thật.
 import { PGlite } from "@electric-sql/pglite";
-import { hoaDon, nguoiDung, taiKhoanThue, tenants } from "@vat/db";
+import { hoaDon, lichSuThayDoiHoaDon, nguoiDung, taiKhoanThue, tenants } from "@vat/db";
 import type { GdtTransport } from "@vat/gdt-client";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -214,6 +214,34 @@ export async function seedInvoice(
     .returning({ id: hoaDon.id });
   const row = rows[0];
   if (!row) throw new Error("insert hoa_don không trả về id");
+  return row.id;
+}
+
+type LichSuThayDoiInsert = typeof lichSuThayDoiHoaDon.$inferInsert;
+
+/** U35 — seed một dòng "thay đổi trạng thái" TRỰC TIẾP (route chỉ đọc/đánh dấu, trigger
+ * DB đã kiểm ở @vat/db/@vat/sync — không cần tái tạo trigger ở đây). */
+export async function seedInvoiceChange(
+  db: Db,
+  tenantId: string,
+  hoaDonId: string,
+  over: Partial<LichSuThayDoiInsert> = {},
+): Promise<string> {
+  const base: LichSuThayDoiInsert = {
+    tenantId,
+    hoaDonId,
+    truong: "ttxly",
+    giaTriCu: 8,
+    giaTriMoi: 6,
+    lanDongBoId: null,
+    daDoc: false,
+  };
+  const rows = await db
+    .insert(lichSuThayDoiHoaDon)
+    .values({ ...base, ...over })
+    .returning({ id: lichSuThayDoiHoaDon.id });
+  const row = rows[0];
+  if (!row) throw new Error("insert lich_su_thay_doi_hoa_don không trả về id");
   return row.id;
 }
 

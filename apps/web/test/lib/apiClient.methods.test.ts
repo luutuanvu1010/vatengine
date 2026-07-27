@@ -138,4 +138,37 @@ describe("apiClient — đồng bộ theo khoảng + backfill dòng hàng", () =
     await api.getBackfill("b1");
     expect(lastCall(m)[0]).toContain("/backfill/b1");
   });
+
+  // U35 — GET /invoices/changes + POST /invoices/changes/mark-read.
+  it("getInvoiceChanges() → GET /invoices/changes, unread=true chỉ gửi khi bật, limit truyền qua query", async () => {
+    const m = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        jsonResponse(200, { rows: [], total: 0, limit: 20, offset: 0, unreadCount: 0 }),
+      );
+    await api.getInvoiceChanges({ limit: 20 });
+    let [url] = lastCall(m);
+    expect(url).toContain("/invoices/changes");
+    expect(url).toContain("limit=20");
+    expect(url).not.toContain("unread=");
+
+    await api.getInvoiceChanges({ unread: true });
+    [url] = lastCall(m);
+    expect(url).toContain("unread=true");
+  });
+
+  it("markInvoiceChangesRead() không tham số → body {} (mark-all); có ids → body {ids}", async () => {
+    const m = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => jsonResponse(200, { ok: true, markedCount: 0 }));
+    await api.markInvoiceChangesRead();
+    let [url, init] = lastCall(m);
+    expect(url).toContain("/invoices/changes/mark-read");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({});
+
+    await api.markInvoiceChangesRead(["a", "b"]);
+    [, init] = lastCall(m);
+    expect(JSON.parse(String(init.body))).toEqual({ ids: ["a", "b"] });
+  });
 });

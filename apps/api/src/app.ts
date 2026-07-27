@@ -12,6 +12,7 @@ import { backfillRoutes } from "./routes/backfill";
 import { dangKyRoutes } from "./routes/dangKy";
 import { datMatKhauRoutes } from "./routes/datMatKhau";
 import { exportsRoutes } from "./routes/exports";
+import { invoiceChangesRoutes } from "./routes/invoiceChanges";
 import { invoicesRoutes } from "./routes/invoices";
 import { meRoutes } from "./routes/me";
 import { reconcileRoutes } from "./routes/reconcile";
@@ -50,6 +51,9 @@ export function createApp(deps: AppDeps) {
   // A1 (U15): hồ sơ tenant + vai — đọc-only, sau requireTenant (cả 3 vai).
   app.route("/me", meRoutes(deps));
 
+  // U35 — đăng ký TRƯỚC /invoices để route tĩnh /invoices/changes thắng /invoices/:id
+  // của invoicesRoutes (cùng nguyên tắc "tĩnh trước tham số" đã dùng cho /invoices/summary).
+  app.route("/invoices/changes", invoiceChangesRoutes(deps));
   app.route("/invoices", invoicesRoutes(deps));
   // U7: kết xuất (POST /exports) + tải (GET /exports/:id) — đều sau requireTenant.
   app.route("/exports", exportsRoutes(deps));

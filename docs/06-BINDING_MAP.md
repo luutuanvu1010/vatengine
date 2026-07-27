@@ -65,6 +65,15 @@
 | `GET /tax-accounts` | — | `200 [{id, username, loai, uyQuyenLuc, tokenHetHan, ngayTao}]` (KHÔNG `tokenHienTai`/`secretRef`) | `ke_toan_truong`,`quan_tri` | `apps/api/src/routes/taxAccounts.ts` |
 | `GET /tax-accounts/:id` | `:id` UUID | `200 {…}` · `404` khác tenant | `ke_toan_truong`,`quan_tri` | như trên |
 
+## 3c. Endpoint bổ sung U35 (lưu vết + cảnh báo thay đổi trạng thái hóa đơn, 2026-07-27)
+
+> Đọc/đánh dấu kho nội bộ `lich_su_thay_doi_hoa_don` (ghi bởi trigger DB) — KHÔNG endpoint nào gọi GDT. Badge/panel "Hóa đơn vừa thay đổi" trên màn Tra cứu hóa đơn.
+
+| Method + path | Request | Response OK | RBAC | Nguồn |
+|---|---|---|---|---|
+| `GET /invoices/changes` | query: `unread?` + `tuNgay?/denNgay?` (YYYY-MM-DD, giờ VN) + `limit`(≤200,mđ 50) + `offset`(≥0) | `200 {rows: [{id,hoaDonId,truong,giaTriCu,giaTriMoi,lanDongBoId,phatHienLuc,daDoc,khmshdon,khhdon,shdon,nbten}], total, limit, offset, unreadCount}` — `unreadCount` LUÔN của TOÀN tenant (không phụ thuộc filter) · `400` sai định dạng | 3 vai | `apps/api/src/routes/invoiceChanges.ts` |
+| `POST /invoices/changes/mark-read` | `{ids?: string[]}` — thiếu/rỗng = đánh dấu TẤT CẢ chưa đọc; thân rỗng cũng hợp lệ (= mark-all) | `200 {ok:true, markedCount}` — id thuộc tenant khác trong `ids[]` → lặng lẽ không đổi (không 403/404, không rò tồn tại chéo tenant) · `400` JSON hỏng hoặc `ids[]` không phải UUID | 3 vai | như trên |
+
 Bề mặt UI bổ sung (ngoài S0–S5, từ brief §3 + quyết định): **Dashboard** (chỉ `GET /tax-accounts` — 1 dòng trạng thái kết nối GDT theo `tokenHetHan`, KHÔNG số tiền/đối chiếu; U23-C) · **Cài đặt chung** (`/me` — bỏ địa chỉ, hiện MST; B6). S5 dùng A2 để khôi phục stepper + panel token. S0 "Ghi nhớ đăng nhập"/"Quên mật khẩu?" dựng sẵn chỗ, chờ backend A3/A4 (tách unit sau).
 
 ## 4. Ánh xạ trường dữ liệu (API → hiển thị)

@@ -53,6 +53,32 @@ export interface InvoiceListResult {
   offset: number;
 }
 
+/** U35 — một lần thay đổi trạng thái hóa đơn (GET /invoices/changes), kèm định danh hóa
+ * đơn qua join server-side (panel không cần gọi thêm API). */
+export interface InvoiceChangeRow {
+  id: string;
+  hoaDonId: string;
+  truong: "ttxly" | "tthai";
+  giaTriCu: number | null;
+  giaTriMoi: number | null;
+  lanDongBoId: string | null;
+  phatHienLuc: string; // ISO UTC
+  daDoc: boolean;
+  khmshdon: string;
+  khhdon: string;
+  shdon: string;
+  nbten: string | null;
+}
+
+export interface InvoiceChangeListResult {
+  rows: InvoiceChangeRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  /** Số chưa đọc CỦA TENANT — nguồn cho badge, không phụ thuộc filter hiện tại. */
+  unreadCount: number;
+}
+
 /** Một dòng hàng của hóa đơn (dong_hang_hoa). Qua JSON: numeric → chuỗi. Thuế suất
  * giữ KÉP: `ltsuat` chuỗi hiển thị ("8%") + `tsuat` số dạng chuỗi. */
 export interface InvoiceLineRow {

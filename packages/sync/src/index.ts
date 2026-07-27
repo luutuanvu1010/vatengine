@@ -1,6 +1,8 @@
 // Package đồng bộ `@vat/sync` (U5) — dịch vụ upsert idempotent hóa đơn: dựng trên
 // adapter `@vat/gdt-client` (U2) + schema `@vat/db` (U4). U6 (API) và U9 (nền) gọi lại.
 export { mapInvoiceRowToHoaDon } from "./mapInvoice";
+// U35 (A3.2) — cấp số phiên bản đồng bộ nguyên tử khi một lan_dong_bo hoàn thành.
+export { capSoPhienBan } from "./soPhienBan";
 export {
   sync,
   // Nhận diện trần nền tảng Workers (subrequest) — tầng job dùng để KHÔNG tính lỗi

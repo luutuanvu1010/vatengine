@@ -18,6 +18,14 @@ export {
   type Page,
 } from "./filters";
 export { getInvoiceById, getInvoiceLines, type DongHangHoaRow } from "./getInvoice";
+export {
+  listInvoiceChanges,
+  markInvoiceChangesRead,
+  invoiceChangeFilterSchema,
+  type InvoiceChangeFilter,
+  type InvoiceChangeRow,
+  type InvoiceChangeListResult,
+} from "./invoiceChanges";
 export { lineSummarySelect, type LineSummary, type HangHoaTomTat } from "./lineSummary";
 export {
   listInvoices,
