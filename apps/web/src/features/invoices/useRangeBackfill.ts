@@ -7,9 +7,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../../lib/apiClient";
-import type { BackfillProgress, TaxAccountView } from "../../types/api";
+import type { BackfillProgress, SyncStatusView, TaxAccountView } from "../../types/api";
 
 const POLL_MS = 2500;
+// Nhịp poll tác vụ nền (GET sync-status — đọc nhẹ, không đụng GDT): nhanh khi CÓ tác vụ
+// (người dùng đang nhìn tiến độ), thưa khi rảnh (chỉ để phát hiện phiên do nơi khác mở).
+const TAC_VU_NEN_POLL_CO_MS = 10_000;
+const TAC_VU_NEN_POLL_RANH_MS = 60_000;
 const TERMINAL = new Set(["hoan_thanh", "co_loi", "can_dang_nhap_lai"]);
 
 export type RangeBackfillState =
@@ -99,6 +103,7 @@ export function useRangeBackfill(opts: {
   state: RangeBackfillState;
   lineResult: LineBackfillResult | null;
   start: () => void;
+  tacVuNen: SyncStatusView | null;
 } {
   const { tuNgay, denNgay, auto } = opts;
   const qc = useQueryClient();
@@ -146,6 +151,16 @@ export function useRangeBackfill(opts: {
     refetchOnWindowFocus: false,
   });
 
+  // Minh bạch tác vụ nền (sự cố livelock 2026-07-27): phát hiện CẢ phiên do nơi khác mở
+  // (cron, phiên đăng nhập khác) — người dùng thấy "đang chạy" thì không bấm lặp lại.
+  const tacVuNenQ = useQuery({
+    queryKey: ["sync-status", acc?.id],
+    queryFn: () => api.getSyncStatus((acc as TaxAccountView).id),
+    enabled: !!acc,
+    refetchInterval: (q) =>
+      q.state.data && q.state.data.soTacVu > 0 ? TAC_VU_NEN_POLL_CO_MS : TAC_VU_NEN_POLL_RANH_MS,
+  });
+
   const backfillId = startQ.data?.khoang.backfillId ?? null;
   const pollQ = useQuery({
     queryKey: ["backfill-poll", backfillId],
@@ -182,6 +197,7 @@ export function useRangeBackfill(opts: {
   return {
     state,
     lineResult: startQ.data ? startQ.data.dongHang : null,
+    tacVuNen: tacVuNenQ.data ?? null,
     // Mỗi lần bấm là MỘT LƯỢT MỚI (kể cả cùng khoảng, kể cả sau khi lượt trước đã "xong") —
     // tăng `lan` đổi queryKey nên useQuery chạy lại thay vì trả cache staleTime vô hạn.
     start: () => {

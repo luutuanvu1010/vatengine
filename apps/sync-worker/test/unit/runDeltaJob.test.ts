@@ -268,7 +268,7 @@ describe("runAuditJob — vòng kiểm đối chiếu total GDT ↔ count DB", (
     expect(msg.vong).toBe(1);
   });
 
-  it("(2f) vòng 0, HỤT nhưng ĐÃ CÓ chuỗi kéo đang chạy cùng scope → KHÔNG mở run trùng, KHÔNG enqueue (khử trùng lặp — sự cố livelock 2026-07-27)", async () => {
+  it("(2f) vòng 0, ĐÃ CÓ chuỗi kéo đang chạy cùng scope → ack NGAY: 0 request GDT, 0 permit, KHÔNG mở run trùng (khử trùng lặp — sự cố livelock 2026-07-27)", async () => {
     const { deps, calls } = makeDeps({
       totals: { normal: 10, sco: 5 },
       dem: { normal: 3, sco: 2 },
@@ -277,9 +277,14 @@ describe("runAuditJob — vòng kiểm đối chiếu total GDT ↔ count DB", (
     const out = await runAuditJob(deps, AUDIT);
     expect(out.kind).toBe("completed"); // ack — chuỗi sẵn có sẽ tự kéo tới đủ
     expect(calls.coChuoiKeoDangChay).toBe(1);
+    // Guard đứng TRƯỚC tiền kiểm + hỏi total: audit trùng không tiêu tài nguyên nào —
+    // không xin permit (không cạnh tranh giỏ token với chuỗi thật), không gọi GDT.
+    expect(calls.tryAcquire).toBe(0);
+    expect(calls.layTotal).toEqual([]);
+    expect(calls.demTheoNguon).toBe(0);
     expect(calls.moRun).toBe(0);
     expect(calls.enqueue).toEqual([]);
-    expect(calls.ghiDu).toBe(0); // KHÔNG được ghi dấu "đủ" — kỳ vẫn đang hụt
+    expect(calls.ghiDu).toBe(0); // KHÔNG được ghi dấu "đủ" — chưa hề đối chiếu
     expect(calls.chotRun).toEqual([]);
   });
 

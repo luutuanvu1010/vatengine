@@ -18,6 +18,7 @@ import {
   buildDetailMessages,
   buildSyncMessages,
   currentPeriodWindow,
+  danhSachChuoiDangChay,
   listInvoicesMissingLines,
   monthlyWindows,
 } from "@vat/sync";
@@ -220,6 +221,35 @@ export function taxAccountsRoutes(deps: AppDeps) {
       });
       if (!row) return c.json({ error: "not_found" }, 404);
       return c.json(row);
+    } finally {
+      await close();
+    }
+  });
+
+  // GET /tax-accounts/:id/sync-status — số tác vụ đồng bộ NỀN đang chạy (chuỗi kéo delta
+  // 'running' tươi, cùng định nghĩa với guard khử trùng ở consumer). Minh bạch phiên
+  // đồng bộ (hệ quả sự cố livelock 2026-07-27): UI hiển thị "x tác vụ nền" để người dùng
+  // không bấm "Đồng bộ" lặp lại vì tưởng hệ thống đứng im. Chỉ ĐỌC, không đụng GDT.
+  r.get("/:id/sync-status", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      // Cách ly tenant: tài khoản không thuộc tenant → 404 (không rò tồn tại chéo tenant).
+      const exists = await withTenant(db, tenantId, async (tx) => {
+        const rows = await tx
+          .select({ id: taiKhoanThue.id })
+          .from(taiKhoanThue)
+          .where(and(eq(taiKhoanThue.id, id), eq(taiKhoanThue.tenantId, tenantId)));
+        return rows.length > 0;
+      });
+      if (!exists) return c.json({ error: "not_found" }, 404);
+      const ds = await danhSachChuoiDangChay(db, tenantId, id);
+      return c.json({
+        soTacVu: ds.length,
+        thang: ds.map((x) => ({ period: x.period, chieu: x.chieu, batDau: x.batDau })),
+      });
     } finally {
       await close();
     }
@@ -574,8 +604,21 @@ export function taxAccountsRoutes(deps: AppDeps) {
           }),
         });
       });
+      // Minh bạch tác vụ nền (sự cố livelock 2026-07-27): các kỳ TRONG khoảng lọc đã có
+      // chuỗi kéo đang chạy — audit vừa enqueue cho chúng sẽ bị guard consumer ack (không
+      // tạo chuỗi trùng), UI dùng danh sách này để nói rõ "đang chạy tiếp, không tạo mới".
+      const dangChay = await danhSachChuoiDangChay(db, tenantId, id);
+      const kyTrongKhoang = new Set(outcome.months);
+      const thangDangChay = [
+        ...new Set(dangChay.filter((x) => kyTrongKhoang.has(x.period)).map((x) => x.period)),
+      ].sort();
       return c.json(
-        { backfillId, thangCanLay: outcome.months, tongSoThang: outcome.months.length },
+        {
+          backfillId,
+          thangCanLay: outcome.months,
+          tongSoThang: outcome.months.length,
+          thangDangChay,
+        },
         202,
       );
     } finally {

@@ -209,6 +209,13 @@ export interface TaxLoginResult {
   tokenHetHan: string;
 }
 
+// Minh bạch tác vụ nền (2026-07-27) — mirror apps/api GET /tax-accounts/:id/sync-status:
+// chuỗi kéo delta đang chạy nền, để UI nói rõ "có x tác vụ đang chạy, bấm thêm không tạo trùng".
+export interface SyncStatusView {
+  soTacVu: number;
+  thang: { period: string; chieu: string; batDau: string }[];
+}
+
 // U22 B7 — theo dõi tiến độ backfill header theo tháng (mirror apps/api GET /backfill/:id).
 export type BackfillMonthStatus = "cho" | "dang_chay" | "xong" | "du" | "loi";
 export interface BackfillProgress {

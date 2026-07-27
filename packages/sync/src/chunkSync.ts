@@ -117,6 +117,53 @@ export async function coDeltaRunDangChay<
   });
 }
 
+/** Một chuỗi kéo delta đang chạy — cho API/UI hiển thị "x tác vụ nền" (minh bạch
+ * phiên đồng bộ, hệ quả sự cố 2026-07-27: người dùng không thấy tác vụ nền nên bấm
+ * "Đồng bộ" lặp lại, tự gây bão). */
+export interface ChuoiDangChay {
+  /** Kỳ "YYYY-MM" (suy từ `tu_ngay` — luôn là mốc đầu tháng UTC, xem coverage.ts). */
+  period: string;
+  chieu: string;
+  batDau: Date;
+}
+
+/**
+ * Liệt kê các chuỗi kéo delta ĐANG CHẠY của một tài khoản (mọi kỳ): run `loai='sync'`
+ * `running` tươi hơn `TUOI_TOI_DA_CHUOI_KEO_MS` — cùng định nghĩa "đang chạy" với
+ * `coDeltaRunDangChay` để UI và guard không bao giờ lệch nhau. Lọc `tenant_id` tường
+ * minh (multi-tenant.md, lớp 1) — gọi trong `withTenant` để RLS chốt lớp 2.
+ */
+export async function danhSachChuoiDangChay<
+  TQuery extends PgQueryResultHKT,
+  TFull extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+>(
+  db: Db<TQuery, TFull, TSchema>,
+  tenantId: string,
+  taikhoanId: string,
+  nowMs: number = Date.now(),
+): Promise<ChuoiDangChay[]> {
+  return withTenant(db, tenantId, async (tx) => {
+    const rows = await tx
+      .select({ tuNgay: lanDongBo.tuNgay, chieu: lanDongBo.chieu, batDau: lanDongBo.batDau })
+      .from(lanDongBo)
+      .where(
+        and(
+          eq(lanDongBo.tenantId, tenantId),
+          eq(lanDongBo.taikhoanId, taikhoanId),
+          eq(lanDongBo.loai, "sync"),
+          eq(lanDongBo.trangThai, TRANG_THAI_LAN_DONG_BO.DANG_CHAY),
+          gte(lanDongBo.batDau, new Date(nowMs - TUOI_TOI_DA_CHUOI_KEO_MS)),
+        ),
+      );
+    return rows.map((r) => ({
+      period: `${r.tuNgay.getUTCFullYear()}-${String(r.tuNgay.getUTCMonth() + 1).padStart(2, "0")}`,
+      chieu: r.chieu,
+      batDau: r.batDau,
+    }));
+  });
+}
+
 /**
  * Ghi một run AUDIT (`lan_dong_bo` trạng thái `completed`, `loai='audit'`, `soHdMoi`/
  * `soHdCapNhat` mặc định 0) — Task 6 gọi khi vòng đối chiếu (`decideAudit`) kết luận

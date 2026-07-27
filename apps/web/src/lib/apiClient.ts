@@ -18,6 +18,7 @@ import type {
   MeResponse,
   Page,
   ReconcileReport,
+  SyncStatusView,
   TaxAccountView,
   TaxLoginResult,
 } from "../types/api";
@@ -303,8 +304,19 @@ export const api = {
   backfillTaxAccount(
     id: string,
     range: { tuNgay: string; denNgay: string },
-  ): Promise<{ backfillId: string | null; thangCanLay: string[]; tongSoThang: number }> {
+  ): Promise<{
+    backfillId: string | null;
+    thangCanLay: string[];
+    tongSoThang: number;
+    /** Các kỳ trong khoảng ĐÃ có chuỗi kéo chạy nền — phiên này không tạo trùng (2026-07-27). */
+    thangDangChay: string[];
+  }> {
     return request("POST", `/tax-accounts/${id}/backfill`, { body: range });
+  },
+  // Minh bạch tác vụ nền (2026-07-27): đếm chuỗi kéo đang chạy để UI hiển thị,
+  // người dùng không bấm "Đồng bộ" lặp lại vì tưởng hệ thống đứng im.
+  getSyncStatus(id: string): Promise<SyncStatusView> {
+    return request("GET", `/tax-accounts/${id}/sync-status`);
   },
   // U26 — đổ dòng hàng cho hóa đơn ĐANG THIẾU (chạy nền; conLai>0 → gọi lại).
   backfillInvoiceLines(

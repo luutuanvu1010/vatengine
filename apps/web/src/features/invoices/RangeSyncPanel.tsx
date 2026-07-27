@@ -8,6 +8,7 @@
 // gộp lọc + đồng bộ); panel này CHỈ còn tiến độ + cảnh báo. Cơ chế tự-tải-file sau đồng bộ
 // (và `loiTaiXuong`) đã bỏ hoàn toàn — người dùng bấm nút Xuất riêng khi cần.
 import { Alert } from "../../components/ui/primitives";
+import type { SyncStatusView } from "../../types/api";
 import type { LineBackfillResult, RangeBackfillState } from "./useRangeBackfill";
 import { formatPeriod } from "./useRangeBackfill";
 
@@ -49,13 +50,31 @@ export interface RangeBackfill {
   state: RangeBackfillState;
   lineResult: LineBackfillResult | null;
   start: () => void;
+  /** Tác vụ đồng bộ NỀN đang chạy (GET sync-status) — minh bạch phiên để người dùng
+   * không bấm lặp lại (sự cố livelock 2026-07-27). Tùy chọn: thiếu = không hiển thị. */
+  tacVuNen?: SyncStatusView | null;
+}
+
+/** Các kỳ đang chạy nền, mỗi kỳ một lần, định dạng MM/YYYY. */
+function thangDangChayNen(tacVuNen: SyncStatusView): string {
+  return [...new Set(tacVuNen.thang.map((t) => formatPeriod(t.period)))].join(", ");
 }
 
 export function RangeSyncPanel({ backfill }: { backfill: RangeBackfill }) {
-  const { state, lineResult } = backfill;
+  const { state, lineResult, tacVuNen } = backfill;
   const running = state.kind === "dang_lay";
   return (
     <div style={{ display: "grid", gap: "var(--sp-2)" }}>
+      {/* Tác vụ nền: chỉ hiện khi KHÔNG đang hiển thị tiến độ của chính phiên này —
+          tránh nói cùng một việc hai lần. */}
+      {!running && tacVuNen && tacVuNen.soTacVu > 0 && (
+        <Alert tone="info">
+          Đang có <strong>{tacVuNen.soTacVu}</strong> tác vụ đồng bộ chạy nền (tháng{" "}
+          <strong>{thangDangChayNen(tacVuNen)}</strong>). Bấm <strong>Đồng bộ từ Thuế</strong> lúc
+          này sẽ <strong>không tạo phiên trùng</strong> — hệ thống tự ghép vào phiên đang chạy, dữ
+          liệu sẽ đầy dần.
+        </Alert>
+      )}
       {running && (
         <ProgressBar
           soXong={state.soXong}

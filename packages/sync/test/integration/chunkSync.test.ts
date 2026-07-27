@@ -15,6 +15,7 @@ import {
   TUOI_TOI_DA_CHUOI_KEO_MS,
   chotDeltaRun,
   coDeltaRunDangChay,
+  danhSachChuoiDangChay,
   ghiAuditDu,
   moDeltaRun,
   syncChunk,
@@ -369,6 +370,56 @@ describe("chunkSync — syncChunk + vòng đời run delta (Task 5)", () => {
       const batDauCu = new Date(Date.now() - TUOI_TOI_DA_CHUOI_KEO_MS - 60_000);
       await db.update(lanDongBo).set({ batDau: batDauCu }).where(eq(lanDongBo.id, id));
       expect(await coDeltaRunDangChay(db, tenantId, { ...BASE_PARAMS, taikhoanId })).toBe(false);
+    });
+  });
+
+  describe("(7) danhSachChuoiDangChay — liệt kê tác vụ nền cho API/UI (minh bạch phiên đồng bộ)", () => {
+    it("không có run nào → []", async () => {
+      expect(await danhSachChuoiDangChay(db, tenantId, taikhoanId)).toEqual([]);
+    });
+
+    it("run 'running' tươi → liệt kê {period, chieu, batDau}; completed/audit/quá tuổi/khác tài khoản KHÔNG lọt vào", async () => {
+      // Tươi, purchase 04/2026 — phải có mặt.
+      await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+      // Tươi, sold 05/2026 — phải có mặt (khác kỳ + chiều).
+      await moDeltaRun(db, tenantId, {
+        ...BASE_PARAMS,
+        taikhoanId,
+        direction: "sold" as const,
+        dateFrom: "01/05/2026",
+        dateTo: "31/05/2026",
+      });
+      // Completed — loại.
+      const daXong = await moDeltaRun(db, tenantId, {
+        ...BASE_PARAMS,
+        taikhoanId,
+        dateFrom: "01/03/2026",
+        dateTo: "31/03/2026",
+      });
+      await chotDeltaRun(db, tenantId, daXong, { trangThai: "completed" });
+      // Audit "đủ" — loại (không phải chuỗi kéo).
+      await ghiAuditDu(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+      // Quá tuổi — loại.
+      const cu = await moDeltaRun(db, tenantId, {
+        ...BASE_PARAMS,
+        taikhoanId,
+        dateFrom: "01/02/2026",
+        dateTo: "28/02/2026",
+      });
+      await db
+        .update(lanDongBo)
+        .set({ batDau: new Date(Date.now() - TUOI_TOI_DA_CHUOI_KEO_MS - 60_000) })
+        .where(eq(lanDongBo.id, cu));
+      // Khác tài khoản — loại.
+      const taikhoanKhac = await makeTaxAccount(db, tenantId, "0100000001-user3");
+      await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId: taikhoanKhac });
+
+      const ds = await danhSachChuoiDangChay(db, tenantId, taikhoanId);
+      expect(ds.map((x) => `${x.period}|${x.chieu}`).sort()).toEqual([
+        "2026-04|purchase",
+        "2026-05|sold",
+      ]);
+      for (const x of ds) expect(x.batDau).toBeInstanceOf(Date);
     });
   });
 });

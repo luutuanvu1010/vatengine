@@ -158,6 +158,20 @@ async function xuLyLoiAudit(
 }
 
 export async function runAuditJob(deps: DeltaJobDeps, msg: AuditSyncMessage): Promise<JobOutcome> {
+  // KHỬ TRÙNG LẶP CHUỖI — kiểm ĐẦU TIÊN, trước cả tiền kiểm permit (sự cố livelock
+  // 2026-07-27: mỗi lần bấm "Đồng bộ" mở thêm một chuỗi cho CÙNG (tài khoản × kỳ ×
+  // chiều), hàng chục chuỗi giành permit 2 req/s → không chuỗi nào xong). Đứng trước
+  // tienKiem để audit trùng tiêu 0 permit + 0 request GDT — không cạnh tranh tài
+  // nguyên với chính chuỗi đang kéo. Vòng ≥1 (có lanDongBoId) không qua guard: run
+  // 'running' tìm thấy chính là run của mình. Ack — chuỗi sẵn có tự kéo tới đủ
+  // (idempotent); nếu chuỗi đó chết không kịp chốt, trần tuổi 2h tự mở lại đường.
+  if (!msg.lanDongBoId && (await deps.coChuoiKeoDangChay(msg))) {
+    console.log(
+      `[delta] bo_qua_chuoi_trung: tenant=${msg.tenantId} ky=${msg.period} chieu=${msg.direction} — da co chuoi keo dang chay, khong mo chuoi moi`,
+    );
+    return { kind: "completed" };
+  }
+
   const kiem = await tienKiem(deps, msg);
   if (!kiem.ok) return kiem.outcome;
 
@@ -221,17 +235,6 @@ export async function runAuditJob(deps: DeltaJobDeps, msg: AuditSyncMessage): Pr
     const runCoSan = msg.lanDongBoId;
     const [family, ...conLai] = quyetDinh.families;
     if (!family) return { kind: "completed" }; // decideAudit "keo" luôn có ≥1 họ (phòng hờ)
-    // KHỬ TRÙNG LẶP CHUỖI (vòng 0, trước khi mở run): đã có chuỗi kéo đang chạy cho cùng
-    // (tài khoản × kỳ × chiều) — từ lần bấm "Đồng bộ" trước / cron — thì KHÔNG mở chuỗi
-    // thứ hai. Chuỗi sẵn có tự kéo tới đủ (idempotent); mở trùng chỉ nhân số request GDT
-    // và gây livelock giành permit (sự cố 2026-07-27). Ack — không phải lỗi.
-    // Vòng ≥1 (runCoSan) không qua guard: run 'running' tìm thấy chính là run của mình.
-    if (!runCoSan && (await deps.coChuoiKeoDangChay(msg))) {
-      console.log(
-        `[delta] bo_qua_chuoi_trung: tenant=${msg.tenantId} ky=${msg.period} chieu=${msg.direction} — da co chuoi keo dang chay, khong mo chuoi moi`,
-      );
-      return { kind: "completed" };
-    }
     const lanDongBoId = runCoSan ?? (await deps.moRun(msg));
     try {
       await deps.enqueue([
