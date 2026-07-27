@@ -13,6 +13,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.9",
+    date: "2026-07-27",
+    title: "Cảnh báo khi hóa đơn đổi trạng thái + sửa hiển thị thuế suất",
+    changes: [
+      'Màn Tra cứu hóa đơn có thêm nút "Hóa đơn vừa thay đổi" — báo ngay khi có hóa đơn đổi trạng thái (ví dụ bị hủy, thay thế, điều chỉnh), kèm số lượng chưa xem; bấm vào xem chi tiết từng hóa đơn (trạng thái cũ → mới, thời điểm phát hiện) và đánh dấu đã đọc.',
+      'Cột "Thuế suất" trong file xuất Excel/CSV nay hiển thị đúng dạng phần trăm (ví dụ 8%) thay vì số thập phân (0.08); hóa đơn không chịu thuế/không kê khai khấu trừ hiện đúng là ô trống, không còn nhầm thành 0%.',
+      'Cột "Tiền thuế" và "Tổng tiền (sau thuế)" trong file xuất nay tự tính đủ số ngay cả khi dữ liệu gốc từ Tổng cục Thuế bị thiếu tiền thuế.',
+    ],
+    kind: "feature",
+  },
+  {
     version: "v1.8",
     date: "2026-07-26",
     title: "Đồng bộ thông minh — tự tìm và bù hóa đơn còn thiếu",
