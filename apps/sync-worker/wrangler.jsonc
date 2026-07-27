@@ -103,8 +103,14 @@
   // U12 — Ngưỡng rate-limit client (tinh chỉnh theo môi trường; bỏ trống → mặc định
   // trong rateLimiter.ts). Đây là cấu hình KHÔNG nhạy cảm nên đặt ở vars, không secret.
   "vars": {
-    "LIMITER_CAPACITY": "10",
-    "LIMITER_REFILL_PER_SEC": "2",
+    // ⚠️ CHẾ ĐỘ NHỎ GIỌT TẠM THỜI (2026-07-27, sự cố GDT kìm nguồn Cloudflare sau bão
+    // request — docs/BACKLOG mục [2026-07-27]): hạ toàn bộ nhịp xuống mức lách qua ngân
+    // sách ít ỏi GDT còn cấp (quan sát 12:41: request lẻ tẻ lọt, chuỗi dài bị cắt).
+    // GIÁ TRỊ GỐC cần KHÔI PHỤC khi GDT hết kìm (đo bằng chuỗi kéo chạy trơn trở lại):
+    //   LIMITER_CAPACITY 10 · LIMITER_REFILL_PER_SEC 2 · FANOUT_BACKPRESSURE_DELAY_SEC 300
+    //   · SYNC_PAGE_MIN_INTERVAL_MS 500 · DELTA_CHUNK_PAGES 40
+    "LIMITER_CAPACITY": "2",
+    "LIMITER_REFILL_PER_SEC": "0.2",
     "LIMITER_FAILURE_THRESHOLD": "5",
     "LIMITER_COOLDOWN_MS": "60000",
     // H-B.4 — fan-out: giãn khởi động tenant trên ~5' (jitter) + trần 10 lần reenqueue
@@ -117,19 +123,19 @@
     // (429 thường rơi ở nhánh sco cuối chuỗi) → tự nuôi cửa sổ phạt. 300s × trần 10 =
     // ~50' kiên nhẫn trước khi rơi về đường max_retries. Đánh đổi: khi GDT hồi sớm,
     // job chờ tối đa 5' mới thử lại — chấp nhận (tôn trọng máy chủ thuế > tốc độ).
-    "FANOUT_BACKPRESSURE_DELAY_SEC": "300",
+    "FANOUT_BACKPRESSURE_DELAY_SEC": "600",
     "FANOUT_MAX_BACKPRESSURE": "10",
     // U25 AC3 (đóng drift 2026-07-18): giãn nhịp giữa hai request GDT trong một job
     // header + backoff 429 khi thiếu Retry-After. Mặc định trong syncRetryConfig.ts;
     // "0" = tắt tường minh. CHƯA KIỂM CHỨNG ngưỡng thật của GDT — chỉnh khi có số đo.
-    "SYNC_PAGE_MIN_INTERVAL_MS": "500",
+    "SYNC_PAGE_MIN_INTERVAL_MS": "15000",
     "SYNC_RETRY_BACKOFF_MS": "3000",
     // Task 6 (delta-sync) — số TRANG tối đa mỗi lô `syncChunk`: một lần gọi Worker chỉ
     // kéo ≤ chừng này trang rồi tự enqueue message nối tiếp, thay vì phân trang cả kỳ
     // trong MỘT invocation (gốc rễ "Too many subrequests by single Worker invocation",
     // sự cố 2026-07-18). Bỏ trống → mặc định deps.ts (40). Hạ xuống nếu log
     // `[delta] local_limit` tái diễn.
-    "DELTA_CHUNK_PAGES": "40"
+    "DELTA_CHUNK_PAGES": "2"
   }
 
   // JWT_SECRET / bí mật egress nạp qua `wrangler secret put` — security.md.
