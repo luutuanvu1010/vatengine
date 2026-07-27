@@ -575,3 +575,11 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 - **Nợ còn lại (finding Major, review dod-auditor 2026-07-27):** guard là SELECT best-effort — hai audit vòng 0 cùng scope chạy đồng thời (queue `max_concurrency: 3`) vẫn có thể cùng mở run (TOCTOU). Hệ quả đã bị chặn trên ~3 chuỗi (đủ thoát livelock), nhưng chặn cứng cần **partial unique index** trên `lan_dong_bo (tenant_id, taikhoan_id, chieu, tu_ngay) WHERE trang_thai='running' AND loai='sync'` + xử lý conflict ở `moDeltaRun` (insert đụng index → coi như "đã có chuỗi", không mở). Là MIGRATION nên tách đơn vị riêng (plan → TDD → review).
 - **Kèm theo dõi (finding Minor):** trần tuổi `TUOI_TOI_DA_CHUOI_KEO_MS` = 2h CHƯA KIỂM CHỨNG dưới tải lớn — nếu quan sát chuỗi lành chạy >2h bị mở trùng, nâng trần.
 - **Nguồn phát hiện:** Review chéo dod-auditor sau fix livelock 2026-07-27.
+
+### [2026-07-27] Chuyển cron nền sang đường delta-audit (tiết kiệm ~98% request ngày thường)
+
+- **Trạng thái:** Đề xuất — chưa triển khai.
+- **Bối cảnh:** Cron nền (nay 20:00 UTC = 03:00 VN, QĐ chủ dự án 27/07) vẫn đi đường LEGACY: kéo đủ cả tháng hiện tại mỗi ngày (~200 request/ngày với tenant ~10k HĐ/tháng). Đường delta (backfill tay) chỉ tốn 4 request/tháng khi đã đủ. Sự cố 27/07 chứng minh tiết kiệm request là phòng thủ trực tiếp trước tường lửa GDT.
+- **Việc:** scheduled() enqueue `buildAuditMessages` (kind:"audit") cho tháng hiện tại thay vì message legacy; giữ legacy cho `force`. Cần cân nhắc: run legacy hằng ngày hiện cũng là cơ chế cập nhật `ttxly/tthai` đổi trạng thái — audit "đủ" sẽ KHÔNG refresh trạng thái → có thể cần vòng refresh trạng thái riêng (tần suất thưa hơn).
+- **Kết quả ncnhat 27/07 (bằng chứng chốt):** GDT nạp HĐ MTT ngày D thành batch ~19:00 VN tối D + rải tới ~12:30 trưa D+1 (303/303 hoá đơn ngày 26 có ncnhat sau 16:24 hôm 26 — audit "đủ" lúc 16:24 là ĐÚNG, giả thuyết A thắng, không có bug đếm audit).
+- **Nguồn phát hiện:** Câu hỏi chủ dự án về số request mỗi lần đồng bộ, phiên 27/07.
