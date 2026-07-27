@@ -10,7 +10,7 @@
   `packages/domain` (giữ ràng buộc `tsuat.kieu==="num"` đã khóa bằng test có sẵn), không đổi
   `apps/web`. Backlog: `invoiceDoc.ts` (renderer XML/HTML riêng, U22) chưa hưởng sửa này — ghi
   ở `docs/BACKLOG-y-tuong-va-de-xuat.md`.
-- **U35** — DONE — commit `<xem git log>` — Lưu vết + cảnh báo thay đổi trạng thái hóa đơn.
+- **U35** — DONE — commit `7751006` — Lưu vết + cảnh báo thay đổi trạng thái hóa đơn.
   DB: bảng `lich_su_thay_doi_hoa_don` (nhật ký ttxly/tthai, RLS+FORCE, composite FK same-tenant
   qua `hoa_don`, unique chống trùng redelivery) + `bo_dem_phien_ban` (đếm nguyên tử); cột
   `lan_dong_bo.so_phien_ban`; trigger DB `hoa_don_ghi_lich_su_thay_doi` (AFTER UPDATE, phủ cả
