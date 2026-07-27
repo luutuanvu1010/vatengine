@@ -123,7 +123,9 @@
     // (429 thường rơi ở nhánh sco cuối chuỗi) → tự nuôi cửa sổ phạt. 300s × trần 10 =
     // ~50' kiên nhẫn trước khi rơi về đường max_retries. Đánh đổi: khi GDT hồi sớm,
     // job chờ tối đa 5' mới thử lại — chấp nhận (tôn trọng máy chủ thuế > tốc độ).
-    "FANOUT_BACKPRESSURE_DELAY_SEC": "600",
+    // 27/07 chiều: hạ 600 → 180 theo yêu cầu chủ dự án (GDT đã trả lời trở lại, chấp
+    // nhận gõ dày hơn để rút ngắn chờ); giá trị gốc ngoài sự cố vẫn là 300.
+    "FANOUT_BACKPRESSURE_DELAY_SEC": "180",
     "FANOUT_MAX_BACKPRESSURE": "10",
     // U25 AC3 (đóng drift 2026-07-18): giãn nhịp giữa hai request GDT trong một job
     // header + backoff 429 khi thiếu Retry-After. Mặc định trong syncRetryConfig.ts;
