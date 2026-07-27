@@ -6,7 +6,7 @@ import { unzipSync } from "fflate";
 // chọn hiện thêm cột ẩn. STT = số chạy TOÀN FILE 1..N. "Tổng tiền (sau thuế)" = thtien+tsuatTien.
 // Hóa đơn chưa có dòng hàng vẫn xuất MỘT dòng. Tiền/số giữ CHUỖI (không ép float). Offline.
 import { describe, expect, it } from "vitest";
-import { congThapPhan, flatRenderColumns } from "../../src/columns";
+import { congThapPhan, flatRenderColumns, tinhTienThue } from "../../src/columns";
 import { csvStreamWithLines } from "../../src/csv";
 import type { ExportRow } from "../../src/rows";
 import { toXlsxWithLinesFromBatches } from "../../src/xlsx";
@@ -177,15 +177,20 @@ describe("STT chạy TOÀN FILE 1..N", () => {
 });
 
 describe("Tổng tiền (sau thuế) — mức DÒNG", () => {
-  it("= Thành tiền + Tiền thuế; thiếu một vế → TRỐNG (không bịa số)", async () => {
+  // U35b — GOLDEN THAY ĐỔI CÓ CHỦ ĐÍCH: dòng 2 trước đây "GDT thiếu Tiền thuế → TRỐNG";
+  // giờ Tiền thuế GDT thiếu nhưng TÍNH ĐƯỢC (8% × 1000 = 80) nên Tổng sau thuế tự đúng
+  // luôn, vì đọc CÙNG giá trị đã chuẩn hóa với cột "Tiền thuế" (B2 quyết định #4, sửa S3 —
+  // chuẩn hóa MỘT NƠI). Dòng 4 (không chịu thuế) vẫn TRỐNG như cũ.
+  it("= Thành tiền + Tiền thuế (đã chuẩn hóa); thiếu Thành tiền hoặc không chịu thuế → TRỐNG", async () => {
     const detail = readXlsx(
       await xlsxAll(
         [row({ id: "a", shdon: "1" })],
         {
           a: [
-            line({ stt: 1, thtien: "2000", tsuatTien: "160" }),
-            line({ stt: 2, thtien: "1000", tsuatTien: null }),
-            line({ stt: 3, thtien: null, tsuatTien: "50" }),
+            line({ stt: 1, thtien: "2000", tsuatTien: "160" }), // GDT có sẵn cả hai
+            line({ stt: 2, thtien: "1000", tsuatTien: null }), // GDT thiếu Tiền thuế, tự tính 8%
+            line({ stt: 3, thtien: null, tsuatTien: "50" }), // thiếu Thành tiền → luôn trống
+            line({ stt: 4, thtien: "1000", tsuatTien: null, tsuat: "0", ltsuat: "KCT" }), // không chịu thuế
           ],
         },
         1,
@@ -193,7 +198,7 @@ describe("Tổng tiền (sau thuế) — mức DÒNG", () => {
       1,
     );
     const tong = detail.rows.slice(1).map((r) => r[iCol("Tổng tiền (sau thuế)")]?.value ?? "");
-    expect(tong).toEqual(["2160", "", ""]);
+    expect(tong).toEqual(["2160", "1080", "", ""]);
   });
 
   it("cộng CHÍNH XÁC số > 2^53 + thập phân (không ép float)", () => {
@@ -204,7 +209,11 @@ describe("Tổng tiền (sau thuế) — mức DÒNG", () => {
 });
 
 describe("Mã thuế suất + tiền thuế dòng (đầy đủ)", () => {
-  it("KCT / KKKNT / 0% — cùng tsuat=0 — vẫn PHÂN BIỆT nhờ mã thuế suất", async () => {
+  // U35b — GOLDEN THAY ĐỔI CÓ CHỦ ĐÍCH: trước đây cột SỐ "Thuế suất" in "0" y hệt cho cả
+  // ba (KCT/KKKNT/0% thật) — cùng lỗi gộp nhầm mà "Mã thuế suất" (U29) từng sửa cho cột
+  // chữ, nhưng cột số vẫn còn hở. Giờ KCT/KKKNT (mã chữ, KHÔNG phải thuế suất) → TRỐNG;
+  // chỉ "0%" thật mới còn số 0 kèm numFmt phần trăm (B2/S5).
+  it("KCT / KKKNT → Thuế suất TRỐNG; 0% thật → còn số 0 kèm numFmt phần trăm", async () => {
     const detail = readXlsx(
       await xlsxAll(
         [row({ id: "a", shdon: "1" })],
@@ -220,23 +229,37 @@ describe("Mã thuế suất + tiền thuế dòng (đầy đủ)", () => {
       1,
     );
     const ma = detail.rows.slice(1).map((r) => r[iCol("Mã thuế suất")]?.value);
-    const so = detail.rows.slice(1).map((r) => r[iCol("Thuế suất")]?.value);
-    expect(so).toEqual(["0", "0", "0"]);
+    const soCells = detail.rows.slice(1).map((r) => r[iCol("Thuế suất")]);
     expect(ma).toEqual(["KCT", "KKKNT", "0%"]);
     expect(new Set(ma).size).toBe(3);
+    expect(soCells.map((c) => c?.value ?? "")).toEqual(["", "", "0"]);
+    expect(soCells[0]?.isNumber).toBe(false); // KCT → ô trống, không phải số 0
+    expect(soCells[1]?.isNumber).toBe(false); // KKKNT → ô trống
+    expect(soCells[2]?.isNumber).toBe(true); // 0% thật → vẫn còn ô số
+    expect(soCells[2]?.numFmt).toBe("0%");
   });
 
-  it("tiền thuế dòng: có giá trị → đúng; null → TRỐNG", async () => {
+  // U35b — GOLDEN THAY ĐỔI CÓ CHỦ ĐÍCH: trước đây GDT thiếu `tthue` (tsuatTien null) luôn
+  // ra TRỐNG. Giờ TỰ TÍNH khi có thtien + thuế suất số thật (quyết định #4); chỉ còn TRỐNG
+  // khi dòng không chịu thuế (mã KCT/KKKNT) hoặc thiếu thtien.
+  it("tiền thuế dòng: GDT có → giữ; GDT thiếu nhưng tính được → tự tính; không chịu thuế → TRỐNG", async () => {
     const detail = readXlsx(
       await xlsxAll(
         [row({ id: "a", shdon: "1" })],
-        { a: [line({ stt: 1, tsuatTien: "160" }), line({ stt: 2, tsuatTien: null })] },
+        {
+          a: [
+            line({ stt: 1, tsuatTien: "160" }), // GDT có tthue → giữ nguyên, không tính lại
+            line({ stt: 2, tsuatTien: null, thtien: "5000", tsuat: "0.08", ltsuat: "8%" }),
+            line({ stt: 3, tsuatTien: null, thtien: "1000", tsuat: "0", ltsuat: "KCT" }),
+          ],
+        },
         1,
       ),
       1,
     );
     expect(detail.rows[1]?.[iCol("Tiền thuế")]?.value).toBe("160");
-    expect(detail.rows[2]?.[iCol("Tiền thuế")]?.value ?? "").toBe("");
+    expect(detail.rows[2]?.[iCol("Tiền thuế")]?.value).toBe("400"); // round(5000 × 0.08)
+    expect(detail.rows[3]?.[iCol("Tiền thuế")]?.value ?? "").toBe("");
   });
 
   it("csv cũng mang mã thuế suất + tiền thuế dòng", async () => {
@@ -249,6 +272,79 @@ describe("Mã thuế suất + tiền thuế dòng (đầy đủ)", () => {
     expect(grid[0]?.[iCol("Mã thuế suất")]).toBe("Mã thuế suất");
     expect(grid[1]?.[iCol("Mã thuế suất")]).toBe("KKKNT");
     expect(grid[1]?.[iCol("Tiền thuế")]).toBe("0");
+  });
+});
+
+describe("Thuế suất — hiện phần trăm (không phải số thô, B2#1)", () => {
+  it("xlsx: giá trị ô GIỮ 0.08, numFmt CUSTOM '0%' (không phải built-in 10=0.00%)", async () => {
+    const detail = readXlsx(
+      await xlsxAll(
+        [row({ id: "a", shdon: "1" })],
+        { a: [line({ tsuat: "0.08", ltsuat: "8%" })] },
+        1,
+      ),
+      1,
+    );
+    const cell = detail.rows[1]?.[iCol("Thuế suất")];
+    expect(cell?.isNumber).toBe(true);
+    expect(cell?.value).toBe("0.08");
+    expect(cell?.numFmt).toBe("0%");
+  });
+
+  it("csv: '8%' / '10%' / '8.5%' (nhân 100 chính xác, không parseFloat)", async () => {
+    const text = await drain(
+      csvAll(
+        [row({ id: "a", shdon: "1" })],
+        {
+          a: [
+            line({ stt: 1, tsuat: "0.08", ltsuat: "8%" }),
+            line({ stt: 2, tsuat: "0.1", ltsuat: "10%" }),
+            line({ stt: 3, tsuat: "0.085", ltsuat: "8.5%" }),
+          ],
+        },
+        10,
+      ),
+    );
+    const grid = parseCsv(text);
+    const dataRows = grid.slice(1).filter((r) => r.length === ALL_HEADERS.length);
+    expect(dataRows.map((r) => r[iCol("Thuế suất")])).toEqual(["8%", "10%", "8.5%"]);
+  });
+
+  it("csv: KCT / KKKNT / tsuat null → chuỗi RỖNG, KHÔNG '0%'", async () => {
+    const text = await drain(
+      csvAll(
+        [row({ id: "a", shdon: "1" })],
+        {
+          a: [
+            line({ stt: 1, ltsuat: "KCT", tsuat: "0" }),
+            line({ stt: 2, ltsuat: "KKKNT", tsuat: "0" }),
+            line({ stt: 3, ltsuat: null, tsuat: null }),
+          ],
+        },
+        10,
+      ),
+    );
+    const grid = parseCsv(text);
+    const dataRows = grid.slice(1).filter((r) => r.length === ALL_HEADERS.length);
+    expect(dataRows.map((r) => r[iCol("Thuế suất")])).toEqual(["", "", ""]);
+  });
+});
+
+describe("tinhTienThue — tự tính Tiền thuế khi GDT thiếu (BigInt, không parseFloat, B2#2)", () => {
+  it("8% × 2000 = 160 (khớp số GDT thường trả, kiểm biên độ tin cậy)", () => {
+    expect(tinhTienThue("2000", "0.08")).toBe("160");
+  });
+
+  it("làm tròn NỬA LÊN về đồng nguyên (8.5 → 9, không phải 8)", () => {
+    expect(tinhTienThue("100", "0.085")).toBe("9");
+  });
+
+  it("số tiền > 2^53 vẫn CHÍNH XÁC (không ép qua Number/parseFloat)", () => {
+    expect(tinhTienThue("9007199254740993", "0.08")).toBe("720575940379279");
+  });
+
+  it("thành tiền ÂM (hóa đơn điều chỉnh giảm) giữ đúng dấu", () => {
+    expect(tinhTienThue("-100", "0.085")).toBe("-9");
   });
 });
 
@@ -318,6 +414,16 @@ describe("xlsx — định dạng 'dễ nhìn'", () => {
     const { styles } = await partsXlsx();
     expect(styles).toContain('patternType="solid"');
     expect(styles).toContain('formatCode="#,##0"');
+  });
+
+  // B2#1 (sửa theo review S4): PHẢI khai numFmt phần trăm CUSTOM (id 165) — built-in 10 là
+  // "0.00%" (2 số thập phân), sai với yêu cầu "8%" không có phần thập phân dư.
+  it("numFmt phần trăm CUSTOM 165='0%' (không dùng built-in 10) + bump numFmts/cellXfs count", async () => {
+    const { styles } = await partsXlsx();
+    expect(styles).toContain('<numFmt numFmtId="165" formatCode="0%"/>');
+    expect(styles).not.toContain('numFmtId="10"');
+    expect(styles).toMatch(/<numFmts count="2">/);
+    expect(styles).toMatch(/<cellXfs count="5">/);
   });
 });
 

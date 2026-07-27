@@ -66,7 +66,13 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = deriveExportColumns(field
 
 // Ô đã chuẩn hóa. `num` giữ giá trị dạng CHUỖI để KHÔNG bao giờ ép qua float (mục 7.1):
 // tiền `numeric` Postgres có thể vượt 2^53 → csv giữ nguyên, xlsx nhét thẳng vào <v>.
-export type ExportCell = { t: "str"; v: string } | { t: "num"; v: string } | { t: "blank" };
+// `percent` (U35b): giá trị GIỮ NGUYÊN dạng phân số (0.08) — xlsx áp numFmt "0%" lên chính
+// giá trị đó (Excel tự nhân 100 khi hiển thị); csv format chuỗi "8%" (encoder tự nhân).
+export type ExportCell =
+  | { t: "str"; v: string }
+  | { t: "num"; v: string }
+  | { t: "percent"; v: string }
+  | { t: "blank" };
 
 const BLANK: ExportCell = { t: "blank" };
 
@@ -238,11 +244,73 @@ export function congThapPhan(a: string, b: string): string {
   return dinhDangThapPhan(na + nb, scale);
 }
 
-/** "Tổng tiền (sau thuế)" mức DÒNG = thtien + tsuatTien. Thiếu một vế → trống (không bịa số). */
+// Nhân hai chuỗi số thập phân CHÍNH XÁC rồi làm tròn về SỐ NGUYÊN, NỬA LÊN theo trị tuyệt
+// đối (BigInt, KHÔNG parseFloat — tiền `numeric` có thể vượt 2^53). Dùng để tự tính "Tiền
+// thuế" khi GDT thiếu `tthue` (B2 quyết định #4: dẫn xuất hợp lệ, ưu tiên số GDT khi có).
+export function tinhTienThue(thtien: string, tsuat: string): string {
+  const a = tachThapPhan(thtien);
+  const b = tachThapPhan(tsuat);
+  const neg = a.val < 0n !== b.val < 0n;
+  const numer = (a.val < 0n ? -a.val : a.val) * (b.val < 0n ? -b.val : b.val);
+  const denom = 10n ** BigInt(a.scale + b.scale);
+  const rounded = (numer + denom / 2n) / denom;
+  return neg && rounded !== 0n ? `-${rounded}` : rounded.toString();
+}
+
+/** Chuỗi thập phân × 100 CHÍNH XÁC (dịch dấu thập phân bằng BigInt, KHÔNG parseFloat) —
+ * "0.08"→"8", "0.1"→"10", "0.085"→"8.5", "0"→"0". Dùng để hiện "Thuế suất" dạng % ở CSV
+ * (xlsx dùng numFmt "0%" áp thẳng lên giá trị gốc, không cần đổi chuỗi — B2#1). */
+export function nhanTram(s: string): string {
+  const { val, scale } = tachThapPhan(s);
+  const newScale = scale - 2;
+  if (newScale >= 0) return dinhDangThapPhan(val, newScale);
+  return dinhDangThapPhan(val * 10n ** BigInt(-newScale), 0);
+}
+
+// `ltsuat` khớp thuế suất SỐ thật dạng "8%"/"10%"/"0%" — phân biệt với mã chữ (KCT/KKKNT/…).
+const PHAN_TRAM_RE = /^\d+(\.\d+)?%$/;
+
+/** true nếu `tsuat` là thuế suất SỐ thật (không phải mã miễn/không kê khai). Bằng chứng
+ * production (U29 §8b/E3): KCT và KKKNT đều có `tsuat=0`, y hệt 0% thật — `ltsuat` là thứ
+ * duy nhất tách được ba nghiệp vụ (B2/S5). Thiếu `ltsuat` (không có bằng chứng xác nhận) →
+ * coi là KHÔNG phải thuế suất số, tránh bịa phần trăm cho dữ liệu chưa chắc (Hiến pháp
+ * §Nguyên tắc bằng chứng — mọi bản ghi `tsuat` từ trước tới nay đều đi kèm `ltsuat`, xem
+ * migration `0000_equal_wendigo.sql`, nên nhánh này chỉ là biên phòng thủ, chưa gặp thật). */
+function laThueSuatSo(
+  ltsuat: string | null | undefined,
+  tsuat: string | null | undefined,
+): boolean {
+  if (tsuat === null || tsuat === undefined) return false;
+  if (ltsuat === null || ltsuat === undefined) return false;
+  return PHAN_TRAM_RE.test(ltsuat);
+}
+
+/** Ô "Thuế suất" — số GIỮ NGUYÊN (0.08) kèm cờ percent; mã chữ (KCT/KKKNT/…) hoặc `tsuat`
+ * null → trống, KHÔNG in "0%" giả (B2#1/S5). */
+const percentCell = (r: Pick<LineDetailRow, "ltsuat" | "tsuat">): ExportCell =>
+  laThueSuatSo(r.ltsuat, r.tsuat) ? { t: "percent", v: String(r.tsuat) } : BLANK;
+
+/** Chuẩn hóa "Tiền thuế" dòng — MỘT NƠI DUY NHẤT (sửa theo review S3), để cột "Tiền thuế"
+ * LẪN "Tổng tiền (sau thuế)" cùng đọc một giá trị (tránh hai công thức lệch nhau). GDT có
+ * `tthue` → giữ (chuẩn); thiếu + có `thtien` & thuế suất SỐ thật → tính
+ * `round(thtien × tsuat)` đồng nguyên (B2 quyết định #4). Không chịu thuế/thiếu dữ liệu →
+ * trống (không bịa số). */
+function tsuatTienChuan(
+  r: Pick<LineDetailRow, "tsuatTien" | "thtien" | "tsuat" | "ltsuat">,
+): string | null {
+  if (r.tsuatTien !== null && r.tsuatTien !== undefined) return r.tsuatTien;
+  if (r.thtien === null || r.thtien === undefined) return null;
+  if (!laThueSuatSo(r.ltsuat, r.tsuat)) return null;
+  return tinhTienThue(r.thtien, r.tsuat as string);
+}
+
+/** "Tổng tiền (sau thuế)" mức DÒNG = thtien + tsuatTien (đã chuẩn hóa). Thiếu một vế →
+ * trống (không bịa số). */
 function tongSauThue(r: LineDetailRow): ExportCell {
   if (r.thtien === null || r.thtien === undefined) return BLANK;
-  if (r.tsuatTien === null || r.tsuatTien === undefined) return BLANK;
-  return { t: "num", v: congThapPhan(String(r.thtien), String(r.tsuatTien)) };
+  const tienThue = tsuatTienChuan(r);
+  if (tienThue === null) return BLANK;
+  return { t: "num", v: congThapPhan(String(r.thtien), tienThue) };
 }
 
 // Nhãn VN cho `chieu` lấy TỪ Registry (@vat/domain) — file xuất hiện "Mua vào"/"Bán ra" thay
@@ -275,8 +343,8 @@ const O_THEO_KEY: Record<string, (r: LineDetailRow) => ExportCell> = {
   dgia: (r) => numCell(r.dgia),
   thtien: (r) => numCell(r.thtien),
   ltsuat: (r) => strCell(r.ltsuat),
-  tsuat: (r) => numCell(r.tsuat),
-  tsuatTien: (r) => numCell(r.tsuatTien),
+  tsuat: (r) => percentCell(r),
+  tsuatTien: (r) => numCell(tsuatTienChuan(r)),
   tongSauThue,
   dvtte: (r) => strCell(r.dvtte),
   ttxly: (r) => numCell(r.ttxly),

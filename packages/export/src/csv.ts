@@ -10,6 +10,7 @@ import {
   flatRenderColumns,
   lineInvoiceContext,
   nativeRenderColumns,
+  nhanTram,
 } from "./columns";
 import type { InvoiceLineLike } from "./invoiceDoc";
 import type { ExportRow } from "./rows";
@@ -53,6 +54,7 @@ export function csvRowLineFor<T>(columns: RenderColumn<T>[], row: T): string {
     const cell = col.cell(row);
     if (cell.t === "blank") return "";
     if (cell.t === "num") return cell.v;
+    if (cell.t === "percent") return `${nhanTram(cell.v)}%`;
     return guardCsvText(cell.v); // ô văn bản: chống formula injection
   });
   return toLine(fields);

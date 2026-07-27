@@ -583,3 +583,12 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 - **Việc:** scheduled() enqueue `buildAuditMessages` (kind:"audit") cho tháng hiện tại thay vì message legacy; giữ legacy cho `force`. Cần cân nhắc: run legacy hằng ngày hiện cũng là cơ chế cập nhật `ttxly/tthai` đổi trạng thái — audit "đủ" sẽ KHÔNG refresh trạng thái → có thể cần vòng refresh trạng thái riêng (tần suất thưa hơn).
 - **Kết quả ncnhat 27/07 (bằng chứng chốt):** GDT nạp HĐ MTT ngày D thành batch ~19:00 VN tối D + rải tới ~12:30 trưa D+1 (303/303 hoá đơn ngày 26 có ncnhat sau 16:24 hôm 26 — audit "đủ" lúc 16:24 là ĐÚNG, giả thuyết A thắng, không có bug đếm audit).
 - **Nguồn phát hiện:** Câu hỏi chủ dự án về số request mỗi lần đồng bộ, phiên 27/07.
+
+### [2026-07-27] `invoiceDoc.ts` (renderer XML/HTML "chứng từ", U22) chưa hưởng sửa 3 trường thuế của U35b
+
+- **Trạng thái:** Ghi nhận — cố ý KHÔNG sửa trong U35b (ngoài phạm vi spec `docs/plans/U35-plan.md` Phần B, vốn chỉ nêu `columns.ts`/`xlsx.ts`/`flatExport.ts`).
+- **Bối cảnh:** U35b sửa 3 trường thuế (`tsuat` → hiện %, `tsuatTien` tự tính khi GDT thiếu, `tongSauThue` chuẩn hóa) ở đường kết xuất PHẲNG (xlsx/csv, `packages/export/src/columns.ts` + `xlsx.ts`). `packages/export/src/invoiceDoc.ts` (renderer XML/HTML một-hóa-đơn-một-file, dùng cho `xml.zip`/`html.zip`, U22) là ĐƯỜNG RENDER KHÁC — `lineValue()` chỉ làm `String(v)` thẳng từ `InvoiceLineLike`, nên vẫn in `tsuat` thô (`0.08`, không phải "8%") và KHÔNG tự tính `tsuatTien` khi GDT thiếu.
+- **Rủi ro nếu bỏ qua:** người dùng xuất `xml.zip`/`html.zip` thay vì xlsx/csv sẽ thấy hành vi cũ (số thô, có thể trống Tiền thuế) — KHÔNG nhất quán với file xlsx/csv đã sửa.
+- **Đề xuất hướng xử lý:** khi tới lượt, cân nhắc cho `invoiceDoc.ts` dùng chung `tsuatTienChuan()`/định dạng percent từ `columns.ts` (hiện là hàm module-private, cần export thêm nếu tái dùng) — hoặc chấp nhận khác biệt có chủ đích nếu `xml.zip`/`html.zip` được coi là "bản dựng thô từ dữ liệu đã đồng bộ", không phải file kê khai.
+- **Mức ưu tiên đề xuất:** Thấp (đường xlsx/csv là đường kê khai/đối chiếu chính; xml/html là phụ).
+- **Nguồn phát hiện:** Rà soát phạm vi khi thực thi U35b, phiên 27/07.
