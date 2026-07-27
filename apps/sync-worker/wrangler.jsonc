@@ -31,7 +31,11 @@
   //  - "*/15 * * * *" (mỗi 15'): GIÁM SÁT (mục C) — probe egress T0; verdict xấu ổn
   //    định (3 tick liên tiếp) → cảnh báo qua Workers observability. scheduled() phân
   //    nhánh theo event.cron. KHÔNG bật T1 (đang TREO) — chỉ phát hiện + cảnh báo.
-  "triggers": { "crons": ["0 3 * * *", "*/15 * * * *"] },
+  // 2026-07-27 (QĐ chủ dự án): dời cron đồng bộ 03:00 UTC (10:00 VN) → 20:00 UTC
+  // (03:00 SÁNG VN hôm sau) — GDT nạp batch hoá đơn MTT ~19:00 VN tối (bằng chứng
+  // ncnhat 27/07), kéo lúc 3h sáng thì dữ liệu hôm trước đã đủ và sẵn sàng trước giờ
+  // làm việc; giờ thấp điểm cũng ít cạnh tranh với thao tác tay của người dùng.
+  "triggers": { "crons": ["0 20 * * *", "*/15 * * * *"] },
 
   // Postgres qua Hyperdrive (giống apps/api). Thay "id" bằng id thật khi deploy.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "1011ff82e7154531883f0f2e62d344f0" }],
@@ -109,8 +113,10 @@
     // GIÁ TRỊ GỐC cần KHÔI PHỤC khi GDT hết kìm (đo bằng chuỗi kéo chạy trơn trở lại):
     //   LIMITER_CAPACITY 10 · LIMITER_REFILL_PER_SEC 2 · FANOUT_BACKPRESSURE_DELAY_SEC 300
     //   · SYNC_PAGE_MIN_INTERVAL_MS 500 · DELTA_CHUNK_PAGES 40
-    "LIMITER_CAPACITY": "2",
-    "LIMITER_REFILL_PER_SEC": "0.2",
+    // 14:17 27/07: GDT xác nhận trả lời trở lại (tail: result ok=true) → nâng nhỏ giọt
+    // lên SỐ TRUNG. Khôi phục hẳn giá trị gốc khi chuỗi chạy trơn ổn định.
+    "LIMITER_CAPACITY": "5",
+    "LIMITER_REFILL_PER_SEC": "1",
     "LIMITER_FAILURE_THRESHOLD": "5",
     "LIMITER_COOLDOWN_MS": "60000",
     // H-B.4 — fan-out: giãn khởi động tenant trên ~5' (jitter) + trần 10 lần reenqueue
@@ -130,14 +136,14 @@
     // U25 AC3 (đóng drift 2026-07-18): giãn nhịp giữa hai request GDT trong một job
     // header + backoff 429 khi thiếu Retry-After. Mặc định trong syncRetryConfig.ts;
     // "0" = tắt tường minh. CHƯA KIỂM CHỨNG ngưỡng thật của GDT — chỉnh khi có số đo.
-    "SYNC_PAGE_MIN_INTERVAL_MS": "15000",
+    "SYNC_PAGE_MIN_INTERVAL_MS": "2000",
     "SYNC_RETRY_BACKOFF_MS": "3000",
     // Task 6 (delta-sync) — số TRANG tối đa mỗi lô `syncChunk`: một lần gọi Worker chỉ
     // kéo ≤ chừng này trang rồi tự enqueue message nối tiếp, thay vì phân trang cả kỳ
     // trong MỘT invocation (gốc rễ "Too many subrequests by single Worker invocation",
     // sự cố 2026-07-18). Bỏ trống → mặc định deps.ts (40). Hạ xuống nếu log
     // `[delta] local_limit` tái diễn.
-    "DELTA_CHUNK_PAGES": "2"
+    "DELTA_CHUNK_PAGES": "10"
   }
 
   // JWT_SECRET / bí mật egress nạp qua `wrangler secret put` — security.md.
