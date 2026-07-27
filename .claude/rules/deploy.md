@@ -20,6 +20,7 @@ Cụ thể hoá nguyên tắc "mọi thay đổi phải truy được về artif
 - Trước khi `wrangler deploy` (hoặc `npm run deploy`) cho `apps/api` / `apps/sync-worker`, kiểm `packages/db/migrations/meta/_journal.json`: nếu có migration mới hơn lần `make migrate` gần nhất đã chạy trên production, **chạy `make migrate` trước** — kể cả khi deploy chỉ nhằm mục đích khác (vd. một nhánh hardening không tự thêm migration) — vì code merge vào nhánh deploy có thể đã mang theo migration của người khác.
 - Mọi migration trong repo này viết dạng cộng dồn, an toàn chạy lại (`ADD COLUMN IF NOT EXISTS`, …) — `make migrate` **luôn an toàn để chạy trước mỗi lần deploy**, kể cả khi không chắc đã áp hay chưa. Không suy đoán "chắc áp rồi" — chạy lại để biết chắc (nguyên tắc bằng chứng, CLAUDE.md).
 - Sau khi deploy, xác minh bằng smoke test đụng đúng cột/bảng mới (không chỉ `/health`) — ví dụ ở sự cố này, `/health` vẫn 200 trong khi `/me` đã 500; `/health` không đủ để kết luận deploy an toàn.
+- **`drizzle-kit migrate` báo thành công KHÔNG phải bằng chứng đủ (ADR-0008, sự cố 2026-07-27).** Nếu migration mới nhất từng bị xoá-tạo-lại trong phiên, kiểm `when` trong `_journal.json` tăng dần so với migration liền trước TRƯỚC khi migrate — một `when` lệch có thể khiến `drizzle-kit` âm thầm bỏ qua toàn bộ migration trong khi vẫn in `[✓] migrations applied successfully!`. Sau mọi lần migrate thật (không phải PGlite), luôn hậu kiểm bằng truy vấn trực tiếp (không qua Drizzle) xác nhận đúng đối tượng schema migration đó phải tạo ra.
 
 ## Khi gặp mơ hồ
 
