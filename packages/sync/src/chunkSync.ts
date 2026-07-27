@@ -9,7 +9,7 @@
 import { TRANG_THAI_LAN_DONG_BO, lanDongBo, withTenant } from "@vat/db";
 import { queryInvoicesChunk } from "@vat/gdt-client";
 import type { GdtTransport, InvoiceDirection, RetryOptions } from "@vat/gdt-client";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { classifyFailure, parseDdmmyyyy, tomTatLoi, upsertBatch } from "./sync";
@@ -60,6 +60,60 @@ export async function moDeltaRun<
     const row = inserted[0];
     if (!row) throw new Error("moDeltaRun: insert lan_dong_bo không trả về id");
     return row.id;
+  });
+}
+
+/** Trần tuổi một run 'running' còn được coi là "chuỗi kéo đang chạy" (2 giờ).
+ *
+ * Vì sao cần trần: run mồ côi (chuỗi chết mà chưa kịp chốt — vd deploy giữa chừng) mà
+ * không có trần thì `coDeltaRunDangChay` chặn kỳ đó VĨNH VIỄN. 2h là dư an toàn: chuỗi
+ * lành hoàn thành trong vài phút; chuỗi kẹt backpressure chết về DLQ (được chốt failed)
+ * trong ~1h (trần bpAttempt 10 × delay 300s + retry consumer). CHƯA KIỂM CHỨNG dưới tải
+ * lớn hơn — nếu quan sát thấy chuỗi lành chạy quá 2h, nâng trần thay vì bỏ guard. */
+export const TUOI_TOI_DA_CHUOI_KEO_MS = 2 * 3_600_000;
+
+/**
+ * Có chuỗi kéo delta ĐANG CHẠY cho cùng (tài khoản × kỳ × chiều) không? — guard khử
+ * TRÙNG LẶP chuỗi (sự cố livelock 2026-07-27: mỗi lần bấm "Đồng bộ" mở thêm một chuỗi
+ * cho CÙNG kỳ; hàng chục chuỗi giành ngân sách permit 2 req/s của tenant → không chuỗi
+ * nào xong). Task 6 gọi TRƯỚC `moDeltaRun` ở vòng audit 0; `true` ⇒ KHÔNG mở chuỗi mới,
+ * để chuỗi sẵn có tự kéo tới đủ. Chỉ xét run `loai='sync'` `running` MỚI hơn trần tuổi
+ * (xem `TUOI_TOI_DA_CHUOI_KEO_MS`). Lọc `tenant_id` tường minh (multi-tenant.md, lớp 1).
+ *
+ * GIỚI HẠN ĐÃ BIẾT (TOCTOU, review 2026-07-27): guard là SELECT best-effort, KHÔNG có
+ * ràng buộc UNIQUE ở DB — hai audit vòng 0 cùng scope chạy ĐỒNG THỜI (queue
+ * max_concurrency=3) vẫn có thể cùng thấy "chưa có run" rồi cùng mở chuỗi. Hệ quả bị
+ * CHẶN TRÊN ở ~3 chuỗi (thay vì không giới hạn như trước fix) — đủ thoát livelock.
+ * Chặn cứng (partial unique index WHERE trang_thai='running' AND loai='sync') là
+ * migration riêng — xem backlog [2026-07-27].
+ */
+export async function coDeltaRunDangChay<
+  TQuery extends PgQueryResultHKT,
+  TFull extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+>(
+  db: Db<TQuery, TFull, TSchema>,
+  tenantId: string,
+  p: DeltaRunParams,
+  nowMs: number = Date.now(),
+): Promise<boolean> {
+  return withTenant(db, tenantId, async (tx) => {
+    const rows = await tx
+      .select({ id: lanDongBo.id })
+      .from(lanDongBo)
+      .where(
+        and(
+          eq(lanDongBo.tenantId, tenantId),
+          eq(lanDongBo.taikhoanId, p.taikhoanId),
+          eq(lanDongBo.chieu, p.direction),
+          eq(lanDongBo.tuNgay, parseDdmmyyyy(p.dateFrom)),
+          eq(lanDongBo.loai, "sync"),
+          eq(lanDongBo.trangThai, TRANG_THAI_LAN_DONG_BO.DANG_CHAY),
+          gte(lanDongBo.batDau, new Date(nowMs - TUOI_TOI_DA_CHUOI_KEO_MS)),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   });
 }
 

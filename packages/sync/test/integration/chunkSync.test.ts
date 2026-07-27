@@ -11,7 +11,14 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeEach, describe, expect, it } from "vitest";
-import { chotDeltaRun, ghiAuditDu, moDeltaRun, syncChunk } from "../../src/chunkSync";
+import {
+  TUOI_TOI_DA_CHUOI_KEO_MS,
+  chotDeltaRun,
+  coDeltaRunDangChay,
+  ghiAuditDu,
+  moDeltaRun,
+  syncChunk,
+} from "../../src/chunkSync";
 
 // migrations của @vat/db nằm ở package anh em; giải qua URL để không phụ thuộc cwd.
 const MIGRATIONS = new URL("../../../db/migrations", import.meta.url).pathname;
@@ -314,5 +321,54 @@ describe("chunkSync — syncChunk + vòng đời run delta (Task 5)", () => {
   it("GdtError.httpStatus === 429 dùng import GdtError (đảm bảo mock đúng lớp lỗi kỳ vọng)", () => {
     const e = new GdtError("rate limited", "HTTP_ERROR", 429);
     expect(e.httpStatus).toBe(429);
+  });
+
+  describe("(6) coDeltaRunDangChay — khử chuỗi kéo trùng lặp (sự cố livelock 2026-07-27)", () => {
+    it("run 'running' loai='sync' MỚI cùng (tài khoản × kỳ × chiều) → true", async () => {
+      await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+      expect(await coDeltaRunDangChay(db, tenantId, { ...BASE_PARAMS, taikhoanId })).toBe(true);
+    });
+
+    it("không có run nào → false; run đã CHỐT (completed) → false", async () => {
+      expect(await coDeltaRunDangChay(db, tenantId, { ...BASE_PARAMS, taikhoanId })).toBe(false);
+      const id = await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+      await chotDeltaRun(db, tenantId, id, { trangThai: "completed" });
+      expect(await coDeltaRunDangChay(db, tenantId, { ...BASE_PARAMS, taikhoanId })).toBe(false);
+    });
+
+    it("run 'audit' completed (ghiAuditDu) KHÔNG tính là chuỗi kéo đang chạy", async () => {
+      await ghiAuditDu(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+      expect(await coDeltaRunDangChay(db, tenantId, { ...BASE_PARAMS, taikhoanId })).toBe(false);
+    });
+
+    it("khác CHIỀU / khác KỲ / khác TÀI KHOẢN → false (không chặn oan)", async () => {
+      await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+      expect(
+        await coDeltaRunDangChay(db, tenantId, {
+          ...BASE_PARAMS,
+          taikhoanId,
+          direction: "sold" as const,
+        }),
+      ).toBe(false);
+      expect(
+        await coDeltaRunDangChay(db, tenantId, {
+          ...BASE_PARAMS,
+          taikhoanId,
+          dateFrom: "01/05/2026",
+          dateTo: "31/05/2026",
+        }),
+      ).toBe(false);
+      const taikhoanKhac = await makeTaxAccount(db, tenantId, "0100000001-user2");
+      expect(
+        await coDeltaRunDangChay(db, tenantId, { ...BASE_PARAMS, taikhoanId: taikhoanKhac }),
+      ).toBe(false);
+    });
+
+    it("run 'running' CŨ hơn trần tuổi (mồ côi chưa được chốt) → false, không chặn vĩnh viễn", async () => {
+      const id = await moDeltaRun(db, tenantId, { ...BASE_PARAMS, taikhoanId });
+      const batDauCu = new Date(Date.now() - TUOI_TOI_DA_CHUOI_KEO_MS - 60_000);
+      await db.update(lanDongBo).set({ batDau: batDauCu }).where(eq(lanDongBo.id, id));
+      expect(await coDeltaRunDangChay(db, tenantId, { ...BASE_PARAMS, taikhoanId })).toBe(false);
+    });
   });
 });

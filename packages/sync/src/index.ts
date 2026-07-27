@@ -68,6 +68,8 @@ export {
   moDeltaRun,
   ghiAuditDu,
   chotDeltaRun,
+  coDeltaRunDangChay,
+  TUOI_TOI_DA_CHUOI_KEO_MS,
   syncChunk,
   type DeltaRunParams,
   type ChotDeltaRunKetQua,

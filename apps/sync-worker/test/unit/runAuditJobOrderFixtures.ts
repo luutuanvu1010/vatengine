@@ -45,6 +45,7 @@ export function makeDeps(): { deps: DeltaJobDeps; calls: { moRun: number; enqueu
     recorder,
     layTotal: async () => 0,
     demTheoNguon: async () => ({ normal: 0, sco: 0 }),
+    coChuoiKeoDangChay: async () => false,
     moRun: async () => {
       calls.moRun += 1;
       return "ldb-moi";

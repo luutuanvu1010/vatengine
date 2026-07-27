@@ -547,3 +547,31 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
   9. **InfoTip (Task 11, `apps/web`) chưa đóng bằng phím Esc** — vi phạm nhẹ WCAG 1.4.13 (Content on Hover or Focus — phải dismissible bằng bàn phím); cần thêm `onKeyDown` xử lý Esc.
 - **Mức ưu tiên đề xuất:** Thấp (không mục nào chặn vận hành hiện tại; 1/4/5 liên quan độ tin cậy vận hành nên ưu tiên cao hơn trong nhóm này, 9 liên quan a11y).
 - **Nguồn phát hiện:** Final whole-branch review delta-sync, phiên 2026-07-26.
+
+### [2026-07-27] Chẩn đoán "thiếu hoá đơn ngày 26/07 khi trích xuất 25–26/07": GDT công bố hoá đơn MTT trễ 1–2 ngày — KHÔNG phải bug lọc/đồng bộ
+
+- **Trạng thái:** Đã chẩn đoán xong (bằng chứng prod 2026-07-27, ~10:00 VN) — chờ chủ dự án chọn hướng xử lý sản phẩm.
+- **Triệu chứng:** Trích xuất 25/07→26/07 chỉ thấy 18 HĐ cho ngày 26/07 (2 normal-purchase + 16 sco-sold), trong khi ngày thường ~420 HĐ (vd 24/07: 442, 25/07: 416).
+- **Đã LOẠI TRỪ bằng bằng chứng (không phải nguyên nhân):**
+  - Biên khoảng ngày phía GDT (`buildSearch` `T00:00:00`→`T23:59:59`) — đúng.
+  - Biên lọc DB theo giờ VN (`dayBoundaryVn` +07:00) khớp quy ước lưu `tdlap` (khoảnh khắc UTC của 00:00 VN; toàn bộ tdlap prod đều ở giờ-VN=0, kể cả sco) — đúng, không lệch múi giờ.
+  - Biên tháng của audit (`vnMonthRangeUtc`) — đúng, cùng công thức +07:00.
+  - Backfill chia cửa sổ THÁNG ĐẦY ĐỦ (`monthlyWindows`) — ngày 26 nằm trong cửa sổ.
+- **Nguyên nhân gốc (đã kiểm chứng qua `ncnhat` — mốc GDT nhận/cập nhật hoá đơn):** hoá đơn máy tính tiền (sco) của ngày D chỉ xuất hiện trên API tra cứu GDT **trễ 1–2 ngày**:
+  - sco mua vào ngày D: `ncnhat` trải từ ~19:00 VN ngày D đến ~12:30 VN ngày D+1 (có khi D+2 — vd HĐ 24/07 có ncnhat_max 26/07T05:33Z).
+  - sco bán ra ngày D: `ncnhat` chủ yếu sáng ngày D+1.
+  - ⇒ Trích xuất/đồng bộ trong ngày 26/07 (hoặc sáng 27/07) không thể lấy được thứ GDT chưa công bố. Audit 26/07 16:24 VN ghi "đủ" là ĐÚNG so với total GDT tại thời điểm đó. Đây là bản chất nguồn dữ liệu, cùng họ với phát hiện "người bán đẩy trễ" trong docs/CHAN-DOAN-thieu-hoa-don-thang.md, nhưng ở thang NGÀY cho MTT.
+- **Cơ chế tự-lành sẵn có:** cron 03:00Z (10:00 VN) hằng ngày đồng bộ tháng hiện tại → ngày 26 sẽ tự đầy trong 1–2 ngày. Sự cố phụ sáng 27/07: ~27 lần bấm backfill dồn dập → 429/timeout → circuit breaker mở từng đợt (217 bản ghi `dong_bo_bo_qua_breaker`/30h) → catch-up chậm + nhiều run treo `running` tạm thời (DLQ rỗng — message chỉ đang quay vòng backpressure, sẽ tự thoát).
+- **Đề xuất hướng xử lý (chờ duyệt, chưa làm):**
+  1. *(Khuyến nghị, rẻ)* Thêm tick cron audit thứ hai cho THÁNG HIỆN TẠI vào buổi tối (~13:00Z = 20:00 VN) để ngày đuôi tự đầy ngay trong tối cùng ngày thay vì chờ 10:00 VN hôm sau.
+  2. *(Sản phẩm)* UI/kết xuất cảnh báo "ngày đuôi" của khoảng lọc (D-1, D): "Hoá đơn máy tính tiền lên Thuế trễ 1–2 ngày — số liệu 1–2 ngày gần nhất có thể chưa đầy đủ" (khai báo qua Registry/luật ui.md, cần spec riêng).
+  3. *(Vận hành)* Chống dồn dập: route backfill có thể từ chối/gộp khi đã có backfill cùng (tài khoản × khoảng) đang chạy — giảm lũ 429 tự gây.
+- **Mức ưu tiên đề xuất:** Cao cho (1)+(2) — đây là lần thứ hai người dùng tưởng "mất dữ liệu" vì độ trễ GDT; niềm tin sản phẩm bị xói mòn dù hệ thống đúng.
+- **Nguồn phát hiện:** Phiên chẩn đoán 2026-07-27 (systematic-debugging), truy vấn trực tiếp Neon prod: phân bố `ncnhat`/`created_at` theo ngày lập, sổ `lan_dong_bo`, `audit_log`, `dong_bo_that_bai`.
+
+### [2026-07-27] Đã làm: guard khử chuỗi kéo delta trùng lặp — và nợ còn lại (unique index)
+
+- **Trạng thái:** Guard ĐÃ hiện thực trong cùng ngày (commit `fix(sync): khử chuỗi kéo delta trùng lặp` — `coDeltaRunDangChay` @vat/sync + dep `coChuoiKeoDangChay` trong `runAuditJob` vòng 0). Đây chính là hiện thực của đề xuất #3 mục chẩn đoán [2026-07-27] phía trên, đặt ở TẦNG CONSUMER (chặn mọi nguồn: bấm tay, cron, replay) thay vì tầng route.
+- **Nợ còn lại (finding Major, review dod-auditor 2026-07-27):** guard là SELECT best-effort — hai audit vòng 0 cùng scope chạy đồng thời (queue `max_concurrency: 3`) vẫn có thể cùng mở run (TOCTOU). Hệ quả đã bị chặn trên ~3 chuỗi (đủ thoát livelock), nhưng chặn cứng cần **partial unique index** trên `lan_dong_bo (tenant_id, taikhoan_id, chieu, tu_ngay) WHERE trang_thai='running' AND loai='sync'` + xử lý conflict ở `moDeltaRun` (insert đụng index → coi như "đã có chuỗi", không mở). Là MIGRATION nên tách đơn vị riêng (plan → TDD → review).
+- **Kèm theo dõi (finding Minor):** trần tuổi `TUOI_TOI_DA_CHUOI_KEO_MS` = 2h CHƯA KIỂM CHỨNG dưới tải lớn — nếu quan sát chuỗi lành chạy >2h bị mở trùng, nâng trần.
+- **Nguồn phát hiện:** Review chéo dod-auditor sau fix livelock 2026-07-27.

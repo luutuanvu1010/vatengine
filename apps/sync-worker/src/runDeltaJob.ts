@@ -55,6 +55,10 @@ export interface DeltaJobDeps {
     direction: InvoiceDirection,
     period: string,
   ): Promise<{ normal: number; sco: number }>;
+  /** Có chuỗi kéo delta ĐANG CHẠY cho cùng (tài khoản × kỳ × chiều) không? — guard
+   * khử trùng lặp chuỗi (sự cố livelock 2026-07-27: mỗi lần bấm "Đồng bộ" mở thêm một
+   * chuỗi cho CÙNG kỳ, hàng chục chuỗi giành permit → không chuỗi nào xong). */
+  coChuoiKeoDangChay(msg: AuditSyncMessage): Promise<boolean>;
   /** Mở run delta mới (`lan_dong_bo` running) → id. */
   moRun(msg: AuditSyncMessage): Promise<string>;
   /** Ghi dấu "đã kiểm, đủ" (`lan_dong_bo` loai='audit', completed). */
@@ -217,6 +221,17 @@ export async function runAuditJob(deps: DeltaJobDeps, msg: AuditSyncMessage): Pr
     const runCoSan = msg.lanDongBoId;
     const [family, ...conLai] = quyetDinh.families;
     if (!family) return { kind: "completed" }; // decideAudit "keo" luôn có ≥1 họ (phòng hờ)
+    // KHỬ TRÙNG LẶP CHUỖI (vòng 0, trước khi mở run): đã có chuỗi kéo đang chạy cho cùng
+    // (tài khoản × kỳ × chiều) — từ lần bấm "Đồng bộ" trước / cron — thì KHÔNG mở chuỗi
+    // thứ hai. Chuỗi sẵn có tự kéo tới đủ (idempotent); mở trùng chỉ nhân số request GDT
+    // và gây livelock giành permit (sự cố 2026-07-27). Ack — không phải lỗi.
+    // Vòng ≥1 (runCoSan) không qua guard: run 'running' tìm thấy chính là run của mình.
+    if (!runCoSan && (await deps.coChuoiKeoDangChay(msg))) {
+      console.log(
+        `[delta] bo_qua_chuoi_trung: tenant=${msg.tenantId} ky=${msg.period} chieu=${msg.direction} — da co chuoi keo dang chay, khong mo chuoi moi`,
+      );
+      return { kind: "completed" };
+    }
     const lanDongBoId = runCoSan ?? (await deps.moRun(msg));
     try {
       await deps.enqueue([

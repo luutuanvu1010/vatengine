@@ -6,6 +6,7 @@ import { createDirectCfTransport, queryInvoiceTotal } from "@vat/gdt-client";
 import {
   adapterFetchDetail,
   chotDeltaRun,
+  coDeltaRunDangChay,
   demHoaDonTheoNguon,
   ghiAuditDu,
   moDeltaRun,
@@ -165,6 +166,13 @@ export function makeDeltaJobDeps(
       queryInvoiceTotal(throttled, token, { direction, family, dateFrom, dateTo }, retry),
     demTheoNguon: (tenantId, direction, period) =>
       withTenant(db, tenantId, (tx) => demHoaDonTheoNguon(tx, tenantId, direction, period)),
+    coChuoiKeoDangChay: (m) =>
+      coDeltaRunDangChay(db, m.tenantId, {
+        taikhoanId: m.taikhoanId,
+        direction: m.direction,
+        dateFrom: m.dateFrom,
+        dateTo: m.dateTo,
+      }),
     moRun: (m) =>
       moDeltaRun(db, m.tenantId, {
         taikhoanId: m.taikhoanId,

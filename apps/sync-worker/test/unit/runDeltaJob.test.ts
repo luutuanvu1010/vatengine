@@ -84,6 +84,7 @@ interface Calls {
   moRun: number;
   ghiDu: number;
   chotRun: Array<{ lanDongBoId: string; trangThai: string; thongDiepLoi?: string }>;
+  coChuoiKeoDangChay: number;
   keoChunk: DeltaPullMessage[];
   enqueue: VatSyncQueueMessage[][];
   enqueueDetail: DetailSyncMessage[][];
@@ -100,6 +101,8 @@ interface DepOverrides {
   totals?: Partial<Record<"normal" | "sco", number | null>>;
   layTotal?: DeltaJobDeps["layTotal"];
   dem?: { normal: number; sco: number };
+  /** Mô phỏng "đã có chuỗi kéo đang chạy cùng (tài khoản × kỳ × chiều)". Mặc định false. */
+  chuoiDangChay?: boolean;
   keoChunk?: (msg: DeltaPullMessage) => Promise<ChunkOutcome>;
   enqueue?: (msgs: VatSyncQueueMessage[]) => Promise<void>;
   enqueueDetail?: (msgs: DetailSyncMessage[]) => Promise<void>;
@@ -112,6 +115,7 @@ function makeDeps(over: DepOverrides = {}): { deps: DeltaJobDeps; calls: Calls }
     moRun: 0,
     ghiDu: 0,
     chotRun: [],
+    coChuoiKeoDangChay: 0,
     keoChunk: [],
     enqueue: [],
     enqueueDetail: [],
@@ -175,6 +179,10 @@ function makeDeps(over: DepOverrides = {}): { deps: DeltaJobDeps; calls: Calls }
     },
     chotRun: async (_tenantId, lanDongBoId, kq) => {
       calls.chotRun.push({ lanDongBoId, ...kq });
+    },
+    coChuoiKeoDangChay: async () => {
+      calls.coChuoiKeoDangChay += 1;
+      return over.chuoiDangChay ?? false;
     },
     keoChunk: async (msg) => {
       calls.keoChunk.push(msg);
@@ -258,6 +266,33 @@ describe("runAuditJob — vòng kiểm đối chiếu total GDT ↔ count DB", (
     expect(msg.conLai).toEqual(["sco"]);
     expect(msg.prevCount).toBe(5);
     expect(msg.vong).toBe(1);
+  });
+
+  it("(2f) vòng 0, HỤT nhưng ĐÃ CÓ chuỗi kéo đang chạy cùng scope → KHÔNG mở run trùng, KHÔNG enqueue (khử trùng lặp — sự cố livelock 2026-07-27)", async () => {
+    const { deps, calls } = makeDeps({
+      totals: { normal: 10, sco: 5 },
+      dem: { normal: 3, sco: 2 },
+      chuoiDangChay: true,
+    });
+    const out = await runAuditJob(deps, AUDIT);
+    expect(out.kind).toBe("completed"); // ack — chuỗi sẵn có sẽ tự kéo tới đủ
+    expect(calls.coChuoiKeoDangChay).toBe(1);
+    expect(calls.moRun).toBe(0);
+    expect(calls.enqueue).toEqual([]);
+    expect(calls.ghiDu).toBe(0); // KHÔNG được ghi dấu "đủ" — kỳ vẫn đang hụt
+    expect(calls.chotRun).toEqual([]);
+  });
+
+  it("(2g) vòng ≥1 (chuỗi CỦA CHÍNH MÌNH) KHÔNG bị guard khử trùng chặn — vẫn kéo tiếp", async () => {
+    const { deps, calls } = makeDeps({
+      totals: { normal: 10, sco: 5 },
+      dem: { normal: 8, sco: 5 },
+      chuoiDangChay: true, // run 'running' tồn tại chính là run của chuỗi này
+    });
+    await runAuditJob(deps, { ...AUDIT, vong: 1, lanDongBoId: "ldb-1", prevCount: 5 });
+    expect(calls.coChuoiKeoDangChay).toBe(0); // guard chỉ áp cho vòng 0 (chưa có run)
+    const msg = (calls.enqueue[0] ?? [])[0] as DeltaPullMessage;
+    expect(msg.lanDongBoId).toBe("ldb-1");
   });
 
   it("(2c) vòng ≥1 KHÔNG mở run mới — dùng lại lanDongBoId đang mở", async () => {
