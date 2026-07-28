@@ -613,7 +613,11 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 
 ### [2026-07-28] SỰ CỐ ĐÃ VÁ + nợ phòng ngừa: migration tạo bảng mà quên `GRANT` → `permission denied` chỉ lộ ra ở production
 
-- **Trạng thái:** Sự cố đã vá nóng (GRANT ba bảng). **Cổng phòng ngừa CHƯA làm** — chủ dự án hoãn, ghi vào đây.
+- **Trạng thái:** Sự cố đã vá nóng (GRANT ba bảng) **+ đã codify thành migration
+  `0018_u35_grant_bang_thieu.sql` (2026-07-28, áp production, hậu kiểm `has_table_privilege`
+  xác nhận)** — DB mới/staging/DR từ nay không lặp lại lỗi này. **Cổng phòng ngừa (CI đối
+  chiếu bảng quyền tự động) VẪN CHƯA làm** — chủ dự án hoãn, vẫn đúng, giữ nguyên đề xuất
+  bên dưới.
 - **Hiện tượng:** 39 phiên `lan_dong_bo` trạng thái `failed` trong 24h (MST 019197004411: 16, 4201969169: 13, 4200730402: 5). Người dùng thấy "13 tác vụ đồng bộ chạy nền" không bao giờ dứt và tưởng hệ thống bị GDT chặn tốc độ.
 - **Nguyên nhân gốc (đã kiểm chứng, `lan_dong_bo.thong_diep_loi` nguyên văn):** `permission denied for table bo_dem_phien_ban`. Chuỗi kéo hoá đơn về ĐƯỢC, nhưng chết ở bước `capSoPhienBan` khi chốt phiên ⇒ run `failed` ⇒ queue retry ⇒ lặp vô hạn. **Không liên quan rate-limit GDT** (24h chỉ 1 lần breaker mở).
 - **Cơ chế:** repo KHÔNG có `ALTER DEFAULT PRIVILEGES` (grep = 0); `packages/db/provisioning/app-role.sql:28` chạy `GRANT … ON ALL TABLES` đúng MỘT LẦN (2026-07-14). Mọi bảng tạo sau mốc đó KHÔNG thừa hưởng quyền nào. Migration `0007:72-75` đã ghi cảnh báo này bằng chữ — nhưng `0008` (`dong_bo_that_bai`) và `0017` (U35: `bo_dem_phien_ban`, `lich_su_thay_doi_hoa_don`) vẫn quên. **Lỗi này chỉ lộ ra SAU deploy production**, vì test chạy trên PGlite với role owner (không có `vat_app`).
