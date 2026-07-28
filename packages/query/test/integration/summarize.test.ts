@@ -242,3 +242,79 @@ describe("summarizeInvoices — loại tthai=4 khỏi TIỀN, giữ count (U36)"
     expect(s.total.soLoaiKhoiTong).toBe(0);
   });
 });
+
+// U39 — bộ BA số tiền cho nhóm hóa đơn BỊ SỬA. Trước đây chỉ có `thueDaLoai`/`ttbsoDaLoai`
+// (mã 4) — THIẾU tiền trước thuế, và mã 5 không có số tiền nào. Chủ dự án yêu cầu thống kê
+// đủ: tiền trước thuế · tiền thuế · tổng sau thuế.
+//
+// ⚠️ Mã 4 và mã 5 để RIÊNG, không gộp: mã 4 KHÔNG tính vào tổng, mã 5 VẪN tính. Gộp tiền
+// của chúng vào một con số là trộn hai ý nghĩa trái ngược.
+describe("summarizeInvoices — bộ ba số tiền cho hóa đơn bị sửa (U39)", () => {
+  let db: Db;
+  let tenantA: string;
+
+  beforeEach(async () => {
+    db = await freshDb();
+    tenantA = await makeTenant(db, "Cty A", "0100000001");
+  });
+
+  const hd = (shdon: string, over: Record<string, unknown> = {}) =>
+    seedInvoice(db, tenantA, {
+      shdon,
+      chieu: "sold",
+      tdlap: new Date(`2026-04-${shdon.padStart(2, "0")}T09:00:00Z`),
+      tgtcthue: "1000000",
+      tgtthue: "80000",
+      tgtttbso: "1080000",
+      ...over,
+    });
+
+  it("mã 4 → đủ ba số: trước thuế, thuế, tổng sau thuế", async () => {
+    await hd("01", { tthai: 4, tgtcthue: "21388889", tgtthue: "1711111", tgtttbso: "23100000" });
+    const s = await summarizeInvoices(db, tenantA, {});
+    const sold = s.byChieu.find((x) => x.chieu === "sold");
+    expect(sold?.tcthueDaLoai).toBe("21388889");
+    expect(sold?.thueDaLoai).toBe("1711111");
+    expect(sold?.ttbsoDaLoai).toBe("23100000");
+  });
+
+  it("mã 5 → có bộ ba RIÊNG, không lẫn vào số của mã 4", async () => {
+    await hd("01", { tthai: 4, tgtcthue: "100", tgtthue: "10", tgtttbso: "110" });
+    await hd("02", { tthai: 5, tgtcthue: "3333333", tgtthue: "266667", tgtttbso: "3600000" });
+    const s = await summarizeInvoices(db, tenantA, {});
+    const sold = s.byChieu.find((x) => x.chieu === "sold");
+    expect(sold?.tcthueDaLoai).toBe("100"); // CHỈ mã 4
+    expect(sold?.tcthueBiDieuChinh).toBe("3333333"); // CHỈ mã 5
+    expect(sold?.thueBiDieuChinh).toBe("266667");
+    expect(sold?.ttbsoBiDieuChinh).toBe("3600000");
+  });
+
+  it("không có mã 4/5 → cả sáu số là '0', KHÔNG null (giao diện luôn hiện số)", async () => {
+    await hd("01", { tthai: 1 });
+    const s = await summarizeInvoices(db, tenantA, {});
+    const sold = s.byChieu.find((x) => x.chieu === "sold");
+    for (const v of [
+      sold?.tcthueDaLoai,
+      sold?.thueDaLoai,
+      sold?.ttbsoDaLoai,
+      sold?.tcthueBiDieuChinh,
+      sold?.thueBiDieuChinh,
+      sold?.ttbsoBiDieuChinh,
+    ]) {
+      expect(v).toBe("0");
+    }
+  });
+
+  it("mã 5 VẪN nằm trong tổng tiền, mã 4 thì KHÔNG — bất biến QĐ-4 không đổi", async () => {
+    await hd("01", { tthai: 4, tgtthue: "999" });
+    await hd("02", { tthai: 5, tgtthue: "111" });
+    const s = await summarizeInvoices(db, tenantA, {});
+    expect(s.total.tongTthue).toBe("111");
+  });
+
+  it("giữ chính xác số > 2^53 ở nhóm bị sửa", async () => {
+    await hd("01", { tthai: 4, tgtcthue: "9007199254740993" });
+    const s = await summarizeInvoices(db, tenantA, {});
+    expect(s.byChieu.find((x) => x.chieu === "sold")?.tcthueDaLoai).toBe("9007199254740993");
+  });
+});

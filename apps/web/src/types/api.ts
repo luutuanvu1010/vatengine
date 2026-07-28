@@ -120,9 +120,14 @@ export interface ChieuSummary extends MoneyTotals {
   soHdThayThe?: number;
   soHdDieuChinh?: number;
   soMaLa?: number;
-  /** Số DƯƠNG (QĐ-8) — giao diện tự thêm dấu trừ ASCII. */
+  /** Số DƯƠNG (QĐ-8) — giao diện tự thêm dấu trừ ASCII. U39: đủ bộ ba cho mã 4, và bộ ba
+   * RIÊNG cho mã 5 (mã 4 không tính vào tổng, mã 5 vẫn tính — không gộp). */
+  tcthueDaLoai?: string;
   thueDaLoai?: string;
   ttbsoDaLoai?: string;
+  tcthueBiDieuChinh?: string;
+  thueBiDieuChinh?: string;
+  ttbsoBiDieuChinh?: string;
   thueThayTheDieuChinh?: string;
   ttbsoThayTheDieuChinh?: string;
 }
@@ -175,6 +180,9 @@ export interface InvoiceFilter {
   denNgay?: string;
   ttxly?: number;
   tthai?: number;
+  /** U39 — chỉ hóa đơn ĐÃ BỊ hóa đơn khác sửa (mã 4 bị thay thế + mã 5 bị điều chỉnh).
+   * Cờ riêng vì cần HAI mã cùng lúc, và "mã nào nghĩa là bị sửa" khai ở `@vat/domain`. */
+  biSua?: boolean;
   nbmst?: string;
   nmmst?: string;
   // U31 — lọc theo cột (văn bản "chứa", không phân biệt hoa thường).

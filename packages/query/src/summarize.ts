@@ -43,10 +43,18 @@ export interface ChieuSummary extends MoneyTotals {
   soHdThayThe: number; // tthai=2 — hóa đơn thay thế lập trong kỳ
   soHdDieuChinh: number; // tthai=3 — hóa đơn điều chỉnh lập trong kỳ
   soMaLa: number; // tthai ngoài tập đã kiểm chứng — QĐ-6, phải cảnh báo
-  /** Σ tiền thuế của hóa đơn ĐÃ BỊ LOẠI khỏi tổng. Số DƯƠNG (QĐ-8) — giao diện tự thêm dấu
-   * trừ. Luôn có giá trị (coalesce 0) vì luôn được hiển thị dạng số. */
+  /** Σ tiền của hóa đơn ĐÃ BỊ LOẠI khỏi tổng (mã 4). Số DƯƠNG (QĐ-8) — giao diện tự thêm
+   * dấu trừ. Luôn có giá trị (coalesce 0) vì luôn được hiển thị dạng số.
+   *
+   * U39: đủ BỘ BA (trước thuế · thuế · tổng sau thuế) — trước đây thiếu `tcthue`. */
+  tcthueDaLoai: string;
   thueDaLoai: string;
   ttbsoDaLoai: string;
+  /** Σ tiền của hóa đơn BỊ ĐIỀU CHỈNH (mã 5) — để RIÊNG, cố ý không gộp với mã 4: mã 4
+   * KHÔNG tính vào tổng còn mã 5 VẪN tính, gộp lại là trộn hai ý nghĩa trái ngược. */
+  tcthueBiDieuChinh: string;
+  thueBiDieuChinh: string;
+  ttbsoBiDieuChinh: string;
   /** Σ tiền của hóa đơn thay thế/điều chỉnh lập TRONG KỲ — quy mô cần rà soát, ĐÃ nằm trong
    * tổng. Không phải "mức thay đổi ròng": cặp gốc↔mới có thể vắt qua kỳ (§2.1). */
   thueThayTheDieuChinh: string;
@@ -85,6 +93,9 @@ export function dieuKienMaLa(daKiemChung: readonly number[]): SQL {
 }
 
 const dungTinh: SQL = dieuKienTinhTong(TTHAI_LOAI_KHOI_TONG);
+/** Hóa đơn BỊ ĐIỀU CHỈNH (mã 5) — bản gốc còn hiệu lực nên VẪN nằm trong tổng tiền; ta chỉ
+ * cộng riêng để giao diện nêu được quy mô cần rà soát trước khi kê khai. */
+const laBiDieuChinh: SQL = sql`${hoaDon.tthai} = ${TTHAI.BI_DIEU_CHINH}`;
 const laMaLa: SQL = dieuKienMaLa(TTHAI_DA_KIEM_CHUNG);
 
 // Bẫy 3 — `count(col)` đếm bản ghi NON-NULL của cột, không phải số dòng ⇒ luôn `count(*)`.
@@ -126,8 +137,12 @@ export async function summarizeInvoices<
     soHdThayThe: demMa(TTHAI.THAY_THE),
     soHdDieuChinh: demMa(TTHAI.DIEU_CHINH),
     soMaLa: demLoc(laMaLa),
+    tcthueDaLoai: tongLocCo0(hoaDon.tgtcthue, sql`not ${dungTinh}`),
     thueDaLoai: tongLocCo0(hoaDon.tgtthue, sql`not ${dungTinh}`),
     ttbsoDaLoai: tongLocCo0(hoaDon.tgtttbso, sql`not ${dungTinh}`),
+    tcthueBiDieuChinh: tongLocCo0(hoaDon.tgtcthue, laBiDieuChinh),
+    thueBiDieuChinh: tongLocCo0(hoaDon.tgtthue, laBiDieuChinh),
+    ttbsoBiDieuChinh: tongLocCo0(hoaDon.tgtttbso, laBiDieuChinh),
     thueThayTheDieuChinh: tongLocCo0(
       hoaDon.tgtthue,
       sql`${hoaDon.tthai} in (${dsMa([TTHAI.THAY_THE, TTHAI.DIEU_CHINH])})`,
@@ -162,8 +177,12 @@ export async function summarizeInvoices<
       soHdThayThe: g.soHdThayThe,
       soHdDieuChinh: g.soHdDieuChinh,
       soMaLa: g.soMaLa,
+      tcthueDaLoai: g.tcthueDaLoai,
       thueDaLoai: g.thueDaLoai,
       ttbsoDaLoai: g.ttbsoDaLoai,
+      tcthueBiDieuChinh: g.tcthueBiDieuChinh,
+      thueBiDieuChinh: g.thueBiDieuChinh,
+      ttbsoBiDieuChinh: g.ttbsoBiDieuChinh,
       thueThayTheDieuChinh: g.thueThayTheDieuChinh,
       ttbsoThayTheDieuChinh: g.ttbsoThayTheDieuChinh,
     })),

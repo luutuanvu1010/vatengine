@@ -1,5 +1,5 @@
 // U6 unit — validate bộ lọc/phân trang (Zod, thuần, offline) + fail-loud ngày sai.
-import { sortableKeys } from "@vat/domain";
+import { TTHAI, sortableKeys } from "@vat/domain";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -336,5 +336,49 @@ describe("U31 — lọc văn bản theo cột", () => {
   it("điều kiện tenant_id VẪN đứng đầu dù thêm bao nhiêu bộ lọc cột", () => {
     const q = render({ nbten: "x", nmten: "y", shdon: "1", dvtte: "VND", ttbsoTu: "5" });
     expect(q.params[0]).toBe(TENANT);
+  });
+});
+
+// U39 — cờ `biSua`: lọc riêng nhóm hóa đơn ĐÃ BỊ một hóa đơn khác sửa (mã 4 bị thay thế +
+// mã 5 bị điều chỉnh). Đây là nhóm người dùng cần soi khi kê khai, và là thứ nút "Hóa đơn
+// vừa thay đổi" KHÔNG trả lời được — nút đó chỉ thấy hóa đơn đổi trạng thái TRONG LÚC hệ
+// thống đang theo dõi (16/17 hóa đơn mã 4 đã là mã 4 ngay lần đồng bộ đầu, đo 2026-07-29).
+describe("invoiceFilterSchema + buildWhere — cờ biSua (U39)", () => {
+  const TENANT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+  it("nhận biSua=true từ query string", () => {
+    const r = invoiceFilterSchema.safeParse({ biSua: "true" });
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.biSua).toBe(true);
+  });
+
+  it("không truyền → undefined, KHÔNG sinh mệnh đề lọc", () => {
+    const r = invoiceFilterSchema.safeParse({});
+    expect(r.success && r.data.biSua).toBeUndefined();
+  });
+
+  it("biSua=true → SQL lọc đúng hai mã 4 và 5, KHÔNG đụng mã 1/2/3", () => {
+    const sql = new PgDialect().sqlToQuery(buildWhere(TENANT, { biSua: true }));
+    expect(sql.sql).toContain("in (");
+    // Tham số hóa: giá trị mã nằm ở params, không nối chuỗi.
+    expect(sql.params).toContain(TTHAI.BI_THAY_THE);
+    expect(sql.params).toContain(TTHAI.BI_DIEU_CHINH);
+    expect(sql.params).not.toContain(TTHAI.THAY_THE);
+    expect(sql.params).not.toContain(TTHAI.GOC);
+  });
+
+  it("biSua=false → KHÔNG lọc gì (không vô tình đảo thành 'chỉ hóa đơn lành')", () => {
+    const co = new PgDialect().sqlToQuery(buildWhere(TENANT, { biSua: true })).sql;
+    const khong = new PgDialect().sqlToQuery(buildWhere(TENANT, { biSua: false })).sql;
+    expect(khong).not.toBe(co);
+    expect(khong).toBe(new PgDialect().sqlToQuery(buildWhere(TENANT, {})).sql);
+  });
+
+  it("kết hợp được với bộ lọc kỳ — vẫn giữ lọc tenant", () => {
+    const sql = new PgDialect().sqlToQuery(
+      buildWhere(TENANT, { biSua: true, tuNgay: "2026-07-01", denNgay: "2026-07-31" }),
+    );
+    expect(sql.params).toContain(TENANT);
+    expect(sql.sql).toContain("in (");
   });
 });

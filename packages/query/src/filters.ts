@@ -2,7 +2,7 @@
 // `buildWhere` LUÔN kèm ràng buộc `tenant_id` tường minh (lớp 1 — multi-tenant.md);
 // RLS `withTenant` là lớp 2. Khoảng `tdlap` fail-loud khi ngày phi thực tế (không đoán).
 import { hoaDon } from "@vat/db";
-import { sortableKeys } from "@vat/domain";
+import { TTHAI, sortableKeys } from "@vat/domain";
 import { type SQL, and, asc, desc, eq, gte, ilike, inArray, lte } from "drizzle-orm";
 import { z } from "zod";
 
@@ -24,6 +24,13 @@ export const invoiceFilterSchema = z.object({
   denNgay: isoDate.optional(),
   ttxly: z.coerce.number().int().optional(),
   tthai: z.coerce.number().int().optional(),
+  /** U39 — chỉ lấy hóa đơn ĐÃ BỊ một hóa đơn khác sửa: mã 4 (bị thay thế) + mã 5 (bị điều
+   * chỉnh). Đây là nhóm kế toán cần soi trước khi kê khai.
+   *
+   * Vì sao cần cờ riêng thay vì `tthai=4`: cần HAI mã cùng lúc, mà `tthai` là một số. Và
+   * việc "mã nào nghĩa là bị sửa" phải khai một nơi (`@vat/domain`), không rải 4/5 vào
+   * query string của client. */
+  biSua: z.coerce.boolean().optional(),
   nbmst: z.string().min(1).optional(),
   nmmst: z.string().min(1).optional(),
   // U31 — lọc theo cột. Văn bản là "chứa", không phân biệt hoa thường (xem buildWhere).
@@ -215,6 +222,10 @@ export function buildWhere(tenantId: string, filter: InvoiceSelection): SQL {
   if (filter.ttbsoDen) conds.push(lte(hoaDon.tgtttbso, filter.ttbsoDen));
   if (filter.ttxly !== undefined) conds.push(eq(hoaDon.ttxly, filter.ttxly));
   if (filter.tthai !== undefined) conds.push(eq(hoaDon.tthai, filter.tthai));
+  // `biSua=false` KHÔNG được đảo thành "chỉ hóa đơn lành" — nó chỉ nghĩa là không lọc.
+  if (filter.biSua) {
+    conds.push(inArray(hoaDon.tthai, [TTHAI.BI_THAY_THE, TTHAI.BI_DIEU_CHINH]));
+  }
   if (filter.tuNgay) conds.push(gte(hoaDon.tdlap, dayBoundaryVn(filter.tuNgay, false)));
   if (filter.denNgay) conds.push(lte(hoaDon.tdlap, dayBoundaryVn(filter.denNgay, true)));
   const where = and(...conds);
