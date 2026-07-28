@@ -27,6 +27,16 @@ export const CHANGELOG: ChangelogEntry[] = [
     kind: "improvement",
   },
   {
+    version: "v1.10",
+    date: "2026-07-28",
+    title: "Sửa đăng ký hộ kinh doanh + đồng bộ không còn treo",
+    changes: [
+      "Đăng ký tài khoản và đổi mã số thuế nay nhận đủ mã số thuế 12 chữ số (số định danh cá nhân dùng cho hộ kinh doanh/cá nhân) — trước đây bị từ chối nhầm dù nhập đúng.",
+      'Sửa lỗi khiến một số tài khoản bấm "Đồng bộ" bị kẹt ở trạng thái đang chạy nền không bao giờ xong — đồng bộ nay chạy và hoàn tất bình thường trở lại.',
+    ],
+    kind: "fix",
+  },
+  {
     version: "v1.9",
     date: "2026-07-27",
     title: "Cảnh báo khi hóa đơn đổi trạng thái + sửa hiển thị thuế suất",

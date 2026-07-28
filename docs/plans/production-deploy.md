@@ -1,5 +1,96 @@
 # Kế hoạch triển khai Production — `vatengine.tourdao.vn`
 
+> ## ✅ Changelog v1.10 — 2026-07-28 (đã deploy, đã kiểm chứng)
+>
+> Ghi nhận hai sửa lỗi người dùng thật của phiên hôm nay (MST 12 chữ số cho hộ kinh doanh —
+> commit `0502677`, đã lên trục từ trước; đồng bộ không còn treo — hệ quả trực tiếp của
+> migration `0018` ngay dưới) vào `apps/web/src/lib/changelog.ts`. `apps/web` 317 test xanh
+> (không đổi hành vi ngoài dữ liệu tĩnh) → build lại (`VITE_API_BASE=/api`) → grep bundle xác
+> nhận tiêu đề mới trước deploy → deploy `vat-web` (Version
+> `274cf3fe-2991-4726-84f0-97dc73dd05c0`) → xác nhận bundle live chứa đúng chuỗi mới.
+> Quyết định vận hành đứng sau đợt vá hôm nay được ghi thành **ADR-0009**
+> (`docs/adr/0009-grant-tuong-minh-cho-bang-moi.md`) — mọi migration tạo bảng mới từ nay bắt
+> buộc kèm GRANT tường minh cho `vat_app`, không dựa vào cảnh báo bằng chữ (đã chứng minh
+> không đủ: bị bỏ qua 2 lần).
+
+> ## ✅ Migration 0018 — codify vá GRANT sự cố 28/07 (đã áp production, đã kiểm chứng)
+>
+> Theo đề nghị ở sự cố `vat-api` bị đè bản cũ (mục ngay dưới): viết migration
+> `0018_u35_grant_bang_thieu.sql` — `GRANT SELECT, INSERT, UPDATE` (không DELETE, khớp đúng
+> vá nóng sáng 28/07) cho `vat_app` trên `bo_dem_phien_ban`, `lich_su_thay_doi_hoa_don`,
+> `dong_bo_that_bai`, bọc guard `IF EXISTS (SELECT FROM pg_roles WHERE rolname='vat_app')`
+> (đúng idiom 0009/0011 — RAISE WARNING chứ không throw khi role vắng mặt, ví dụ PGlite).
+> Test mới `packages/db/test/integration/grantVatApp.test.ts` (3 ca) tạo role tên **đúng như
+> production** (`vat_app`, khác `app_user` mà mọi test khác trong repo dùng) và KHÔNG tự cấp
+> gì thêm — khẳng định quyền tới từ chính migration, đúng lớp lỗi từng lọt lưới 8 ngày ở
+> migration `0008`. `packages/db` 117 test xanh, `make lint` sạch. Trước `make migrate`:
+> kiểm `when` journal tăng đơn điệu so với 0017 (ADR-0008) — bắt đúng lệch giờ sandbox lần
+> nữa (`1785217300856` < `1785645720000`), sửa thành `+60000` trước khi chạy. Hậu kiểm trực
+> tiếp trên Neon (không tin thông điệp `[✓]` một mình — ADR-0008): `__drizzle_migrations`
+> mới nhất `id=19` khớp `when` vừa sửa; `has_table_privilege('vat_app', …)` cho cả 3 bảng =
+> SELECT/INSERT/UPDATE **true**, DELETE **false** — khớp chính xác vá nóng đã làm sáng nay.
+> Không cần deploy lại Worker nào (migration thuần GRANT, không đổi API/schema mà code phụ
+> thuộc).
+>
+> **Nhật ký deploy U35b + U35 — 2026-07-27 (đã kiểm chứng).** U35b (sửa hiển thị thuế suất/tiền thuế trong file xuất, commit `593c0b9`) + U35 (lưu vết + cảnh báo thay đổi trạng thái hóa đơn, commit `7751006`) thực hiện tuần tự theo cổng dừng bắt buộc (`docs/plans/U35-prompt-dieu-phoi.md`), cả hai `dod-auditor` PASS, U35 thêm `security-reviewer` PASS. Chi tiết kỹ thuật: `docs/plans/U35-tien-do.md`.
+>
+> ## 🔴 SỰ CỐ 2026-07-28 — `vat-api` bị GHI ĐÈ về bản TRƯỚC U35b bởi một deploy từ checkout cũ (đã vá)
+>
+> **Triệu chứng người dùng báo:** file xuất theo khoảng ngày vẫn KHÔNG có định dạng % cho
+> thuế suất, cột Tiền thuế/Tổng tiền sau thuế vẫn trống — dù U35b đã deploy + xác nhận bằng
+> mắt tối 27/07.
+>
+> **Điều tra (bằng chứng trực tiếp, không suy đoán):** unzip file `.xlsx` người dùng gửi —
+> `xl/styles.xml` chỉ có `cellXfs count="4"`, KHÔNG có `numFmtId="165"` (numFmt "0%" của
+> U35b) — đúng bản CŨ. Dấu thời gian trong chính zip entry (`unzip -v`) = `2026-07-28 05:08`
+> UTC, tức file được server sinh THẬT lúc đó, không phải cache trình duyệt cũ. Đối chiếu
+> `wrangler deployments list` cho `vat-api`: bản của tôi (`d398e86d`, 27/07 11:33 UTC) bị
+> **2 deploy khác đè lên sau đó** — `8e19f7e5` (28/07 02:27:42 UTC) rồi `0f86f407` (28/07
+> 02:35:32 UTC), cùng account `luutuanvu.gl@gmail.com`, **KHÔNG phải phiên này**.
+>
+> **Nguyên nhân gốc (xác nhận qua `docs/plans/HANDOFF-phien-2026-07-28-grant-thieu.md` §4.5
+> + §7 — phiên chẩn đoán độc lập của chủ dự án sáng 28/07):** một checkout khác (máy local
+> của chủ dự án) đứng yên ở commit CŨ (trước khi nhật ký `aa6f2b5` được push tối 27/07) khi
+> họ bắt đầu phiên sáng 28/07 (sửa `fix(mst): nhận MST 12 chữ số`). Họ deploy `vat-api`
+> ngay từ checkout cũ đó (~02:27–02:35 UTC) — bundle mang fix MST mới nhưng **thiếu toàn bộ
+> U35b/U35** (packages/export chưa có percent style). Sau đó họ mới nhận ra + rebase nhánh
+> local lên đúng `origin/trunk` (đã có U35 từ tối 27/07) và push `c09bc5e`/`ded6bc4` — nhưng
+> **quên deploy lại `vat-api`** sau khi rebase, nên production tiếp tục chạy bản thiếu U35b
+> suốt ~10 giờ dù mã nguồn trên trục đã đúng từ lâu.
+>
+> **Sự cố liên quan (cùng phiên sáng 28/07, do chủ dự án + Cowork tự phát hiện và vá, KHÔNG
+> phải phiên này):** migration `0017` (U35, của tôi) **thiếu câu `GRANT`** cho vai trò
+> `vat_app` trên 2 bảng mới (`bo_dem_phien_ban`, `lich_su_thay_doi_hoa_don`) — gây
+> `permission denied` thật trên production, làm 39 phiên đồng bộ `failed` trong 24h + lộ ra
+> **cùng lỗi đã có sẵn 8 ngày** ở migration `0008` (bảng `dong_bo_that_bai`, sổ dead-letter
+> câm suốt từ 20/07). Đã vá nóng bằng `GRANT` tay trên DB thật (không phải migration) —
+> chi tiết đầy đủ, đã kiểm chứng: `docs/plans/HANDOFF-phien-2026-07-28-grant-thieu.md`.
+> **CÒN TREO (chưa phải việc của tôi, chờ chủ dự án quyết):** vá nóng chưa được codify vào
+> migration — DB mới/staging/DR sẽ lặp lại đúng lỗi này (mục 4.1 trong handoff).
+>
+> **Vá của phiên này (2026-07-28, đã kiểm chứng):** fast-forward worktree lên đúng
+> `origin/feat/cloudflare-stack-u0` (`ded6bc4`, không mất commit nào — kiểm
+> `git merge --ff-only` sạch); chạy lại **toàn bộ** test bị ảnh hưởng TRƯỚC khi deploy
+> (`apps/api` 505, `apps/admin` 68, `apps/web` 317 — tất cả xanh) + `make lint` sạch; deploy
+> lại CẢ BA worker đang lệch trục: `vat-api` (Version `853541e3-f265-4482-ab00-796a954a0559`),
+> `vat-web` (build lại, grep bundle xác nhận CẢ hai chuỗi mới — mst-fix "10, 12 hoặc 13 chữ
+> số" VÀ U35 "Hóa đơn vừa thay đổi" — trước khi deploy, Version
+> `0bbf962c-7406-4438-a643-8fe802448422`), `vat-admin` (build ra bundle **giống hệt** bản đã
+> live — "No updated asset files to upload" — tức admin đã được đồng bộ từ trước, Version
+> `1aa732c6-3ab9-441d-84ba-49d29b68d146` chỉ để chắc chắn). Smoke: `/api/health` 200; bundle
+> web live chứa cả 2 chuỗi mới; admin origin vẫn 302 (Access sống).
+>
+> **CHƯA kiểm chứng bằng mắt sau vá lần này** (ranh giới thành thật — không tự tạo được file
+> export thật vì cần đăng nhập tenant + captcha): cần chủ dự án xuất lại file cho đúng
+> khoảng ngày đã báo lỗi, xác nhận cột Thuế suất hiện `%` và Tiền thuế/Tổng sau thuế không
+> còn trống.
+>
+> **Bài học ghi sổ (tổng quát, không chỉ lần này):** một nhánh đã lên trục AN TOÀN không có
+> nghĩa production đang chạy đúng nhánh đó — bất kỳ checkout nào khác (kể cả của chính chủ
+> dự án) đứng yên ở commit cũ mà chạy `wrangler deploy` sẽ ÂM THẦM ghi đè lại. Sau một sự cố
+> phối hợp (rebase/pull để vá lệch nhánh), luôn tự hỏi "phần code vừa rebase có worker nào
+> ĐANG CHẠY BẢN CŨ của nó không — nếu có, phải deploy lại", không mặc định merge xong là đủ.
+
 > ## ⚠️ SỰ CỐ 2026-07-22 — build thiếu biến ⇒ MẤT ĐĂNG NHẬP toàn hệ thống (đã khắc phục)
 >
 > **Việc đang làm:** deploy `vat-web` cho thay đổi ẩn trang Đối chiếu (PR #32, chỉ đụng `apps/web`).
