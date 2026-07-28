@@ -206,6 +206,25 @@ describe("runHoSoGocJob — phân loại lỗi", () => {
     expect(recordResult).toHaveBeenCalledWith(true);
   });
 
+  it("lỗi tạm chung (không phải 401/429/thiếu hồ sơ gốc) → retry + TÍNH là GDT hỏng", async () => {
+    // Nhánh cuối của khối bắt lỗi khi gọi adapter: 5xx thật, timeout, lỗi mạng. Khác
+    // hai nhánh trên ở chỗ PHẢI ghi `false` — đây mới là tín hiệu GDT thật sự có vấn đề,
+    // đủ nhiều liên tiếp thì breaker mở đúng.
+    const recordResult = vi.fn(async () => {});
+    const out = await runHoSoGocJob(
+      deps({
+        taiHoSoGoc: async () => {
+          throw new GdtError("Tải hồ sơ gốc lỗi (HTTP 502).", "HTTP_ERROR", 502);
+        },
+        limiter: { tryAcquire: async () => ({ allowed: true }), recordResult },
+      }),
+      MSG,
+    );
+
+    expect(out.kind).toBe("retry");
+    expect(recordResult).toHaveBeenCalledWith(false);
+  });
+
   it("lỗi ghi R2/DB → retry, KHÔNG tính GDT hỏng", async () => {
     const recordResult = vi.fn(async () => {});
     const out = await runHoSoGocJob(
@@ -236,6 +255,11 @@ describe("hoSoGocConsumerAction — ánh xạ sang hành động hàng đợi", 
   it("retry_backpressure → reenqueue có delay (không tiêu quota max_retries)", () => {
     const a = hoSoGocConsumerAction({ kind: "retry_backpressure", reason: "rate_limited" }, opts);
     expect(a.type).toBe("reenqueue");
+  });
+
+  it("needs_reauth → ack (chờ người đăng nhập lại; retry vô ích, không được kẹt queue)", () => {
+    const a = hoSoGocConsumerAction({ kind: "needs_reauth", reason: "session_expired" }, opts);
+    expect(a.type).toBe("ack");
   });
 
   it("retry → retry thật (tính vào max_retries → DLQ)", () => {

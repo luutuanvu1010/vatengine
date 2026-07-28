@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Mã đơn vị** | U37 (U36 là số lớn nhất đang dùng, xác nhận `ls docs/plans/` 2026-07-28) |
-| **Trạng thái** | 🔄 **ĐỔI HƯỚNG 2026-07-28 (chủ dự án).** Không dựng bản thể hiện từ dữ liệu nữa — **tải thẳng hóa đơn gốc từ GDT** (§4.5). Bốn quyết định cũ bị vô hiệu hóa (§3). Kế hoạch đã duyệt, còn treo **R-b** trước khi code. |
+| **Trạng thái** | 🔄 **ĐỔI HƯỚNG 2026-07-28 (chủ dự án).** Không dựng bản thể hiện từ dữ liệu nữa — **tải thẳng hóa đơn gốc từ GDT** (§4.5). Bốn quyết định cũ bị vô hiệu hóa (§3). **Bước R đã đóng** (§4.5–§4.7). U37a xong 3/3 lát (`c133bcf`, `44db2e2`, `c217a24`); tiếp theo là **U37b**. |
 | **Mức ưu tiên** | **1 (cao nhất trong backlog)** — chỉ định trực tiếp của chủ dự án |
 | **Nguồn gốc** | `docs/BACKLOG-y-tuong-va-de-xuat.md`, mục `[2026-07-28] ⭐ ƯU TIÊN 1 — Xuất hóa đơn theo MẪU CHUẨN` |
 | **Ngày lập hồ sơ** | 2026-07-28 (3 vòng hỏi–đáp với chủ dự án trong cùng ngày) |
@@ -62,7 +62,7 @@ Mục đích của file: **hỗ trợ tổng hợp và đối soát**. **Không 
 
 ### 4.1 ⚠️ GDT **không** phát hành PDF có logo — giả định ban đầu đã bị bác bỏ
 
-Giả định ban đầu của chủ dự án: *"Hoá đơn tải về từ trang GDT vẫn có logo ⇒ logo được lưu sẵn trong CSDL của GDT."* **Bốn bằng chứng độc lập nói ngược lại:**
+Giả định ban đầu của chủ dự án: *"Hoá đơn tải về từ trang GDT vẫn có logo ⇒ logo được lưu sẵn trong CSDL của GDT."* **Sáu bằng chứng độc lập nói ngược lại:**
 
 1. **Chân trang mọi hóa đơn trong file mẫu** (`pdftotext -f 1 -l 1 docs/doi_chieu_data/hoa_don_mau.pdf`, trích nguyên văn):
    > *"Đơn vị cung cấp dịch vụ Hóa đơn điện tử: Tập đoàn Công nghiệp - Viễn thông Quân đội (Viettel), MST: 0100109106. Tra cứu hóa đơn điện tử tại Website: https://vinvoice.viettel.vn/utilities/invoice-search. **Mã số bí mật**: 5666OK7MZX1R3CK."*
@@ -72,7 +72,7 @@ Giả định ban đầu của chủ dự án: *"Hoá đơn tải về từ tran
 3. **Ảnh nhúng** (`pdfimages -list`): đúng **3 ảnh/trang**, kích thước **giống hệt nhau ở mọi trang** (179×364, 512×106, 130×54) — logo/con dấu của **một** người bán, do hệ thống Viettel chèn lúc dựng bản thể hiện.
 4. **Adapter của ta biết gì về GDT:** `packages/gdt-client/src/endpoints.ts` + `detail.ts` chỉ có `/query/invoices/{purchase,sold}`, `/sco-query/...`, `/…/invoices/detail` (4 tham số định danh) — **không có endpoint PDF/logo nào**.
 5. **Tín hiệu đối thủ:** `KHAO_SAT_TINH_NANG_NIBOT.md:31` — *"với PDF gốc có logo/màu, NIBOT chào dịch vụ **DOLAGO** để tải từ nhà cung cấp"*. Nếu GDT phát PDF có logo, NIBOT đã không phải bán thêm dịch vụ bên thứ ba.
-6. **⭐ Bằng chứng thứ 5 — từ CHÍNH cổng GDT, không phải PDF của nhà cung cấp** (bổ sung 2026-07-28): `docs/doi_chieu_data/Hóa Đơn Điện Tử.html` là trang cổng GDT thật đã lưu, **có chứa khối "Xem hóa đơn"** — tức bản thể hiện do chính GDT dựng. Đếm ảnh trong toàn trang:
+6. **⭐ Bằng chứng thứ 6 — từ CHÍNH cổng GDT, không phải PDF của nhà cung cấp** (bổ sung 2026-07-28): `docs/doi_chieu_data/Hóa Đơn Điện Tử.html` là trang cổng GDT thật đã lưu, **có chứa khối "Xem hóa đơn"** — tức bản thể hiện do chính GDT dựng. Đếm ảnh trong toàn trang:
 
    ```
    $ node -e "const h=require('fs').readFileSync(f,'utf8');
@@ -310,6 +310,15 @@ XML lấy từ GDT theo **định danh hóa đơn** (`nbmst`/`khhdon`/`shdon`/`k
 3. **Job nền** (`apps/sync-worker`): thêm loại message vào queue `vat-sync` sẵn có, qua `TenantLimiter` + `EgressHealth`, DLQ dùng lại `vat-sync-dlq`. ⚠️ `apps/sync-worker/wrangler.jsonc` **hiện không có binding R2 nào** — phải thêm `RAW`.
 
 ### U37b — Gói ZIP, link công khai, thu hồi, giao diện
+
+> **🔴 RÀNG BUỘC BẮT BUỘC khi dựng producer** (phát hiện ở review bảo mật lát 3, 2026-07-28):
+> `runHoSoGocJob` **tin thẳng** `msg.ref` (nbmst/khhdon/khmshdon/shdon) trong message, không
+> tự tra lại `hoa_don` theo `tenantId`. Hiện vô hại vì chưa producer nào enqueue. Khi làm nút
+> "Xuất hóa đơn", `HoSoGocMessage.ref` **PHẢI** dựng từ chính hàng `hoa_don` đã lọc đúng
+> `tenant_id` của phiên đăng nhập — không nhận `ref` từ client. Lớp chặn cuối đã có: FK ghép
+> `(tenant_id, hoa_don_id)` làm vỡ insert nếu hóa đơn không thuộc tenant, nhưng đó là lưới
+> an toàn, không thay cho việc dựng đúng.
+
 
 4. **Gói ZIP — cấu trúc PHẲNG, tài nguyên tĩnh dùng chung một lần** (§4.7 hệ quả 2). `invoice.html` tham chiếu 3 tài nguyên bằng **tên phẳng không tiền tố**, nên đặt phẳng là chạy được **mà không phải sửa một ký tự nào** trong HTML:
 

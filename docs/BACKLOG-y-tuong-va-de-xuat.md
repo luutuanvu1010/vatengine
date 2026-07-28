@@ -839,3 +839,23 @@ lạc phạm vi U36.
   dứt điểm câu hỏi CHƯA KIỂM CHỨNG ở trên; (b) thêm cổng CI kiểm `when` tăng đơn điệu trên
   toàn journal, đỏ ngay khi lệch — rẻ, chặn được cả lớp lỗi này về sau.
 - **Nguồn phát hiện:** Phiên U37a lát 2, 2026-07-28.
+
+## [2026-07-28] Lớp wiring `deps.ts` của sync-worker chưa từng có test — nợ có sẵn, U37a làm nó lớn thêm
+
+- **Trạng thái:** Ghi nhận, KHÔNG chặn DoD (đúng tiền lệ đã chấp nhận của dự án). Phát hiện
+  lại khi `dod-auditor` soát U37a lát 3 (commit `c217a24`).
+- **Bằng chứng:** `apps/sync-worker/vitest.config.ts` loại `deps.ts` khỏi ngưỡng phủ từ trước,
+  lý do ghi sẵn trong file: *"cần binding Cloudflare thật — kiểm chứng khi deploy"*. `grep`
+  xác nhận `makeJobDeps` / `makeDetailJobDeps` / `makeDeltaJobDeps` / `makeHoSoGocJobDeps`
+  KHÔNG hàm nào xuất hiện trong bất kỳ file test nào.
+- **Vì sao U37a làm nó đáng lo hơn:** `makeHoSoGocJobDeps` là hàm `deps` đầu tiên có **logic
+  thật sự có thể sai**, không chỉ nối dây: (a) thứ tự ghi R2 TRƯỚC rồi mới upsert DB — đảo
+  ngược sẽ khiến `daCo` chặn vĩnh viễn một hóa đơn có sổ mà không có tệp; (b) chọn đúng khóa
+  trong `KHOA_TAI_NGUYEN_CHUNG[ten]`; (c) gọi `env.RAW.put` đúng 2–5 lần với đúng khóa. Cả ba
+  hiện chỉ được kiểm khi deploy thật, không có lưới an toàn tự động.
+- **Đề xuất khi tới lượt:** hoặc (a) tách phần logic thuần khỏi `deps.ts` (nhận một
+  `R2Bucket`-like tiêm được) rồi test với R2 giả trong bộ nhớ — `apps/api/test/helpers.ts`
+  ĐÃ có sẵn một R2 giả dùng được làm khuôn; hoặc (b) chấp nhận và bù bằng nghiệm thu thủ công
+  có kịch bản rõ sau mỗi lần deploy.
+- **Mức ưu tiên đề xuất:** Trung bình — tăng lên Cao nếu còn thêm hàm `deps` mang logic.
+- **Nguồn phát hiện:** Review chéo `dod-auditor`, phiên U37a lát 3, 2026-07-28.
