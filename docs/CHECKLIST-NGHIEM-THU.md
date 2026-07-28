@@ -406,8 +406,15 @@ Tenant MST `4201969169`, chiều **Bán ra**:
 - [x] Thông báo hiện đúng số hóa đơn + tiền đã loại, **tách theo chiều** · *đã đối chiếu nguyên văn với mẫu §4b kế hoạch: "Kỳ 01/07 – 31/07/2026 · Bán ra / 3 hóa đơn bị thay thế - đã loại khỏi tổng: thuế -1.711.111 ₫, tổng thanh toán -23.100.000 ₫ / 3 hóa đơn thay thế và 1 hóa đơn điều chỉnh lập trong kỳ - đã tính vào tổng"*
 - [x] Dòng *"Thuế phải nộp trên báo cáo giảm 1.711.111 ₫"* xuất hiện **một lần**, kèm chú
       giải "số thuế phải nộp thật không đổi" · *xác nhận 2026-07-28*
-- [ ] Tải file Excel → có 3 cột trạng thái; hóa đơn mã 4 **vẫn có trong file** với
-      "Tính vào tổng" = **Không** ← **CHƯA kiểm** (ba ô trên đã xác nhận 2026-07-28)
+- [x] Tải file Excel → có 3 cột trạng thái; hóa đơn mã 4 **vẫn có trong file** với
+      "Tính vào tổng" = **Không** · *đã đối chiếu MÁY trên file thật
+      `docs/doi_chieu_data/vatengine-export-01072026-31072026.xlsx` (2026-07-28): 19 cột đúng
+      thứ tự, 3 cột trạng thái ngay sau `Tổng tiền (sau thuế)`; 3.589 hóa đơn / 7.923 dòng
+      mặt hàng; 3 HĐ mã 4 (`Tính vào tổng` = Không) tổng thuế **1.711.111 đ**, tổng sau thuế
+      **23.100.000 đ** — khớp TỪNG ĐỒNG với thông báo trên màn hình; "Có" + "Không" = 3.589
+      không sót dòng nào*
+
+**U36 ĐÓNG — cả 4 ô nghiệm thu đã đạt.**
 
 ⚠️ **20.335.925 ₫ là tổng TOÀN BỘ 3 tenant × 5 tháng — KHÔNG dùng để nghiệm thu một kỳ.**
 
