@@ -107,16 +107,13 @@
   // U12 — Ngưỡng rate-limit client (tinh chỉnh theo môi trường; bỏ trống → mặc định
   // trong rateLimiter.ts). Đây là cấu hình KHÔNG nhạy cảm nên đặt ở vars, không secret.
   "vars": {
-    // ⚠️ CHẾ ĐỘ NHỎ GIỌT TẠM THỜI (2026-07-27, sự cố GDT kìm nguồn Cloudflare sau bão
-    // request — docs/BACKLOG mục [2026-07-27]): hạ toàn bộ nhịp xuống mức lách qua ngân
-    // sách ít ỏi GDT còn cấp (quan sát 12:41: request lẻ tẻ lọt, chuỗi dài bị cắt).
-    // GIÁ TRỊ GỐC cần KHÔI PHỤC khi GDT hết kìm (đo bằng chuỗi kéo chạy trơn trở lại):
-    //   LIMITER_CAPACITY 10 · LIMITER_REFILL_PER_SEC 2 · FANOUT_BACKPRESSURE_DELAY_SEC 300
-    //   · SYNC_PAGE_MIN_INTERVAL_MS 500 · DELTA_CHUNK_PAGES 40
-    // 14:17 27/07: GDT xác nhận trả lời trở lại (tail: result ok=true) → nâng nhỏ giọt
-    // lên SỐ TRUNG. Khôi phục hẳn giá trị gốc khi chuỗi chạy trơn ổn định.
-    "LIMITER_CAPACITY": "5",
-    "LIMITER_REFILL_PER_SEC": "1",
+    // 2026-07-28 (QĐ chủ dự án): KHÔI PHỤC GIÁ TRỊ GỐC — kết thúc "chế độ nhỏ giọt"
+    // tạm 27/07 (GDT kìm nguồn Cloudflare sau bão request). Bằng chứng GDT hết kìm:
+    // chuỗi kéo 28/07 chạy trơn (4 run completed 03:53–03:54Z, không 429; xem
+    // docs/plans/HANDOFF-phien-2026-07-28-grant-thieu.md phụ lục 6). Lịch sử nhỏ giọt:
+    // HANDOFF-phien-2026-07-27-thieu-hd-ngay-26.md mục 5.
+    "LIMITER_CAPACITY": "10",
+    "LIMITER_REFILL_PER_SEC": "2",
     "LIMITER_FAILURE_THRESHOLD": "5",
     "LIMITER_COOLDOWN_MS": "60000",
     // H-B.4 — fan-out: giãn khởi động tenant trên ~5' (jitter) + trần 10 lần reenqueue
@@ -131,19 +128,20 @@
     // job chờ tối đa 5' mới thử lại — chấp nhận (tôn trọng máy chủ thuế > tốc độ).
     // 27/07 chiều: hạ 600 → 180 theo yêu cầu chủ dự án (GDT đã trả lời trở lại, chấp
     // nhận gõ dày hơn để rút ngắn chờ); giá trị gốc ngoài sự cố vẫn là 300.
+    // 28/07: khi khôi phục 4 var kia về gốc, chủ dự án CHƯA chốt 180 vs 300 — giữ 180.
     "FANOUT_BACKPRESSURE_DELAY_SEC": "180",
     "FANOUT_MAX_BACKPRESSURE": "10",
     // U25 AC3 (đóng drift 2026-07-18): giãn nhịp giữa hai request GDT trong một job
     // header + backoff 429 khi thiếu Retry-After. Mặc định trong syncRetryConfig.ts;
     // "0" = tắt tường minh. CHƯA KIỂM CHỨNG ngưỡng thật của GDT — chỉnh khi có số đo.
-    "SYNC_PAGE_MIN_INTERVAL_MS": "2000",
+    "SYNC_PAGE_MIN_INTERVAL_MS": "500",
     "SYNC_RETRY_BACKOFF_MS": "3000",
     // Task 6 (delta-sync) — số TRANG tối đa mỗi lô `syncChunk`: một lần gọi Worker chỉ
     // kéo ≤ chừng này trang rồi tự enqueue message nối tiếp, thay vì phân trang cả kỳ
     // trong MỘT invocation (gốc rễ "Too many subrequests by single Worker invocation",
     // sự cố 2026-07-18). Bỏ trống → mặc định deps.ts (40). Hạ xuống nếu log
     // `[delta] local_limit` tái diễn.
-    "DELTA_CHUNK_PAGES": "10"
+    "DELTA_CHUNK_PAGES": "40"
   }
 
   // JWT_SECRET / bí mật egress nạp qua `wrangler secret put` — security.md.
