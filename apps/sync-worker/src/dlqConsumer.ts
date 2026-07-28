@@ -9,6 +9,7 @@ import {
   isAuditMessage,
   isDeltaMessage,
   isDetailMessage,
+  isHoSoGocMessage,
 } from "@vat/sync";
 import type { AnyDb } from "./types";
 
@@ -17,7 +18,7 @@ export const AUDIT_HANH_DONG_DLQ = "dong_bo_that_bai_dlq";
 // I2 — thêm "audit"/"delta" (Task 6): trước đây hai loại này rơi vào nhánh mặc định
 // "header" (dán nhãn sai — audit/delta không phải job cả kỳ).
 export interface DlqRecord {
-  loai: "header" | "detail" | "audit" | "delta";
+  loai: "header" | "detail" | "audit" | "delta" | "hoso";
   lyDo: string;
   doiTuong: string;
   payload: VatSyncQueueMessage;
@@ -52,6 +53,15 @@ export function dlqRecord(body: VatSyncQueueMessage): DlqRecord {
       loai: "delta",
       lyDo: "max_retries",
       doiTuong: `ky:${body.period}:${body.direction}`,
+      payload: body,
+    };
+  }
+  // U37a — như `detail`, message này định danh theo HÓA ĐƠN chứ không theo kỳ/chiều.
+  if (isHoSoGocMessage(body)) {
+    return {
+      loai: "hoso",
+      lyDo: "max_retries",
+      doiTuong: `hoadon:${body.hoaDonId}`,
       payload: body,
     };
   }

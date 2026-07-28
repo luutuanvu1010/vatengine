@@ -714,4 +714,25 @@ describe("phanLoaiMessage — THỨ TỰ nhánh consumer (chốt chặn hồi qu
       }).loai,
     ).toBe("header");
   });
+
+  // U37a — loại thứ NĂM trên cùng queue. Nếu quên guard này, message `hoso` rơi vào
+  // nhánh header và âm thầm chạy như job đồng bộ CẢ THÁNG cho tenant đó: tốn hàng loạt
+  // request GDT sai mục đích, không lỗi biên dịch, không lỗi runtime.
+  it("message hồ sơ gốc → nhánh 'hoso' (KHÔNG rơi vào 'header'/runScheduledSync)", () => {
+    expect(
+      phanLoaiMessage({
+        kind: "hoso",
+        tenantId: "t-A",
+        taikhoanId: "acc-1",
+        hoaDonId: "hd-1",
+        ref: {
+          nbmst: "0100000001",
+          khhdon: "C26TQO",
+          khmshdon: "1",
+          shdon: "13580",
+          source: "normal",
+        },
+      }).loai,
+    ).toBe("hoso");
+  });
 });

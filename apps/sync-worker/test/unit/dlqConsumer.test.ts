@@ -28,6 +28,20 @@ describe("H-B.6 — dlqRecord (thuần)", () => {
     expect(r.doiTuong).toBe("hoadon:hd9");
   });
 
+  // U37a — message hồ sơ gốc. Dán nhãn 'header' sẽ khiến sổ DLQ ghi `doiTuong` theo
+  // kỳ/chiều mà message này KHÔNG có (undefined), người trực mất manh mối hóa đơn nào hỏng.
+  it("message hồ sơ gốc → loai 'hoso' + doiTuong theo hóa đơn (KHÔNG 'header')", () => {
+    const r = dlqRecord({
+      kind: "hoso",
+      tenantId: "t1",
+      taikhoanId: "a1",
+      hoaDonId: "hd7",
+      ref: { nbmst: "x", khhdon: "1", khmshdon: "1", shdon: "5", source: "normal" },
+    });
+    expect(r.loai).toBe("hoso");
+    expect(r.doiTuong).toBe("hoadon:hd7");
+  });
+
   // I2 (nhãn `loai` sai) — audit/delta đang bị dán "header" trước khi vá.
   it("message audit → loai 'audit' (KHÔNG 'header')", () => {
     const r = dlqRecord({

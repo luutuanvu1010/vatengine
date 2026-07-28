@@ -2,19 +2,24 @@
 // transport egress T0, limiter theo tenant) + đọc sổ đăng ký tenant để lập lịch.
 // KHÔNG test-cover (test tiêm fake/PGlite trực tiếp vào runJob/enumerate).
 import { tenants, withTenant } from "@vat/db";
-import { createDirectCfTransport, queryInvoiceTotal } from "@vat/gdt-client";
+import { createDirectCfTransport, getInvoiceOriginalZip, queryInvoiceTotal } from "@vat/gdt-client";
 import {
+  KHOA_TAI_NGUYEN_CHUNG,
   adapterFetchDetail,
   chotDeltaRun,
   coDeltaRunDangChay,
+  daCoHoSoGoc,
   demHoaDonTheoNguon,
   ghiAuditDu,
+  ghiNhanKhongCoHoSoGoc,
+  khoaHoSoGoc,
+  luuTepHoaDonGoc,
   moDeltaRun,
   persistInvoiceLines,
   sync,
   syncChunk,
 } from "@vat/sync";
-import type { AuditSyncMessage, DeltaPullMessage } from "@vat/sync";
+import type { AuditSyncMessage, DeltaPullMessage, HoSoGocMessage } from "@vat/sync";
 import { eq } from "drizzle-orm";
 import { egressHealthClient } from "./egressHealth";
 import type { EgressProbeDeps } from "./egressProbe";
@@ -27,6 +32,7 @@ import {
 import { dbRecorder, loadAccountToken } from "./recorder";
 import type { DeltaJobDeps } from "./runDeltaJob";
 import type { RunDetailJobDeps } from "./runDetailJob";
+import type { RunHoSoGocJobDeps } from "./runHoSoGocJob";
 import { resolveSyncRetryConfig } from "./syncRetryConfig";
 import { tenantLimiterClient } from "./tenantLimiter";
 import { throttledTransport } from "./throttledTransport";
@@ -207,5 +213,49 @@ export function makeDeltaJobDeps(
     enqueue,
     enqueueDetail: (msgs: DetailSyncMessage[]) => enqueue(msgs),
     chunkPages: resolveDeltaChunkPages(env),
+  };
+}
+
+/**
+ * U37a (lát 3) — deps cho MỘT message tải hồ sơ gốc. Cùng kỷ luật `makeDetailJobDeps`:
+ * limiter bound theo tenant, 1 permit / request GDT, mọi hàm chạm DB bọc `withTenant`.
+ *
+ * Ghi R2 TRƯỚC rồi mới upsert DB: nếu ngược lại và R2 hỏng giữa chừng, sổ sẽ khẳng định
+ * "đã có" trong khi tệp không tồn tại — `daCo` chặn từ đầu nên hóa đơn đó KHÔNG BAO GIỜ
+ * được tải lại, và lỗi chỉ lộ ra lúc người dùng tải gói về. Theo thứ tự này, ca xấu nhất
+ * là R2 có tệp mà DB chưa ghi ⇒ lần chạy sau tải lại và ghi đè cùng khóa (idempotent),
+ * chỉ tốn một request, không mất dữ liệu.
+ *
+ * Ba tệp tĩnh dùng chung ghi cùng lúc, LUÔN cùng khóa cố định `hoadon-goc/_chung/…` —
+ * ghi đè bằng chính nội dung giống hệt là vô hại và tự lành nếu bộ cũ bị mất.
+ */
+export function makeHoSoGocJobDeps(env: Env, db: AnyDb, msg: HoSoGocMessage): RunHoSoGocJobDeps {
+  const limiter = tenantLimiterClient(env.TENANT_LIMITER, msg.tenantId);
+  return {
+    now: () => Date.now(),
+    loadAccount: (m) => loadAccountToken(db, m, env.TOKEN_KEK),
+    limiter,
+    daCo: (tenantId, hoaDonId) =>
+      withTenant(db, tenantId, (tx) => daCoHoSoGoc(tx, tenantId, hoaDonId)),
+    taiHoSoGoc: (token, ref) => getInvoiceOriginalZip(transport, token, ref, { maxAttempts: 2 }),
+    luuHoSoGoc: async (tenantId, hoaDonId, daTach) => {
+      const khoa = khoaHoSoGoc(tenantId, hoaDonId);
+      await env.RAW.put(khoa.xml, daTach.xml);
+      await env.RAW.put(khoa.html, daTach.html);
+      for (const [ten, noiDung] of Object.entries(daTach.taiNguyenChung)) {
+        const khoaChung = KHOA_TAI_NGUYEN_CHUNG[ten];
+        if (khoaChung) await env.RAW.put(khoaChung, noiDung);
+      }
+      await withTenant(db, tenantId, (tx) =>
+        luuTepHoaDonGoc(tx, tenantId, hoaDonId, {
+          soByteXml: daTach.xml.length,
+          soByteHtml: daTach.html.length,
+        }),
+      );
+    },
+    ghiNhanKhongCoHoSoGoc: (tenantId, hoaDonId, maLoi) =>
+      withTenant(db, tenantId, (tx) => ghiNhanKhongCoHoSoGoc(tx, tenantId, hoaDonId, maLoi)),
+    markTokenDead: (m, reason) =>
+      dbRecorder(db).reauthRuntime({ tenantId: m.tenantId, taikhoanId: m.taikhoanId }, reason),
   };
 }

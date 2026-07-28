@@ -17,6 +17,8 @@ export interface Env extends LimiterEnv, SyncRetryEnv {
   // Hàng đợi job đồng bộ nền: scheduled() enqueue, queue() consume. U26: chở CẢ
   // message header (không `kind`) lẫn message chi tiết (`kind:"detail"`).
   SYNC_QUEUE: Queue<VatSyncQueueMessage>;
+  // U37a — kho hồ sơ gốc hóa đơn (bucket NỘI BỘ `vat-raw`, không công khai).
+  RAW: R2Bucket;
   // Durable Object: token-bucket rate limit + circuit breaker theo tenant/MST.
   TENANT_LIMITER: DurableObjectNamespace;
   // GIÁM SÁT (mục C): Durable Object singleton giữ health-state probe egress

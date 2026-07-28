@@ -15,13 +15,14 @@
 //    message.retry(), trần max_retries → dead-letter) · `ack` (xong / cần đăng nhập lại);
 //  - export TenantLimiter: Durable Object rate-limit/circuit-breaker theo tenant/MST.
 // Logic (schedule/runJob/fanout/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
-import { buildAuditMessages, isDetailMessage } from "@vat/sync";
+import { buildAuditMessages, isDetailMessage, isHoSoGocMessage } from "@vat/sync";
 import { getDbFromHyperdrive } from "./db";
 import {
   listActiveTenantIds,
   makeDeltaJobDeps,
   makeDetailJobDeps,
   makeEgressProbeDeps,
+  makeHoSoGocJobDeps,
   makeJobDeps,
 } from "./deps";
 import { dlqConsume } from "./dlqConsumer";
@@ -42,6 +43,7 @@ import { isEgressBlocked } from "./health";
 import { replayDeadLetters } from "./replay";
 import { runAuditJob, runDeltaJob } from "./runDeltaJob";
 import { detailConsumerAction, runDetailJob } from "./runDetailJob";
+import { hoSoGocConsumerAction, runHoSoGocJob } from "./runHoSoGocJob";
 import { runScheduledSync } from "./runJob";
 import {
   buildMessages,
@@ -206,6 +208,7 @@ export default {
           //  - U26 `kind:"detail"` (pha 2, MỘT hóa đơn / message, 1 permit / request);
           //  - Task 6 `kind:"audit"` (đối chiếu total GDT ↔ count DB, quyết kéo/dừng);
           //  - Task 6 `kind:"delta"` (kéo MỘT lô ≤ DELTA_CHUNK_PAGES trang rồi nối chuỗi);
+          //  - U37a `kind:"hoso"` (tải hồ sơ gốc MỘT hóa đơn, 1 permit / request);
           //  - header (không `kind` — job cả kỳ, tương thích lùi).
           const daPhanLoai = phanLoaiMessage(body);
           let action: QueueAction;
@@ -225,6 +228,12 @@ export default {
             case "delta":
               action = consumerAction(
                 await runDeltaJob(makeDeltaJobDeps(env, db, daPhanLoai.msg), daPhanLoai.msg),
+                actionOpts,
+              );
+              break;
+            case "hoso":
+              action = hoSoGocConsumerAction(
+                await runHoSoGocJob(makeHoSoGocJobDeps(env, db, daPhanLoai.msg), daPhanLoai.msg),
                 actionOpts,
               );
               break;
@@ -249,9 +258,11 @@ export default {
           // An toàn cuối: lỗi ngoài dự kiến → retry (trần max_retries làm chốt chặn).
           // security.md "che trước khi ghi": KHÔNG log message thô (có thể mang dữ
           // liệu nhạy cảm) — chỉ định danh job (không nhạy cảm) + LOẠI lỗi để định vị.
-          const nhan = isDetailMessage(body)
-            ? `hoadon=${body.hoaDonId}`
-            : `kỳ=${body.period} chiều=${body.direction}`;
+          // U37a: `hoso` cũng định danh theo HÓA ĐƠN — không có period/direction để in.
+          const nhan =
+            isDetailMessage(body) || isHoSoGocMessage(body)
+              ? `hoadon=${body.hoaDonId}`
+              : `kỳ=${body.period} chiều=${body.direction}`;
           console.warn(
             `Job đồng bộ nền lỗi bất ngờ (tenant=${body.tenantId} ${nhan}): ${err instanceof Error ? err.name : "unknown"}`,
           );

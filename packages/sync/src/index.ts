@@ -24,6 +24,25 @@ export {
 export { persistInvoiceLines, mapLineToDongHangHoa, adapterFetchDetail } from "./detailLines";
 // U26 (backfill) — tập hóa đơn thiếu dòng hàng cho trigger backfill-lines.
 export { listInvoicesMissingLines, type MissingLinesResult } from "./missingLines";
+// U37a — kho hồ sơ gốc: quy ước khóa R2 + thao tác DB tenant-scoped.
+export {
+  KHOA_TAI_NGUYEN_CHUNG,
+  daCoHoSoGoc,
+  ghiNhanKhongCoHoSoGoc,
+  khoaHoSoGoc,
+  luuTepHoaDonGoc,
+} from "./tepHoaDonGocStore";
+// U37a — hồ sơ gốc hóa đơn: contract message + bộ tách gói ZIP của GDT.
+export {
+  TEN_TEP_HTML,
+  TEN_TEP_XML,
+  TEP_TINH_DUNG_CHUNG,
+  buildHoSoGocMessages,
+  isHoSoGocMessage,
+  tachHoSoGoc,
+  type HoSoGocDaTach,
+  type HoSoGocMessage,
+} from "./hoSoGoc";
 // Contract job đồng bộ nền + lịch kỳ (dùng chung producer/consumer — U9 + "Đồng bộ ngay").
 export {
   type SyncJobMessage,

@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage"
@@ -12,7 +14,8 @@
   "dependencies": {
     "@vat/db": "*",
     "@vat/gdt-client": "*",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4"

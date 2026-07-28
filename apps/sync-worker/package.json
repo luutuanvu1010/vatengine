@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
-    "@types/pg": "^8.11.10"
+    "@types/pg": "^8.11.10",
+    "fflate": "^0.8.2"
   }
 }

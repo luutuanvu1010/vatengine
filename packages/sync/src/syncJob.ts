@@ -3,6 +3,7 @@
 //  - consumer: `queue()` (vat-sync-worker).
 // Đặt ở @vat/sync để KHÔNG nhân đôi định nghĩa message/period giữa hai app (Hiến pháp §8).
 import type { InvoiceDirection } from "@vat/gdt-client";
+import type { HoSoGocMessage } from "./hoSoGoc";
 
 // Payload MỘT job: một tenant × một tài khoản thuế × một chiều × một kỳ. `tenantId`
 // TƯỜNG MINH — job nền không có request context (multi-tenant.md).
@@ -109,12 +110,14 @@ export interface DeltaPullMessage {
  */
 export const TRAN_TONG_TRANG_DELTA = 2000;
 
-/** Mọi hình dạng message hợp lệ trên queue vat-sync (header U5/U22 + detail U26 + audit/delta U3-U9). */
+/** Mọi hình dạng message hợp lệ trên queue vat-sync (header U5/U22 + detail U26 +
+ * audit/delta U3-U9 + hồ sơ gốc U37a). */
 export type VatSyncQueueMessage =
   | SyncJobMessage
   | DetailSyncMessage
   | AuditSyncMessage
-  | DeltaPullMessage;
+  | DeltaPullMessage
+  | HoSoGocMessage;
 
 /** Phân nhánh consumer: chỉ tin `kind === "detail"`; mọi thứ khác coi là header. */
 export function isDetailMessage(body: unknown): body is DetailSyncMessage {

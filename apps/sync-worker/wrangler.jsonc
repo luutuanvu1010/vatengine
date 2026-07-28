@@ -40,6 +40,13 @@
   // Postgres qua Hyperdrive (giống apps/api). Thay "id" bằng id thật khi deploy.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "1011ff82e7154531883f0f2e62d344f0" }],
 
+  // U37a — kho HỒ SƠ GỐC hóa đơn (bản XML có chữ ký số + bản thể hiện HTML do GDT
+  // dựng sẵn, tải qua `export-xml`). Bucket NỘI BỘ, KHÔNG công khai: khóa dạng
+  // `hoadon-goc/<tenantId>/<hoaDonId>.{xml,html}` + một bộ tài nguyên tĩnh dùng chung
+  // ở `hoadon-goc/_chung/`. Cùng bucket `vat-raw` mà vat-api đang dùng cho file kết
+  // xuất — worker này TRƯỚC ĐÂY KHÔNG có binding R2 nào.
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }],
+
   // Hàng đợi job đồng bộ: worker này VỪA là producer (scheduled() enqueue) VỪA là
   // consumer (queue() xử lý). Tạo lúc deploy: `wrangler queues create vat-sync`.
   "queues": {

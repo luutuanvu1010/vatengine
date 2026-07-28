@@ -1,11 +1,12 @@
 // H-B.4 — Fan-out job đồng bộ nền: chia lô gửi hàng đợi, giãn tải theo tenant, và
 // ánh xạ outcome → hành động hàng đợi (tách backpressure khỏi lỗi thật). THUẦN LOGIC,
 // không phụ thuộc runtime Cloudflare → test offline. Áp dụng ở wiring index.ts.
-import { isAuditMessage, isDeltaMessage, isDetailMessage } from "@vat/sync";
+import { isAuditMessage, isDeltaMessage, isDetailMessage, isHoSoGocMessage } from "@vat/sync";
 import type {
   AuditSyncMessage,
   DeltaPullMessage,
   DetailSyncMessage,
+  HoSoGocMessage,
   SyncJobMessage,
   VatSyncQueueMessage,
 } from "@vat/sync";
@@ -16,6 +17,7 @@ export type MessageDaPhanLoai =
   | { loai: "detail"; msg: DetailSyncMessage }
   | { loai: "audit"; msg: AuditSyncMessage }
   | { loai: "delta"; msg: DeltaPullMessage }
+  | { loai: "hoso"; msg: HoSoGocMessage }
   | { loai: "header"; msg: SyncJobMessage };
 
 /**
@@ -34,6 +36,7 @@ export function phanLoaiMessage(body: VatSyncQueueMessage): MessageDaPhanLoai {
   if (isDetailMessage(body)) return { loai: "detail", msg: body };
   if (isAuditMessage(body)) return { loai: "audit", msg: body };
   if (isDeltaMessage(body)) return { loai: "delta", msg: body };
+  if (isHoSoGocMessage(body)) return { loai: "hoso", msg: body };
   return { loai: "header", msg: body };
 }
 
