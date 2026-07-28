@@ -753,3 +753,27 @@ Dùng **tên miền phụ `docs.tourdao.vn`** làm địa chỉ công khai của
   `@vat/export` re-export cho tương thích ngược. Việc cơ học, có test dày ở cả hai bên nên
   rủi ro thấp — nhưng nó đụng `columns.ts` (vùng vừa qua QA của U36.2) nên cố ý hoãn.
 - **Ghi lại thay vì âm thầm chọn một bên** — `CLAUDE.md` §8 "khi phát hiện drift, ghi lại".
+
+## [2026-07-28] `kiem-quyen-bang.mjs` báo "THIẾU quyền" sai — và `audit_log` cấp thừa thật
+
+Phát hiện khi hậu kiểm migration 0018 trước lúc deploy U36.
+
+**(a) Báo động giả — đừng chạy câu vá nó gợi ý.** Script kết luận 3 bảng
+`bo_dem_phien_ban` · `dong_bo_that_bai` · `lich_su_thay_doi_hoa_don` "⚠️ THIẾU"
+vì thiếu `DELETE`, rồi in sẵn `GRANT DELETE … TO vat_app`. Nhưng:
+
+- Migration `0018_u35_grant_bang_thieu.sql` **cố ý** chỉ cấp `SELECT, INSERT, UPDATE`.
+- `scripts/kiem-quyen-bang.mjs:83` ghi rõ: bảng không nằm trong bảng tra thì **mặc định**
+  kỳ vọng đủ `SELECT/INSERT/UPDATE/DELETE`. Đó là giả định mặc định, không phải bằng chứng.
+- Mã ứng dụng **không có lệnh DELETE nào** trên cả ba bảng (đã grep `packages/*/src`,
+  `apps/*/src`).
+
+⇒ Chạy câu vá đó là **cấp quyền thừa**, ngược nguyên tắc đặc quyền tối thiểu. Việc cần làm
+là bổ sung ba bảng này vào bảng tra của script với tập quyền ĐÚNG (`SIU`), để lần sau nó
+không dụ người trực cấp thừa.
+
+**(b) Cấp thừa THẬT, cần rà:** `audit_log` hiện cho `vat_app` cả `UPDATE` và `DELETE`
+(di sản `app-role.sql` chạy `GRANT … ON ALL TABLES` một lần). `.claude/rules/security.md`
+quy định *"Audit log không được ghi đè, chỉ append"* — quyền hiện tại **mâu thuẫn với luật**.
+Chưa thu hồi ngay vì cần xác nhận không có đường ghi hợp lệ nào đang dùng tới, và việc này
+lạc phạm vi U36.
