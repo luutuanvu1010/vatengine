@@ -2,7 +2,13 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { AboutPage } from "../../src/features/about/AboutPage";
+import { CHANGELOG } from "../../src/lib/changelog";
 import { renderWithProviders } from "../helpers/renderApp";
+
+/** Số hiệu phiên bản chứa dấu chấm — thoát trước khi dựng RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 describe("Trang Giới thiệu & Hỗ trợ (U16b)", () => {
   it("hiện tiêu đề mới + mục đích phần mềm", () => {
@@ -22,9 +28,18 @@ describe("Trang Giới thiệu & Hỗ trợ (U16b)", () => {
     expect(screen.getByText(/không lưu mật khẩu thô/i)).toBeInTheDocument();
   });
 
-  it("Lịch sử cập nhật: hiện phiên bản mới nhất", () => {
+  // Khẳng định DẪN XUẤT từ CHANGELOG, không gõ cứng số hiệu: bản trước ghim `/v1\.6/` —
+  // đúng vì v1.6 tình cờ là mục thứ 5 (đúng trần hiển thị mặc định). Thêm BẤT KỲ mục
+  // changelog nào cũng đẩy nó ra ngoài trần và làm test đỏ vì lý do chẳng liên quan gì tới
+  // điều nó muốn kiểm (đã xảy ra 28/07 khi v1.10 và v2.0 cùng được thêm).
+  it("Lịch sử cập nhật: hiện phiên bản mới nhất, ẩn bớt phiên bản cũ", () => {
     renderWithProviders(<AboutPage />);
-    expect(screen.getByText(/v1\.6/)).toBeInTheDocument();
+    const moiNhat = CHANGELOG[0];
+    const cuNhat = CHANGELOG[CHANGELOG.length - 1];
+    expect(moiNhat).toBeDefined();
+    expect(screen.getByText(new RegExp(escapeRegExp(moiNhat?.version ?? "")))).toBeInTheDocument();
+    // Danh sách bị cắt bớt (có nút "xem thêm") → mục cũ nhất KHÔNG hiện sẵn.
+    expect(screen.queryByText(new RegExp(escapeRegExp(cuNhat?.version ?? "")))).toBeNull();
   });
 
   it("nút Zalo/WhatsApp: đúng liên kết, mở tab mới, chống tabnabbing + giờ hỗ trợ", () => {

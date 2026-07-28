@@ -638,7 +638,7 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 
 ### [2026-07-28] ⭐ ƯU TIÊN 1 — Xuất hóa đơn theo MẪU CHUẨN (bản thể hiện giống GDT) + gói ZIP chia sẻ công khai qua R2 có hạn 1 tháng
 
-- **Trạng thái:** Đề xuất — chưa triển khai. **Mức ưu tiên: 1 (cao nhất trong giỏ)** — chỉ định trực tiếp của chủ dự án, phiên 2026-07-28. Cần tách thành đơn vị U riêng có spec + review bảo mật/pháp lý trước khi code.
+- **Trạng thái:** ✅ **ĐÃ TÁCH HỒ SƠ KHỞI ĐỘNG → `docs/plans/U37-HO-SO-KHOI-DONG-xuat-hoa-don-theo-mau.md`** (2026-07-28). Mục backlog này giữ lại làm **lịch sử hỏi–đáp**; **mọi việc tiếp theo đọc file U37**. Chưa có plan, chưa có code — bước kế tiếp là **Bước R (nghiên cứu R1–R4)** rồi `/plan-unit U37`. **Mức ưu tiên: 1 (cao nhất trong giỏ)** — chỉ định trực tiếp của chủ dự án, phiên 2026-07-28.
 - **Yêu cầu nguyên văn của chủ dự án (3 điều kiện):**
   1. Nút **"Xuất hóa đơn"** đặt **cạnh nút Xuất Excel** hiện có; file kết xuất phải **đúng mẫu hóa đơn GTGT của GDT** — gồm **logo**, thông tin người bán đầy đủ, và các thông tin cần thiết của người mua. Mẫu tham chiếu: `docs/doi_chieu_data/hoa_don_mau.pdf`.
   2. File tải về ở **định dạng nén (nghiêng về ZIP)**, lưu trong **R2** (hoặc dịch vụ Cloudflare phù hợp) **giữ 1 tháng rồi tự xóa** để giải phóng dung lượng; đặt ở chế độ **công khai, chỉ-đọc** để chia sẻ được qua **link / email / Zalo / WhatsApp** — người nhận **đọc + tải xuống được mà không cần đăng nhập**.
