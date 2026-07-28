@@ -859,3 +859,21 @@ lạc phạm vi U36.
   có kịch bản rõ sau mỗi lần deploy.
 - **Mức ưu tiên đề xuất:** Trung bình — tăng lên Cao nếu còn thêm hàm `deps` mang logic.
 - **Nguồn phát hiện:** Review chéo `dod-auditor`, phiên U37a lát 3, 2026-07-28.
+
+## [2026-07-29] Hóa đơn BÁN HÀNG (mẫu số 2) nằm ngoài mọi phép kiểm toàn vẹn
+
+- **Đã probe xong, KHÔNG phải lỗi dữ liệu** (`docs/RA-SOAT-thong-bao-lech-hoa-don-2026-07-28.md`
+  §3.1): 2.138 hóa đơn `khmshdon='2'` thiếu `tgtcthue`/`tgtthue` vì **hóa đơn bán hàng không
+  tách thuế GTGT** — GDT không có gì để trả. Mapper khớp `raw_json` 33.945/33.945, không bỏ sót.
+  Tách bạch theo `khmshdon` là tuyệt đối: mẫu số 1 → 0 thiếu; mẫu số 2 → 2.138 thiếu.
+- **Nhưng chúng vẫn không được kiểm gì.** `taxIntegrity` đòi đủ ba cột tiền nên bỏ qua toàn bộ
+  nhóm này (6,3% dữ liệu). Bỏ qua là ĐÚNG với phép kiểm hiện có — định danh
+  `tgtcthue − ttcktmai + tgtthue = tgtttbso` vô nghĩa khi không có thuế.
+- **Đề xuất: thêm phép kiểm thứ hai cho nhóm không thuế** — `Σ thtien(dòng hàng) = tgtttbso`.
+  Khả thi: 2.126/2.138 hóa đơn đã có dòng hàng. Thử thô (dung sai 1 đ) cho **25 ca lệch**.
+- ⚠️ **25 KHÔNG phải số hóa đơn sai.** Phép thử đó chưa trừ chiết khấu (`ttcktmai`) và chưa xét
+  làm tròn nhiều dòng. Phải loại trừ hai yếu tố này TRƯỚC khi coi là phát hiện — nếu không sẽ
+  lặp lại đúng cái bẫy false-positive mà `taxIntegrity` đã cẩn thận tránh (xem chú thích
+  `packages/reconcile/src/taxIntegrity.ts:2-8`).
+- **Liên quan:** nếu bật `SHOW_RECONCILE`, nên làm phép kiểm này cùng lúc — bằng không màn Đối
+  chiếu sẽ ngầm nói "6,3% hóa đơn của bạn không có vấn đề gì", trong khi thực tế là chưa hỏi tới.

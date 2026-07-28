@@ -88,10 +88,51 @@ from hoa_don;
 **nằm ngoài mọi phép kiểm toàn vẹn**. Chúng không lệch, cũng không "không lệch" — chúng
 **không được hỏi tới**.
 
-Đây không phải lỗi của `taxIntegrity`. Câu hỏi thật là: **vì sao 2.138 hóa đơn sco thiếu cột
-tiền?** Do GDT không trả, hay do mapper `packages/sync/src/mapInvoice.ts` bỏ sót? Chưa kiểm
-chứng — cần probe riêng. Nếu là mapper bỏ sót thì đây là lỗ hổng dữ liệu, không phải lỗ hổng
-đối chiếu.
+### 3.1 ĐÃ PROBE — nguyên nhân (2026-07-29)
+
+Probe đọc-only trên `raw_json` (dữ liệu GDT trả về, đã lưu — **không gọi GDT**). Kết quả dứt khoát:
+
+**(a) KHÔNG phải lỗi mapper.** So từng hóa đơn giữa cột DB và `raw_json`:
+
+| Cột | Số hóa đơn DB khớp raw_json |
+|---|---|
+| `tgtcthue` | **33.945 / 33.945** |
+| `tgtthue` | **33.945 / 33.945** |
+| `tgtttbso` | **33.945 / 33.945** |
+
+`mapInvoice.ts:26-28` là pass-through thuần (`numStr` chỉ trả null khi raw null). Khớp 100% ⇒
+**mapper không bỏ sót một trường nào.**
+
+**(b) GDT thật sự không trả — và có lý do chính đáng.** Trong nhóm 2.138: `tgtttbso` **CÓ ĐỦ**
+(2.138/2.138), chỉ thiếu `tgtcthue` và `tgtthue`. Tức GDT trả tổng thanh toán nhưng không tách
+phần trước thuế / phần thuế.
+
+**(c) Nguyên nhân: đây là HÓA ĐƠN BÁN HÀNG, không phải hóa đơn GTGT.** Tách bạch hoàn hảo
+theo `khmshdon` (ký hiệu mẫu số):
+
+| `khmshdon` | Loại | Thiếu cột tiền | Đủ cột tiền |
+|---|---|---|---|
+| `1` | Hóa đơn GTGT | **0** | **31.807** |
+| `2` | Hóa đơn bán hàng | **2.138** | **0** |
+
+Không một ngoại lệ nào. Hóa đơn bán hàng (mẫu số 2) theo quy định **không tách thuế GTGT**,
+nên không có gì để GDT trả. Bằng chứng phụ nhất quán: 2.138/2.138 hóa đơn này **không có bảng
+`thttltsuat`**, và toàn bộ 2.209 dòng hàng của chúng có `ltsuat = null`. Đối chứng: hóa đơn
+sco mẫu số 1 thì 31.484 dòng mang `8%`, 2 dòng mang `10%`.
+
+⇒ **Không có lỗi dữ liệu. Không cần sửa mapper.** `taxIntegrity` bỏ qua nhóm này là ĐÚNG —
+định danh `tgtcthue − ttcktmai + tgtthue = tgtttbso` vô nghĩa với hóa đơn không có thuế.
+
+### 3.2 Nhưng điểm mù VẪN CÒN — và có đường bịt
+
+2.138 hóa đơn này vẫn **không được kiểm gì cả**. Chúng có đường kiểm khác: **2.126/2.138 đã
+đồng bộ dòng hàng**, nên so được `Σ thtien(dòng)` với `tgtttbso`.
+
+Thử ngay (dung sai 1 đ): **25/2.126 hóa đơn lệch.**
+
+⚠️ **Chưa kết luận 25 ca này là sai.** Phép so trên chưa trừ chiết khấu (`ttcktmai`) và chưa
+xét làm tròn nhiều dòng. Phải loại trừ hai yếu tố đó trước khi gọi là "lệch". Con số 25 ở đây
+chỉ chứng minh **đường kiểm này khả thi và có tín hiệu**, không phải kết luận về số hóa đơn sai.
 
 ---
 
@@ -135,7 +176,7 @@ Hai cơ chế **không che nhau** — bỏ `soMaLa` đi thì rủi ro 7.1 của 
 |---|---|---|---|
 | 1 | **Hiện `soDuocDieuChinh`** trong `ThongBaoTrangThai.tsx` — API tính sẵn, giao diện quên hiện (lỗi bỏ sót U36.3) | ~1 giờ | tự làm được |
 | 2 | **Bật `SHOW_RECONCILE`** — 15 phát hiện, 11 ca > 100.000 đ, tỷ lệ 0,047% không nhiễu | ~30 phút | **chủ dự án** (chính họ đã tắt 22/07) |
-| 3 | **Probe: vì sao 2.138 hóa đơn sco thiếu cột tiền** — GDT không trả hay mapper bỏ sót? | chưa rõ | cần kiểm chứng trước khi ước lượng |
+| 3 | ~~Probe: vì sao 2.138 hóa đơn sco thiếu cột tiền~~ **ĐÃ XONG 29/07** — không phải lỗi, là hóa đơn bán hàng (mẫu số 2) vốn không có thuế GTGT. Việc còn lại: **thêm phép kiểm `Σ dòng hàng = tgtttbso`** cho nhóm này (§3.2) | vừa | chủ dự án |
 | 4 | **Cảnh báo vắt kỳ** (hóa đơn kỳ này bị sửa bởi hóa đơn kỳ sau) — cần ghép cặp qua `shdgoc` | lớn | **U37** |
 
 Bằng chứng cho #4 đã có thật, không còn là giả thuyết: HĐ `C26MYY-9842` lập 09/07/2026
