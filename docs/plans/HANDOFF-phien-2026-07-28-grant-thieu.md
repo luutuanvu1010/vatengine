@@ -218,3 +218,25 @@ bị chặn ngay, không phải chờ trần tuổi 2h (~11:35).
   Token tenant này đã hết hạn (01:35Z) nên vòng "tự lành" không chạy được; cần đăng
   nhập lại 4200730402 rồi theo dõi, nếu vẫn kẹt thì điều tra riêng (có thể liên quan
   `ttxly = 8`).
+
+## 7. Phụ lục 3 — ~12:00 VN: khôi phục cấu hình nhịp + đồng bộ trục (QĐ chủ dự án "khôi phục luôn, không chờ cron đêm")
+
+- ✅ **Mục 4.7 XONG:** 4 var về gốc (`LIMITER_CAPACITY 10`, `LIMITER_REFILL_PER_SEC 2`,
+  `SYNC_PAGE_MIN_INTERVAL_MS 500`, `DELTA_CHUNK_PAGES 40`) + deploy `vat-sync-worker`
+  version `b84ef862` — output deploy in rõ từng var và xác nhận trigger
+  `schedule: 0 20 * * *` + `*/15 * * * *` được đăng ký. Riêng
+  `FANOUT_BACKPRESSURE_DELAY_SEC` giữ 180 — chốt 180 vs 300 **vẫn treo**.
+- ✅ **Mục 4.5 HẾT HIỆU LỰC:** U35 thực ra ĐÃ merge vào trục trên origin từ 27/07
+  (commit `7751006`, nhật ký "đồng bộ trục" `aa6f2b5`, kèm `097281f` sửa mốc journal
+  0017 + ADR-0008) — máy local chỉ chưa pull nên biên bản sáng nay nhìn thấy "lệch
+  nhánh". Đã rebase 4 commit local lên đầu origin (resolve conflict BACKLOG bằng cách
+  giữ cả hai cụm mục), push `c09bc5e`. **Hệ quả: mục 4.1 hết vướng đánh số — codify
+  GRANT có thể làm thành migration 0018 trên trục.**
+- ✅ Trước deploy đã theo đúng luật: push trục → `make migrate` → hậu kiểm ADR-0008
+  bằng truy vấn trực tiếp (18 bản ghi `__drizzle_migrations`, mốc cuối khớp journal
+  `0017`; hai bảng U35 tồn tại) → mới `wrangler deploy`.
+- Vệ sinh: gỡ `HEAD.lock` rỗng (0 byte, sinh 09:40 — tàn dư phiên sáng bị ngắt) bằng
+  lệnh phạm vi hẹp sau khi xác minh không còn tiến trình git nào chạy; hook chặn
+  `rm` đụng `.git` đã kích hoạt đúng vai trò, ghi lại đây cho minh bạch.
+- Task trực cron 02:50 sáng 29/07 giữ nguyên — đêm nay cron 20:00Z chạy với **nhịp
+  gốc**; nếu lại im lặng thì nguyên nhân không thể là nhịp gọi.
