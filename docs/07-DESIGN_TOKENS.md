@@ -13,6 +13,7 @@
 - **Mã ngoài tập đã kiểm chứng = màu trung tính.** Chip mang mã `tthai` ngoài tập 1–5, mọi chip `ttxly` (ý nghĩa chưa kiểm chứng), và finding `hủy` dùng `--neutral-*` — KHÔNG tô đỏ/xanh gợi ý ngữ nghĩa chưa có bằng chứng.
 - **Trạng thái đã kiểm chứng ≠ đều là tin tốt** (QĐ-11, 2026-07-28). Trong `tthai` 1–5, CHỈ mã `1` (Gốc) dùng `--success-*`; `2`–`5` (Thay thế / Điều chỉnh / Bị thay thế / Bị điều chỉnh) dùng `--neutral-chip-*`. `--success-*` mang nghĩa "số dương / trạng thái tốt"; tô nó cho "Bị thay thế" là nói sai nghiệp vụ.
 - **Thay đổi ĐÃ KIỂM CHỨNG, cần rà soát (không phải lỗi)** → `--info-700` / nền `--info-50` / viền `--info-200` (primitive `Alert` tone `info`). Dùng cho thông báo "hóa đơn bị thay thế đã bị loại khỏi tổng".
+- **Đã kiểm chứng NHƯNG cần HÀNH ĐỘNG trước hạn kê khai** → `Alert` tone **`warning`** (chủ dự án chốt 2026-07-28). Vạch phân biệt với `info` ở trên: `info` chỉ *giải thích số liệu đã đổi*, người dùng đọc rồi thôi; `warning` là việc **bỏ qua thì có hậu quả pháp lý** (phải khai bổ sung). Ví dụ đang dùng: "N hóa đơn của kỳ này đã bị thay thế/điều chỉnh bởi hóa đơn ở kỳ khác — kiểm tra trước khi kê khai". KHÔNG dùng `warning` cho thông tin thuần túy — bão hòa cảnh báo làm người dùng bỏ qua cả cái thật.
 - **Số tiền dùng `tabular-nums`** (căn cột đều) — bằng chứng: `font-variant-numeric:tabular-nums` trong export.
 
 ## 2. Màu — nền tảng (primitive)

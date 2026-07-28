@@ -191,3 +191,58 @@ describe("ThongBaoTrangThai — nội dung theo từng chiều", () => {
     expect(screen.getByRole("status").textContent).toContain("1 hóa đơn bị thay thế");
   });
 });
+
+// Lỗ hổng A (rà soát 2026-07-28): `soDuocDieuChinh` được API tính sẵn nhưng giao diện KHÔNG
+// hiển thị ở đâu cả — bỏ sót của U36.3.
+//
+// Vì sao nó quan trọng: mã 5 nghĩa là "hóa đơn CỦA KỲ NÀY đã bị một hóa đơn khác sửa" — mà
+// hóa đơn sửa nó có thể nằm ở KỲ SAU. Ca thật: HĐ 7914 lập 23/06/2026 (mã 5) bị HĐ 9842 lập
+// 09/07/2026 điều chỉnh giảm 3.599.999 đ. Người mở kỳ tháng 6 hiện không thấy dấu hiệu nào,
+// trong khi đó chính là tình huống phải cân nhắc khai bổ sung.
+describe("soDuocDieuChinh — hóa đơn của kỳ này bị sửa bởi hóa đơn kỳ khác", () => {
+  it("soDuocDieuChinh > 0 → hiện cảnh báo, kể cả khi kỳ KHÔNG có hóa đơn mã 4", () => {
+    // Đúng hình dạng kỳ 06/2026: có mã 5, không có mã 4, không có mã 2/3 lập trong kỳ.
+    render(
+      <ThongBaoTrangThai
+        badgeKy={KY}
+        byChieu={[chieu({ chieu: "sold", count: 100, soDuocDieuChinh: 1 })]}
+      />,
+    );
+    const noiDung = document.body.textContent ?? "";
+    expect(noiDung).toContain("1 hóa đơn");
+    expect(noiDung).toContain("kỳ khác");
+  });
+
+  it("nêu rõ phải kiểm trước khi kê khai (không để người dùng tự đoán ý nghĩa)", () => {
+    render(
+      <ThongBaoTrangThai badgeKy={KY} byChieu={[chieu({ chieu: "sold", soDuocDieuChinh: 2 })]} />,
+    );
+    expect(document.body.textContent).toContain("kê khai");
+  });
+
+  it("cộng dồn cả hai chiều — không bỏ sót chiều nào", () => {
+    render(
+      <ThongBaoTrangThai
+        badgeKy={KY}
+        byChieu={[
+          chieu({ chieu: "sold", soDuocDieuChinh: 2 }),
+          chieu({ chieu: "purchase", soDuocDieuChinh: 3 }),
+        ]}
+      />,
+    );
+    expect(document.body.textContent).toContain("5 hóa đơn");
+  });
+
+  it("soDuocDieuChinh = 0 → KHÔNG hiện gì (không dọa người dùng vô cớ)", () => {
+    const { container } = render(
+      <ThongBaoTrangThai badgeKy={KY} byChieu={[chieu({ chieu: "sold", count: 50 })]} />,
+    );
+    expect(container.textContent).toBe("");
+  });
+
+  it("shape CŨ thiếu trường → không ném, không hiện", () => {
+    const cu = { chieu: "sold", count: 9, tongTcthue: null, tongTthue: null, tongTtbso: null };
+    const { container } = render(<ThongBaoTrangThai badgeKy={KY} byChieu={[cu as ChieuSummary]} />);
+    expect(container.textContent).toBe("");
+  });
+});

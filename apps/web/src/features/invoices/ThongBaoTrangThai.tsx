@@ -88,9 +88,13 @@ export function ThongBaoTrangThai({
     (c) => soLoai(c) > 0 || (c.soHdThayThe ?? 0) > 0 || (c.soHdDieuChinh ?? 0) > 0,
   );
   const soMaLa = byChieu.reduce((n, c) => n + (c.soMaLa ?? 0), 0);
+  // `tthai=5` = hóa đơn CỦA KỲ NÀY đã bị một hóa đơn khác sửa. Hóa đơn sửa nó có thể nằm ở
+  // KỲ SAU, và khi đó phần tăng/giảm rơi vào kỳ sau trong khi kỳ này vẫn cộng đủ bản gốc.
+  // Đếm cả hai chiều: mã 5 ở mua vào cũng đã quan sát được (2 ca, biên bản §6.5).
+  const soBiSua = byChieu.reduce((n, c) => n + (c.soDuocDieuChinh ?? 0), 0);
   const delta = deltaThuePhaiNop(byChieu);
 
-  if (coThayDoi.length === 0 && soMaLa === 0) return null;
+  if (coThayDoi.length === 0 && soMaLa === 0 && soBiSua === 0) return null;
 
   return (
     <div style={{ display: "grid", gap: "var(--sp-3)", marginBottom: "var(--sp-4)" }}>
@@ -109,6 +113,22 @@ export function ThongBaoTrangThai({
           <div style={{ fontSize: "var(--fs-xs)" }}>
             <em>Từ {NGAY_DOI_CACH_TINH}, hóa đơn bị thay thế không còn được cộng vào tổng.</em>
           </div>
+        </Alert>
+      ) : null}
+
+      {/* Hóa đơn của kỳ này đã bị sửa bởi hóa đơn KHÁC — mà hóa đơn đó có thể thuộc kỳ SAU.
+          Ca thật: HĐ 7914 lập 23/06/2026 bị HĐ 9842 lập 09/07/2026 điều chỉnh giảm
+          3.599.999 đ. Tổng tháng 6 vẫn cộng đủ 7914, phần giảm rơi sang tháng 7 ⇒ nếu tờ
+          khai tháng 6 đã nộp thì phải cân nhắc KHAI BỔ SUNG. Đây là cảnh báo duy nhất người
+          xem kỳ cũ nhận được cho tới khi U37 ghép được cặp gốc↔mới.
+
+          Tone `warning` chứ KHÔNG phải `info` như khối phía trên (chủ dự án chốt 2026-07-28,
+          đã ghi thành luật ở 07-DESIGN_TOKENS §1): khối trên chỉ GIẢI THÍCH số liệu đã đổi,
+          còn khối này bỏ qua thì có HẬU QUẢ PHÁP LÝ — tờ khai kỳ cũ có thể phải làm lại. */}
+      {soBiSua > 0 ? (
+        <Alert tone="warning">
+          {soBiSua} hóa đơn của kỳ này đã bị thay thế hoặc điều chỉnh bởi hóa đơn ở kỳ khác - kiểm
+          tra trước khi kê khai.
         </Alert>
       ) : null}
 
