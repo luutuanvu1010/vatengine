@@ -41,7 +41,7 @@ Tài liệu **sống** để theo dõi tiến độ và làm **bộ tiêu chuẩ
 >
 > **Nợ kiểm chứng còn treo (KHÔNG chặn U4, gắn nhãn `CHƯA KIỂM CHỨNG` trong mã):** `DETAIL_ENDPOINTS.sco` (`/api/sco-query/invoices/detail`) + mã thuế đặc biệt `KCT`/`KKKNT` — cần probe một HĐ máy tính tiền / HĐ có mã đặc biệt; `/api/sco-query/invoices/sold` (suy từ đối xứng). Khi probe được, gỡ nhãn + cân nhắc nâng hợp đồng `invoice_detail`/`invoice_envelope` từ mềm sang raise cứng (`.claude/rules/gdt-adapter.md`).
 >
-> **Đã xong — U10 (Module đối chiếu, `packages/reconcile` = `@vat/reconcile` + `apps/api`):** `reconcile()` đọc-only trên hóa đơn đã đồng bộ (KHÔNG gọi GDT), findings tính **on-read** (không bảng mới). Ba kiểm tra: **lệch thuế** (số học nội tại header `tgtcthue − ttcktmai + tgtthue = tgtttbso`, tính trong **SQL `numeric`** không ép float, dung sai cấu hình); **thiếu số HĐ đầu ra** (khoảng trống dãy `shdon` theo `(nbmst, khhdon)`, chỉ `chieu='sold'`); **hủy/thay thế** (cơ chế phân loại tách khỏi giá trị mã — `classifyStatus(row, map)`). `GET /reconcile` sau `requireTenant` + RBAC 3 vai, cách ly tenant hai lớp (`buildWhere` lọc `tenant_id` + `withTenant`/RLS) — test qua route thật. Kiểm bằng **PGlite offline** (28 test `@vat/reconcile` + 5 route; coverage 100% dòng / 89% nhánh). **Nguyên tắc bằng chứng:** map trạng thái production `STATUS_CODE_MAP` **RỖNG** vì mã `tthai`/`ttxly` hủy/thay thế **CHƯA KIỂM CHỨNG** (ADR-0001 dòng 45 — mới thấy `tthai=1`); cổng guard `statusCodes.contract.test.ts` đỏ nếu ai điền mã chưa probe. Quyết định (chủ dự án 2026-07-14): #1 HĐ thiếu = gap dãy đầu ra · #2 hủy/thay thế = cơ chế + bảng mã chờ xác nhận · #3 lệch thuế = số học nội tại header. Xem `docs/plans/U10-plan.md`.
+> **Đã xong — U10 (Module đối chiếu, `packages/reconcile` = `@vat/reconcile` + `apps/api`):** `reconcile()` đọc-only trên hóa đơn đã đồng bộ (KHÔNG gọi GDT), findings tính **on-read** (không bảng mới). Ba kiểm tra: **lệch thuế** (số học nội tại header `tgtcthue − ttcktmai + tgtthue = tgtttbso`, tính trong **SQL `numeric`** không ép float, dung sai cấu hình); **thiếu số HĐ đầu ra** (khoảng trống dãy `shdon` theo `(nbmst, khhdon)`, chỉ `chieu='sold'`); **hủy/thay thế** (cơ chế phân loại tách khỏi giá trị mã — `classifyStatus(row, map)`). `GET /reconcile` sau `requireTenant` + RBAC 3 vai, cách ly tenant hai lớp (`buildWhere` lọc `tenant_id` + `withTenant`/RLS) — test qua route thật. Kiểm bằng **PGlite offline** (28 test `@vat/reconcile` + 5 route; coverage 100% dòng / 89% nhánh). **Nguyên tắc bằng chứng:** từ **2026-07-28** (U36.1) map production chốt `thayThe.tthai = [4]` theo `docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md`; mã **hủy** pháp lý và MỌI `ttxly` vẫn **RỖNG** (chưa có bằng chứng). Cổng guard `statusCodes.contract.test.ts` khóa cả ba điều đó — đỏ nếu ai điền thêm mã chưa probe. Quyết định (chủ dự án 2026-07-14): #1 HĐ thiếu = gap dãy đầu ra · #2 hủy/thay thế = cơ chế + bảng mã chờ xác nhận · #3 lệch thuế = số học nội tại header. Xem `docs/plans/U10-plan.md`.
 
 ## Vòng lặp mỗi mốc
 
@@ -209,7 +209,7 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 
 - [x] Test theo **bộ dữ liệu tình huống** (28 test `@vat/reconcile` + 5 route `apps/api`): **lệch thuế** (`taxIntegrity` — khớp/lệch/chiết khấu/null không false-positive/dung sai/số > 2^53/lọc kỳ); **thiếu số đầu ra** (`sequenceGaps` — gap giữa dãy, chỉ `chieu='sold'`, nhóm `(nbmst,khhdon)` độc lập, shdon phi số bỏ qua); **hủy/thay thế** (`statusAnomaly` — phân loại theo bảng mã tiêm ở test).
 - [x] **Lệch thuế** đối chiếu trên cột header **đã ánh xạ từ `raw_json`** (U5): định danh `tgtcthue − ttcktmai + tgtthue = tgtttbso`, tính **trong SQL `numeric`** (không ép float); dung sai cấu hình (mặc định khớp tuyệt đối). *(Đối chiếu bảng `thttltsuat` trong `raw_json` — HOÃN, quyết định #3.)*
-- [x] **HĐ hủy/thay thế:** cơ chế phân loại tách rời khỏi GIÁ TRỊ mã (`classifyStatus(row, map)`); map production `STATUS_CODE_MAP` **RỖNG** vì mã `tthai`/`ttxly` **CHƯA KIỂM CHỨNG** (ADR-0001 dòng 45 — chỉ mới thấy `tthai=1`). Cổng guard `statusCodes.contract.test.ts` **đỏ nếu ai điền mã chưa probe**. Nguyên tắc bằng chứng của Hiến pháp: KHÔNG "chốt" mã.
+- [x] **HĐ hủy/thay thế:** cơ chế phân loại tách rời khỏi GIÁ TRỊ mã (`classifyStatus(row, map)`). **Cập nhật 2026-07-28 (U36.1):** `thayThe.tthai = [4]` (bị thay thế) — ĐÃ KIỂM CHỨNG trên 33.929 hóa đơn thật; mã **hủy** và MỌI `ttxly` vẫn **RỖNG**. Cổng guard `statusCodes.contract.test.ts` **đỏ nếu ai điền thêm mã chưa probe**. `GET /reconcile` có test phủ hành vi mới (seed `tthai:4` → `thayThe === 1`).
 - [x] **Cách ly tenant:** mọi truy vấn lọc `tenant_id` tường minh (`buildWhere` của @vat/query, lớp 1) + endpoint `GET /reconcile` trong `withTenant` (RLS lớp 2), RBAC `ke_toan`+; test tenant A không thấy anomaly của B (package + route) xanh.
 - [x] **Read-only:** 0 bảng mới, 0 gọi GDT (không import `@vat/gdt-client`/`fetch`), không đụng adapter/401/captcha/mật khẩu thô.
 
@@ -244,7 +244,7 @@ Cổng kỹ thuật `.claude/hooks/gate-dod.sh` ép `make lint && make test` ph�
 - [ ] **U15.3** Chi tiết `GET /invoices/:id` (chỉ header — U6 #2).
 - [ ] **U15.4** Kết xuất `POST /exports` + convert (chỉ profile khả dụng) + tải `GET /exports/:id`; RBAC ẩn với `ke_toan`.
 - [ ] **U15.5** Đối chiếu `GET /reconcile` — 4 loại finding + tóm tắt; gap nhãn "nghi thiếu". ⚠️ **Màn ĐANG ẨN** khỏi bảng điều khiển từ 2026-07-22 (cờ `SHOW_RECONCILE=false`, `apps/web/src/lib/featureFlags.ts`): menu + route tắt, mã màn và `@vat/reconcile` giữ nguyên. Nghiệm thu màn này hoãn tới khi bật lại cờ.
-- [ ] **Ánh xạ dữ liệu (Nguyên tắc bằng chứng):** nhãn `ttxly`/`tthai` CHỈ cho mã đã kiểm chứng, mã lạ → số + "(chưa rõ)" (đồng bộ `@vat/reconcile statusCodes`); cột bảng = `EXPORT_COLUMNS`.
+- [ ] **Ánh xạ dữ liệu (Nguyên tắc bằng chứng):** nhãn `tthai` 1–5 từ `@vat/domain` `nhanTthai()` (một nguồn cho web + file xuất); `ttxly` chưa mã nào kiểm chứng; mã ngoài tập → số + "(chưa rõ)" **kèm cảnh báo**; cột bảng = `EXPORT_COLUMNS`.
 - [ ] **Cách ly tenant + bảo mật client:** `tenant_id` lấy từ token (không tin client); không bí mật/không token trong mã/log.
 - [ ] **DoD chung (mục A)** + coverage tầng logic UI (formatter/mapping/guard) ≥ 80% + a11y smoke + **hồi quy U0–U15 xanh**.
 - [ ] **Fenced (chờ đơn vị BACKEND trước):** UI đăng nhập thuế + captcha (chưa có đường ghi token GDT), "đồng bộ ngay", lịch sử đồng bộ, Cổng Admin, webhook tích hợp — xem `docs/plans/U15-plan.md` §NGOÀI phạm vi.
@@ -365,3 +365,52 @@ Doanh nghiệp **đã được duyệt** (trạng thái đã đổi trong DB) nh
 **"Gửi lại thư"** ngay trong hộp thoại. Vẫn hỏng thì vấn đề nằm ở cấu hình SES phía ta,
 không ở hộp thư khách — kiểm `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION`
 (`ap-southeast-1`) / `EMAIL_FROM` (`no-reply@vatengine.tourdao.vn`) trước khi báo cho khách.
+
+---
+
+## U36 — Trạng thái hóa đơn trong tổng hợp và kết xuất (2026-07-28)
+
+Kế hoạch: `docs/plans/U36-plan.md` · Tiến độ: `docs/plans/U36-tien-do.md` ·
+Bằng chứng mã trạng thái: `docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md`.
+
+**Đổi hành vi người dùng thấy được:** hóa đơn `tthai=4` (BỊ THAY THẾ) không còn được cộng
+vào tổng tiền. Tổng của các kỳ ĐÃ QUA vì vậy **khác** con số cũ — đây là sửa đúng, không
+phải hồi quy.
+
+### Máy kiểm (đã có test)
+
+- [x] Tổng tiền loại `tthai=4`; `tthai=5` và `tthai=NULL` **vẫn được cộng**
+- [x] `count` "hóa đơn khớp bộ lọc" **giữ nguyên nghĩa** ⇒ kỳ chỉ có mã 4 KHÔNG tự kích hoạt
+      đồng bộ lên Tổng cục Thuế (nguồn của sự cố 429 ngày 27/07)
+- [x] Một chiều toàn mã 4 vẫn còn trong `byChieu` (loại trừ đặt ở aggregate, không ở WHERE)
+- [x] Kỳ chỉ có mã 4 → `thueDaLoai` là **số**, không null
+- [x] `soMaLa > 0` → giao diện cảnh báo mã chưa xác định
+- [x] Thuế phải nộp đúng dấu: bán ra làm **giảm**, mua vào làm **tăng**; tính bằng BigInt
+- [x] Tab đang mở giữ dữ liệu shape CŨ → không crash, không hiện thông báo sai
+- [x] File tải về 19 cột mặc định, 3 cột trạng thái ngay sau `Tổng tiền (sau thuế)`
+- [x] Người dùng đã lưu lựa chọn cột cũ vẫn thấy 3 cột mới (khóa localStorage v2)
+- [x] Cách ly tenant nguyên vẹn
+
+### Nghiệm thu thủ công — số đo thật ngày 2026-07-28
+
+Tenant MST `4201969169`, chiều **Bán ra**:
+
+| Kỳ | Số HĐ mã 4 | Thuế phải giảm | Tổng thanh toán phải giảm |
+|---|---|---|---|
+| 2026-04 | 6 | 7.787.702 ₫ | 105.134.000 ₫ |
+| 2026-05 | 5 | 9.257.482 ₫ | 124.976.000 ₫ |
+| 2026-06 | 3 | 1.579.630 ₫ | 21.325.000 ₫ |
+| **2026-07** | **3** | **1.711.111 ₫** | **23.100.000 ₫** |
+
+- [ ] Mở kỳ 07/2026, chiều **Bán ra** → tổng thuế giảm **đúng 1.711.111 ₫** so với trước
+- [ ] Thông báo hiện đúng số hóa đơn + tiền đã loại, **tách theo chiều**
+- [ ] Dòng *"Thuế phải nộp trên báo cáo giảm 1.711.111 ₫"* xuất hiện **một lần**, kèm chú
+      giải "số thuế phải nộp thật không đổi"
+- [ ] Tải file Excel → có 3 cột trạng thái; hóa đơn mã 4 **vẫn có trong file** với
+      "Tính vào tổng" = **Không**
+
+⚠️ **20.335.925 ₫ là tổng TOÀN BỘ 3 tenant × 5 tháng — KHÔNG dùng để nghiệm thu một kỳ.**
+
+⚠️ Chiều **Mua vào** hiện 0 hóa đơn mã 4 ở mọi kỳ. **Không coi là quy luật:** toàn bộ dữ
+liệu chỉ có đúng 1 ca thay thế ở chiều mua vào, và biên bản §6.5 **đã rút** kết luận cũ
+"GDT không trả bản gốc cho bên mua". Mã và test xử lý hai chiều như nhau.

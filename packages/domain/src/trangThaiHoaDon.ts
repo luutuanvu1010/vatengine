@@ -21,6 +21,23 @@ export const TTHAI_NHAN: Readonly<Record<number, string>> = {
   5: "Bị điều chỉnh",
 };
 
+/** Tên gọi cho từng mã đã kiểm chứng — để tầng truy vấn/giao diện không rải số 2/3/5 trần
+ * khắp nơi (mỗi chỗ như vậy là một nguồn sự thật nữa về ý nghĩa mã). Giá trị bị khóa vào
+ * `TTHAI_NHAN`/`TTHAI_LOAI_KHOI_TONG` bằng test, không thể lệch nhau âm thầm. */
+export const TTHAI = {
+  GOC: 1,
+  THAY_THE: 2,
+  DIEU_CHINH: 3,
+  BI_THAY_THE: 4,
+  BI_DIEU_CHINH: 5,
+} as const;
+
+/** Tập mã ĐÃ KIỂM CHỨNG — dẫn xuất từ bảng nhãn, không khai tay lần hai.
+ * Mã ngoài tập này là "chưa xác định" (QĐ-6): vẫn cộng vào tổng, nhưng phải cảnh báo. */
+export const TTHAI_DA_KIEM_CHUNG: readonly number[] = Object.keys(TTHAI_NHAN)
+  .map(Number)
+  .sort((a, b) => a - b);
+
 /** Mã `tthai` bị LOẠI khỏi mọi phép cộng TIỀN.
  *
  * CHỈ mã 4 (QĐ-4): hóa đơn bị thay thế đã mất hiệu lực, bản thay thế gánh toàn bộ giá trị.

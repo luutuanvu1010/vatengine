@@ -6,6 +6,8 @@
 // (biên bản §5.1, §4) ⇒ test dưới KHÔNG được khẳng định nhãn cho chúng.
 import { describe, expect, it } from "vitest";
 import {
+  TTHAI,
+  TTHAI_DA_KIEM_CHUNG,
   TTHAI_LOAI_KHOI_TONG,
   TTHAI_NHAN,
   daKiemChungTthai,
@@ -75,5 +77,28 @@ describe("tinhVaoTong — QĐ-3/QĐ-4: CHỈ loại mã 4", () => {
     for (let c = 0; c <= 10; c++) {
       expect(tinhVaoTong(c)).toBe(!TTHAI_LOAI_KHOI_TONG.includes(c));
     }
+  });
+});
+
+// U36.3 — khóa hai hằng dẫn xuất vào bảng nhãn, để chúng KHÔNG thể lệch nhau âm thầm khi
+// ai đó thêm/bớt mã sau này.
+describe("TTHAI / TTHAI_DA_KIEM_CHUNG — dẫn xuất, không phải nguồn thứ hai", () => {
+  it("TTHAI_DA_KIEM_CHUNG đúng bằng tập khóa của TTHAI_NHAN", () => {
+    expect([...TTHAI_DA_KIEM_CHUNG]).toEqual([1, 2, 3, 4, 5]);
+    expect([...TTHAI_DA_KIEM_CHUNG].sort((a, b) => a - b)).toEqual(
+      Object.keys(TTHAI_NHAN)
+        .map(Number)
+        .sort((a, b) => a - b),
+    );
+  });
+
+  it("mọi mã trong TTHAI đều có nhãn (không đặt tên cho mã chưa kiểm chứng)", () => {
+    for (const ma of Object.values(TTHAI)) expect(daKiemChungTthai(ma)).toBe(true);
+  });
+
+  it("TTHAI.BI_THAY_THE chính là mã duy nhất bị loại khỏi tổng", () => {
+    expect([...TTHAI_LOAI_KHOI_TONG]).toEqual([TTHAI.BI_THAY_THE]);
+    expect(tinhVaoTong(TTHAI.BI_THAY_THE)).toBe(false);
+    expect(tinhVaoTong(TTHAI.BI_DIEU_CHINH)).toBe(true);
   });
 });

@@ -244,11 +244,16 @@ export function Stat({
   value,
   label,
   badge,
+  ghiChu,
   co = "md",
 }: {
   value: string | number;
   label: string;
   badge?: ReactNode;
+  /** Dòng phụ nhỏ dưới số — giải thích một sắc thái của chính con số đó (vd "3 hóa đơn bị
+   * thay thế - không tính vào tổng"). Đặt ở primitive để không tô kiểu nội tuyến trong
+   * `features/` (ui.md). */
+  ghiChu?: ReactNode;
   /** Cỡ số: "md" (tiêu điểm, mặc định) | "sm" (đứng cụm nhiều số — 2026-07-26, cụm 4 số
    * thẻ Kết quả cần vừa một hàng thay vì 4 số cỡ 3xl tràn dòng). Một nơi, không tô đè. */
   co?: "md" | "sm";
@@ -271,6 +276,9 @@ export function Stat({
         </span>
         <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}>{label}</span>
       </div>
+      {ghiChu ? (
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>{ghiChu}</span>
+      ) : null}
       {badge}
     </div>
   );

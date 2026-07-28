@@ -70,6 +70,27 @@ describe("REST /invoices (integration, PGlite)", () => {
     expect(Number(body.total.tongTtbso)).toBe(1080000 + 5400000); // KHÔNG cộng 999999 của B
   });
 
+  // U36 — hợp đồng `/invoices/summary` mở rộng: 2 số đếm ở `total`, khối "thay đổi" ở cấp
+  // CHIỀU. Test đi qua ĐƯỜNG THẬT (route + auth + withTenant) nên nó cũng khóa việc các
+  // trường mới sống sót qua tuần tự hóa JSON, không chỉ đúng trong hàm truy vấn.
+  it("GET /invoices/summary → có countTinhTong/soLoaiKhoiTong và khối thay đổi theo chiều", async () => {
+    const token = await tokenFor(tenantA);
+    const res = await app.request("/invoices/summary", { headers: bearer(token) }, makeEnv());
+    const body = (await res.json()) as InvoiceSummary;
+
+    expect(body.total.countTinhTong).toBe(2);
+    expect(body.total.soLoaiKhoiTong).toBe(0);
+    // Khối "thay đổi" CHỈ ở cấp chiều — cộng mua vào với bán ra là trộn hai nghiệp vụ
+    // ngược nhau (QĐ-9/QĐ-12), nên `total` cố ý KHÔNG mang các trường này.
+    expect(body.total).not.toHaveProperty("thueDaLoai");
+    for (const c of body.byChieu) {
+      expect(c.soMaLa).toBe(0);
+      expect(c.thueDaLoai).toBe("0"); // coalesce 0, KHÔNG null (bẫy SUM tập rỗng)
+      expect(c.ttbsoDaLoai).toBe("0");
+      expect(c.thueThayTheDieuChinh).toBe("0");
+    }
+  });
+
   it("GET /invoices/:id trong tenant → 200; của tenant khác → 404 (cách ly)", async () => {
     const token = await tokenFor(tenantA);
     const ok = await app.request(`/invoices/${idA}`, { headers: bearer(token) }, makeEnv());

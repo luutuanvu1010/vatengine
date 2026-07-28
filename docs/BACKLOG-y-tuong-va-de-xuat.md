@@ -631,3 +631,121 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 - **Rủi ro nếu bỏ qua:** đồng bộ nền coi như không tồn tại — mọi dữ liệu phụ thuộc thao tác tay của người dùng, phá vỡ lời hứa "chạy nền" của sản phẩm.
 - **Cách phân xử:** `npx wrangler tail --name vat-sync-worker` quanh 03:00 VN, hoặc mục Logs/Cron của Worker trên dashboard Cloudflare.
 - **Nguồn phát hiện:** Phiên chẩn đoán 2026-07-28.
+
+### [2026-07-28] ⭐ ƯU TIÊN 1 — Xuất hóa đơn theo MẪU CHUẨN (bản thể hiện giống GDT) + gói ZIP chia sẻ công khai qua R2 có hạn 1 tháng
+
+- **Trạng thái:** Đề xuất — chưa triển khai. **Mức ưu tiên: 1 (cao nhất trong giỏ)** — chỉ định trực tiếp của chủ dự án, phiên 2026-07-28. Cần tách thành đơn vị U riêng có spec + review bảo mật/pháp lý trước khi code.
+- **Yêu cầu nguyên văn của chủ dự án (3 điều kiện):**
+  1. Nút **"Xuất hóa đơn"** đặt **cạnh nút Xuất Excel** hiện có; file kết xuất phải **đúng mẫu hóa đơn GTGT của GDT** — gồm **logo**, thông tin người bán đầy đủ, và các thông tin cần thiết của người mua. Mẫu tham chiếu: `docs/doi_chieu_data/hoa_don_mau.pdf`.
+  2. File tải về ở **định dạng nén (nghiêng về ZIP)**, lưu trong **R2** (hoặc dịch vụ Cloudflare phù hợp) **giữ 1 tháng rồi tự xóa** để giải phóng dung lượng; đặt ở chế độ **công khai, chỉ-đọc** để chia sẻ được qua **link / email / Zalo / WhatsApp** — người nhận **đọc + tải xuống được mà không cần đăng nhập**.
+  3. Khâu **kiểm tra chất lượng trước khi phát hành**: đảm bảo hóa đơn tạo ra **đạt chuẩn, không sai, không thiếu thông tin**.
+- **Bối cảnh/bằng chứng (đã kiểm chứng 2026-07-28, không suy đoán):**
+  - **Mẫu tham chiếu có thật và đọc được:** `docs/doi_chieu_data/hoa_don_mau.pdf` — 25,3 MB, **~171 trang** (nhiều hóa đơn nối nhau). Trích văn bản trang 1 (`pdftotext -f 1 -l 1`) cho thấy khung trường chuẩn của **"Bản thể hiện của hóa đơn điện tử"**: tiêu đề *HÓA ĐƠN GIÁ TRỊ GIA TĂNG*, `Ký hiệu` (1C26TMF), `Số` (7608), ngày lập, **Đơn vị bán hàng + MST + Địa chỉ + Fax + Điện thoại + Địa điểm bán hàng**, **Đơn vị mua hàng + MST + Địa chỉ + Họ tên người nhận**, `Hợp đồng số`, `Phương thức thanh toán`, `Phương thức vận chuyển`, `Ghi chú`, rồi bảng dòng hàng (`STT | Tên hàng hóa, dịch vụ | ĐVT | Số lượng | Đơn giá | Thành tiền`) và dòng `Thuế suất thuế GTGT (%)`.
+  - **Hạ tầng R2 ĐÃ CÓ, đang dùng cho kết xuất:** `apps/api/wrangler.jsonc:42-44` — binding `RAW` → bucket `vat-raw` (ghi chú trong file: "U7: R2 lưu file kết xuất (xlsx/csv)").
+  - **Bộ khung kết xuất ĐÃ CÓ, tái dùng được nhiều:** `packages/export/src/` gồm `zipStream.ts` (đã biết nén ZIP), `invoiceDoc.ts` (renderer XML/HTML **một-hóa-đơn-một-file**, U22 — chính là điểm bám gần nhất cho "một hóa đơn = một trang mẫu"), `columns.ts`/`xlsx.ts`/`csv.ts`/`lineRows.ts`, `profiles/`.
+  - **Điểm đặt nút đã xác định:** `apps/web/src/features/invoices/InvoiceExportButtons.tsx` (và `apps/web/src/features/exports/ExportsPage.tsx`).
+#### Vòng 2 — chủ dự án trả lời 6 điểm (2026-07-28), kèm kết quả kiểm chứng của phiên
+
+**(1) Giả định "GDT có lưu logo" — ⚠️ BẰNG CHỨNG NGƯỢC LẠI, KHÔNG ĐƯỢC CHỐT.**
+Chủ dự án nêu: *"Hoá đơn tải về từ trang GDT vẫn có logo, có nghĩa là nó được lưu sẵn ở 1 nơi nào đó trong cơ sở dữ liệu của GDT rồi."* Phiên này đã **giám định trực tiếp chính file mẫu** và kết luận **file mẫu KHÔNG đến từ GDT**:
+
+- **Chân trang mỗi hóa đơn trong `hoa_don_mau.pdf` (trích nguyên văn, `pdftotext -f 1 -l 1`):** *"Đơn vị cung cấp dịch vụ Hóa đơn điện tử: Tập đoàn Công nghiệp - Viễn thông Quân đội (Viettel), MST: 0100109106. **Tra cứu hóa đơn điện tử tại Website: https://vinvoice.viettel.vn/utilities/invoice-search**. Mã số bí mật: 5666OK7MZX1R3CK."* — lặp lại ở mọi trang kiểm tra (dòng 87, 176, 265, 354, 443…), mỗi hóa đơn một "Mã số bí mật" riêng. **"Mã số bí mật" là khóa tra cứu của NHÀ CUNG CẤP (Viettel vinvoice), không phải trường của GDT.**
+- **Metadata PDF (`pdfinfo`):** `Producer: iText® 5.5.13`, 152 trang, tạo 01/07/2026 14:54 — bản kết xuất hàng loạt từ hệ thống nhà cung cấp.
+- **Ảnh nhúng (`pdfimages -list`):** đúng **3 ảnh/trang**, kích thước **giống hệt nhau ở mọi trang** (179×364, 512×106, 130×54) — tức logo/con dấu của **một** người bán (Xăng dầu Quân đội KV3), do **hệ thống Viettel** chèn khi dựng bản thể hiện, không phải dữ liệu đi kèm từng hóa đơn.
+- **Adapter của ta biết gì về GDT:** `packages/gdt-client/src/endpoints.ts` + `detail.ts` chỉ có `/query/invoices/{purchase,sold}`, `/sco-query/...` và `/…/invoices/detail` (4 tham số định danh) — **không có endpoint PDF/logo nào**.
+- **Tín hiệu thị trường (đối thủ):** `KHAO_SAT_TINH_NANG_NIBOT.md:31` — *"mỗi hóa đơn có nút tải XML và PDF; **với PDF gốc có logo/màu, NIBOT chào dịch vụ DOLAGO để tải từ nhà cung cấp**"*. Nếu GDT phát PDF có logo, NIBOT đã không phải bán thêm một dịch vụ bên thứ ba để lấy nó.
+
+⇒ **Suy luận có cơ sở (chưa phải kết luận cuối):** logo nằm ở hệ thống **nhà cung cấp dịch vụ HĐĐT của người bán** (Viettel/VNPT/MISA/…), **không** ở kho GDT. Đây đúng dạng bẫy mà Hiến pháp cảnh báo (bài học `:30000`) — **một tiền đề chưa kiểm chứng suýt định hình cả tính năng ưu tiên 1**.
+**Phép kiểm chứng dứt điểm còn thiếu (phải làm trước khi thiết kế):** đăng nhập `hoadondientu.gdt.gov.vn` bằng tài khoản thật, mở một hóa đơn, dùng DevTools → tab Network ghi lại **có request nào trả về PDF/ảnh logo không** (và endpoint là gì). Có → ghi endpoint vào adapter; không → chốt phương án B dưới đây.
+**Phương án B (nếu GDT không phát logo):** hóa đơn BÁN RA thì **tenant tự tải logo lên** một lần (lưu R2, tham chiếu ở hồ sơ tenant) → bản thể hiện của ta có logo của chính họ. Hóa đơn MUA VÀO thì **không có logo** người bán — chấp nhận, và nói rõ trên bản in.
+
+##### ✅ QUYẾT ĐỊNH CHỦ DỰ ÁN 2026-07-28 (vòng 3): chốt Phương án B — người dùng tự tải logo lên
+
+> *"Thêm trường Logo vào trong Cài đặt thông tin doanh nghiệp (Menu Cài đặt chung), để người dùng tải nó lên. Lúc tạo hoá đơn (bán ra) thì lấy thông tin này để chèn vào hoá đơn."*
+
+Không chờ probe GDT nữa — đi thẳng Phương án B. (Probe GDT vẫn nên làm khi rảnh: nếu GDT có phát logo thật thì đó là **cải tiến cho hóa đơn MUA VÀO**, vốn không có đường nào khác để có logo người bán.)
+
+**Hiện trạng đã kiểm chứng (2026-07-28) — phần việc này lớn hơn "thêm một trường":**
+
+- **Màn Cài đặt đã có:** `apps/web/src/features/settings/SettingsPage.tsx` (+ `DoiMatKhauCard.tsx`, `ThongTinSanPham.tsx`) — có chỗ để gắn.
+- **Bảng `tenants` (`packages/db/src/schema/tenants.ts`) hiện chỉ có:** `id, ten, mst, trang_thai, goi_dich_vu, ghi_chu, ban_quyen, ngay_tao`. **Không có `logo`.** ⇒ cần **migration** (nhớ `GRANT` — xem mục bẫy GRANT ngày 28/07 phía trên, đã dính 2 lần).
+- **`PATCH /me` (`apps/api/src/routes/me.ts:22-28`) chỉ cho `quan_tri` sửa `ten`/`ghi_chu`**, schema `strict` ⇒ phải mở rộng tường minh.
+- **⚠️ Dự án CHƯA TỪNG có luồng tải file lên:** `grep "multipart/form-data\|formData()" apps/api/src` = **0 kết quả**. Đây là **đường upload đầu tiên** của hệ thống ⇒ mở một bề mặt tấn công mới, **bắt buộc `security-reviewer`**. Tối thiểu phải chốt: giới hạn dung lượng (đề xuất ≤ 500 KB); **danh sách trắng định dạng PNG/JPEG**, **KHÔNG nhận SVG** (SVG nhúng được script → XSS khi hiển thị); **xác thực magic bytes chứ không tin `Content-Type`/đuôi file**; chặn ảnh kích thước bất thường (decompression bomb); khóa object gắn `tenant_id` để không ghi đè chéo tenant.
+- **⚠️ Logo phải nằm ở bucket NỘI BỘ (`vat-raw`), KHÔNG phải bucket công khai** — bản PDF nhúng ảnh vào file, nên logo không cần URL public. Đưa logo lên bucket công khai là mở rộng lộ diện vô ích.
+- **⚠️ Thiếu nhiều hơn logo:** mẫu hóa đơn cần **địa chỉ, điện thoại, fax** của người bán. Với hóa đơn BÁN RA, người bán chính là tenant — mà `tenants` **cũng không có các cột này**. ⇒ Đơn vị này thực chất là **"hồ sơ doanh nghiệp đầy đủ để in hóa đơn"** (logo + địa chỉ + điện thoại + fax…), không phải chỉ một trường logo. Nên gom một lượt để tránh migration hai lần.
+
+##### ✅ QUYẾT ĐỊNH CHỦ DỰ ÁN 2026-07-28 (vòng 3): tên miền công khai cho R2 = `docs.tourdao.vn`
+
+Dùng **tên miền phụ `docs.tourdao.vn`** làm địa chỉ công khai của bucket chia sẻ (đúng khuyến nghị "custom domain, không dùng `r2.dev`" ở mục (3) trên).
+
+- **Điều kiện tài liệu Cloudflare yêu cầu:** *"The domain being used must have been added as a zone in the same account as the R2 bucket."* — `tourdao.vn` đã nằm trên Cloudflare (xem mục AWS SES 2026-07-16), nên chỉ cần thêm bản ghi; Cloudflare tự tạo CNAME khi kết nối bucket. Trạng thái đi từ **Initializing → Active** sau vài phút.
+- **Vì là custom domain nên bật được** WAF / Cache / Bot Management / Zero Trust Access / WAF Token Authentication — dự phòng nếu sau này muốn siết link.
+- **⚠️ Cảnh báo trong tài liệu, phải làm:** nếu đã bật `r2.dev` để thử nghiệm thì **PHẢI tắt** — *"If you do not disable public access, your bucket will remain publicly available through your r2.dev subdomain"* (tắt tên miền chính mà quên `r2.dev` = vẫn lộ).
+- **Đặt tên gợi ý cho rõ nghĩa:** dùng `docs.tourdao.vn` cho **bucket chia sẻ riêng** (vd `vat-chia-se`), tách hẳn khỏi `vat-raw`. URL cuối có dạng `https://docs.tourdao.vn/goi-hoa-don/2026-07/<token-ngẫu-nhiên>.zip`.
+
+**(2) Định dạng bên trong ZIP: ✅ CHỐT = PDF.** Mục đích chủ dự án nêu: *"chỉ phục vụ cho mục đích lưu trữ nội bộ hoặc thống kê cơ bản"* ⇒ không cần đua độ đẹp với bản gốc của nhà cung cấp.
+**CHƯA KIỂM CHỨNG (kỹ thuật, phải khảo sát trước khi code):** **chưa có thư viện sinh PDF nào được xác nhận chạy trên Cloudflare Workers** trong dự án này. Ba hướng cần đo: (a) thư viện JS thuần (vd `pdf-lib`) — cần kiểm font tiếng Việt có dấu (nhúng font Unicode, không dùng font chuẩn PDF); (b) dựng HTML rồi convert bằng **Cloudflare Browser Rendering** (Puppeteer) — đẹp nhất, nhưng là dịch vụ trả phí riêng, phải đo chi phí/throughput; (c) dựng PDF trong **Queue consumer** từng lô nhỏ để né trần CPU/wall-time. **Không chọn hướng nào trước khi có phép đo thật.**
+
+**(3) R2 public — ✅ ĐÃ NGHIÊN CỨU (tài liệu chính thức Cloudflare, đọc 2026-07-28):**
+- Nguồn: `https://developers.cloudflare.com/r2/buckets/public-buckets/` và `https://developers.cloudflare.com/r2/buckets/object-lifecycles/`.
+- **Hai cách công khai:** (i) **Custom domain** (tên miền của mình, vd `hoadon.tourdao.vn`) — **BẮT BUỘC dùng cái này cho production**; (ii) **`r2.dev` subdomain** — tài liệu ghi rõ *"intended for non-production traffic"*, *"rate-limited and should only be used for development purposes"* ⇒ **KHÔNG dùng để chia sẻ khách hàng**. Chỉ custom domain mới bật được **WAF / Cache / Bot Management / Zero Trust Access / WAF Token Authentication**.
+- **Điểm an toàn sẵn có:** *"public buckets do not let you list the bucket contents at the root"* ⇒ **không ai liệt kê được toàn bộ file**. Hệ quả: **an toàn hoàn toàn phụ thuộc vào khóa object đoán-không-ra** — đây là lý do quy tắc đặt tên dưới đây là **yêu cầu bảo mật, không phải thẩm mỹ**.
+- **Quy tắc đặt tên đề xuất (khóa = bí mật, tách phần định danh khỏi phần đoán được):**
+  `goi-hoa-don/<YYYY-MM>/<token-ngẫu-nhiên-≥128-bit-base32url>.zip`
+  - Tiền tố `<YYYY-MM>` là **tháng phát hành** → khớp thẳng với lifecycle rule theo prefix, và cho phép dọn/thống kê theo tháng.
+  - **TUYỆT ĐỐI KHÔNG** nhúng MST, tên doanh nghiệp, khoảng ngày, số hóa đơn hay `tenant_id` vào khóa — vì khóa **là** thứ duy nhất bảo vệ file; nhúng MST là mời người khác dò.
+  - Tên file **hiển thị khi tải về** (thân thiện, có MST/kỳ) đặt riêng qua metadata `contentDisposition` lúc `put()` — **không** đặt vào khóa.
+  - Ánh xạ khóa ↔ (tenant, kỳ, người tạo, `het_han_luc`) lưu ở bảng Postgres, có `tenant_id` + audit log.
+- **Tự xóa sau 1 tháng — ✅ có sẵn, không cần viết cron:** **Object Lifecycle Rules**, khai theo prefix: `npx wrangler r2 bucket lifecycle add <bucket> …` với `Expiration: { Days: 30 }`, hoặc `lifecycle set` từ file JSON. **Lưu ý vận hành (trích tài liệu):** *"Objects will typically be removed from a bucket within 24 hours of the `x-amz-expiration` value"* ⇒ **xóa trong vòng ~24h sau mốc, không đúng phút** — UI phải nói "khoảng 30 ngày", đừng hứa mốc chính xác. Giới hạn 1000 rule/bucket ⇒ **dùng MỘT rule theo prefix chung**, không tạo rule mỗi file.
+- **Khuyến nghị:** **bucket RIÊNG** (vd `vat-chia-se`) cho file công khai — **không** đặt chung `vat-raw` (đang chứa dữ liệu nội bộ). Bật public **chỉ** trên bucket mới. Đây là hàng rào chống lỗi cấu hình vô ý làm lộ toàn bộ kho.
+
+**(4) Trường dữ liệu — ✅ CHỐT: chỉ làm cho hóa đơn BÁN RA; trường rỗng thì để trống.** Lấy tối đa các trường người mua có trong dữ liệu đã đồng bộ; **không bịa, không suy diễn**.
+**CHƯA KIỂM CHỨNG:** bảng `hoa_don` chỉ có cột người mua là `nmmst` + `nmten` (`packages/db/src/schema/hoaDon.ts:30-31`); các trường còn lại của mẫu (**địa chỉ người mua, họ tên người nhận, hình thức thanh toán, đơn vị tiền tệ, MCCQT, ký hiệu mẫu số**) nếu có thì nằm trong `raw_json`. **Việc đầu tiên khi mở đơn vị này: rà `raw_json` thật trên prod, lập bảng "trường mẫu ↔ khóa GDT ↔ tỷ lệ có dữ liệu"** — rồi mới thiết kế template.
+
+**(5) Cảnh báo rủi ro link công khai — ✅ CHỐT: phải có.** Hiển thị trước khi tạo link (checkbox xác nhận, không phải dòng chữ mờ ở góc): *"Bất kỳ ai có link đều xem và tải được file này mà không cần đăng nhập. File chứa thông tin doanh nghiệp và đối tác. Chỉ chia sẻ với người bạn tin tưởng."* Kèm nút **thu hồi ngay** (xóa object trước hạn 30 ngày) và ghi audit log mỗi lần phát hành/thu hồi.
+
+**(6) Tuyên bố mục tiêu file — ✅ CHỐT: phải in TRÊN chính bản PDF (không chỉ trên web).** Nội dung: *"Tài liệu này hỗ trợ tổng hợp và đối soát thông tin. **Không thay thế hóa đơn điện tử gốc (bản XML có chữ ký số)** do người bán phát hành."* Đặt ở chân mỗi trang để không mất khi tách lẻ file.
+- **Rủi ro nếu bỏ qua / làm ẩu:**
+  - **PHÁP LÝ — rủi ro cao nhất:** đặt file hóa đơn ở chế độ **công khai không cần đăng nhập** nghĩa là **bất kỳ ai có link đều đọc được dữ liệu doanh nghiệp + đối tác** (tên, MST, địa chỉ, mặt hàng, giá trị giao dịch). Đây là **dữ liệu cá nhân/kinh doanh** thuộc phạm vi **NĐ 13/2023/NĐ-CP**. Link R2 phải **không đoán được** (khóa ngẫu nhiên đủ dài, không nhúng MST/kỳ vào tên file), và nên có cách **thu hồi sớm** trước 1 tháng. Cần `security-reviewer` bắt buộc.
+  - **NHẦM LẪN PHÁP LÝ về giá trị chứng từ:** thứ ta tạo ra là **"bản thể hiện"** (đúng như chữ in trên mẫu), **KHÔNG phải hóa đơn điện tử gốc có giá trị pháp lý** (gốc là XML có chữ ký số). Giao diện và bản in **phải nói rõ điều này**, nếu không người dùng có thể dùng sai mục đích khi làm việc với cơ quan thuế.
+  - **Cách ly tenant:** file công khai nằm ngoài hàng rào RLS/JWT — mọi kiểm tra quyền phải làm **tại thời điểm tạo**, vì sau đó không còn cửa nào chặn.
+  - **Dung lượng/chi phí:** hàng nghìn hóa đơn/tenant/tháng × 100.000 tenant ⇒ cần ước lượng chi phí R2 trước khi mở rộng.
+- **Đề xuất hướng xử lý (khung, chưa phải thiết kế chốt):**
+  1. **Registry-first** (bắt buộc theo `.claude/rules/ui.md` + `docs/design/CHUAN-giao-dien-va-anh-xa-du-lieu.md`): khai báo bộ trường của "mẫu hóa đơn" trong Registry miền hóa đơn — một nguồn sự thật, không hardcode nhãn trong template.
+  2. **Renderer** mở rộng từ `invoiceDoc.ts`, gom qua `zipStream.ts` → 1 file ZIP; job chạy **nền qua Queue** (không dựng đồng bộ trong request) vì khối lượng có thể lớn.
+  3. **Khâu kiểm tra (yêu cầu 3) — cụ thể hóa thành cổng tự động, không phải "xem bằng mắt":** trước khi phát hành ZIP, chạy **validator** trên từng hóa đơn — (a) đủ trường bắt buộc theo mẫu; (b) **đối chiếu số học**: `Σ thành tiền dòng hàng` khớp `tổng trước thuế`, `tiền thuế` khớp `thuế suất × tiền hàng`, `tổng sau thuế` khớp (tái dùng logic đã sửa ở U35b `columns.ts`); (c) hóa đơn **chưa đồng bộ dòng hàng** thì **từ chối xuất** kèm thông báo rõ (liên quan mục `[2026-07-27] race export × sync` phía trên — đừng lặp lại lỗi ô trống câm). Có lỗi ⇒ báo cáo kèm danh sách hóa đơn hỏng, **không phát hành file im lặng**.
+  4. **Lưu trữ:** khóa object ngẫu nhiên; bảng theo dõi (`tenant_id`, khóa, thời điểm tạo, `het_han_luc`, người tạo) + audit log hành động "phát hành link công khai"; lifecycle 30 ngày + nút **thu hồi ngay**.
+- **Phụ thuộc/liên quan:** `invoiceDoc.ts` chưa hưởng sửa 3 trường thuế của U35b (xem mục `[2026-07-27]` phía trên) — **phải xử lý trước hoặc cùng lúc**, nếu không bản thể hiện sẽ in `0.08` thay vì `8%` và có thể trống Tiền thuế. Cũng liên quan mục hạn mức tải xuống miễn phí (link công khai là một dạng "lượt tải" cần đếm).
+- **Nguồn phát hiện:** Yêu cầu trực tiếp của chủ dự án, phiên Cowork 2026-07-28; bằng chứng hạ tầng/mẫu do phiên này tự kiểm chứng (trích `hoa_don_mau.pdf` trang 1, `wrangler.jsonc:42-44`, `ls packages/export/src/`).
+
+---
+
+## [2026-07-28] `FindingKind` chưa phân biệt điều chỉnh với thay thế (đẩy khỏi U36)
+
+- **Phát hiện khi:** thực thi U36 (`docs/plans/U36-plan.md`), sau khi biên bản
+  `docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md` §8.1 mục 4 nêu việc này.
+- **Hiện trạng (đã kiểm chứng, đọc từ mã):** `packages/reconcile/src/types.ts` khai
+  `FindingKind = "lech_thue" | "thieu_so_dau_ra" | "huy" | "thay_the"`, và
+  `packages/reconcile/src/statusCodes.ts` chỉ có hai nhóm `huy` / `thayThe`. Từ U36.1
+  `thayThe.tthai = [4]`, nên hóa đơn **bị điều chỉnh** (`tthai=5`) và hóa đơn **điều chỉnh**
+  (`tthai=3`) hiện **không sinh finding nào** — màn Đối chiếu im lặng với cả một nhánh
+  nghiệp vụ đã có bằng chứng (3 cặp `3↔5` trong dữ liệu thật).
+- **Vì sao chưa làm trong U36:** thêm nhánh kéo theo chuỗi `StatusCodeMap` → `classifyStatus`
+  → `ReconcileSummary` → route → `apps/web/src/types/api.ts` → `ReconcilePage`; rộng hơn hẳn
+  phạm vi "trạng thái trong tổng hợp và kết xuất". Màn Đối chiếu lại đang ẩn sau cờ
+  `SHOW_RECONCILE=false` nên chưa cấp bách.
+- **Lưu ý khi làm:** `huy` phải TIẾP TỤC rỗng (mã hủy pháp lý chưa từng xuất hiện trong
+  33.929 hóa đơn — biên bản §5.1). Đừng nhân tiện "điền cho đủ".
+
+## [2026-07-28] Số học chuỗi thập phân đang có HAI nơi (drift, phát hiện ở U36.3)
+
+- **Hiện trạng:** `packages/export/src/columns.ts` có `tachThapPhan`/`congThapPhan`/
+  `tinhTienThue`/`nhanTram` (BigInt, ra đời ở U7/U35b). U36.3 cần phép TRỪ tiền cho
+  `apps/web`, nhưng `apps/web` **không phụ thuộc `@vat/export`**, nên helper mới
+  (`truTienChuoi`) được đặt ở `packages/domain/src/tienChuoi.ts`.
+- **Hệ quả:** hai gói cùng làm số học chuỗi thập phân bằng BigInt — một nguồn sự thật rưỡi.
+  Sửa quy tắc làm tròn/định dạng ở một nơi sẽ không lan sang nơi kia.
+- **Đề xuất:** gom bộ số học về `@vat/domain` (gói lá, mọi gói khác đã phụ thuộc), để
+  `@vat/export` re-export cho tương thích ngược. Việc cơ học, có test dày ở cả hai bên nên
+  rủi ro thấp — nhưng nó đụng `columns.ts` (vùng vừa qua QA của U36.2) nên cố ý hoãn.
+- **Ghi lại thay vì âm thầm chọn một bên** — `CLAUDE.md` §8 "khi phát hiện drift, ghi lại".

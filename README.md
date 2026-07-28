@@ -27,7 +27,7 @@ Mọi endpoint (trừ `/health`) cần JWT nội bộ HS256 (`Authorization: Bea
 
 Kết xuất bám mẫu cột chuẩn (`@vat/export`): tiền giữ chuỗi numeric chính xác, ô tiền `xlsx` định dạng `#,##0`; file lớn không giữ nguyên khối trong bộ nhớ Worker (CSV stream thẳng vào R2).
 
-Đối chiếu (`@vat/reconcile`, U10) đọc-only trên hóa đơn đã đồng bộ, tính on-read: **lệch thuế** (số học nội tại header `tgtcthue − ttcktmai + tgtthue = tgtttbso`, tính trong SQL `numeric`), **thiếu số HĐ đầu ra** (khoảng trống dãy `shdon` theo `(nbmst, khhdon)`), **hủy/thay thế** (theo bảng mã trạng thái — hiện **RỖNG** vì mã `tthai`/`ttxly` chưa kiểm chứng, chờ probe; xem `docs/plans/U10-plan.md`).
+Đối chiếu (`@vat/reconcile`, U10) đọc-only trên hóa đơn đã đồng bộ, tính on-read: **lệch thuế** (số học nội tại header `tgtcthue − ttcktmai + tgtthue = tgtttbso`, tính trong SQL `numeric`), **thiếu số HĐ đầu ra** (khoảng trống dãy `shdon` theo `(nbmst, khhdon)`), **hủy/thay thế** (theo bảng mã trạng thái: `tthai=4` = bị thay thế, ĐÃ KIỂM CHỨNG 2026-07-28 — `docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md`; mã **hủy** pháp lý và mọi `ttxly` vẫn **RỖNG** vì chưa có bằng chứng; xem `docs/plans/U10-plan.md`).
 
 Convert kế toán (`@vat/export`, U11) tổng quát hóa encoder xuất U7 qua **profile ánh xạ** (`MappingProfile`): mỗi profile định nghĩa cột đích + định dạng của một phần mềm kế toán. Convert đọc-only, keyset streaming, ghi **R2** + trả link (như U7). Định dạng import thật của MISA/FAST/SmartKTSC **CHƯA KIỂM CHỨNG** (chưa có template) → nằm ở `PENDING_PROFILES`, chưa khả dụng (`profile=misa` → 400); hiện chỉ có **profile tham chiếu** chứng minh cơ chế. Điền profile thật chỉ khi có template chính thức (Nguyên tắc bằng chứng); xem `docs/plans/U11-plan.md`.
 

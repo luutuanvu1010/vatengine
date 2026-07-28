@@ -13,6 +13,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.0",
+    date: "2026-07-28",
+    title: "Hóa đơn bị thay thế không còn được cộng vào tổng",
+    changes: [
+      "Từ 28/07/2026, hóa đơn ĐÃ BỊ THAY THẾ bằng một hóa đơn khác không còn được cộng vào Tiền chưa thuế, Tiền thuế và Tổng thanh toán. Trước đây phần mềm cộng cả bản gốc lẫn bản thay thế nên số liệu bị tính dư. Số thuế phải nộp THẬT của doanh nghiệp không thay đổi — chỉ là con số trên màn hình trước đây tính dư.",
+      "Vì vậy tổng của các kỳ đã xem trước đây có thể khác con số cũ. Màn Danh sách hóa đơn nay hiện rõ có bao nhiêu hóa đơn bị loại, loại đi bao nhiêu tiền thuế và bao nhiêu tổng thanh toán, tách riêng theo Mua vào / Bán ra.",
+      "Số đếm 'hóa đơn khớp bộ lọc' vẫn đếm đủ mọi hóa đơn, kể cả hóa đơn bị thay thế — chỉ phần TIỀN là không cộng chúng.",
+      'File Excel/CSV tải về có thêm 3 cột: "Trạng thái HĐ (mã)", "Trạng thái" (Gốc / Thay thế / Điều chỉnh / Bị thay thế / Bị điều chỉnh) và "Tính vào tổng" (Có/Không). Hóa đơn bị thay thế VẪN có trong file, chỉ được đánh dấu là không tính vào tổng.',
+      "Nếu Tổng cục Thuế trả về một mã trạng thái phần mềm chưa biết, màn hình sẽ cảnh báo để bạn kiểm tra thay vì lặng lẽ bỏ qua.",
+      "Nhãn trạng thái hóa đơn nay hiện bằng tiếng Việt thay vì mã số khó đọc.",
+    ],
+    kind: "improvement",
+  },
+  {
     version: "v1.9",
     date: "2026-07-27",
     title: "Cảnh báo khi hóa đơn đổi trạng thái + sửa hiển thị thuế suất",

@@ -26,6 +26,7 @@ import { FilterBar } from "./FilterBar";
 import { InvoiceChangesBadge } from "./InvoiceChangesBadge";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { RangeSyncPanel } from "./RangeSyncPanel";
+import { ThongBaoTrangThai } from "./ThongBaoTrangThai";
 import { useRangeBackfill } from "./useRangeBackfill";
 
 /** "12480350200" → "12.480.350.200 ₫"; null/rỗng → "—" (không giá trị giả). */
@@ -90,6 +91,10 @@ export function InvoicesPage() {
   }
 
   const count = summary.data?.total.count ?? 0;
+  // U36 — số hóa đơn bị loại khỏi TỔNG TIỀN (mã 4). `?? 0` chứ không chỉ kiểm mảng rỗng:
+  // tab đang mở giữ dữ liệu shape CŨ trong cache tới lần refetch (queryKey không đổi).
+  const soLoaiKhoiTong = summary.data?.total.soLoaiKhoiTong ?? 0;
+  const byChieu = summary.data?.byChieu ?? [];
   // Rỗng = đã tải xong summary và đếm được 0. Dùng để tự đồng bộ (không để màn rỗng gây hiểu nhầm).
   const khongCoHoaDon = summary.isSuccess && count === 0;
 
@@ -172,45 +177,58 @@ export function InvoicesPage() {
             }
           />
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: "var(--sp-6)",
-              alignItems: "start",
-            }}
-          >
-            {/* Task 13 + chỉnh 2026-07-26 — cụm 4 số xếp LƯỚI tự co (auto-fit): số đếm là
+          <>
+            {/* U36 — giải thích TRƯỚC khi người dùng đọc số, không phải chú thích cuối trang:
+                tổng của kỳ đã qua nay khác con số họ từng thấy và từng xuất file (§7.2). */}
+            <ThongBaoTrangThai byChieu={byChieu} badgeKy={badgeKy} />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "var(--sp-6)",
+                alignItems: "start",
+              }}
+            >
+              {/* Task 13 + chỉnh 2026-07-26 — cụm 4 số xếp LƯỚI tự co (auto-fit): số đếm là
                 tiêu điểm (cỡ md), 3 tổng tiền cỡ sm để vừa MỘT hàng màn thường, tự xuống
                 hàng gọn ở màn hẹp. Nhãn tiền từ Registry (`labelOf` — nhãn một-nguồn), tiền
                 in ĐẦY ĐỦ (formatMoney). Cụm xuất đã chuyển lên hàng hành động thẻ Tra cứu. */}
-            <Stat
-              value={formatMoney(String(count))}
-              label="hóa đơn khớp bộ lọc"
-              badge={
-                badgeKy ? (
-                  <Badge>
-                    <span className="tabular">Kỳ {badgeKy}</span>
-                  </Badge>
-                ) : undefined
-              }
-            />
-            <Stat
-              co="sm"
-              value={tienStat(summary.data?.total.tongTcthue)}
-              label={labelOf("tgtcthue")}
-            />
-            <Stat
-              co="sm"
-              value={tienStat(summary.data?.total.tongTthue)}
-              label={labelOf("tgtthue")}
-            />
-            <Stat
-              co="sm"
-              value={tienStat(summary.data?.total.tongTtbso)}
-              label={labelOf("tgtttbso")}
-            />
-          </div>
+              {/* U36 QĐ-7 — SỐ ĐẾM GIỮ NGUYÊN nghĩa "khớp bộ lọc"; ba số tiền bên cạnh thì đã
+                loại hóa đơn bị thay thế. Chênh lệch đó phải được nói ra ngay tại chỗ, nếu
+                không người dùng sẽ tự cộng tay và thấy lệch. */}
+              <Stat
+                value={formatMoney(String(count))}
+                label="hóa đơn khớp bộ lọc"
+                ghiChu={
+                  soLoaiKhoiTong > 0
+                    ? `(${formatMoney(String(soLoaiKhoiTong))} hóa đơn bị thay thế - không tính vào tổng)`
+                    : undefined
+                }
+                badge={
+                  badgeKy ? (
+                    <Badge>
+                      <span className="tabular">Kỳ {badgeKy}</span>
+                    </Badge>
+                  ) : undefined
+                }
+              />
+              <Stat
+                co="sm"
+                value={tienStat(summary.data?.total.tongTcthue)}
+                label={labelOf("tgtcthue")}
+              />
+              <Stat
+                co="sm"
+                value={tienStat(summary.data?.total.tongTthue)}
+                label={labelOf("tgtthue")}
+              />
+              <Stat
+                co="sm"
+                value={tienStat(summary.data?.total.tongTtbso)}
+                label={labelOf("tgtttbso")}
+              />
+            </div>
+          </>
         )}
       </Card>
     </div>

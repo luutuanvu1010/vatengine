@@ -9,7 +9,9 @@
 ## 1. Nguyên tắc
 
 - **TÁCH đỏ-thương-hiệu vs đỏ-cảnh-báo** (yêu cầu cứng brief §5): `--brand-*` (`#c5221f`, hơi ngả nâu-đỏ) cho thương hiệu + hành động chính; `--danger-*` (`#d93025`, đỏ tươi hơn) CHỈ cho cảnh báo lệch thuế/lỗi phá hủy. **Không** dùng lẫn.
-- **Trạng thái chưa kiểm chứng = màu trung tính.** Chip `ttxly`/`tthai` và finding `hủy`/`thay thế` (mã CHƯA KIỂM CHỨNG — xem B1, `statusCodes.ts` rỗng) dùng `--neutral-*`, KHÔNG tô đỏ/xanh gợi ý ngữ nghĩa chưa có bằng chứng.
+- **Mã ngoài tập đã kiểm chứng = màu trung tính.** Chip mang mã `tthai` ngoài tập 1–5, mọi chip `ttxly` (ý nghĩa chưa kiểm chứng), và finding `hủy` dùng `--neutral-*` — KHÔNG tô đỏ/xanh gợi ý ngữ nghĩa chưa có bằng chứng.
+- **Trạng thái đã kiểm chứng ≠ đều là tin tốt** (QĐ-11, 2026-07-28). Trong `tthai` 1–5, CHỈ mã `1` (Gốc) dùng `--success-*`; `2`–`5` (Thay thế / Điều chỉnh / Bị thay thế / Bị điều chỉnh) dùng `--neutral-chip-*`. `--success-*` mang nghĩa "số dương / trạng thái tốt"; tô nó cho "Bị thay thế" là nói sai nghiệp vụ.
+- **Thay đổi ĐÃ KIỂM CHỨNG, cần rà soát (không phải lỗi)** → `--info-700` / nền `--info-50` / viền `--info-200` (primitive `Alert` tone `info`). Dùng cho thông báo "hóa đơn bị thay thế đã bị loại khỏi tổng".
 - **Số tiền dùng `tabular-nums`** (căn cột đều) — bằng chứng: `font-variant-numeric:tabular-nums` trong export.
 
 ## 2. Màu — nền tảng (primitive)
@@ -53,7 +55,7 @@
 | `--surface-muted` | `#f1f3f4` | Nền phụ (chip, header bảng) |
 | `--surface-hover` | `#eef0f2` | Hover hàng/nút phụ |
 | `--surface-inverse` | `#202124` | Nền ĐẢO (đậm) — tooltip/popover nổi trên nền sáng (Task 11 InfoTip). Trùng giá trị `--text-primary` ở theme sáng **là chủ đích** — hai ngữ nghĩa khác nhau (chữ vs nền), không phải trùng lặp cần gộp |
-| `--neutral-chip-bg` | `#f1f3f4` | Nền chip trạng thái **chưa kiểm chứng** |
+| `--neutral-chip-bg` | `#f1f3f4` | Nền chip trạng thái **trung tính**: mã chưa kiểm chứng, và mã `tthai` 2–5 (QĐ-11) |
 | `--neutral-chip-fg` | `#3c4043` | Chữ chip trung tính |
 
 ## 4. Typography
@@ -134,7 +136,9 @@ Line-height: thân `1.5`, tiêu đề `1.25`.
 | Chiều **Mua vào** (chip) | `--info-600` / nền `--info-50` |
 | Chiều **Bán ra** (chip), số dương | `--success-600` / nền `--success-50` |
 | **Nghi thiếu đầu ra** (chưa khẳng định) | `--warning-700` / nền `--warning-50` / viền `--warning-200` |
-| Chip `ttxly`/`tthai`, finding **hủy/thay thế** (CHƯA KIỂM CHỨNG) | `--neutral-chip-*` (KHÔNG tô đỏ/xanh) |
+| Chip `tthai` = `1` (Gốc — còn nguyên hiệu lực) | `--success-700` / nền `--success-50` |
+| Chip `tthai` 2–5 (Thay thế/Điều chỉnh/Bị thay thế/Bị điều chỉnh — QĐ-11), chip `ttxly`, mã ngoài 1–5 | `--neutral-chip-*` (KHÔNG tô đỏ/xanh) |
+| Thông báo **thay đổi trạng thái đã kiểm chứng, cần rà soát** | `--info-700` / nền `--info-50` / viền `--info-200` |
 | Số tiền, số liệu | `--text-primary` + `.tabular` (tabular-nums), căn phải |
 | Nền trang / thẻ / bảng | `--surface-page` / `--surface-card` |
 

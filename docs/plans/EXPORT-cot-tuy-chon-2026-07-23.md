@@ -5,6 +5,22 @@
 > **Nguồn quy tắc:** `CLAUDE.md`, `.claude/rules/ui.md` (một nguồn sự thật cột, token/primitive,
 > 4 trạng thái, đa tenant), `docs/06-BINDING_MAP.md` (S1/S3 + hợp đồng `/exports`).
 
+> ### ⚠️ Sửa đổi 2026-07-28 (U36.2) — các con số dưới đây đã LỖI THỜI
+>
+> Tài liệu này giữ nguyên làm **hồ sơ thiết kế thời điểm 23/07**. Cơ chế (catalog một nguồn ở
+> `@vat/domain`, thứ tự logic chọn B, cột ẩn chen đúng vị trí, `cols` qua body) **không đổi**;
+> chỉ các con số đổi. Trạng thái hiện hành — đọc thẳng từ mã, đừng đọc từ đây:
+>
+> | Điều | Doc này (23/07) | Hiện hành (28/07, U36.2) |
+> |---|---|---|
+> | Số cột catalog | 29 | **31** |
+> | Cột mặc định | 16 | **19** |
+> | `tthai` (Trạng thái HĐ (mã)) | vị trí 25, ẩn | **chuyển lên ngay sau `Tổng tiền (sau thuế)`, BẬT** |
+> | Cột mới | — | **`tthaiNhan`** (Trạng thái, chữ) · **`tinhVaoTong`** (Có/Không) |
+> | Khóa localStorage | `vat.exportCols.v1` | **`vat.exportCols.v2`** (bump để người dùng cũ thấy 3 cột mới) |
+>
+> Nguồn sự thật: `packages/domain/src/flatExport.ts`. Lý do: `docs/plans/U36-plan.md` §4 Gói 2.
+
 ## 1. Mục tiêu
 
 File kết xuất (xlsx/csv) hiện là **một sheet phẳng** — mỗi mặt hàng một dòng, kèm ngữ cảnh

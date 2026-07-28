@@ -14,7 +14,7 @@
 |---|---|
 | Bộ lọc + phân trang | `packages/query/src/filters.ts` |
 | Cột bảng hóa đơn | `packages/export/src/columns.ts` (`EXPORT_COLUMNS`) |
-| Cột dòng hàng kết xuất (U23-B) | `packages/export/src/columns.ts` (`lineDetailRenderColumns`) |
+| Cột file kết xuất phẳng | `packages/domain/src/flatExport.ts` (catalog 31 cột) → `packages/export/src/columns.ts` (`flatRenderColumns`) |
 | Tổng hợp | `packages/query/src/summarize.ts` |
 | Vai trò RBAC | `apps/api/src/rbac.ts` (`ROLES`) |
 | Đối chiếu | `packages/reconcile/src/types.ts` |
@@ -31,7 +31,7 @@
 | S0 | **Đăng nhập nội bộ** (email + mật khẩu SaaS) | `POST /auth/login` | công khai |
 | S1 | **Danh sách hóa đơn** (lọc kỳ/chiều/nguồn/MST + phân trang) | `GET /invoices`, `GET /invoices/summary` | 3 vai |
 | S2 | **Chi tiết hóa đơn** (header + bảng dòng hàng) | `GET /invoices/:id` | 3 vai |
-| S3 | **Kết xuất & Convert** (xlsx/csv + profile kế toán; xlsx 2 sheet / csv 2 khối: hóa đơn + Chi tiết dòng hàng — U23-B) → tải file | `POST /exports`, `POST /exports/convert`, `GET /exports/:id` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
+| S3 | **Kết xuất & Convert** (xlsx/csv + profile kế toán; MỘT sheet PHẲNG — mỗi mặt hàng một dòng kèm đủ ngữ cảnh hóa đơn) → tải file | `POST /exports`, `POST /exports/convert`, `GET /exports/:id` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
 | S4 | **Đối chiếu** (4 loại phát hiện + tóm tắt) — ⚠️ **ĐANG ẨN** khỏi SPA bằng cờ `SHOW_RECONCILE=false` (`apps/web/src/lib/featureFlags.ts`, quyết định 2026-07-22): không có mục menu, route tắt → `/reconcile` về Tổng quan. Mã màn + hợp đồng API giữ nguyên, bật lại bằng 1 hằng số. | `GET /reconcile` | 3 vai |
 | S5 | **Kết nối tài khoản thuế (GDT)** — MST cố định (auto từ tenant) → ủy quyền → captcha + mật khẩu → đăng nhập lưu token; **ngắt kết nối** (U23-D) | `POST /tax-accounts`, `/:id/authorize`, `GET /:id/captcha`, `POST /:id/login`, `POST /:id/disconnect` | ⚠️ chỉ `ke_toan_truong` + `quan_tri` |
 
@@ -43,9 +43,9 @@
 |---|---|---|---|---|
 | `POST /auth/login` | `{email, password}` | `200 {token}` (JWT HS256, `tenant_id`+`role`, 8h) | `400` sai định dạng · `401` sai thông tin (gộp, không phân biệt email/mật khẩu) | công khai |
 | `GET /invoices` | query: bộ lọc chuẩn + `limit`(≤200,mđ 50) + `offset`(≥0) | `200 {rows[], total, limit, offset}` | `400` | 3 vai |
-| `GET /invoices/summary` | query: bộ lọc chuẩn | `200 {byChieu:[{chieu,count,tongTcthue,tongTthue,tongTtbso}], total:{count,tongTcthue,tongTthue,tongTtbso}}` (tiền = chuỗi/null) | `400` | 3 vai |
+| `GET /invoices/summary` | query: bộ lọc chuẩn | `200 {byChieu: ChieuSummary[], total: MoneyTotals}` — xem §4.6 (tiền = chuỗi/null) | `400` | 3 vai |
 | `GET /invoices/:id` | `:id` UUID | `200 {...header, dongHangHoa: DongHangHoaRow[]}` (dòng hàng sort theo stt; tiền/số = chuỗi) | `400` id sai · `404` | 3 vai |
-| `POST /exports` | query: `format=xlsx\|csv` + bộ lọc | `201 {id, key, url}` — file có thêm sheet/khối "Chi tiết dòng hàng" (khóa `shdon`; U23-B) | `400` | `ke_toan_truong`,`quan_tri` (`ke_toan`→403) |
+| `POST /exports` | query: `format=xlsx\|csv` + bộ lọc · body: `{ids?, cols?}` (`cols` = key cột theo catalog `@vat/domain`, allowlist ở server; vắng ⇒ 19 cột mặc định) | `201 {id, key, url}` — MỘT sheet phẳng, mỗi mặt hàng một dòng | `400` | `ke_toan_truong`,`quan_tri` (`ke_toan`→403) |
 | `POST /exports/convert` | query: `profile` + `format` + bộ lọc | `201 {id, key, url, profile}` | `400` profile/format sai | `ke_toan_truong`,`quan_tri` |
 | `GET /exports/:id` | `:id` (mã kết xuất) | `200` file stream (R2, giới hạn tenant) | `400` · `404` | `ke_toan_truong`,`quan_tri` |
 | `GET /reconcile` | query: bộ lọc chuẩn | `200 {findings[], summary}` | `400` | 3 vai |
@@ -88,7 +88,8 @@ Bề mặt UI bổ sung (ngoài S0–S5, từ brief §3 + quyết định): **Da
 |---|---|---|
 | **Tiền** (chuỗi numeric, có thể >2^53) | `tgtcthue`,`tgtthue`,`tgtttbso`,`ttcktmai`,`tgia`, các `tong*` | Phân nhóm nghìn bằng **thao tác chuỗi/BigInt/decimal** — **CẤM** `Number()`/`parseFloat`. Căn phải. `null`→ trống. |
 | **Thời khắc UTC** | `tdlap`, `ncnhat` | Đổi sang **giờ VN (UTC+7)**, format `dd/MM/yyyy` (giờ khi cần). `tdlap` quan sát luôn `17:00:00Z` = 00:00 giờ VN — **không lệch ngày**. |
-| **Mã trạng thái** | `ttxly`, `tthai` | Ánh xạ nhãn **CHỈ mã đã kiểm chứng**; mã chưa probe → hiển thị **số + "(chưa rõ)"**. KHÔNG đoán nhãn (Nguyên tắc bằng chứng — đồng bộ với `@vat/reconcile statusCodes.ts` đang RỖNG có chủ đích). |
+| **Mã trạng thái** | `tthai` | `1` Gốc · `2` Thay thế · `3` Điều chỉnh · `4` Bị thay thế · `5` Bị điều chỉnh — ĐÃ KIỂM CHỨNG 2026-07-28 (`docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md` §3). Nhãn lấy từ `@vat/domain` `nhanTthai()`, mã ngoài tập → **số + "(chưa rõ)"** + cảnh báo. Chip: chỉ mã `1` tô `--success-*`; `2`–`5` trung tính (QĐ-11). |
+| **Mã trạng thái** | `ttxly` | **CHƯA KIỂM CHỨNG** — không đổi khi hóa đơn bị thay thế, bám theo họ hóa đơn/tiến trình xử lý (biên bản §4). Bảng nhãn GIỮ RỖNG ⇒ mọi mã hiển thị **số + "(chưa rõ)"**, trung tính. |
 | **Enum** | `chieu` | `purchase`→"Mua vào", `sold`→"Bán ra" |
 | **Enum** | `nguon` | `normal`→"HĐĐT thường", `sco`→"Máy tính tiền" |
 
@@ -101,7 +102,36 @@ Bề mặt UI bổ sung (ngoài S0–S5, từ brief §3 + quyết định): **Da
 4 loại `Finding` + `summary {lechThue, thieuSoDauRa, huy, thayThe}` (4 con số):
 - `lech_thue` — lệch số học header (`tgtcthue/ttcktmai/tgtthue/tgtttbso` + `lech` chuỗi). Cảnh báo trực quan.
 - `thieu_so_dau_ra` — khoảng trống dãy `shdon` trong nhóm (`nbmst,khhdon,shdonThieu`). **Là NGHI NGỜ** → nhãn UI "**nghi thiếu**", KHÔNG khẳng định.
-- `huy` / `thay_the` — theo `tthai/ttxly` (bảng mã production RỖNG → hiện mã, không đoán nhãn).
+- `huy` / `thay_the` — theo `tthai`/`ttxly` (`packages/reconcile/src/statusCodes.ts`). Từ 2026-07-28: `thayThe.tthai = [4]`; `huy` và MỌI `ttxly` vẫn **RỖNG** (mã hủy pháp lý chưa từng xuất hiện trong dữ liệu, ý nghĩa `ttxly` chưa kiểm chứng) ⇒ `summary.huy` luôn 0. Reconcile CỐ Ý **không** áp loại trừ mã 4: nó không có phép cộng tiền nào, loại đi sẽ tạo "thiếu số đầu ra" GIẢ và giấu hóa đơn mã 4 bị lệch thuế.
+
+### 4.6. Tổng hợp (`GET /invoices/summary` → `InvoiceSummary`)
+
+> Ghi TỪ MÃ `packages/query/src/summarize.ts` (gương ở `apps/web/src/types/api.ts`), 2026-07-28.
+
+`{ byChieu: ChieuSummary[], total: MoneyTotals }`. Mọi số tiền là **chuỗi** (numeric, có thể >2^53).
+
+`MoneyTotals` — có ở CẢ `total` lẫn từng chiều:
+
+| Trường | Nghĩa |
+|---|---|
+| `count` | Hóa đơn **khớp bộ lọc**. ⚠️ **KHÔNG** trừ hóa đơn bị thay thế (QĐ-7): trang Danh sách coi `count === 0` là "kỳ rỗng" và **tự gọi đồng bộ lên Tổng cục Thuế** — trừ đi sẽ tự kích hoạt đồng bộ oan cho kỳ chỉ chứa hóa đơn mã 4. |
+| `countTinhTong` | Hóa đơn ĐƯỢC cộng vào tiền |
+| `soLoaiKhoiTong` | Hóa đơn bị loại khỏi tiền (hiện chỉ `tthai=4`). `count = countTinhTong + soLoaiKhoiTong` |
+| `tongTcthue` · `tongTthue` · `tongTtbso` | Tổng tiền **ĐÃ loại `tthai=4`**. Giữ **nullable** (không COALESCE) để `null` → `—` như trước |
+
+`ChieuSummary extends MoneyTotals` — thêm `chieu` và khối "thay đổi". Khối này **CHỈ ở cấp chiều**, cố ý không có ở `total`: cộng số mua vào với bán ra là trộn hai nghiệp vụ ngược dấu.
+
+| Trường | Nghĩa |
+|---|---|
+| `soDuocDieuChinh` · `soHdThayThe` · `soHdDieuChinh` | Số hóa đơn `tthai` = 5 · 2 · 3 |
+| `soMaLa` | Hóa đơn mang mã ngoài tập 1–5 → giao diện **phải cảnh báo** (QĐ-6). `tthai` NULL KHÔNG tính vào đây |
+| `thueDaLoai` · `ttbsoDaLoai` | Σ tiền của hóa đơn đã bị loại khỏi tổng — số **DƯƠNG**, `coalesce 0` (giao diện tự thêm dấu trừ `-` ASCII) |
+| `thueThayTheDieuChinh` · `ttbsoThayTheDieuChinh` | Σ tiền hóa đơn `tthai` ∈ {2,3} lập trong kỳ — quy mô cần rà soát, ĐÃ nằm trong tổng |
+
+**Thuế phải nộp** dẫn xuất hoàn toàn ở client, KHÔNG có trong hợp đồng:
+`Δ = −thueDaLoai(sold) + thueDaLoai(purchase)` — hai chiều **ngược dấu**; tính bằng BigInt trên chuỗi (`@vat/domain` `truTienChuoi`).
+
+**Tương thích ngược:** `queryKey` phía client không đổi sau deploy ⇒ tab đang mở giữ dữ liệu shape CŨ tới lần refetch. Mọi trường mới khai `?` ở client và phải chịu được `undefined`.
 
 ### 4.5. Convert kế toán (`POST /exports/convert`)
 

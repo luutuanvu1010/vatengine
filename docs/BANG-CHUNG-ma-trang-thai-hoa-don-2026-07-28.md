@@ -260,16 +260,20 @@ Vòng quét lại theo kỳ **không bị loại bỏ**, nhưng hạ xuống vai
 
 ### 8.1 Việc cần làm để gỡ khóa
 
-| # | Việc | File |
-|---|---|---|
-| 1 | Điền `STATUS_CODE_MAP.thayThe.tthai = [4]`; giữ `huy` RỖNG; giữ mọi `ttxly` RỖNG | `packages/reconcile/src/statusCodes.ts` |
-| 2 | Cập nhật assertion cổng bằng chứng sang tập mã đã kiểm chứng, dẫn biên bản này | `packages/reconcile/test/contract/statusCodes.contract.test.ts` |
-| 3 | Điền `TTHAI_VERIFIED = {1:"Gốc", 2:"Thay thế", 3:"Điều chỉnh", 4:"Bị thay thế", 5:"Bị điều chỉnh"}`; `TTXLY_VERIFIED` giữ RỖNG | `apps/web/src/lib/statusLabels.ts` |
-| 4 | Bổ sung `FindingKind` nhánh `dieu_chinh` / `bi_dieu_chinh` (hiện chỉ có `huy`, `thay_the`) | `packages/reconcile/src/types.ts` |
-| 5 | Map `shdgoc`/`khhdgoc`/`khmshdgoc`/`tdlhdgoc` ra cột để liên kết cặp hóa đơn — ghép đủ khóa theo cảnh báo mục 6.6 | `packages/db/src/schema/hoaDon.ts`, `packages/sync/src/mapInvoice.ts` |
-| 6 | Loại `tthai=4` khỏi mọi con số tổng hợp; **giữ** `tthai=5` | tầng truy vấn/kết xuất |
-| 7 | Cập nhật ADR-0001 (dòng 45 ghi "chỉ quan sát được `tthai=1`" — nay đã lỗi thời) | `docs/adr/0001-nen-tang-cloudflare.md` |
-| 8 | Gỡ nhãn "CHƯA KIỂM CHỨNG" ở các nơi liên quan | `README.md`, `docs/CHECKLIST-NGHIEM-THU.md`, `docs/07-DESIGN_TOKENS.md` |
+> **Trạng thái 2026-07-28: mục 1, 2, 3, 6, 7, 8 ĐÃ THỰC HIỆN** trong U36 (`docs/plans/U36-plan.md`,
+> tiến độ `docs/plans/U36-tien-do.md`). Mục 4 đẩy sang BACKLOG (chuỗi map→classify→summary→UI→
+> `api.ts` quá rộng cho U36). Mục 5 (ghép cặp gốc↔thay thế) là **U37**.
+
+| # | Việc | File | Trạng thái |
+|---|---|---|---|
+| 1 | Điền `STATUS_CODE_MAP.thayThe.tthai = [4]`; giữ `huy` RỖNG; giữ mọi `ttxly` RỖNG | `packages/reconcile/src/statusCodes.ts` | ✅ U36.1 |
+| 2 | Cập nhật assertion cổng bằng chứng sang tập mã đã kiểm chứng, dẫn biên bản này | `packages/reconcile/test/contract/statusCodes.contract.test.ts` | ✅ U36.1 |
+| 3 | Điền nhãn `{1:"Gốc", 2:"Thay thế", 3:"Điều chỉnh", 4:"Bị thay thế", 5:"Bị điều chỉnh"}`; `ttxly` giữ RỖNG | `packages/domain/src/trangThaiHoaDon.ts` (một nguồn cho web + file xuất; `apps/web/src/lib/statusLabels.ts` thành lớp mỏng) | ✅ U36.1 |
+| 4 | Bổ sung `FindingKind` nhánh `dieu_chinh` / `bi_dieu_chinh` (hiện chỉ có `huy`, `thay_the`) | `packages/reconcile/src/types.ts` | ⏸ BACKLOG |
+| 5 | Map `shdgoc`/`khhdgoc`/`khmshdgoc`/`tdlhdgoc` ra cột để liên kết cặp hóa đơn — ghép đủ khóa theo cảnh báo mục 6.6 | `packages/db/src/schema/hoaDon.ts`, `packages/sync/src/mapInvoice.ts` | ⏸ U37 |
+| 6 | Loại `tthai=4` khỏi mọi con số **TIỀN**; **giữ** `tthai=5`; `count` giữ nguyên nghĩa | `packages/query/src/summarize.ts` (+ 3 cột trạng thái ở file xuất) | ✅ U36.2/U36.3 |
+| 7 | Cập nhật ADR-0001 (dòng 45 ghi "chỉ quan sát được `tthai=1`" — nay đã lỗi thời) | `docs/adr/0001-nen-tang-cloudflare.md` | ✅ U36.1 |
+| 8 | Gỡ nhãn "CHƯA KIỂM CHỨNG" ở các nơi liên quan | `README.md`, `docs/CHECKLIST-NGHIEM-THU.md`, `docs/07-DESIGN_TOKENS.md`, `.claude/rules/ui.md`, `docs/06-BINDING_MAP.md` | ✅ U36.3 |
 
 ### 8.2 Vẫn phải giữ nguyên kỷ luật
 

@@ -100,14 +100,31 @@ export interface InvoiceLineRow {
 /** GET /invoices/:id — header + mảng dòng hàng (ĐV4). */
 export type InvoiceDetailResponse = InvoiceRow & { dongHangHoa: InvoiceLineRow[] };
 
+// Gương của `packages/query/src/summarize.ts` — sửa một bên phải sửa bên kia.
+//
+// U36 — mọi trường MỚI khai `?` (tùy chọn) có chủ đích: `queryKey: ["invoices-summary", …]`
+// KHÔNG đổi sau khi deploy, nên một tab đang mở vẫn giữ dữ liệu shape CŨ trong cache tới
+// lần refetch kế. Giao diện phải chịu được `undefined`, không chỉ mảng rỗng.
 export interface MoneyTotals {
+  /** Hóa đơn khớp bộ lọc — QĐ-7: KHÔNG trừ mã 4 (trừ đi sẽ kích hoạt tự đồng bộ GDT). */
   count: number;
-  tongTcthue: string | null;
+  countTinhTong?: number;
+  soLoaiKhoiTong?: number;
+  tongTcthue: string | null; // đã loại hóa đơn bị thay thế
   tongTthue: string | null;
   tongTtbso: string | null;
 }
 export interface ChieuSummary extends MoneyTotals {
   chieu: string;
+  soDuocDieuChinh?: number;
+  soHdThayThe?: number;
+  soHdDieuChinh?: number;
+  soMaLa?: number;
+  /** Số DƯƠNG (QĐ-8) — giao diện tự thêm dấu trừ ASCII. */
+  thueDaLoai?: string;
+  ttbsoDaLoai?: string;
+  thueThayTheDieuChinh?: string;
+  ttbsoThayTheDieuChinh?: string;
 }
 export interface InvoiceSummary {
   byChieu: ChieuSummary[];
