@@ -117,8 +117,20 @@ describe("Gửi đăng ký", () => {
     await u.type(screen.getByLabelText(/^Tên doanh nghiệp$/i), "Cty");
     await u.type(screen.getByLabelText(/^Mã số thuế$/i), "123");
     await u.click(screen.getByRole("checkbox"));
-    expect(screen.getByText(/đúng 10 hoặc 13 chữ số/i)).toBeInTheDocument();
+    expect(screen.getByText(/đúng 10, 12 hoặc 13 chữ số/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Gửi đăng ký/i })).toBeDisabled();
+  });
+
+  // Hộ kinh doanh / cá nhân dùng số định danh cá nhân 12 số làm MST (TT 86/2024/TT-BTC).
+  it("MST 12 số → KHÔNG báo lỗi, nút gửi được", async () => {
+    renderWithProviders(<DangKyPage />);
+    const u = userEvent.setup();
+    await u.type(screen.getByLabelText(/^Email/i), "a@b.vn");
+    await u.type(screen.getByLabelText(/^Tên doanh nghiệp$/i), "Hộ KD");
+    await u.type(screen.getByLabelText(/^Mã số thuế$/i), "001199012345");
+    await u.click(screen.getByRole("checkbox"));
+    expect(screen.queryByText(/chữ số/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Gửi đăng ký/i })).toBeEnabled();
   });
 });
 
@@ -166,7 +178,7 @@ describe("🔴 Ánh xạ ĐỦ 8 mã lỗi của backend", () => {
   // ra" và không biết phải sửa gì.
   it.each([
     ["email_khong_hop_le", 400, /email doanh nghiệp, Gmail hoặc Yahoo/i],
-    ["mst_khong_hop_le", 400, /10 hoặc 13 chữ số/i],
+    ["mst_khong_hop_le", 400, /10, 12 hoặc 13 chữ số/i],
     ["chua_dong_y_dieu_khoan", 400, /tích ô cam kết/i],
     ["da_ton_tai", 409, /đã được đăng ký/i],
     ["bad_request", 400, /kiểm tra lại các ô/i],

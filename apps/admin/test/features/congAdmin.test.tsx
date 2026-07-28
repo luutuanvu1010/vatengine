@@ -405,8 +405,8 @@ describe("Đổi MST", () => {
     const hop = within(await screen.findByRole("dialog"));
     await userEvent.type(hop.getByLabelText(/mã số thuế mới/i), "123");
     await userEvent.click(hop.getByRole("button", { name: "Đổi MST" }));
-    // Bám cả câu lỗi qua role=alert — chuỗi "10 hoặc 13 chữ số" cũng có trong NHÃN ô nhập.
-    expect(hop.getByRole("alert")).toHaveTextContent(/Mã số thuế phải gồm 10 hoặc 13 chữ số/i);
+    // Bám cả câu lỗi qua role=alert — chuỗi "10, 12 hoặc 13 chữ số" cũng có trong NHÃN ô nhập.
+    expect(hop.getByRole("alert")).toHaveTextContent(/Mã số thuế phải gồm 10, 12 hoặc 13 chữ số/i);
     expect(api.doiMst).not.toHaveBeenCalled();
   });
 });

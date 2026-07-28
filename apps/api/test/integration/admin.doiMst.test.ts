@@ -171,6 +171,13 @@ describe("POST /admin/tenants/:id/doi-mst", () => {
     });
   });
 
+  // 12 số = số định danh cá nhân (hộ kinh doanh/cá nhân, TT 86/2024/TT-BTC) — phải nhận.
+  it("MST 12 số → 200", async () => {
+    const res = await doi("001199012345");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, mst_moi: "001199012345" });
+  });
+
   it("🔴 token KHÁCH bị từ chối (route sau requireSuperAdmin)", async () => {
     const kh = bearer(await tokenFor(tenantId, { role: "quan_tri" }));
     const res = await doi("0100000002", tenantId, kh);

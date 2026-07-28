@@ -124,6 +124,13 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
     expect(res.status).toBe(201);
   });
 
+  // 12 số = số định danh cá nhân (CCCD) dùng thay MST cho CÁ NHÂN & HỘ KINH DOANH theo
+  // TT 86/2024/TT-BTC (từ 01/07/2025). Trước đây bị chặn ⇒ loại khách này không đăng ký được.
+  it("MST 12 số (số định danh cá nhân — hộ kinh doanh) hợp lệ → 201", async () => {
+    const res = await dangKy(app, body({ mst: "001199012345", email: "hokinhdoanh@abc.vn" }));
+    expect(res.status).toBe(201);
+  });
+
   it("MST trùng → 409 da_ton_tai", async () => {
     await makeTenant(db, "Cty cũ", "0100000099");
     const res = await dangKy(app, body());
