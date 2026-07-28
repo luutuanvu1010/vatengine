@@ -811,3 +811,31 @@ lạc phạm vi U36.
   xác thực magic bytes, khóa gắn `tenant_id`, bucket nội bộ). Kèm `security-reviewer` bắt buộc.
 - **Mức ưu tiên đề xuất:** Trung bình — phụ thuộc phản hồi thật sau U37.
 - **Nguồn phát hiện:** Phiên lập kế hoạch U37, 2026-07-28.
+
+## [2026-07-28] `_journal.json` có mốc `when` LỆCH ở `idx 5` — bẫy ADR-0008 còn nằm trong repo
+
+- **Trạng thái:** Phát hiện khi sinh migration `0019` (U37a lát 2). **Không chặn U37**, đã né
+  được cho `0019`; nhưng mầm mống vẫn còn nguyên cho migration sau.
+- **Bằng chứng (đo thật, `packages/db/migrations/meta/_journal.json`):**
+  - `idx 4` → `when = 1784200000000` (2026-07-16T11:06:40Z)
+  - `idx 5` → `when = 1784125480919` (2026-07-15T14:24:40Z) — **NHỎ HƠN mục liền trước**
+  - `idx 15..18` mang mốc **tương lai** (2026-08-02T04:40..04:43Z), cách nhau đúng 60s —
+    dấu hiệu đã có người chỉnh tay để né đúng bẫy này trước đây.
+- **Hệ quả đã gặp ngay:** `drizzle-kit generate` đặt `when` = thời điểm thật (28/07), tức
+  **nhỏ hơn `idx 18`** ⇒ `drizzle-kit migrate` sẽ in `[✓] migrations applied successfully!`
+  mà **KHÔNG áp `0019`**. Đã né bằng cách đặt `0019.when = 0018.when + 60000`. **Mọi
+  migration sinh mới từ nay đều dính lại lỗi này** cho tới khi mốc thật vượt 2026-08-02.
+- **CHƯA KIỂM CHỨNG:** chỗ lệch ở `idx 5` có làm `drizzle-kit migrate` (CLI) bỏ qua
+  `0005_real_wendell_vaughn.sql` trên một DB dựng mới / khôi phục DR hay không. Bộ migrate
+  của **ORM** (`drizzle-orm/pglite/migrator`, dùng trong test) thì **KHÔNG** bỏ qua — đã
+  kiểm: DB PGlite dựng mới vẫn có đủ cột `ban_quyen`/`ghi_chu` của `0005`. Hai bộ migrate
+  này khác nhau, nên kết quả trên không kết luận được cho CLI. Đừng suy diễn theo cả hai
+  hướng khi chưa đo.
+- **Vì sao đáng lo:** `0005` chính là migration của sự cố ghi trong `.claude/rules/deploy.md`
+  (thêm `ban_quyen`/`ghi_chu`, làm `GET /me` vỡ 500). Nếu CLI thật sự bỏ qua nó, một lần
+  khôi phục DR sẽ tái tạo đúng sự cố cũ mà không ai biết.
+- **Đề xuất khi tới lượt:** (a) dựng một Postgres trống (không phải PGlite) rồi chạy
+  `drizzle-kit migrate` thật, đối chiếu `information_schema` với snapshot kỳ vọng — trả lời
+  dứt điểm câu hỏi CHƯA KIỂM CHỨNG ở trên; (b) thêm cổng CI kiểm `when` tăng đơn điệu trên
+  toàn journal, đỏ ngay khi lệch — rẻ, chặn được cả lớp lỗi này về sau.
+- **Nguồn phát hiện:** Phiên U37a lát 2, 2026-07-28.

@@ -13,3 +13,4 @@ export * from "./nguoiDung";
 export * from "./quanTriHeThong";
 export * from "./taiKhoanThue";
 export * from "./tenants";
+export * from "./tepHoaDonGoc";
