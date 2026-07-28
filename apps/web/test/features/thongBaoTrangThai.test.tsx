@@ -3,10 +3,12 @@
 // Vì sao BẮT BUỘC có thông báo (§7.2): tổng của các kỳ ĐÃ QUA sẽ khác con số người dùng
 // từng thấy và từng xuất file. Đổi số mà không giải thích thì kế toán sẽ tưởng phần mềm hỏng
 // — hoặc tệ hơn, tưởng nghĩa vụ thuế của họ thay đổi.
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThongBaoTrangThai, deltaThuePhaiNop } from "../../src/features/invoices/ThongBaoTrangThai";
 import type { ChieuSummary } from "../../src/types/api";
+import { renderWithProviders } from "../helpers/renderApp";
 
 function chieu(over: Partial<ChieuSummary> & { chieu: string }): ChieuSummary {
   return {
@@ -244,5 +246,220 @@ describe("soDuocDieuChinh — hóa đơn của kỳ này bị sửa bởi hóa �
     const cu = { chieu: "sold", count: 9, tongTcthue: null, tongTthue: null, tongTtbso: null };
     const { container } = render(<ThongBaoTrangThai badgeKy={KY} byChieu={[cu as ChieuSummary]} />);
     expect(container.textContent).toBe("");
+  });
+});
+
+// U39 gói B — bung danh sách hóa đơn BỊ SỬA ngay tại thông báo.
+//
+// Vì sao cần: nút "Hóa đơn vừa thay đổi" chỉ thấy hóa đơn đổi trạng thái TRONG LÚC hệ thống
+// theo dõi — 16/17 hóa đơn mã 4 đã là mã 4 từ lần đồng bộ đầu nên không xuất hiện ở đó. Người
+// dùng cần xem "kỳ này đang có những hóa đơn lệch nào", là câu hỏi khác hẳn.
+describe("Bung danh sách hóa đơn bị sửa (U39)", () => {
+  const KY_LOC = { tuNgay: "2026-07-01", denNgay: "2026-07-31" };
+
+  it("hiện ĐỦ BỘ BA số tiền cho hóa đơn bị thay thế (mã 4)", () => {
+    render(
+      <ThongBaoTrangThai
+        badgeKy={KY}
+        filter={KY_LOC}
+        byChieu={[
+          chieu({
+            chieu: "sold",
+            soLoaiKhoiTong: 3,
+            tcthueDaLoai: "21388889",
+            thueDaLoai: "1711111",
+            ttbsoDaLoai: "23100000",
+          }),
+        ]}
+      />,
+    );
+    const n = screen.getByRole("status").textContent ?? "";
+    expect(n).toContain("21.388.889");
+    expect(n).toContain("1.711.111");
+    expect(n).toContain("23.100.000");
+  });
+
+  it("mã 5 hiện RIÊNG và nói rõ VẪN tính vào tổng — không để kế toán trừ nhầm", () => {
+    render(
+      <ThongBaoTrangThai
+        badgeKy={KY}
+        filter={KY_LOC}
+        byChieu={[
+          chieu({
+            chieu: "sold",
+            soDuocDieuChinh: 1,
+            tcthueBiDieuChinh: "3333333",
+            thueBiDieuChinh: "266667",
+            ttbsoBiDieuChinh: "3600000",
+          }),
+        ]}
+      />,
+    );
+    const n = document.body.textContent ?? "";
+    expect(n).toContain("3.600.000");
+    expect(n).toContain("vẫn tính vào tổng");
+  });
+
+  it("có nút bung danh sách khi có hóa đơn bị sửa", () => {
+    render(
+      <ThongBaoTrangThai
+        badgeKy={KY}
+        filter={KY_LOC}
+        byChieu={[chieu({ chieu: "sold", soLoaiKhoiTong: 3, thueDaLoai: "1" })]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Xem danh sách/ })).toBeTruthy();
+  });
+
+  it("KHÔNG có nút bung khi không có hóa đơn nào bị sửa", () => {
+    render(
+      <ThongBaoTrangThai
+        badgeKy={KY}
+        filter={KY_LOC}
+        byChieu={[chieu({ chieu: "sold", soHdThayThe: 2, thueThayTheDieuChinh: "5" })]}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Xem danh sách/ })).toBeNull();
+  });
+
+  it("shape CŨ thiếu bộ ba → không ném, không hiện số rác", () => {
+    const cu = { chieu: "sold", count: 5, tongTcthue: null, tongTthue: null, tongTtbso: null };
+    const { container } = render(
+      <ThongBaoTrangThai badgeKy={KY} filter={KY_LOC} byChieu={[cu as ChieuSummary]} />,
+    );
+    expect(container.textContent).toBe("");
+  });
+});
+
+// U39 gói B — DANH SÁCH bung ra. QA 2026-07-29 bắt được: phần này 0% test phủ, kéo file
+// xuống dưới ngưỡng 80% và chỉ qua cổng nhờ file khác bù. Không có test nào từng bấm nút.
+describe("DanhSachBiSua — nội dung danh sách bung ra (U39)", () => {
+  const KY_LOC = { tuNgay: "2026-07-01", denNgay: "2026-07-31" };
+  const goi: string[] = [];
+
+  afterEach(() => {
+    goi.length = 0;
+    vi.restoreAllMocks();
+  });
+
+  function mockDs(rows: unknown[], total = rows.length, status = 200) {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      goi.push(url);
+      if (url.includes("/invoices")) {
+        return new Response(JSON.stringify({ rows, total, limit: 100, offset: 0 }), {
+          status,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    });
+  }
+
+  const hd = (over: Record<string, unknown> = {}) => ({
+    id: "hd-1",
+    khhdon: "C26MYY",
+    shdon: "12250",
+    tdlap: "2026-07-25T17:00:00Z",
+    tthai: 4,
+    chieu: "sold",
+    tgtcthue: "1805556",
+    tgtthue: "144444",
+    tgtttbso: "1950000",
+    ...over,
+  });
+
+  const moBang = (byChieu: ChieuSummary[]) =>
+    renderWithProviders(<ThongBaoTrangThai badgeKy={KY} filter={KY_LOC} byChieu={byChieu} />);
+
+  it("CHƯA bấm → KHÔNG gọi API (không tải sẵn cho mọi lần mở trang)", () => {
+    mockDs([hd()]);
+    moBang([chieu({ chieu: "sold", soLoaiKhoiTong: 1, thueDaLoai: "1" })]);
+    expect(goi.filter((u) => u.includes("/invoices?"))).toEqual([]);
+  });
+
+  it("bấm → gọi API KÈM biSua=true và ĐÚNG kỳ đang lọc", async () => {
+    mockDs([hd()]);
+    moBang([chieu({ chieu: "sold", soLoaiKhoiTong: 1, thueDaLoai: "1" })]);
+    await userEvent.click(screen.getByRole("button", { name: /Xem danh sách/ }));
+    await waitFor(() => expect(goi.some((u) => u.includes("biSua=true"))).toBe(true));
+    const u = goi.find((x) => x.includes("biSua=true")) ?? "";
+    expect(u).toContain("tuNgay=2026-07-01");
+    expect(u).toContain("denNgay=2026-07-31");
+  });
+
+  it("hiện số hiệu, ngày, nhãn trạng thái và ba số tiền của TỪNG hóa đơn", async () => {
+    mockDs([hd()]);
+    moBang([chieu({ chieu: "sold", soLoaiKhoiTong: 1, thueDaLoai: "1" })]);
+    await userEvent.click(screen.getByRole("button", { name: /Xem danh sách/ }));
+    expect(await screen.findByText("C26MYY-12250")).toBeTruthy();
+    const n = document.body.textContent ?? "";
+    expect(n).toContain("26/07/2026"); // tdlap 17:00Z = 26/07 giờ VN, không lệch ngày
+    expect(n).toContain("Bị thay thế");
+    expect(n).toContain("1.805.556");
+    expect(n).toContain("1.950.000");
+  });
+
+  it("danh sách RỖNG → nói rõ, không để khoảng trắng câm", async () => {
+    mockDs([], 0);
+    moBang([chieu({ chieu: "sold", soLoaiKhoiTong: 1, thueDaLoai: "1" })]);
+    await userEvent.click(screen.getByRole("button", { name: /Xem danh sách/ }));
+    expect(await screen.findByText(/Không có hóa đơn nào bị sửa/)).toBeTruthy();
+  });
+
+  // Dùng 400 chứ không 500: `makeQueryClient` retry một lần cho lỗi >= 500, nên test phải
+  // đợi hết backoff — chậm và dễ chớp tắt trên CI. Nhánh hiển thị lỗi là MỘT, không đổi.
+  it("API lỗi → hiện ErrorState, KHÔNG màn trắng", async () => {
+    mockDs([], 0, 400);
+    moBang([chieu({ chieu: "sold", soLoaiKhoiTong: 1, thueDaLoai: "1" })]);
+    await userEvent.click(screen.getByRole("button", { name: /Xem danh sách/ }));
+    expect(await screen.findByText(/Không tải được danh sách/)).toBeTruthy();
+  });
+
+  it("nhiều hơn trần tải → NÓI RÕ đang cắt, không im lặng", async () => {
+    mockDs([hd()], 250);
+    moBang([chieu({ chieu: "sold", soLoaiKhoiTong: 250, thueDaLoai: "1" })]);
+    await userEvent.click(screen.getByRole("button", { name: /Xem danh sách/ }));
+    expect(await screen.findByText(/Hiện 1\/250 hóa đơn/)).toBeTruthy();
+  });
+
+  it("bấm lần nữa → ẩn danh sách", async () => {
+    mockDs([hd()]);
+    moBang([chieu({ chieu: "sold", soLoaiKhoiTong: 1, thueDaLoai: "1" })]);
+    await userEvent.click(screen.getByRole("button", { name: /Xem danh sách/ }));
+    await screen.findByText("C26MYY-12250");
+    await userEvent.click(screen.getByRole("button", { name: /Ẩn danh sách/ }));
+    expect(screen.queryByText("C26MYY-12250")).toBeNull();
+  });
+});
+
+// QA bắt: con số trên nút KHÔNG bị test khóa ⇒ ai đó quên cộng `soDuocDieuChinh` thì số lệch
+// danh sách mà test vẫn xanh. Người dùng bấm vào thấy số khác là mất tin tưởng ngay.
+describe("Số trên nút phải khớp tập server trả (mã 4 + mã 5, cả hai chiều)", () => {
+  const KY_LOC = { tuNgay: "2026-07-01", denNgay: "2026-07-31" };
+
+  it("cộng ĐỦ mã 4 và mã 5", () => {
+    render(
+      <ThongBaoTrangThai
+        badgeKy={KY}
+        filter={KY_LOC}
+        byChieu={[chieu({ chieu: "sold", soLoaiKhoiTong: 3, soDuocDieuChinh: 1, thueDaLoai: "1" })]}
+      />,
+    );
+    screen.getByRole("button", { name: "Xem danh sách 4 hóa đơn" });
+  });
+
+  it("cộng ĐỦ cả hai chiều", () => {
+    render(
+      <ThongBaoTrangThai
+        badgeKy={KY}
+        filter={KY_LOC}
+        byChieu={[
+          chieu({ chieu: "sold", soLoaiKhoiTong: 3, soDuocDieuChinh: 1, thueDaLoai: "1" }),
+          chieu({ chieu: "purchase", soLoaiKhoiTong: 2, soDuocDieuChinh: 5, thueDaLoai: "1" }),
+        ]}
+      />,
+    );
+    screen.getByRole("button", { name: "Xem danh sách 11 hóa đơn" });
   });
 });

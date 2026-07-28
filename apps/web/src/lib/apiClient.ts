@@ -120,6 +120,10 @@ function filterQuery(f: InvoiceFilter, p?: Page): Record<string, string | number
     denNgay: f.denNgay,
     ttxly: f.ttxly,
     tthai: f.tthai,
+    // U39 — CHỈ gửi khi bật. Gửi "false" là vô nghĩa và từng là bẫy: `z.coerce.boolean()`
+    // biến chuỗi "false" thành true. Server nay đọc tường minh, nhưng client vẫn không gửi
+    // tham số thừa — URL sạch, cache key ổn định.
+    biSua: f.biSua ? "true" : undefined,
     nbmst: f.nbmst,
     nmmst: f.nmmst,
     // U31 — lọc theo cột. Chuỗi rỗng → undefined để không gửi tham số vô nghĩa lên server

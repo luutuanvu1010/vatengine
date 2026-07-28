@@ -7,11 +7,14 @@
 //
 // Chịu được dữ liệu shape CŨ: `queryKey` không đổi sau deploy nên một tab đang mở vẫn giữ
 // dữ liệu cũ trong cache tới lần refetch kế. Mọi trường mới đọc qua `?? 0` / `?? "0"`.
-import { truTienChuoi } from "@vat/domain";
-import { Alert } from "../../components/ui/primitives";
-import { formatMoney } from "../../lib/format";
+import { useQuery } from "@tanstack/react-query";
+import { nhanTthai, truTienChuoi } from "@vat/domain";
+import { useState } from "react";
+import { Alert, Button, ErrorState, Loading } from "../../components/ui/primitives";
+import { api } from "../../lib/apiClient";
+import { formatDateVN, formatMoney } from "../../lib/format";
 import { labelChieu } from "../../lib/statusLabels";
-import type { ChieuSummary } from "../../types/api";
+import type { ChieuSummary, InvoiceFilter } from "../../types/api";
 
 /** Ngày đổi cách tính — nêu thẳng cho người dùng, không giấu trong changelog. */
 export const NGAY_DOI_CACH_TINH = "28/07/2026";
@@ -49,6 +52,48 @@ function dienGiaiDelta(delta: string): string {
   return `${am ? "giảm" : "tăng"} ${tien(am ? delta.slice(1) : delta)}`;
 }
 
+/** Danh sách hóa đơn ĐÃ BỊ sửa của kỳ đang lọc.
+ *
+ * Chỉ mount khi người dùng bấm bung — cố ý KHÔNG tải sẵn: đa số kỳ không có hóa đơn nào bị
+ * sửa, tải trước là tốn một lượt gọi cho mọi lần mở trang.
+ *
+ * Nguồn `GET /invoices?biSua=true` (mã 4 + mã 5) — KHÁC nguồn của nút "Hóa đơn vừa thay
+ * đổi", vốn chỉ thấy hóa đơn đổi trạng thái TRONG LÚC hệ thống theo dõi. */
+function DanhSachBiSua({ filter }: { filter: InvoiceFilter }) {
+  const ds = useQuery({
+    queryKey: ["invoices-bi-sua", filter],
+    queryFn: () => api.getInvoices({ ...filter, biSua: true }, { limit: 100 }),
+  });
+
+  if (ds.isPending) return <Loading />;
+  if (ds.isError)
+    return <ErrorState message="Không tải được danh sách." onRetry={() => ds.refetch()} />;
+  if (ds.data.rows.length === 0) return <div>Không có hóa đơn nào bị sửa trong kỳ này.</div>;
+
+  return (
+    <div style={{ display: "grid", gap: "var(--sp-2)", marginTop: "var(--sp-2)" }}>
+      {ds.data.rows.map((r) => (
+        <div key={r.id} style={{ fontSize: "var(--fs-sm)" }}>
+          <strong>
+            {r.khhdon}-{r.shdon}
+          </strong>{" "}
+          · {formatDateVN(r.tdlap)} · {nhanTthai(r.tthai)} · {labelChieu(r.chieu)}
+          <br />
+          <span className="tabular">
+            trước thuế {tien(r.tgtcthue ?? "0")} · thuế {tien(r.tgtthue ?? "0")} · tổng{" "}
+            {tien(r.tgtttbso ?? "0")}
+          </span>
+        </div>
+      ))}
+      {ds.data.total > ds.data.rows.length ? (
+        <div>
+          Hiện {ds.data.rows.length}/{ds.data.total} hóa đơn - tải file Excel để xem đủ.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function KhoiChieu({ c, badgeKy }: { c: ChieuSummary; badgeKy: string | null }) {
   const loai = soLoai(c);
   const moi = (c.soHdThayThe ?? 0) + (c.soHdDieuChinh ?? 0);
@@ -60,9 +105,20 @@ function KhoiChieu({ c, badgeKy }: { c: ChieuSummary; badgeKy: string | null }) 
       </div>
       {loai > 0 ? (
         <div>
-          {loai} hóa đơn <strong>bị thay thế</strong> - đã loại khỏi tổng: thuế{" "}
+          {loai} hóa đơn <strong>bị thay thế</strong> - đã loại khỏi tổng: trước thuế{" "}
+          <strong className="tabular">{tien(c.tcthueDaLoai ?? "0", true)}</strong>, thuế{" "}
           <strong className="tabular">{tien(c.thueDaLoai ?? "0", true)}</strong>, tổng thanh toán{" "}
           <strong className="tabular">{tien(c.ttbsoDaLoai ?? "0", true)}</strong>
+        </div>
+      ) : null}
+      {/* Mã 5 để RIÊNG và nói thẳng "vẫn tính vào tổng". Gộp chung với mã 4 thì kế toán sẽ
+          trừ nhầm phần này ra khỏi sổ — sai theo chiều ngược lại (biên bản §7). */}
+      {(c.soDuocDieuChinh ?? 0) > 0 ? (
+        <div>
+          {c.soDuocDieuChinh} hóa đơn <strong>bị điều chỉnh</strong> - <em>vẫn tính vào tổng</em>:
+          trước thuế <strong className="tabular">{tien(c.tcthueBiDieuChinh ?? "0")}</strong>, thuế{" "}
+          <strong className="tabular">{tien(c.thueBiDieuChinh ?? "0")}</strong>, tổng thanh toán{" "}
+          <strong className="tabular">{tien(c.ttbsoBiDieuChinh ?? "0")}</strong>
         </div>
       ) : null}
       {moi > 0 ? (
@@ -80,18 +136,30 @@ function KhoiChieu({ c, badgeKy }: { c: ChieuSummary; badgeKy: string | null }) 
 export function ThongBaoTrangThai({
   byChieu,
   badgeKy,
+  filter,
 }: {
   byChieu: readonly ChieuSummary[];
   badgeKy: string | null;
+  /** Kỳ đang lọc — dùng nguyên vẹn khi bung danh sách, để danh sách khớp đúng con số
+   * người dùng đang nhìn. */
+  filter?: InvoiceFilter;
 }) {
   const coThayDoi = byChieu.filter(
-    (c) => soLoai(c) > 0 || (c.soHdThayThe ?? 0) > 0 || (c.soHdDieuChinh ?? 0) > 0,
+    (c) =>
+      soLoai(c) > 0 ||
+      (c.soHdThayThe ?? 0) > 0 ||
+      (c.soHdDieuChinh ?? 0) > 0 ||
+      (c.soDuocDieuChinh ?? 0) > 0,
   );
   const soMaLa = byChieu.reduce((n, c) => n + (c.soMaLa ?? 0), 0);
   // `tthai=5` = hóa đơn CỦA KỲ NÀY đã bị một hóa đơn khác sửa. Hóa đơn sửa nó có thể nằm ở
   // KỲ SAU, và khi đó phần tăng/giảm rơi vào kỳ sau trong khi kỳ này vẫn cộng đủ bản gốc.
   // Đếm cả hai chiều: mã 5 ở mua vào cũng đã quan sát được (2 ca, biên bản §6.5).
   const soBiSua = byChieu.reduce((n, c) => n + (c.soDuocDieuChinh ?? 0), 0);
+  // Tổng số hóa đơn ĐÃ BỊ sửa = mã 4 (bị thay thế) + mã 5 (bị điều chỉnh) — khớp đúng tập
+  // mà `GET /invoices?biSua=true` trả về, để con số trên nút không lệch danh sách bung ra.
+  const soBiSuaTong = byChieu.reduce((n, c) => n + soLoai(c) + (c.soDuocDieuChinh ?? 0), 0);
+  const [moDs, setMoDs] = useState(false);
   const delta = deltaThuePhaiNop(byChieu);
 
   if (coThayDoi.length === 0 && soMaLa === 0 && soBiSua === 0) return null;
@@ -108,6 +176,16 @@ export function ThongBaoTrangThai({
             <div style={{ marginBottom: "var(--sp-2)" }}>
               <strong>Thuế phải nộp trên báo cáo {dienGiaiDelta(delta)}</strong>{" "}
               <em>(số thuế phải nộp thật không đổi - trước đây phần mềm tính dư)</em>
+            </div>
+          ) : null}
+          {/* Bung danh sách ngay tại chỗ — người dùng đang đứng ở đây, không bắt họ đi tìm
+              sang màn khác. Chỉ hiện khi thật sự có hóa đơn bị sửa để xem. */}
+          {soBiSuaTong > 0 && filter ? (
+            <div style={{ marginBottom: "var(--sp-2)" }}>
+              <Button type="button" variant="ghost" onClick={() => setMoDs((v) => !v)}>
+                {moDs ? "Ẩn danh sách" : `Xem danh sách ${soBiSuaTong} hóa đơn`}
+              </Button>
+              {moDs ? <DanhSachBiSua filter={filter} /> : null}
             </div>
           ) : null}
           <div style={{ fontSize: "var(--fs-xs)" }}>

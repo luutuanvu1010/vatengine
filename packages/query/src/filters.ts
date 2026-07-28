@@ -29,8 +29,16 @@ export const invoiceFilterSchema = z.object({
    *
    * Vì sao cần cờ riêng thay vì `tthai=4`: cần HAI mã cùng lúc, mà `tthai` là một số. Và
    * việc "mã nào nghĩa là bị sửa" phải khai một nơi (`@vat/domain`), không rải 4/5 vào
-   * query string của client. */
-  biSua: z.coerce.boolean().optional(),
+   * query string của client.
+   *
+   * ⚠️ KHÔNG dùng `z.coerce.boolean()`: nó gọi `Boolean("false")` = **true**, nên
+   * `?biSua=false` sẽ lọc NGƯỢC ý người dùng (chỉ hiện hóa đơn lệch trong khi họ muốn xem
+   * tất cả). Đọc tường minh, chỉ "true"/"1" mới là bật. */
+  biSua: z
+    .union([z.boolean(), z.enum(["true", "1", "false", "0", ""])])
+    .optional()
+    // `undefined` phải GIỮ NGUYÊN undefined ("không nêu"), khác hẳn `false` ("nêu là tắt").
+    .transform((v) => (v === undefined ? undefined : v === true || v === "true" || v === "1")),
   nbmst: z.string().min(1).optional(),
   nmmst: z.string().min(1).optional(),
   // U31 — lọc theo cột. Văn bản là "chứa", không phân biệt hoa thường (xem buildWhere).

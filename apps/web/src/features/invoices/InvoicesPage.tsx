@@ -180,7 +180,7 @@ export function InvoicesPage() {
           <>
             {/* U36 — giải thích TRƯỚC khi người dùng đọc số, không phải chú thích cuối trang:
                 tổng của kỳ đã qua nay khác con số họ từng thấy và từng xuất file (§7.2). */}
-            <ThongBaoTrangThai byChieu={byChieu} badgeKy={badgeKy} />
+            <ThongBaoTrangThai byChieu={byChieu} badgeKy={badgeKy} filter={filter} />
             <div
               style={{
                 display: "grid",

@@ -352,6 +352,24 @@ describe("invoiceFilterSchema + buildWhere — cờ biSua (U39)", () => {
     expect(r.success && r.data.biSua).toBe(true);
   });
 
+  // BẪY: `z.coerce.boolean()` gọi Boolean("false") = TRUE. Nếu client lỡ gửi biSua=false,
+  // server sẽ lọc ngược lại ý người dùng — chỉ hiện hóa đơn lệch trong khi họ muốn xem tất
+  // cả. Schema phải tự chịu được, không dựa vào client nhớ đừng gửi.
+  it('chuỗi "false"/"0" → false, KHÔNG bị coerce thành true', () => {
+    for (const v of ["false", "0", ""]) {
+      const r = invoiceFilterSchema.safeParse({ biSua: v });
+      expect(r.success, `biSua=${v}`).toBe(true);
+      expect(r.success && r.data.biSua, `biSua=${v}`).toBeFalsy();
+    }
+  });
+
+  it('chuỗi "true"/"1" → true', () => {
+    for (const v of ["true", "1"]) {
+      const r = invoiceFilterSchema.safeParse({ biSua: v });
+      expect(r.success && r.data.biSua, `biSua=${v}`).toBe(true);
+    }
+  });
+
   it("không truyền → undefined, KHÔNG sinh mệnh đề lọc", () => {
     const r = invoiceFilterSchema.safeParse({});
     expect(r.success && r.data.biSua).toBeUndefined();

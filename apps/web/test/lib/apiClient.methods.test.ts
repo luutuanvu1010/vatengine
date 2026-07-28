@@ -171,4 +171,24 @@ describe("apiClient — đồng bộ theo khoảng + backfill dòng hàng", () =
     [, init] = lastCall(m);
     expect(JSON.parse(String(init.body))).toEqual({ ids: ["a", "b"] });
   });
+
+  // U39 — cờ `biSua`. Server đã tự chịu được chuỗi "false" (schema đọc tường minh, có test
+  // riêng ở packages/query), nhưng client vẫn KHÔNG gửi tham số thừa: gửi "false" từng là
+  // bẫy thật vì `z.coerce.boolean()` biến nó thành true.
+  it("getInvoices(): biSua=true → gửi biSua=true; false/không nêu → KHÔNG gửi tham số", async () => {
+    const m = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        jsonResponse(200, { rows: [], total: 0, limit: 50, offset: 0 }),
+      );
+
+    await api.getInvoices({ biSua: true }, {});
+    expect(lastCall(m)[0]).toContain("biSua=true");
+
+    await api.getInvoices({ biSua: false }, {});
+    expect(lastCall(m)[0]).not.toContain("biSua");
+
+    await api.getInvoices({}, {});
+    expect(lastCall(m)[0]).not.toContain("biSua");
+  });
 });
