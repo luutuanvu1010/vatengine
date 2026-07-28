@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Mã đơn vị** | U37 (U36 là số lớn nhất đang dùng, xác nhận `ls docs/plans/` 2026-07-28) |
-| **Trạng thái** | 🟡 **HỒ SƠ NGHIÊN CỨU — CHƯA PHẢI KẾ HOẠCH.** Chưa qua `/plan-unit`, chưa có test, chưa có code. |
+| **Trạng thái** | 🔄 **ĐỔI HƯỚNG 2026-07-28 (chủ dự án).** Không dựng bản thể hiện từ dữ liệu nữa — **tải thẳng hóa đơn gốc từ GDT** (§4.5). Bốn quyết định cũ bị vô hiệu hóa (§3). Kế hoạch đã duyệt, còn treo **R-b** trước khi code. |
 | **Mức ưu tiên** | **1 (cao nhất trong backlog)** — chỉ định trực tiếp của chủ dự án |
 | **Nguồn gốc** | `docs/BACKLOG-y-tuong-va-de-xuat.md`, mục `[2026-07-28] ⭐ ƯU TIÊN 1 — Xuất hóa đơn theo MẪU CHUẨN` |
 | **Ngày lập hồ sơ** | 2026-07-28 (3 vòng hỏi–đáp với chủ dự án trong cùng ngày) |
@@ -27,20 +27,34 @@ Mục đích của file: **hỗ trợ tổng hợp và đối soát**. **Không 
 2. File tải về ở **định dạng nén (ZIP)**, lưu trên **R2**, giữ **1 tháng rồi tự xóa**; đặt **công khai chỉ-đọc** để chia sẻ qua **link / email / Zalo / WhatsApp** — người nhận **đọc + tải được**.
 3. Có **khâu kiểm tra** đảm bảo hóa đơn tạo ra **đạt chuẩn, không sai, không thiếu thông tin**.
 
+> **📌 Đổi hướng 2026-07-28 (giữ nguyên văn ba yêu cầu trên làm lịch sử).** Chủ dự án chỉ đạo: *"thay vì tạo hoá đơn từ dữ liệu thì tìm cách tải hoá đơn từ GDT luôn, vì họ hỗ trợ việc đó. Như vậy vừa đơn giản và chính xác"* — và điều đó **đã được kiểm chứng đúng** (§4.5).
+>
+> Hệ quả với ba yêu cầu gốc: **(1)** không còn "đúng mẫu + logo" — thứ GDT phát là **XML gốc có chữ ký số**, chính xác tuyệt đối nhưng **không xem được bằng mắt**; phần "nhìn thấy tờ hóa đơn" tách sang **U38**. **(2)** giữ nguyên. **(3)** giữ nguyên nhưng đổi nội dung kiểm: không còn đối chiếu số học (ta không tự tính gì), chuyển thành đối chiếu **số lượng** + báo cáo hóa đơn GDT không có hồ sơ gốc (§8).
+>
+> Mục **§1** ở trên mô tả sản phẩm theo hướng CŨ; đọc §8 để lấy hình dung đúng theo hướng mới.
+
 ---
 
-## 3. Tám quyết định ĐÃ CHỐT (không mở lại khi lập kế hoạch)
+## 3. Tám quyết định ĐÃ CHỐT — **bốn cái đã bị hướng mới vô hiệu hóa (2026-07-28)**
 
-| # | Quyết định | Ghi chú ràng buộc |
+| # | Quyết định | Trạng thái sau khi đổi hướng |
 |---|---|---|
-| QĐ-1 | **Chỉ làm hóa đơn BÁN RA** (`chieu = 'sold'`) | Hóa đơn mua vào không có đường lấy logo người bán → ngoài phạm vi |
-| QĐ-2 | **Định dạng bên trong ZIP = PDF** | Mục đích: lưu trữ nội bộ + thống kê cơ bản, không đua độ đẹp với bản gốc nhà cung cấp |
-| QĐ-3 | **Trường rỗng thì để trống** — không bịa, không suy diễn | Lấy tối đa trường người mua có thật trong dữ liệu đã đồng bộ |
-| QĐ-4 | **Logo do người dùng TỰ TẢI LÊN** qua *Cài đặt chung → Thông tin doanh nghiệp* | Không lấy từ GDT (xem §4.1 — bằng chứng ngược lại) |
-| QĐ-5 | **Tên miền công khai = `docs.tourdao.vn`** (custom domain, KHÔNG dùng `r2.dev`) | `tourdao.vn` đã nằm trên Cloudflare |
-| QĐ-6 | **Tự xóa sau ~30 ngày** bằng R2 Object Lifecycle Rule theo prefix | Không tự viết cron |
-| QĐ-7 | **Cảnh báo rủi ro link công khai** trước khi tạo link (checkbox xác nhận, không phải dòng chữ mờ) | Kèm nút **thu hồi ngay** + audit log |
-| QĐ-8 | **In tuyên bố trên CHÍNH bản PDF** (chân mỗi trang): *"Tài liệu này hỗ trợ tổng hợp và đối soát thông tin. Không thay thế hóa đơn điện tử gốc (bản XML có chữ ký số) do người bán phát hành."* | Đặt chân trang để không mất khi tách lẻ file |
+| QĐ-1 | ~~Chỉ làm hóa đơn BÁN RA (`chieu = 'sold'`)~~ | ❌ **VÔ HIỆU.** Lý do loại mua vào là "không có đường lấy logo người bán". Không dựng bản thể hiện nữa ⇒ hết lý do ⇒ **làm CẢ HAI CHIỀU**. Bundle GDT có sẵn nhãn `"Xuất xml (hóa đơn mua vào)"` |
+| QĐ-2 | ~~Định dạng bên trong ZIP = PDF~~ | ❌ **VÔ HIỆU.** Bên trong ZIP là **XML gốc có chữ ký số** do GDT phát |
+| QĐ-3 | **Trường rỗng thì để trống** — không bịa, không suy diễn | ✅ Còn hiệu lực (áp cho báo cáo kèm gói và cho U38) |
+| QĐ-4 | ~~Logo do người dùng TỰ TẢI LÊN~~ | ❌ **VÔ HIỆU.** Không dựng bản thể hiện ⇒ không cần logo. **Đường tải file lên đầu tiên của hệ thống RA KHỎI phạm vi**, kèm toàn bộ rủi ro §6.3 |
+| QĐ-5 | **Tên miền công khai = `docs.tourdao.vn`** (custom domain, KHÔNG dùng `r2.dev`) | ✅ Còn hiệu lực (chủ dự án tái xác nhận 2026-07-28) |
+| QĐ-6 | **Tự xóa sau ~30 ngày** bằng R2 Object Lifecycle Rule theo prefix | ✅ Còn hiệu lực |
+| QĐ-7 | **Cảnh báo rủi ro link công khai** trước khi tạo link (checkbox xác nhận, không phải dòng chữ mờ) | ✅ Còn hiệu lực. Kèm nút **thu hồi ngay** + audit log |
+| QĐ-8 | ~~In tuyên bố "không thay thế hóa đơn điện tử gốc" lên chân mỗi trang PDF~~ | ❌ **VÔ HIỆU — và in lên là SAI SỰ THẬT.** File **chính là** bản gốc có chữ ký số. Rủi ro §6.2 (nhầm lẫn giá trị chứng từ) biến mất |
+
+### Quyết định MỚI chốt cùng lúc (2026-07-28)
+
+| # | Quyết định |
+|---|---|
+| QĐ-A | **Gói chỉ chứa XML gốc từ GDT.** Bản thể hiện xem-bằng-mắt đẩy sang **U38**, dựng từ kho XML đã tải (khi đó không gọi GDT thêm lần nào) |
+| QĐ-B | **Không chặn trần số hóa đơn mỗi lần xuất.** Chạy nền qua hàng đợi; `TenantLimiter` giữ nhịp; báo tiến trình |
+| QĐ-C | **Tách đôi:** U37a = adapter + kho XML gốc + job nền; U37b = gói ZIP + link công khai + thu hồi + UI |
 
 ---
 
@@ -58,6 +72,15 @@ Giả định ban đầu của chủ dự án: *"Hoá đơn tải về từ tran
 3. **Ảnh nhúng** (`pdfimages -list`): đúng **3 ảnh/trang**, kích thước **giống hệt nhau ở mọi trang** (179×364, 512×106, 130×54) — logo/con dấu của **một** người bán, do hệ thống Viettel chèn lúc dựng bản thể hiện.
 4. **Adapter của ta biết gì về GDT:** `packages/gdt-client/src/endpoints.ts` + `detail.ts` chỉ có `/query/invoices/{purchase,sold}`, `/sco-query/...`, `/…/invoices/detail` (4 tham số định danh) — **không có endpoint PDF/logo nào**.
 5. **Tín hiệu đối thủ:** `KHAO_SAT_TINH_NANG_NIBOT.md:31` — *"với PDF gốc có logo/màu, NIBOT chào dịch vụ **DOLAGO** để tải từ nhà cung cấp"*. Nếu GDT phát PDF có logo, NIBOT đã không phải bán thêm dịch vụ bên thứ ba.
+6. **⭐ Bằng chứng thứ 5 — từ CHÍNH cổng GDT, không phải PDF của nhà cung cấp** (bổ sung 2026-07-28): `docs/doi_chieu_data/Hóa Đơn Điện Tử.html` là trang cổng GDT thật đã lưu, **có chứa khối "Xem hóa đơn"** — tức bản thể hiện do chính GDT dựng. Đếm ảnh trong toàn trang:
+
+   ```
+   $ node -e "const h=require('fs').readFileSync(f,'utf8');
+              console.log((h.match(/<img[^>]*>/g)||[]).length)"
+   8
+   ```
+
+   Tám thẻ `<img>` gồm **1 logo của cổng GDT** (`NTT_Logo_v2.png`) + **7 icon menu** (`ic_ql_tao_lap.svg`). **Không có thẻ ảnh nào trong khối hóa đơn.** Bản thể hiện của GDT dựng hoàn toàn bằng HTML/CSS + một mã QR vẽ bằng SVG `<rect>`. ⇒ GDT **không hề lưu logo người bán**, kể cả để hiển thị trên cổng của mình.
 
 ⇒ **Kết luận làm việc:** logo nằm ở **nhà cung cấp dịch vụ HĐĐT của người bán** (Viettel/VNPT/MISA…), không ở kho GDT. **Bài học:** đây đúng dạng bẫy Hiến pháp cảnh báo (`:30000`) — một tiền đề chưa kiểm chứng suýt định hình cả tính năng ưu tiên 1.
 
@@ -104,21 +127,129 @@ goi-hoa-don/<YYYY-MM>/<token-ngẫu-nhiên-≥128-bit-base32url>.zip
 | Bảng `hoa_don` chỉ có cột người mua `nmmst` + `nmten` | `packages/db/src/schema/hoaDon.ts:30-31` | Địa chỉ người mua, họ tên người nhận, hình thức thanh toán, đơn vị tiền tệ, MCCQT… nếu có thì nằm trong `raw_json` — **phải rà thật** (xem §5, việc R1) |
 | `invoiceDoc.ts` **chưa** hưởng sửa 3 trường thuế của U35b | Backlog mục `[2026-07-27]` | Nếu bám `invoiceDoc.ts` mà không vá trước, bản PDF sẽ in `0.08` thay vì `8%` và có thể **trống Tiền thuế** |
 
+> **⚠️ Bảng trên đã LẠC HẬU sau khi đổi hướng (2026-07-28).** Đo thật `raw_json` production (§4.6) cho thấy khoảng trống dữ liệu **nhỏ hơn nhiều** so với ghi nhận ở đây: `raw_json` có **152 khóa cấp 1**, gồm đủ `nbdchi`/`nbsdthoai`/`nbstkhoan`/`nbtnhang` (người bán) và `nmdchi`/`nmtnmua`/`htttoan` (người mua). Hai dòng cuối cũng hết hiệu lực: đường upload logo ra khỏi phạm vi (QĐ-4 vô hiệu), và `invoiceDoc.ts` **không còn là nợ chặn** vì U37 không đi qua renderer nào.
+
+### 4.5 ⭐ GDT CÓ đường tải hóa đơn gốc — ĐÃ KIỂM CHỨNG (2026-07-28, offline, không cần đăng nhập)
+
+Nguồn sơ cấp: bundle JS của chính cổng `hoadondientu.gdt.gov.vn`, lưu trong `docs/doi_chieu_data/Hóa Đơn Điện Tử_files/`. Trích nguyên văn (đã khử minify):
+
+```js
+// 1121-a47aace172e5b7dc.js — handleExportXML (nút "Xuất xml" trên màn Tra cứu)
+const { hsgoc } = selectedRow;
+if (!hsgoc) return message.error("Không tồn tại hồ sơ gốc");
+dispatch(exportXml(this.getValues(selectedRow, ["nbmst","khhdon","shdon","khmshdon"]),
+                   jwt, activeTab == 1 ? "query" : "sco-query"))
+  .then(blob => saveAs("invoice", blob, "zip"))
+
+// _app-2aef5a25f219981e.js
+exportXml = (params, token, family) => () =>
+  sendGetBlob(`https://hoadondientu.gdt.gov.vn/api/${family}/invoices/export-xml`, params, token)
+
+sendGetBlob = (url, params, token) => axios({
+  method: "get", url, params, responseType: "blob",
+  headers: { Authorization: `Bearer ${token}`, "Accept-Language": "vi" },
+})
+```
+
+**Đã kiểm chứng:**
+
+- Đường dẫn: `GET /api/{query|sco-query}/invoices/export-xml`
+- Tham số: `nbmst`, `khhdon`, `shdon`, `khmshdon` — **trùng khít 4 tham số định danh** của `/invoices/detail` mà `packages/gdt-client/src/endpoints.ts` đã kiểm chứng và đang dùng
+- Xác thực: `Authorization: Bearer <token GDT>` — **cùng token** U14 đã có
+- Phản hồi: **blob**, cổng lưu thành `invoice.zip`
+- Điều kiện tiên quyết: cờ **`hsgoc`** trên dòng hóa đơn
+- Có cho **cả hai chiều**: bundle chứa cả `"Xuất xml (hóa đơn bán ra)"` lẫn `"Xuất xml (hóa đơn mua vào)"`
+
+**KHÔNG có endpoint PDF cho hóa đơn.** `grep -ohiE '[a-z0-9/_-]*pdf[a-z0-9/_-]*' *.js` chỉ ra tên icon (`FilePdfOutline`, `file-pdf`) và hai hàm in chứng từ TNCN (`print01QTRPDF`, `pageSignBoxPrintPDF`) — không có đường xuất PDF hóa đơn nào. Ba endpoint xuất hóa đơn duy nhất: `/invoices/export-xml`, `/invoices/export-excel`, `/invoices/export-excel-sold`.
+
+**CHƯA KIỂM CHỨNG (chờ R-b):** bên trong ZIP có gì (chỉ XML? có kèm bản thể hiện?), mã lỗi khi thiếu `hsgoc`, và GDT có kìm nhịp riêng cho endpoint này không.
+
+### 4.6 `hsgoc` và độ giàu của `raw_json` — ĐO THẬT trên production (2026-07-28)
+
+Lệnh: `node scripts/do-hsgoc-u37.mjs` (chỉ `SELECT`). Tổng **33.945** hóa đơn.
+
+| chiều × nguồn | tổng | có khóa `hsgoc` | `hsgoc` khác `null` |
+|---|---|---|---|
+| `purchase` × `normal` | 322 | 322 | **258** |
+| `purchase` × `sco` | 22.017 | 22.017 | 22.017 |
+| `sold` × `sco` | 11.606 | 11.606 | 11.606 |
+
+- **`hsgoc` có mặt ở 100% hóa đơn đã đồng bộ** — không cần thêm gì để lấy cờ này.
+- Giá trị là **UUID chuỗi** (id hồ sơ gốc), **không phải boolean**.
+- **64 hóa đơn `null`**, toàn bộ nằm trong `purchase/normal` (~19,9% nhóm đó). Mọi hóa đơn `sco` đều có ⇒ phải có nhánh "GDT không có hồ sơ gốc" trong báo cáo kèm gói, nhưng tỷ lệ nhỏ.
+- Không tồn tại tổ hợp `sold/normal` trong dữ liệu hiện tại.
+
+**`raw_json` có 152 khóa cấp 1** — giàu hơn nhiều so với 24 cột của bảng `hoa_don`. Đáng chú ý cho **U38**:
+
+- **`tgtttbchu`** — tổng tiền thanh toán **bằng chữ**, GDT trả sẵn ⇒ **không cần viết bộ đọc số thành chữ tiếng Việt**
+- **`qrcode`** — GDT trả sẵn ⇒ **không cần bộ sinh mã QR**
+- Người bán: `nbdchi`, `nbsdthoai`, `nbstkhoan`, `nbtnhang`, `nbfax` (322), `nbcks` (chữ ký số)
+- Người mua: `nmdchi`, `nmtnmua`, `nmshchieu`, `nmcccd`, `nmstkhoan` (322)
+- Khác: `htttoan` (hình thức thanh toán, 322), `dvtte`/`tgia` (322 — khớp ghi nhận backlog "`dvtte` trống ở 100% hóa đơn `sco`"), `hdhhdvu` (dòng hàng)
+
+⚠️ Các khóa đếm `322` **chỉ có ở `purchase/normal`** — hóa đơn `sco` (33.623) nghèo trường hơn. U38 phải xử lý hai mức độ đầy đủ khác nhau.
+
+### 4.7 ⭐⭐ R-b — PROBE THẬT `export-xml`: bên trong ZIP có gì (2026-07-28)
+
+Lệnh: `node scripts/probe-export-xml-u37.mjs` (token GDT thật lấy từ DB, chủ dự án cho phép; chỉ đọc, không ghi DB, không in token).
+
+**Ca 1 — hóa đơn CÓ hồ sơ gốc** (`purchase`/`normal`, family `query`): **HTTP 200**, 317.636 byte, là ZIP. Bên trong **5 file**:
+
+| File | Kích thước | Là gì |
+|---|---|---|
+| `invoice.xml` | 10.338 B | **Bản gốc có chữ ký số** — `<HDon><DLHDon Id="…"><TTChung><PBan>2.1.0</PBan>…` |
+| **`invoice.html`** | 32.186 B | **⭐ BẢN THỂ HIỆN do CHÍNH GDT dựng sẵn** |
+| `details.js` | 109.897 B | jQuery 1.8.2 (tài nguyên tĩnh) |
+| `viewinvoice-bg.jpg` | 152.675 B | Ảnh nền tờ hóa đơn (tài nguyên tĩnh) |
+| `sign-check.jpg` | 11.928 B | Dấu "Signature Valid" (tài nguyên tĩnh) |
+
+*(Hai ảnh này khớp đúng hai ảnh mà cổng GDT nạp trước khi in — `printInvoice` gọi `handleLoadImage("/static/images/viewinvoice-bg.jpg")` và `sign-check.jpg`.)*
+
+**Ca 2 — hóa đơn `hsgoc = null`:** **HTTP 500**, `content-type: application/json`, thân nguyên văn:
+
+```json
+{"timestamp":"28/07/2026 19:10:32","message":"Không tồn tại hồ sơ gốc của hóa đơn.",
+ "details":"","path":"uri=/invoices/export-xml","requestId":"30f0dc15-…"}
+```
+
+**Ba hệ quả thiết kế:**
+
+1. **U38 gần như không cần nữa.** GDT kèm sẵn bản thể hiện HTML ⇒ "xem bằng mắt" đã có, miễn phí. U38 co lại còn "PDF hóa nếu cần in hàng loạt" (xem backlog `[2026-07-28] U38`).
+2. **BẮT BUỘC khử trùng lặp tài nguyên tĩnh.** `invoice.html` tham chiếu 3 tài nguyên bằng **tên phẳng không tiền tố** (`details.js`, `viewinvoice-bg.jpg`, `sign-check.jpg`) và **không nhúng base64** (đã đo bằng regex trong probe). Tức **274.500/317.636 byte ≈ 86% mỗi ZIP là 3 file giống hệt nhau lặp lại**. Gói **phẳng** với **một** bộ tài nguyên dùng chung ở gốc ZIP ⇒ **không phải sửa một ký tự nào** trong HTML:
+
+   ```
+   details.js   viewinvoice-bg.jpg   sign-check.jpg        ← một lần cho cả gói
+   C26TQO-13580.html   C26TQO-13580.xml                    ← mỗi hóa đơn ~42 KB
+   …
+   bao-cao.txt                                             ← HĐ không lấy được
+   ```
+
+   500 hóa đơn: **~21 MB thay vì ~160 MB**. Kho R2 cho 33.945 hóa đơn: **~1,4 GB thay vì ~10,5 GB**. ⇒ **Kho `tep_hoa_don_goc` chỉ lưu `invoice.xml` + `invoice.html`**, không lưu 3 file tĩnh theo từng hóa đơn.
+3. **🔴 Bẫy retry — GDT trả 500 cho ca "không có hồ sơ gốc".** Nếu adapter theo lệ thường *"5xx ⇒ retry có backoff"* thì 64 hóa đơn `hsgoc = null` sẽ bị gọi lặp vô ích rồi rơi DLQ, và ta lại gọi dồn máy chủ thuế. **Phải phân loại theo thân phản hồi** (`message` = "Không tồn tại hồ sơ gốc của hóa đơn.") ⇒ **lỗi vĩnh viễn, không retry**, đưa thẳng vào báo cáo kèm gói.
+
+**Bằng chứng thứ 7 cho §4.1:** `invoice.html` tham chiếu **đúng 3** tài nguyên, không có ảnh nào khác ⇒ **bản thể hiện chính thức của GDT không có logo người bán**, kể cả trong file GDT phát ra cho người nộp thuế tải về.
+
+**CHƯA KIỂM CHỨNG (không chốt):** GDT có kìm nhịp riêng cho endpoint này không — hai lần gọi mất 353 ms rồi 2.261 ms, **hai mẫu là quá ít** để kết luận. Đo khi chạy lô thật ở U37a.
+
 ---
 
 ## 5. CHƯA KIỂM CHỨNG — phải làm xong trước khi chốt kế hoạch (Bước R)
 
 > Theo *Nguyên tắc bằng chứng* (`CLAUDE.md`): không mục nào dưới đây được coi là "đã chốt" cho tới khi có phép kiểm tái lập được **kèm ngày và kết quả**.
 
-- **R1 — Bản đồ trường dữ liệu.** Rà `raw_json` thật trên production, lập bảng **"trường trong mẫu ↔ khóa GDT ↔ tỷ lệ có dữ liệu"** cho hóa đơn `chieu='sold'`. Đây là **việc đầu tiên** — template không thiết kế được khi chưa biết có gì.
-- **R2 — Thư viện sinh PDF chạy được trên Cloudflare Workers.** Chưa có thư viện nào được xác nhận. Ba hướng phải đo:
-  - (a) JS thuần (vd `pdf-lib`) — **kiểm font tiếng Việt có dấu** (phải nhúng font Unicode, font chuẩn PDF không đủ);
-  - (b) **Cloudflare Browser Rendering** (Puppeteer) từ HTML — đẹp nhất nhưng là dịch vụ trả phí riêng, phải đo chi phí + throughput;
-  - (c) dựng trong **Queue consumer** từng lô nhỏ để né trần CPU/wall-time.
-  **Không chọn hướng nào trước khi có phép đo thật.**
-- **R3 — Ngưỡng quy mô.** Chưa đo CPU/wall-time/bộ nhớ khi dựng hàng trăm–hàng nghìn PDF một lượt. Cần biết trần để quyết định chia lô.
-- **R4 — Chi phí R2 ở quy mô mục tiêu.** Hàng nghìn hóa đơn/tenant/tháng × mục tiêu 100.000 tenant — ước lượng dung lượng + chi phí trước khi mở rộng.
-- **R5 *(tùy chọn, để sau)* — GDT có phát logo thật không.** Đăng nhập `hoadondientu.gdt.gov.vn` bằng tài khoản thật, mở một hóa đơn, dùng DevTools → Network ghi lại có request nào trả PDF/ảnh logo không. Nếu **có** → đó là **cải tiến cho hóa đơn MUA VÀO** (vốn không có đường nào khác). Không chặn U37 vì QĐ-4 đã chốt đường tự tải lên.
+> **Cập nhật 2026-07-28 sau khi đổi hướng:** R1 → **XONG** (§4.6). R2/R3/R4 (thư viện PDF, trần dựng PDF, chi phí kết xuất) **hủy khỏi U37, chuyển sang U38** — U37 không dựng PDF nữa. R5 → **XONG, kết luận ngược lại điều mong đợi** (§4.5: GDT không có endpoint PDF nào; nhưng CÓ endpoint tải XML gốc, tốt hơn). Chỉ còn **R-b** dưới đây là treo.
+
+- ~~**R1 — Bản đồ trường dữ liệu.**~~ ✅ **XONG 2026-07-28** — xem §4.6. `hsgoc` có ở 100% hóa đơn; `raw_json` có 152 khóa cấp 1.
+- ~~**R2 — Thư viện sinh PDF chạy được trên Cloudflare Workers.**~~ ⏭️ **Chuyển sang U38.** (Ba hướng phải đo khi tới lượt: `pdf-lib` thuần JS + nhúng font Unicode tiếng Việt; Cloudflare Browser Rendering; dựng theo lô trong Queue consumer.)
+- ~~**R3 — Ngưỡng quy mô dựng PDF.**~~ ⏭️ **Chuyển sang U38.**
+- ~~**R4 — Chi phí R2 ở quy mô mục tiêu.**~~ ⏭️ **Chuyển sang U38** (nhưng U37 có kho XML gốc bất biến, cần ước lượng dung lượng riêng khi có số đo từ R-b).
+- ~~**R5 — GDT có phát logo thật không.**~~ ✅ **XONG 2026-07-28** — §4.5: `grep` toàn bộ bundle GDT cho thấy **không có endpoint PDF hóa đơn nào**, và bản thể hiện của chính GDT **không có logo người bán** (§4.1 bằng chứng 6). Đổi lại, phát hiện endpoint **`export-xml`** trả bản gốc có chữ ký số — nền tảng của hướng mới.
+
+### ✅ R-b — XONG 2026-07-28
+
+Đã probe thật (`scripts/probe-export-xml-u37.mjs`, token từ DB, chủ dự án cho phép). Kết quả đầy đủ ở **§4.7**: ZIP có 5 file gồm cả **bản thể hiện HTML do GDT dựng sẵn**; ca thiếu hồ sơ gốc trả **HTTP 500 + JSON**; 86% dung lượng mỗi ZIP là tài nguyên tĩnh trùng lặp phải khử. Chỉ còn **kìm nhịp** là chưa đủ mẫu để kết luận — đo khi chạy lô thật ở U37a.
+
+**⇒ Bước R đóng. Không còn gì chặn bước T (code).**
 
 ---
 
@@ -128,13 +259,17 @@ goi-hoa-don/<YYYY-MM>/<token-ngẫu-nhiên-≥128-bit-base32url>.zip
 
 Link công khai **không cần đăng nhập** nghĩa là **bất kỳ ai có link đều đọc được dữ liệu doanh nghiệp + đối tác** (tên, MST, địa chỉ, mặt hàng, giá trị giao dịch) — **dữ liệu thuộc phạm vi NĐ 13/2023/NĐ-CP**. Bắt buộc: khóa ngẫu nhiên đủ dài (§4.3), **thu hồi sớm được**, audit log mỗi lần phát hành/thu hồi, cảnh báo có xác nhận (QĐ-7).
 
-### 6.2 Nhầm lẫn giá trị chứng từ
+### 6.2 ~~Nhầm lẫn giá trị chứng từ~~ — ❌ KHÔNG CÒN (2026-07-28)
 
-Thứ ta tạo là **"bản thể hiện"** — **không** phải hóa đơn điện tử gốc có giá trị pháp lý (gốc là XML có chữ ký số). QĐ-8 bắt in tuyên bố lên chính PDF; giao diện cũng phải nói rõ.
+Hướng mới tải **chính bản gốc có chữ ký số** từ GDT, không tạo "bản thể hiện" nào. Rủi ro này biến mất, và **QĐ-8 trở thành sai sự thật** nếu vẫn in (xem §3).
 
-### 6.3 Bảo mật đường tải logo lên (đường upload đầu tiên của hệ thống)
+### 6.3 ~~Bảo mật đường tải logo lên~~ — ❌ RA KHỎI PHẠM VI (2026-07-28)
 
-Tối thiểu phải chốt trong spec: dung lượng ≤ **500 KB**; **danh sách trắng PNG/JPEG**, **KHÔNG nhận SVG** (SVG nhúng được script → XSS); **xác thực magic bytes**, không tin `Content-Type`/đuôi file; chặn ảnh kích thước bất thường (decompression bomb); khóa object gắn `tenant_id` để không ghi đè chéo tenant. **Logo lưu ở bucket NỘI BỘ `vat-raw`, KHÔNG phải bucket công khai** — PDF nhúng ảnh vào file nên logo không cần URL public.
+QĐ-4 vô hiệu ⇒ không có đường upload nào trong U37. Đặc tả dưới đây **giữ lại làm spec sẵn sàng cho U38** (nếu U38 dựng bản thể hiện có logo): dung lượng ≤ **500 KB**; **danh sách trắng PNG/JPEG**, **KHÔNG nhận SVG** (SVG nhúng được script → XSS); **xác thực magic bytes**, không tin `Content-Type`/đuôi file; chặn ảnh kích thước bất thường (decompression bomb); khóa object gắn `tenant_id`; lưu ở bucket **nội bộ** `vat-raw`.
+
+### 6.3b 🔴 MỚI — nhịp gọi GDT (rủi ro lớn nhất của hướng mới)
+
+Mỗi hóa đơn tốn **một request** tới máy chủ thuế. Một kỳ vài trăm–vài nghìn hóa đơn = ngần ấy lần gọi ⇒ trái thẳng *"Tôn trọng máy chủ thuế… Không gọi dồn dập"* của Hiến pháp. Bắt buộc: chạy nền qua queue `vat-sync` + `TenantLimiter` + circuit breaker `EgressHealth`, **không** chạy trong request `POST /exports` như đường xuất hiện nay. Giảm nhẹ: XML gốc **bất biến** ⇒ tải một lần lưu R2, lần xuất sau tốn **0** request GDT.
 
 ### 6.4 Cách ly tenant ngoài hàng rào
 
@@ -144,44 +279,70 @@ File công khai nằm **ngoài** RLS/JWT — mọi kiểm tra quyền phải là
 
 Migration tạo bảng mới (bảng theo dõi link chia sẻ) **phải kèm `GRANT`** — dự án **đã dính bẫy này 2 lần**, và triệu chứng chỉ lộ ra ở production (xem backlog `[2026-07-28]` + memory `bay-grant-migration`).
 
-### 6.6 Race export × sync
+### 6.6 ~~Race export × sync~~ — ❌ KHÔNG CÒN (2026-07-28)
 
-Hóa đơn **chưa đồng bộ dòng hàng** mà vẫn xuất ⇒ tờ hóa đơn trống ruột. Xem sự cố `[2026-07-27] Kết xuất giữa lúc đồng bộ đang chạy`. Yêu cầu (3) phải chặn được ca này.
+XML lấy từ GDT theo **định danh hóa đơn** (`nbmst`/`khhdon`/`shdon`/`khmshdon`), không đọc bảng `dong_hang_hoa` của ta ⇒ hóa đơn đã đồng bộ dòng hàng hay chưa **không ảnh hưởng**. Rủi ro này biến mất cùng hướng mới. *(Vẫn còn nguyên với đường xuất xlsx/csv hiện tại — xem backlog `[2026-07-27]`.)*
 
 ---
 
 ## 7. Các bước Loop Engineering tiếp theo
 
-| Bước | Việc | Đầu ra | Cổng |
+| Bước | Việc | Đầu ra | Trạng thái |
 |---|---|---|---|
-| **R** | Chạy R1 → R4 ở §5 (R5 tùy chọn) | Ghi kết quả **kèm ngày + lệnh + output** trực tiếp vào file này, mục §5 chuyển từ "CHƯA KIỂM CHỨNG" sang "đã kiểm chứng" | Không sang bước P khi R1 và R2 còn treo |
-| **P** | `/plan-unit U37` — viết `docs/plans/U37-plan.md` theo khuôn U36 (Vì sao làm / Quyết định đã chốt / Phạm vi / Thiết kế theo gói / Tiêu chí nghiệm thu / Rủi ro / Trạng thái duyệt) | `U37-plan.md` | Chủ dự án duyệt kế hoạch trước khi code |
-| **C** | Cân nhắc **tách đôi**: **U37a** = hồ sơ doanh nghiệp (logo + địa chỉ + ĐT + fax, đường upload đầu tiên) → **U37b** = dựng PDF + ZIP + link chia sẻ. U37b phụ thuộc U37a | Hai plan con nếu tách | Hiến pháp: **mỗi lần một đơn vị** |
-| **T** | `/start-unit U37a` rồi `/start-unit U37b` — TDD, test đỏ trước | Code + test | `make lint && make test` xanh |
-| **Q** | `/qa-unit` — `dod-auditor` **+ `security-reviewer`** (bắt buộc, §6) | Báo cáo review | Stop hook `.claude/hooks/gate-dod.sh` |
+| **R** | R1 + R5 ở §5 | §4.5 + §4.6 | ✅ **XONG 2026-07-28** |
+| **R-b** | Probe thật `export-xml` | §4.7 | ✅ **XONG 2026-07-28** |
+| **P** | Kế hoạch U37 theo hướng mới | Đã duyệt 2026-07-28 | ✅ **XONG** |
+| **C** | **Tách đôi:** **U37a** = adapter `export-xml` + kho hóa đơn gốc + job nền → **U37b** = gói ZIP + bucket công khai + link + thu hồi + UI. U37b phụ thuộc U37a | Hai đơn vị con | ✅ Chốt (QĐ-C) |
+| **T** | `/start-unit U37a` rồi `/start-unit U37b` — TDD, test đỏ trước | Code + test | ▶️ **SẴN SÀNG — không còn gì chặn** |
+| **Q** | `/qa-unit` — `dod-auditor` **+ `security-reviewer`** (bắt buộc, §6) | Báo cáo review | ⏸ |
 
-**Việc phải làm TRƯỚC hoặc CÙNG LÚC (nợ chặn):** vá `invoiceDoc.ts` để hưởng sửa 3 trường thuế của U35b — nếu không, PDF in `0.08` thay vì `8%` và có thể trống Tiền thuế (§4.4).
+**Nợ chặn cũ đã GỠ:** vá `invoiceDoc.ts` cho 3 trường thuế U35b **không còn chặn U37** — hướng mới không đi qua renderer nào. Nợ đó vẫn thuộc đường `xml.zip`/`html.zip` cũ (backlog `[2026-07-27]`), xử lý khi tới lượt.
 
 ---
 
-## 8. Hướng thiết kế đề xuất (khung — chưa phải thiết kế chốt)
+## 8. Hướng thiết kế — ĐÃ CHỐT theo hướng mới (2026-07-28)
 
-1. **Registry-first** (bắt buộc theo `.claude/rules/ui.md` + `docs/design/CHUAN-giao-dien-va-anh-xa-du-lieu.md`): khai báo bộ trường "mẫu hóa đơn" trong Registry miền hóa đơn — một nguồn sự thật, **không hardcode nhãn trong template**.
-2. **Renderer** mở rộng từ `invoiceDoc.ts` → PDF; gom qua `zipStream.ts` → một ZIP. Job chạy **nền qua Queue** (không dựng đồng bộ trong request).
-3. **Khâu kiểm tra (yêu cầu 3) = cổng tự động, không phải "xem bằng mắt".** Trước khi phát hành ZIP, chạy validator trên từng hóa đơn:
-   - (a) đủ trường bắt buộc theo mẫu;
-   - (b) **đối chiếu số học**: `Σ thành tiền dòng hàng` khớp `tổng trước thuế`; `tiền thuế` khớp `thuế suất × tiền hàng`; `tổng sau thuế` khớp (tái dùng logic đã sửa ở U35b `columns.ts`);
-   - (c) hóa đơn **chưa đồng bộ dòng hàng** ⇒ **từ chối xuất** kèm thông báo rõ (§6.6 — đừng lặp lại lỗi ô trống câm).
+### U37a — Adapter + kho XML gốc + job nền
 
-   Có lỗi ⇒ **báo cáo kèm danh sách hóa đơn hỏng, không phát hành file im lặng**.
-4. **Lưu trữ & chia sẻ:** khóa ngẫu nhiên (§4.3); bảng theo dõi (`tenant_id`, khóa, thời điểm tạo, `het_han_luc`, người tạo) + audit log "phát hành link công khai"; lifecycle 30 ngày + nút **thu hồi ngay**.
+1. **Adapter** (`packages/gdt-client`): thêm `EXPORT_XML_ENDPOINTS` vào `src/endpoints.ts` kèm khối bằng chứng đúng khuôn `DETAIL_ENDPOINTS`; `src/exportXml.ts` mới bám khuôn `src/detail.ts`, đi qua `GdtTransport` (**không** `fetch()` trực tiếp), timeout + retry backoff, `401` → dừng và báo hết hạn token. Contract test riêng.
+   **🔴 Bắt buộc:** phân loại **HTTP 500 + `message` = "Không tồn tại hồ sơ gốc của hóa đơn."** thành **lỗi VĨNH VIỄN, KHÔNG retry** (§4.7 hệ quả 3). Theo lệ 5xx thông thường sẽ retry vô ích 64 hóa đơn rồi rơi DLQ — và gọi dồn máy chủ thuế.
+2. **Kho hóa đơn gốc bất biến:** R2 bucket **nội bộ** `vat-raw`. **Chỉ lưu 2 file/hóa đơn** — `hoadon-goc/<tenantId>/<hoaDonId>.xml` và `.html` — **KHÔNG lưu** `details.js`/`viewinvoice-bg.jpg`/`sign-check.jpg` theo từng hóa đơn (chúng giống hệt nhau, chiếm 86% dung lượng; giữ **một** bản dùng chung). Chênh lệch: **~1,4 GB thay vì ~10,5 GB** cho 33.945 hóa đơn (§4.7). Bảng `tep_hoa_don_goc` (+ RLS + FORCE + **`GRANT`** theo khuôn `0008`+`0018` — quên là dính bẫy lần thứ ba, §6.5). Đã có ⇒ không gọi GDT lại.
+3. **Job nền** (`apps/sync-worker`): thêm loại message vào queue `vat-sync` sẵn có, qua `TenantLimiter` + `EgressHealth`, DLQ dùng lại `vat-sync-dlq`. ⚠️ `apps/sync-worker/wrangler.jsonc` **hiện không có binding R2 nào** — phải thêm `RAW`.
+
+### U37b — Gói ZIP, link công khai, thu hồi, giao diện
+
+4. **Gói ZIP — cấu trúc PHẲNG, tài nguyên tĩnh dùng chung một lần** (§4.7 hệ quả 2). `invoice.html` tham chiếu 3 tài nguyên bằng **tên phẳng không tiền tố**, nên đặt phẳng là chạy được **mà không phải sửa một ký tự nào** trong HTML:
+
+   ```
+   details.js   viewinvoice-bg.jpg   sign-check.jpg     ← MỘT lần cho cả gói
+   <khhdon>-<shdon>.html   <khhdon>-<shdon>.xml         ← mỗi hóa đơn ~42 KB
+   …
+   bao-cao.txt                                          ← HĐ không lấy được
+   ```
+
+   500 hóa đơn ≈ **21 MB** thay vì ~160 MB. Dùng lại `packages/export/src/zipStream.ts` (`fflate`, chế độ STORE — lưu ý nội dung đã gồm 2 ảnh JPEG nén sẵn, STORE là đúng). Nguồn là object R2 đã tải; **phải stream**, không đi qua `apps/api/src/storage.ts:14` (helper đó đọc trọn file vào RAM).
+   ⚠️ Trùng tên: hai hóa đơn khác `nbmst` vẫn có thể trùng `<khhdon>-<shdon>` — `zipStream.ts` đã có `uniqueName` thêm hậu tố, nhưng phải kiểm lại rằng tên sinh ra vẫn ghép đúng cặp `.xml`/`.html`.
+5. **Khâu kiểm tra (yêu cầu gốc số 3) = cổng tự động, không phải "xem bằng mắt":**
+   - (a) đối chiếu **số lượng** — số XML trong gói khớp số hóa đơn thỏa bộ lọc;
+   - (b) hóa đơn GDT từ chối (`hsgoc = null` — ~19,9% nhóm `purchase/normal` theo §4.6 — hoặc lỗi khác) ⇒ vào **báo cáo kèm gói**, không phát hành im lặng;
+   - (c) 0 hóa đơn thành công ⇒ **không phát hành link**.
+
+   *(Đối chiếu số học ở bản cũ không còn cần: XML là bản gốc do người bán ký, ta không tự tính lại con số nào.)*
+6. **Lưu trữ & chia sẻ:** bucket **mới** `vat-chia-se` + `docs.tourdao.vn`, khóa ngẫu nhiên (§4.3); bảng `goi_chia_se` (`tenant_id`, khóa, `tao_luc`, `het_han_luc`, người tạo, trạng thái) + audit log **phát hành** và **thu hồi**; lifecycle 30 ngày + nút **thu hồi ngay**. Kiểm quyền **tại thời điểm tạo** (§6.4).
+7. **Giao diện:** nút mới trong `hanhDongPhu` của `FilterBar` (`InvoicesPage.tsx:130-150`). Theo `.claude/rules/ui.md:23` đây là **hành động nặng chạy nền** — tên/vị trí phải phản ánh đúng, không đặt ngang hàng "Xuất Excel". Cảnh báo + checkbox xác nhận (QĐ-7) dùng `Checkbox`/`Alert` sẵn có; **`Modal` chưa tồn tại** ⇒ nếu cần thì thêm primitive vào `components/ui/primitives.tsx`, không tô kiểu nội tuyến trong `features/` (`ui-luat.test.ts` sẽ đỏ). Nhãn mới khai trong Registry `packages/domain/src/registry.ts`.
+
+### Ngoài phạm vi U37 (→ U38, đã co lại rất nhiều)
+
+R-b cho thấy **GDT kèm sẵn `invoice.html`** — bản thể hiện xem-bằng-mắt **đã có, không phải dựng** (§4.7). U38 vì thế chỉ còn lý do tồn tại nếu người dùng cần **PDF để in hàng loạt**; và cả khi đó cũng là "HTML → PDF", không phải dựng template từ đầu. Hai thứ tưởng phải viết đều không cần: `tgtttbchu` (tiền bằng chữ) và `qrcode` GDT trả sẵn trong `raw_json` (§4.6).
 
 ---
 
 ## 9. Liên quan
 
 - `docs/BACKLOG-y-tuong-va-de-xuat.md` — mục `[2026-07-28] ⭐ ƯU TIÊN 1` (bản gốc, giữ làm lịch sử)
-- `docs/doi_chieu_data/hoa_don_mau.pdf` — mẫu tham chiếu (⚠️ **nguồn Viettel vinvoice, không phải GDT** — §4.1)
+- **`docs/doi_chieu_data/Hóa Đơn Điện Tử.html` + `…_files/`** — ⭐ **nguồn sơ cấp quan trọng nhất của đơn vị này**: trang cổng GDT thật đã lưu, chứa bản thể hiện hóa đơn do chính GDT dựng **và toàn bộ bundle JS** (nơi tìm ra endpoint `export-xml` — §4.5). Kiểm lại được offline, không cần đăng nhập.
+- `scripts/do-hsgoc-u37.mjs` — script chỉ-đọc đo cờ `hsgoc` + điều tra khóa `raw_json` (§4.6)
+- `docs/doi_chieu_data/hoa_don_mau.pdf` — mẫu tham chiếu (⚠️ **nguồn Viettel vinvoice, không phải GDT** — §4.1). Sau khi đổi hướng, file này **không còn là mẫu đích** của U37; giữ cho U38.
 - `docs/design/CHUAN-giao-dien-va-anh-xa-du-lieu.md` + `.claude/rules/ui.md` — chuẩn tầng trình bày, Registry
 - `.claude/rules/security.md`, `.claude/rules/multi-tenant.md` — ràng buộc bảo mật & cách ly
 - Backlog `[2026-07-27]` — `invoiceDoc.ts` chưa hưởng sửa thuế U35b (nợ chặn)

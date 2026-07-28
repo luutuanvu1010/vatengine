@@ -638,7 +638,8 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 
 ### [2026-07-28] ⭐ ƯU TIÊN 1 — Xuất hóa đơn theo MẪU CHUẨN (bản thể hiện giống GDT) + gói ZIP chia sẻ công khai qua R2 có hạn 1 tháng
 
-- **Trạng thái:** ✅ **ĐÃ TÁCH HỒ SƠ KHỞI ĐỘNG → `docs/plans/U37-HO-SO-KHOI-DONG-xuat-hoa-don-theo-mau.md`** (2026-07-28). Mục backlog này giữ lại làm **lịch sử hỏi–đáp**; **mọi việc tiếp theo đọc file U37**. Chưa có plan, chưa có code — bước kế tiếp là **Bước R (nghiên cứu R1–R4)** rồi `/plan-unit U37`. **Mức ưu tiên: 1 (cao nhất trong giỏ)** — chỉ định trực tiếp của chủ dự án, phiên 2026-07-28.
+- **Trạng thái:** ✅ **ĐÃ TÁCH HỒ SƠ KHỞI ĐỘNG → `docs/plans/U37-HO-SO-KHOI-DONG-xuat-hoa-don-theo-mau.md`** (2026-07-28). Mục backlog này giữ lại làm **lịch sử hỏi–đáp**; **mọi việc tiếp theo đọc file U37**. **Mức ưu tiên: 1 (cao nhất trong giỏ)** — chỉ định trực tiếp của chủ dự án, phiên 2026-07-28.
+- **🔄 ĐỔI HƯỚNG (2026-07-28, cùng ngày, chủ dự án):** **không dựng bản thể hiện từ dữ liệu nữa — tải thẳng hóa đơn gốc từ GDT.** Tiền đề đã kiểm chứng bằng bundle JS của chính cổng GDT: `GET /api/{query|sco-query}/invoices/export-xml?nbmst&khhdon&shdon&khmshdon` + `Authorization: Bearer <token>` trả blob ZIP chứa **XML gốc có chữ ký số**; điều kiện là cờ `hsgoc` (có ở 100% hóa đơn đã đồng bộ). Chi tiết + bằng chứng: U37 §4.5/§4.6. **Bốn quyết định cũ bị vô hiệu hóa** (QĐ-1 chỉ bán ra, QĐ-2 PDF, QĐ-4 logo tự tải lên, QĐ-8 dòng tuyên bố) — xem U37 §3. Kế hoạch mới đã duyệt; còn treo **R-b** (probe thật `export-xml`) trước khi code.
 - **Yêu cầu nguyên văn của chủ dự án (3 điều kiện):**
   1. Nút **"Xuất hóa đơn"** đặt **cạnh nút Xuất Excel** hiện có; file kết xuất phải **đúng mẫu hóa đơn GTGT của GDT** — gồm **logo**, thông tin người bán đầy đủ, và các thông tin cần thiết của người mua. Mẫu tham chiếu: `docs/doi_chieu_data/hoa_don_mau.pdf`.
   2. File tải về ở **định dạng nén (nghiêng về ZIP)**, lưu trong **R2** (hoặc dịch vụ Cloudflare phù hợp) **giữ 1 tháng rồi tự xóa** để giải phóng dung lượng; đặt ở chế độ **công khai, chỉ-đọc** để chia sẻ được qua **link / email / Zalo / WhatsApp** — người nhận **đọc + tải xuống được mà không cần đăng nhập**.
@@ -777,3 +778,36 @@ không dụ người trực cấp thừa.
 quy định *"Audit log không được ghi đè, chỉ append"* — quyền hiện tại **mâu thuẫn với luật**.
 Chưa thu hồi ngay vì cần xác nhận không có đường ghi hợp lệ nào đang dùng tới, và việc này
 lạc phạm vi U36.
+
+## [2026-07-28] U38 — Bản thể hiện hóa đơn xem-bằng-mắt, dựng TỪ kho XML gốc đã tải
+
+- **Trạng thái:** Đề xuất — **và đã CO LẠI RẤT NHIỀU sau probe R-b (2026-07-28)**. Ban đầu tưởng
+  phải dựng bản thể hiện từ đầu; probe thật cho thấy **GDT kèm sẵn `invoice.html` trong ZIP tải
+  về** (U37 §4.7) ⇒ "xem bằng mắt" đã có, miễn phí, không phải dựng gì. **U38 chỉ còn lý do tồn
+  tại nếu người dùng cần PDF để IN HÀNG LOẠT** — và cả khi đó cũng là bài toán "HTML → PDF",
+  không phải dựng template từ dữ liệu. **Chỉ làm sau khi U37 chạy thật** và có nhu cầu thật.
+- **Bối cảnh:** U37 giao ZIP gồm `invoice.xml` (bản gốc có chữ ký số) **+ `invoice.html`** (bản
+  thể hiện của chính GDT) cho mỗi hóa đơn. Nếu U38 làm thì dựng từ kho đã tải, **không phải gọi
+  GDT thêm lần nào** (kho bất biến, U37 đã lưu ở `vat-raw`).
+- **Ba việc đo còn nợ (chuyển nguyên từ U37 §5):** (R2) thư viện sinh PDF chạy được trên
+  Workers — `pdf-lib` thuần JS phải **nhúng font Unicode cho tiếng Việt có dấu**, hoặc
+  Cloudflare Browser Rendering (trả phí riêng), hoặc dựng theo lô trong Queue consumer;
+  (R3) trần CPU/wall-time/RAM khi dựng hàng trăm–hàng nghìn PDF; (R4) chi phí R2 ở quy mô mục tiêu.
+  **Không chọn hướng nào trước khi có phép đo thật.**
+- **Hai thứ tưởng phải viết nhưng KHÔNG cần** (đo thật `raw_json` production 2026-07-28,
+  `node scripts/do-hsgoc-u37.mjs`, U37 §4.6): GDT trả sẵn **`tgtttbchu`** (tổng tiền thanh toán
+  **bằng chữ**) và **`qrcode`** ⇒ không cần bộ đọc số thành chữ tiếng Việt, không cần bộ sinh QR.
+- **Mẫu trình bày đích:** **chính `invoice.html` mà GDT phát kèm** (U37 §4.7) — không phải dựng
+  lại. Nếu cần bản dựng tay để tham chiếu thì dùng khối "Xem hóa đơn" trong
+  `docs/doi_chieu_data/Hóa Đơn Điện Tử.html`. **Không** bám `hoa_don_mau.pdf` (bản kết xuất của
+  Viettel vinvoice, có trường của nhà cung cấp mà ta không có — U37 §4.1).
+- **⚠️ Nếu HTML → PDF:** `invoice.html` phụ thuộc `details.js` (jQuery 1.8.2) + 2 ảnh JPEG theo
+  **tên phẳng tương đối**, không nhúng base64 ⇒ bộ chuyển phải nạp được tài nguyên kèm theo.
+- **⚠️ Hai mức độ đầy đủ dữ liệu:** các khóa `raw_json` như `htttoan`, `dvtte`, `tgia`, `nbfax`,
+  `nmstkhoan` **chỉ có ở hóa đơn `purchase/normal`** (322/33.945); hóa đơn `sco` (33.623) nghèo
+  trường hơn. Template phải xử lý được cả hai, theo QĐ-3 "trường rỗng thì để trống, không bịa".
+- **Nợ kéo theo:** nếu U38 muốn in logo doanh nghiệp thì mới cần đường **tải file lên đầu tiên**
+  của hệ thống — spec bảo mật đã soạn sẵn ở U37 §6.3 (≤500 KB, whitelist PNG/JPEG, **cấm SVG**,
+  xác thực magic bytes, khóa gắn `tenant_id`, bucket nội bộ). Kèm `security-reviewer` bắt buộc.
+- **Mức ưu tiên đề xuất:** Trung bình — phụ thuộc phản hồi thật sau U37.
+- **Nguồn phát hiện:** Phiên lập kế hoạch U37, 2026-07-28.
