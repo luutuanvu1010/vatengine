@@ -1,6 +1,6 @@
 # U37 — Hồ sơ khởi động: Module XUẤT HÓA ĐƠN THEO MẪU CHUẨN
 
-> **Câu lệnh gọi ở phiên sau:** *"xây dựng module xuất hoá đơn"* → mở file này trước, rồi chạy `/plan-unit U37` (nếu đã đủ dữ kiện) hoặc làm **Bước R** ở §7 trước (nghiên cứu) rồi mới lập kế hoạch.
+> **Câu lệnh gọi ở phiên sau:** *"làm tiếp U37b"* → đọc **`docs/plans/HANDOFF-phien-2026-07-28-U37a.md`** TRƯỚC (bàn giao gọn, đủ để bắt đầu ngay), rồi §8 mục U37b của file này. Bước R đã đóng; U37a xong 3/3 lát và đã deploy.
 
 | | |
 |---|---|
