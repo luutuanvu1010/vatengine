@@ -1,12 +1,17 @@
-import { FLAT_EXPORT_COLUMNS } from "@vat/domain";
+import { FLAT_EXPORT_COLUMNS, nhanTthai, tinhVaoTong } from "@vat/domain";
 import type { InvoiceLineLike } from "@vat/export";
 import { unzipSync } from "fflate";
 // Sheet PHẲNG — file xuất chỉ còn MỘT sheet: mỗi mặt hàng một dòng, kèm đủ ngữ cảnh hóa đơn.
-// Cột dẫn xuất từ catalog @vat/domain: mặc định 16 cột "kê khai đầy đủ" (STT ở đầu); có thể
+// Cột dẫn xuất từ catalog @vat/domain: mặc định 19 cột "kê khai đầy đủ" (STT ở đầu); có thể
 // chọn hiện thêm cột ẩn. STT = số chạy TOÀN FILE 1..N. "Tổng tiền (sau thuế)" = thtien+tsuatTien.
 // Hóa đơn chưa có dòng hàng vẫn xuất MỘT dòng. Tiền/số giữ CHUỖI (không ép float). Offline.
 import { describe, expect, it } from "vitest";
-import { congThapPhan, flatRenderColumns, tinhTienThue } from "../../src/columns";
+import {
+  type LineDetailRow,
+  congThapPhan,
+  flatRenderColumns,
+  tinhTienThue,
+} from "../../src/columns";
 import { csvStreamWithLines } from "../../src/csv";
 import type { ExportRow } from "../../src/rows";
 import { toXlsxWithLinesFromBatches } from "../../src/xlsx";
@@ -105,8 +110,8 @@ const xlsxAll = (rows: ExportRow[], byId: Record<string, InvoiceLineLike[]>, siz
 const csvAll = (rows: ExportRow[], byId: Record<string, InvoiceLineLike[]>, size = 10) =>
   csvStreamWithLines(batchesOf(rows, size), stubFetch(byId), ALL_KEYS);
 
-describe("Cột MẶC ĐỊNH (16, kê khai đầy đủ)", () => {
-  it("STT ở cột ĐẦU; đúng 16 cột theo thứ tự", () => {
+describe("Cột MẶC ĐỊNH (19, kê khai đầy đủ)", () => {
+  it("STT ở cột ĐẦU; đúng 19 cột theo thứ tự", () => {
     expect(DEFAULT_HEADERS).toEqual([
       "STT",
       "Ngày lập",
@@ -124,6 +129,10 @@ describe("Cột MẶC ĐỊNH (16, kê khai đầy đủ)", () => {
       "Thuế suất",
       "Tiền thuế",
       "Tổng tiền (sau thuế)",
+      // U36 QĐ-1 — ba cột trạng thái đứng ngay sau số tiền mà chúng chi phối.
+      "Trạng thái HĐ (mã)",
+      "Trạng thái",
+      "Tính vào tổng",
     ]);
   });
 
@@ -462,5 +471,58 @@ describe("csv — MỘT khối phẳng", () => {
     expect(dataRows.length).toBe(1);
     expect(dataRows[0]?.[iCol("Số HĐ")]).toBe("9");
     expect(dataRows[0]?.[iCol("Hàng hóa/dịch vụ")]).toBe("");
+  });
+});
+
+// U36 QĐ-1/QĐ-3 — ba cột trạng thái trong file tải về. Nhãn PHẢI lấy từ `@vat/domain`
+// (tiêu chí #12: web và file xuất cho CÙNG một chuỗi cho cùng một mã), và "Tính vào tổng"
+// PHẢI dẫn xuất từ `tinhVaoTong()` chứ không so sánh mã bằng tay ở đây.
+describe("U36 — ba cột trạng thái (mã · nhãn · tính vào tổng)", () => {
+  const oCua = (key: string, tthai: number | null): string => {
+    const col = flatRenderColumns([key])[0];
+    if (!col) throw new Error(`không dựng được cột ${key}`);
+    const cell = col.cell({ tthai } as LineDetailRow);
+    return cell.t === "blank" ? "" : String(cell.v);
+  };
+
+  it("cột 'Trạng thái' lấy nhãn TỪ @vat/domain — cùng nguồn với giao diện", () => {
+    for (const c of [1, 2, 3, 4, 5, 9, 23]) {
+      expect(oCua("tthaiNhan", c)).toBe(nhanTthai(c));
+    }
+  });
+
+  it("mã đã kiểm chứng → nhãn tiếng Việt; mã lạ → '(chưa rõ)', không bịa", () => {
+    expect(oCua("tthaiNhan", 4)).toBe("Bị thay thế");
+    expect(oCua("tthaiNhan", 5)).toBe("Bị điều chỉnh");
+    expect(oCua("tthaiNhan", 9)).toBe("9 (chưa rõ)");
+  });
+
+  it("'Tính vào tổng' = 'Không' CHỈ cho mã 4 (bị thay thế)", () => {
+    expect(oCua("tinhVaoTong", 4)).toBe("Không");
+  });
+
+  it("'Tính vào tổng' = 'Có' cho 1/2/3/5 và cho mã lạ (QĐ-6: không tự ý loại)", () => {
+    for (const c of [1, 2, 3, 5, 9]) expect(oCua("tinhVaoTong", c)).toBe("Có");
+  });
+
+  it("tthai = null → mã trống, nhãn trống, 'Tính vào tổng' = 'Có'", () => {
+    expect(oCua("tthai", null)).toBe("");
+    expect(oCua("tthaiNhan", null)).toBe("");
+    expect(oCua("tinhVaoTong", null)).toBe("Có");
+  });
+
+  it("dẫn xuất từ `tinhVaoTong()`, không hardcode mã: đúng với mọi mã 0..10", () => {
+    for (let c = 0; c <= 10; c++) {
+      expect(oCua("tinhVaoTong", c)).toBe(tinhVaoTong(c) ? "Có" : "Không");
+    }
+  });
+
+  it("hóa đơn mã 4 VẪN xuất ra file (QĐ-5) — chỉ không tính vào tổng", async () => {
+    const text = await drain(csvAll([row({ id: "a", shdon: "4444", tthai: 4 })], {}));
+    const grid = parseCsv(text);
+    const r = grid.slice(1).find((x) => x[iCol("Số HĐ")] === "4444");
+    expect(r?.[iCol("Trạng thái HĐ (mã)")]).toBe("4");
+    expect(r?.[iCol("Trạng thái")]).toBe("Bị thay thế");
+    expect(r?.[iCol("Tính vào tổng")]).toBe("Không");
   });
 });

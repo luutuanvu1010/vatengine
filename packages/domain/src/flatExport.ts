@@ -4,8 +4,9 @@
 // Khai MỘT LẦN ở đây; sửa thứ tự/nhãn/mặc định chỉ ở chỗ này (một nơi, cả server + web hưởng).
 //
 // Khác `INVOICE_FIELDS` (chỉ trường cấp HÓA ĐƠN): catalog phẳng GỘP trường hóa đơn + trường
-// DÒNG HÀNG (ten/sluong/dgia…) + 2 cột TÍNH (sttFile, tongSauThue) — nên đứng riêng.
-// Thứ tự dưới đây = thứ tự cột trong file; lọc theo `macDinhHien` → 16 cột "kê khai đầy đủ".
+// DÒNG HÀNG (ten/sluong/dgia…) + 4 cột TÍNH (sttFile, tongSauThue, tthaiNhan, tinhVaoTong)
+// — nên đứng riêng.
+// Thứ tự dưới đây = thứ tự cột trong file; lọc theo `macDinhHien` → 19 cột "kê khai đầy đủ".
 
 /** Nhóm để bảng chọn cột gom lại (client). */
 export type FlatExportNhom = "stt" | "hd" | "nguoi" | "dong" | "trangthai" | "hdTien";
@@ -21,13 +22,14 @@ export interface FlatExportCol {
   nhan: string;
   nhom: FlatExportNhom;
   kieu: FlatExportKieu;
-  /** Có nằm trong bộ MẶC ĐỊNH hiện không (16 cột kê khai đầy đủ). */
+  /** Có nằm trong bộ MẶC ĐỊNH hiện không (19 cột kê khai đầy đủ). */
   macDinhHien: boolean;
 }
 
-// Thứ tự LOGIC đầy đủ (29 cột). 16 cột `macDinhHien:true` = bộ kê khai/đối chiếu; cột ẩn khi
+// Thứ tự LOGIC đầy đủ (31 cột). 19 cột `macDinhHien:true` = bộ kê khai/đối chiếu; cột ẩn khi
 // bật hiện chen đúng vị trí này. Nhãn tiền "(cả HĐ)" giữ nguyên để không cộng nhầm (một HĐ
-// nhiều mặt hàng lặp dòng). ttxly/tthai xuất MÃ số (giữ quyết định U6).
+// nhiều mặt hàng lặp dòng). ttxly/tthai xuất MÃ số (giữ quyết định U6); U36 thêm cột `tthaiNhan`
+// đọc được bên cạnh — nhãn lấy từ `nhanTthai()`, KHÔNG khai bảng nhãn thứ hai ở tầng xuất.
 export const FLAT_EXPORT_COLUMNS: readonly FlatExportCol[] = [
   { key: "sttFile", nhan: "STT", nhom: "stt", kieu: "num", macDinhHien: true },
   { key: "tdlap", nhan: "Ngày lập", nhom: "hd", kieu: "ngay", macDinhHien: true },
@@ -57,7 +59,15 @@ export const FLAT_EXPORT_COLUMNS: readonly FlatExportCol[] = [
     kieu: "tien",
     macDinhHien: true,
   },
+  // U36 QĐ-1 — ba cột trạng thái đặt NGAY SAU số tiền mà chúng chi phối, bật MẶC ĐỊNH.
+  // Hóa đơn `tthai=4` vẫn có mặt trong file (QĐ-5) nhưng không được cộng vào tổng; ai pivot
+  // cột tiền mà không thấy ba cột này sẽ ra số cũ và không hiểu vì sao (rủi ro 7.4).
+  // `tthai` được CHUYỂN VỊ TRÍ từ cuối nhóm trạng thái lên đây và bật — không tạo key trùng.
+  { key: "tthai", nhan: "Trạng thái HĐ (mã)", nhom: "trangthai", kieu: "ma", macDinhHien: true },
+  { key: "tthaiNhan", nhan: "Trạng thái", nhom: "trangthai", kieu: "text", macDinhHien: true },
+  { key: "tinhVaoTong", nhan: "Tính vào tổng", nhom: "trangthai", kieu: "text", macDinhHien: true },
   { key: "dvtte", nhan: "Tiền tệ", nhom: "hd", kieu: "text", macDinhHien: false },
+  // `ttxly` GIỮ vị trí và GIỮ TẮT: ý nghĩa mã chưa kiểm chứng (biên bản 2026-07-28 §4).
   {
     key: "ttxly",
     nhan: "Trạng thái xử lý (mã)",
@@ -65,7 +75,6 @@ export const FLAT_EXPORT_COLUMNS: readonly FlatExportCol[] = [
     kieu: "ma",
     macDinhHien: false,
   },
-  { key: "tthai", nhan: "Trạng thái HĐ (mã)", nhom: "trangthai", kieu: "ma", macDinhHien: false },
   {
     key: "tgtcthue",
     nhan: "Tiền chưa thuế (cả HĐ)",
@@ -87,7 +96,7 @@ export const FLAT_EXPORT_COLUMNS: readonly FlatExportCol[] = [
 /** Key hợp lệ (allowlist khi nhận `cols` từ client — chống input rác). */
 export const FLAT_EXPORT_KEYS: ReadonlySet<string> = new Set(FLAT_EXPORT_COLUMNS.map((c) => c.key));
 
-/** Bộ cột mặc định (16) — dùng khi client không gửi `cols`. */
+/** Bộ cột mặc định (19) — dùng khi client không gửi `cols`. */
 export const FLAT_EXPORT_DEFAULT_KEYS: readonly string[] = FLAT_EXPORT_COLUMNS.filter(
   (c) => c.macDinhHien,
 ).map((c) => c.key);

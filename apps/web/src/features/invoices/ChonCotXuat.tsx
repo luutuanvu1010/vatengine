@@ -70,7 +70,7 @@ export function ChonCotXuat({
                 );
               })}
               <Button variant="ghost" onClick={() => onChange([...FLAT_EXPORT_DEFAULT_KEYS])}>
-                Về mặc định (16 cột)
+                Về mặc định ({FLAT_EXPORT_DEFAULT_KEYS.length} cột)
               </Button>
             </div>
           </Card>

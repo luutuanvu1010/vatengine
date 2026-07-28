@@ -1,5 +1,5 @@
 // U-K1 — File xuất phẳng (một mặt hàng một dòng): catalog cột, helper chọn cột, guard key hợp lệ.
-// Test khoá: (1) cấu trúc FLAT_EXPORT_COLUMNS — 29 cột, nhãn/nhóm/kiểu/mặc định đúng; (2) chonCotXuat()
+// Test khoá: (1) cấu trúc FLAT_EXPORT_COLUMNS — 31 cột, nhãn/nhóm/kiểu/mặc định đúng; (2) chonCotXuat()
 // xử lý được input rỗng/null/lạ/lẫn hợp lệ+lạ; (3) KEYS/DEFAULT_KEYS đúng nguồn từ COLUMNS.
 import { describe, expect, it } from "vitest";
 import {
@@ -12,9 +12,9 @@ import {
   chonCotXuat,
 } from "../../src/flatExport";
 
-describe("FLAT_EXPORT_COLUMNS — catalog 29 cột file xuất phẳng", () => {
-  it("có đúng 29 cột", () => {
-    expect(FLAT_EXPORT_COLUMNS.length).toBe(29);
+describe("FLAT_EXPORT_COLUMNS — catalog 31 cột file xuất phẳng", () => {
+  it("có đúng 31 cột", () => {
+    expect(FLAT_EXPORT_COLUMNS.length).toBe(31);
   });
 
   it("mọi cột có key, nhan không rỗng", () => {
@@ -26,7 +26,7 @@ describe("FLAT_EXPORT_COLUMNS — catalog 29 cột file xuất phẳng", () => {
 
   it("key duy nhất, không trùng", () => {
     const keys = FLAT_EXPORT_COLUMNS.map((c) => c.key);
-    expect(new Set(keys).size).toBe(29);
+    expect(new Set(keys).size).toBe(31);
   });
 
   it("mọi cột có nhom hợp lệ (stt|hd|nguoi|dong|trangthai|hdTien)", () => {
@@ -57,7 +57,8 @@ describe("FLAT_EXPORT_COLUMNS — catalog 29 cột file xuất phẳng", () => {
   });
 
   it("cột cuối cùng là tgtttbso (Tổng thanh toán cả HĐ)", () => {
-    const last = FLAT_EXPORT_COLUMNS[28];
+    // `.at(-1)` chứ KHÔNG phải chỉ số cứng: catalog còn chèn cột nữa, đừng cột-hoá chỉ số.
+    const last = FLAT_EXPORT_COLUMNS.at(-1);
     expect(last?.key).toBe("tgtttbso");
     expect(last?.nhan).toBe("Tổng thanh toán (cả HĐ)");
     expect(last?.nhom).toBe("hdTien");
@@ -121,10 +122,52 @@ describe("FLAT_EXPORT_COLUMNS — catalog 29 cột file xuất phẳng", () => {
   });
 });
 
+// U36 QĐ-1 — người dùng phải ĐỌC ĐƯỢC trạng thái ngay trên file tải về, sát cạnh số tiền
+// mà nó chi phối; nếu không, kế toán pivot cột "Tổng thanh toán (cả HĐ)" sẽ ra số cũ mà
+// không biết vì sao (rủi ro 7.4 của kế hoạch).
+describe("U36 — ba cột trạng thái, bật mặc định, ngay sau 'Tổng tiền (sau thuế)'", () => {
+  const keys = FLAT_EXPORT_COLUMNS.map((c) => c.key);
+
+  it("thứ tự: tthai → tthaiNhan → tinhVaoTong nằm LIỀN SAU tongSauThue", () => {
+    const i = keys.indexOf("tongSauThue");
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(keys.slice(i + 1, i + 4)).toEqual(["tthai", "tthaiNhan", "tinhVaoTong"]);
+  });
+
+  it("cả ba đều BẬT mặc định và giữ đúng thứ tự đó trong bộ mặc định", () => {
+    const i = FLAT_EXPORT_DEFAULT_KEYS.indexOf("tongSauThue");
+    expect(FLAT_EXPORT_DEFAULT_KEYS.slice(i + 1)).toEqual(["tthai", "tthaiNhan", "tinhVaoTong"]);
+  });
+
+  it("nhãn: `tthai` GIỮ NGUYÊN 'Trạng thái HĐ (mã)' — không đẻ nhãn thứ hai cho một trường", () => {
+    expect(FLAT_EXPORT_COLUMNS.find((c) => c.key === "tthai")?.nhan).toBe("Trạng thái HĐ (mã)");
+    expect(FLAT_EXPORT_COLUMNS.find((c) => c.key === "tthaiNhan")?.nhan).toBe("Trạng thái");
+    expect(FLAT_EXPORT_COLUMNS.find((c) => c.key === "tinhVaoTong")?.nhan).toBe("Tính vào tổng");
+  });
+
+  it("hai cột mới thuộc nhóm 'trangthai', kiểu 'text'", () => {
+    for (const k of ["tthaiNhan", "tinhVaoTong"]) {
+      const c = FLAT_EXPORT_COLUMNS.find((x) => x.key === k);
+      expect(c?.nhom).toBe("trangthai");
+      expect(c?.kieu).toBe("text");
+    }
+  });
+
+  it("`tthai` chỉ xuất hiện MỘT lần (chuyển vị trí, không tạo key trùng)", () => {
+    expect(keys.filter((k) => k === "tthai")).toHaveLength(1);
+  });
+
+  it("`ttxly` giữ vị trí cũ và VẪN TẮT — ý nghĩa mã chưa kiểm chứng, không bật bừa", () => {
+    expect(FLAT_EXPORT_COLUMNS.find((c) => c.key === "ttxly")?.macDinhHien).toBe(false);
+    expect(keys.indexOf("ttxly")).toBeGreaterThan(keys.indexOf("dvtte"));
+    expect(keys.indexOf("ttxly")).toBeLessThan(keys.indexOf("tgtcthue"));
+  });
+});
+
 describe("FLAT_EXPORT_KEYS — Set key hợp lệ", () => {
-  it("là Set, chứa 29 key từ COLUMNS", () => {
+  it("là Set, chứa 31 key từ COLUMNS", () => {
     expect(FLAT_EXPORT_KEYS instanceof Set).toBe(true);
-    expect(FLAT_EXPORT_KEYS.size).toBe(29);
+    expect(FLAT_EXPORT_KEYS.size).toBe(31);
   });
 
   it("chứa đúng các key của COLUMNS", () => {
@@ -151,10 +194,10 @@ describe("FLAT_EXPORT_KEYS — Set key hợp lệ", () => {
   });
 });
 
-describe("FLAT_EXPORT_DEFAULT_KEYS — 16 cột mặc định (macDinhHien=true)", () => {
-  it("là array 16 cột", () => {
+describe("FLAT_EXPORT_DEFAULT_KEYS — 19 cột mặc định (macDinhHien=true)", () => {
+  it("là array 19 cột", () => {
     expect(Array.isArray(FLAT_EXPORT_DEFAULT_KEYS)).toBe(true);
-    expect(FLAT_EXPORT_DEFAULT_KEYS.length).toBe(16);
+    expect(FLAT_EXPORT_DEFAULT_KEYS.length).toBe(19);
   });
 
   it("chứa đúng key của cột có macDinhHien=true", () => {
@@ -162,9 +205,11 @@ describe("FLAT_EXPORT_DEFAULT_KEYS — 16 cột mặc định (macDinhHien=true)
     expect(FLAT_EXPORT_DEFAULT_KEYS).toEqual(expected);
   });
 
-  it("cột đầu là sttFile, cuối là tongSauThue", () => {
+  it("cột đầu là sttFile, cuối là tinhVaoTong (U36 chèn 3 cột trạng thái ở cuối bộ mặc định)", () => {
     expect(FLAT_EXPORT_DEFAULT_KEYS[0]).toBe("sttFile");
+    // Vị trí 15 vẫn là tongSauThue — 16 cột cũ KHÔNG bị xáo, 3 cột mới chỉ nối thêm phía sau.
     expect(FLAT_EXPORT_DEFAULT_KEYS[15]).toBe("tongSauThue");
+    expect(FLAT_EXPORT_DEFAULT_KEYS.at(-1)).toBe("tinhVaoTong");
   });
 
   it("chứa stt, ngày lập, ký hiệu, số HĐ, chiều, người, hàng, số lượng, tiền", () => {
@@ -185,14 +230,13 @@ describe("FLAT_EXPORT_DEFAULT_KEYS — 16 cột mặc định (macDinhHien=true)
     expect(FLAT_EXPORT_DEFAULT_KEYS).toContain("tsuatTien");
   });
 
-  it("KHÔNG chứa cột ẩn (ncnhat, khmshdon, dvtinh, ltsuat, dvtte, ttxly, tthai, tgtcthue, ttcktmai, tgtthue, tgtttbso, sttDong)", () => {
+  it("KHÔNG chứa cột ẩn (ncnhat, khmshdon, dvtinh, ltsuat, dvtte, ttxly, tgtcthue, ttcktmai, tgtthue, tgtttbso, sttDong)", () => {
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("ncnhat");
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("khmshdon");
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("dvtinh");
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("ltsuat");
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("dvtte");
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("ttxly");
-    expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("tthai");
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("tgtcthue");
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("ttcktmai");
     expect(FLAT_EXPORT_DEFAULT_KEYS).not.toContain("tgtthue");
@@ -202,19 +246,19 @@ describe("FLAT_EXPORT_DEFAULT_KEYS — 16 cột mặc định (macDinhHien=true)
 });
 
 describe("chonCotXuat() — chuẩn hóa cột từ client", () => {
-  it("không truyền gì (undefined) → trả 16 cột mặc định theo CATALOG", () => {
+  it("không truyền gì (undefined) → trả 19 cột mặc định theo CATALOG", () => {
     const result = chonCotXuat();
     const expected = FLAT_EXPORT_COLUMNS.filter((c) => c.macDinhHien);
     expect(result).toEqual(expected);
   });
 
-  it("truyền null → trả 16 cột mặc định", () => {
+  it("truyền null → trả 19 cột mặc định", () => {
     const result = chonCotXuat(null);
     const expected = FLAT_EXPORT_COLUMNS.filter((c) => c.macDinhHien);
     expect(result).toEqual(expected);
   });
 
-  it("truyền array rỗng → trả 16 cột mặc định", () => {
+  it("truyền array rỗng → trả 19 cột mặc định", () => {
     const result = chonCotXuat([]);
     const expected = FLAT_EXPORT_COLUMNS.filter((c) => c.macDinhHien);
     expect(result).toEqual(expected);
@@ -235,7 +279,7 @@ describe("chonCotXuat() — chuẩn hóa cột từ client", () => {
     expect(keys).toEqual(["sttFile", "ten"]);
   });
 
-  it("truyền array chỉ key lạ → fallback mặc định (16 cột, an toàn)", () => {
+  it("truyền array chỉ key lạ → fallback mặc định (19 cột, an toàn)", () => {
     const input = ["khong_ton_tai", "fake_key"];
     const result = chonCotXuat(input);
     // Khi toàn bộ key lạ được lọc, chon.length === 0 → co = null → fallback mặc định
@@ -243,7 +287,7 @@ describe("chonCotXuat() — chuẩn hóa cột từ client", () => {
     expect(result).toEqual(expected);
   });
 
-  it("truyền toàn bộ 29 key → trả 29 cột theo CATALOG", () => {
+  it("truyền toàn bộ 31 key → trả 31 cột theo CATALOG", () => {
     const allKeys = FLAT_EXPORT_COLUMNS.map((c) => c.key);
     const result = chonCotXuat(allKeys);
     expect(result).toEqual(FLAT_EXPORT_COLUMNS);

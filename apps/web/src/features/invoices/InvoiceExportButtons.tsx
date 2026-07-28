@@ -15,7 +15,7 @@ export function InvoiceExportButtons({ filter, cols }: { filter: InvoiceFilter; 
   const run = useMutation({
     // 2026-07-23 — bảng đã bỏ nên không còn chế độ "xuất dòng đã chọn": luôn xuất TOÀN BỘ
     // kết quả theo bộ lọc hiện tại (server-side). `cols` = cột người dùng chọn (rỗng ⇒ server
-    // xuất 16 cột mặc định). Luồng xuất+tải dùng chung (taiXuatHoaDon).
+    // xuất bộ cột mặc định của catalog). Luồng xuất+tải dùng chung (taiXuatHoaDon).
     mutationFn: (format: ExportFormat) => taiXuatHoaDon(format, filter, undefined, cols),
   });
 

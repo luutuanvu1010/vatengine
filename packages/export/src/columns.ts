@@ -12,6 +12,8 @@ import {
   type InvoiceFieldKind,
   chonCotXuat,
   fieldsForExport,
+  nhanTthai,
+  tinhVaoTong,
 } from "@vat/domain";
 import type { HangHoaTomTat } from "@vat/query";
 import type { InvoiceLineLike } from "./invoiceDoc";
@@ -346,9 +348,15 @@ const O_THEO_KEY: Record<string, (r: LineDetailRow) => ExportCell> = {
   tsuat: (r) => percentCell(r),
   tsuatTien: (r) => numCell(tsuatTienChuan(r)),
   tongSauThue,
+  tthai: (r) => numCell(r.tthai),
+  // U36 — hai cột TÍNH từ `tthai`. Cả nhãn lẫn quy tắc "tính vào tổng" lấy TỪ `@vat/domain`
+  // (một nguồn với giao diện, ui.md): không so mã bằng tay, không khai bảng nhãn thứ hai.
+  // `nhanTthai(null)` = "" và `tinhVaoTong(null)` = true ⇒ hóa đơn thiếu mã: nhãn trống,
+  // "Tính vào tổng" = "Có" — không tự ý loại thứ chưa hiểu.
+  tthaiNhan: (r) => strCell(nhanTthai(r.tthai)),
+  tinhVaoTong: (r) => strCell(tinhVaoTong(r.tthai) ? "Có" : "Không"),
   dvtte: (r) => strCell(r.dvtte),
   ttxly: (r) => numCell(r.ttxly),
-  tthai: (r) => numCell(r.tthai),
   tgtcthue: (r) => numCell(r.tgtcthue),
   ttcktmai: (r) => numCell(r.ttcktmai),
   tgtthue: (r) => numCell(r.tgtthue),
