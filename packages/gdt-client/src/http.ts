@@ -26,6 +26,20 @@ export interface RetryOptions {
    */
   sleepFn?: (ms: number) => Promise<void>;
   /**
+   * Nhận diện một phản hồi 5xx là lỗi **VĨNH VIỄN** (retry vô nghĩa) bằng cách soi
+   * thân phản hồi — trả `true` ⇒ trả response ngay, KHÔNG retry. Mặc định không đặt
+   * (giữ nguyên hành vi cũ: mọi 5xx đều retry).
+   *
+   * Vì sao cần (U37 §4.7): GDT trả **HTTP 500** cho hóa đơn không có hồ sơ gốc, kèm
+   * JSON `{"message":"Không tồn tại hồ sơ gốc của hóa đơn."}`. Theo lệ "5xx ⇒ retry"
+   * thì mỗi hóa đơn như vậy tốn `maxAttempts` request vô ích tới máy chủ thuế — trái
+   * "Không gọi dồn dập" của Hiến pháp.
+   *
+   * Hàm nhận một **bản sao** (`res.clone()`) nên đọc thân thoải mái; thân của response
+   * trả về cho caller vẫn nguyên vẹn.
+   */
+  isPermanentError?: (res: Response) => boolean | Promise<boolean>;
+  /**
    * Khoảng nghỉ tối thiểu (ms) giữa các lần gọi liên tiếp (giãn nhịp phân trang/detail
    * — U25 AC3). `0`/không đặt = tắt (hành vi cũ). Bản thân `fetchWithRetry` KHÔNG tự
    * áp giá trị này — caller (vòng lặp phân trang/detail) gọi `pace()` giữa hai request.
@@ -102,22 +116,15 @@ export async function fetchWithRetry(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    // CHỈ bọc try/catch quanh chính lời gọi mạng. Mọi xử lý sau đó nằm NGOÀI, để lỗi
+    // của chúng (nhất là callback `isPermanentError` do caller cung cấp) không bị
+    // `catch` bên dưới hiểu nhầm thành "lỗi mạng tạm thời" rồi nuốt mất: trước đây một
+    // callback ném lỗi sẽ khiến hàm retry hết lượt rồi TRẢ VỀ response như không có gì,
+    // lỗi biến mất không dấu vết (.claude/rules/gdt-adapter.md — không nuốt lỗi im lặng).
+    let res: Response;
     try {
-      const res = await transport.fetch(url, { ...init, signal: ctrl.signal });
+      res = await transport.fetch(url, { ...init, signal: ctrl.signal });
       clearTimeout(timer);
-
-      if (res.status === 401) return res;
-      const isRateLimited = retryOn429 && (res.status === 429 || res.status === 503);
-      if (isRateLimited && attempt < maxAttempts) {
-        const ms = Math.min(retryAfterMs(res) ?? backoffMs * 2 ** (attempt - 1), maxBackoffMs);
-        await wait(ms);
-        continue;
-      }
-      if (res.status >= 500 && attempt < maxAttempts) {
-        await wait(backoffMs * 2 ** (attempt - 1));
-        continue;
-      }
-      return res;
     } catch (err) {
       clearTimeout(timer);
       if (attempt < maxAttempts) {
@@ -126,6 +133,23 @@ export async function fetchWithRetry(
       }
       throw err;
     }
+
+    if (res.status === 401) return res;
+    const isRateLimited = retryOn429 && (res.status === 429 || res.status === 503);
+    if (isRateLimited && attempt < maxAttempts) {
+      const ms = Math.min(retryAfterMs(res) ?? backoffMs * 2 ** (attempt - 1), maxBackoffMs);
+      await wait(ms);
+      continue;
+    }
+    if (res.status >= 500 && attempt < maxAttempts) {
+      // Lỗi vĩnh viễn đội lốt 5xx (vd "không tồn tại hồ sơ gốc") — retry chỉ tổ
+      // gọi dồn máy chủ thuế mà kết quả không đổi. Soi trên bản sao để giữ nguyên
+      // thân response trả về cho caller.
+      if (opts.isPermanentError && (await opts.isPermanentError(res.clone()))) return res;
+      await wait(backoffMs * 2 ** (attempt - 1));
+      continue;
+    }
+    return res;
   }
   // Không thể tới đây (vòng lặp luôn return hoặc throw), giữ để tsc thoả mãn kiểu trả về.
   throw new Error("fetchWithRetry: hết lượt thử nhưng không có kết quả");

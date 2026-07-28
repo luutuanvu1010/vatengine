@@ -197,3 +197,93 @@ describe("fetchWithRetry", () => {
     ).rejects.toThrow();
   });
 });
+
+// U37a — tuỳ chọn `isPermanentError` (lỗi vĩnh viễn đội lốt 5xx). Đây là tuỳ chọn của
+// module DÙNG CHUNG, nên phải có test riêng cho hành vi generic: không chỉ "chặn retry
+// đúng lúc" mà còn "KHÔNG tiêu thân response của caller" — nếu callback đọc nhầm thân
+// gốc thay vì bản sao, mọi caller khác sẽ nhận response rỗng một cách âm thầm.
+describe("fetchWithRetry — isPermanentError", () => {
+  it("callback trả true → trả response NGAY, không retry, thân vẫn đọc được nguyên vẹn", async () => {
+    const { transport, callCount } = mockTransport([
+      () => jsonResponse(500, { message: "hỏng hẳn" }),
+    ]);
+
+    const res = await fetchWithRetry(
+      transport,
+      "https://example.test/x",
+      {},
+      {
+        maxAttempts: 3,
+        backoffMs: 1,
+        sleepFn: async () => {},
+        isPermanentError: async (r) => {
+          const body = (await r.json()) as { message?: string };
+          return body.message === "hỏng hẳn";
+        },
+      },
+    );
+
+    expect(callCount()).toBe(1);
+    expect(res.status).toBe(500);
+    // Thân gốc PHẢI còn nguyên: callback chỉ được nhận bản sao.
+    await expect(res.json()).resolves.toEqual({ message: "hỏng hẳn" });
+  });
+
+  it("callback trả false → vẫn retry như cũ, thân response cuối vẫn đọc được", async () => {
+    const { transport, callCount } = mockTransport([
+      () => jsonResponse(500, { message: "bận tạm thời" }),
+    ]);
+
+    const res = await fetchWithRetry(
+      transport,
+      "https://example.test/x",
+      {},
+      {
+        maxAttempts: 3,
+        backoffMs: 1,
+        sleepFn: async () => {},
+        isPermanentError: async (r) => {
+          const body = (await r.json()) as { message?: string };
+          return body.message === "hỏng hẳn";
+        },
+      },
+    );
+
+    expect(callCount()).toBe(3);
+    await expect(res.json()).resolves.toEqual({ message: "bận tạm thời" });
+  });
+
+  it("callback ném lỗi KHÔNG được nuốt thành 'lỗi tạm' im lặng", async () => {
+    const { transport } = mockTransport([() => jsonResponse(500)]);
+
+    await expect(
+      fetchWithRetry(
+        transport,
+        "https://example.test/x",
+        {},
+        {
+          maxAttempts: 3,
+          backoffMs: 1,
+          sleepFn: async () => {},
+          isPermanentError: () => {
+            throw new Error("callback hỏng");
+          },
+        },
+      ),
+    ).rejects.toThrow("callback hỏng");
+  });
+
+  it("KHÔNG đặt isPermanentError → hành vi 5xx giữ nguyên như trước (không hồi quy)", async () => {
+    const { transport, callCount } = mockTransport([() => jsonResponse(500)]);
+
+    const res = await fetchWithRetry(
+      transport,
+      "https://example.test/x",
+      {},
+      { maxAttempts: 3, backoffMs: 1, sleepFn: async () => {} },
+    );
+
+    expect(callCount()).toBe(3);
+    expect(res.status).toBe(500);
+  });
+});

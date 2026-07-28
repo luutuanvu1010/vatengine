@@ -42,5 +42,33 @@ export const DETAIL_ENDPOINTS = {
   sco: "/api/sco-query/invoices/detail",
 } as const;
 
+// Tải HỒ SƠ GỐC của một hóa đơn (bản XML có chữ ký số do người bán phát hành),
+// gói trong ZIP. Dùng ĐÚNG 4 tham số định danh như DETAIL_ENDPOINTS.
+//
+// ĐÃ KIỂM CHỨNG — hai tầng bằng chứng độc lập, xem docs/plans/U37-HO-SO-KHOI-DONG-*.md:
+// (a) §4.5, offline 2026-07-28, không cần đăng nhập: bundle JS của chính cổng GDT
+//     (docs/doi_chieu_data/Hóa Đơn Điện Tử_files/) —
+//       exportXml = (params, token, family) => sendGetBlob(
+//         `${BASE}/api/${family}/invoices/export-xml`, params, token)
+//       sendGetBlob = (url, params, token) => axios({method:"get", url, params,
+//         responseType:"blob", headers:{Authorization:`Bearer ${token}`}})
+//     và caller `handleExportXML` truyền family = "query" | "sco-query", params =
+//     getValues(row, ["nbmst","khhdon","shdon","khmshdon"]), chặn trước bằng cờ `hsgoc`.
+// (b) §4.7, probe THẬT 2026-07-28 (scripts/probe-export-xml-u37.mjs, token thật):
+//     họ `query` trả HTTP 200 + ZIP 317.636 byte gồm 5 file — invoice.xml (bản gốc,
+//     `<HDon><DLHDon><TTChung><PBan>2.1.0`), invoice.html (bản thể hiện GDT dựng sẵn),
+//     details.js, viewinvoice-bg.jpg, sign-check.jpg. Hóa đơn KHÔNG có hồ sơ gốc trả
+//     **HTTP 500** + JSON {"message":"Không tồn tại hồ sơ gốc của hóa đơn."} — xem
+//     `getInvoiceOriginalZip` (exportXml.ts) vì sao phải coi đây là lỗi VĨNH VIỄN.
+//
+// CHƯA KIỂM CHỨNG: họ `sco` chưa gọi trực tiếp (hóa đơn mẫu của probe là normal) —
+// suy từ bundle (b) và từ đối xứng với INVOICE_ENDPOINTS/DETAIL_ENDPOINTS.
+// KHÔNG có endpoint PDF cho hóa đơn: grep toàn bộ bundle chỉ ra tên icon và hai hàm
+// in chứng từ TNCN, không có đường xuất PDF hóa đơn nào (§4.5).
+export const EXPORT_XML_ENDPOINTS = {
+  normal: "/api/query/invoices/export-xml",
+  sco: "/api/sco-query/invoices/export-xml",
+} as const;
+
 // Endpoint công khai để probe khả năng tới máy chủ (không cần đăng nhập).
 export const PUBLIC_PROBE_PATH = CAPTCHA_PATH;
