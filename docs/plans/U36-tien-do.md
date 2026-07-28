@@ -10,7 +10,21 @@ Nguồn bằng chứng: `docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md`.
 | U36.2 (Gói 2) | DONE | `379f936` | Catalog 29→31, mặc định 16→19; 3 cột trạng thái ngay sau `Tổng tiền (sau thuế)`; ô sinh từ `nhanTthai()`/`tinhVaoTong()` (một nguồn); khóa localStorage bump v1→v2 + xuất `EXPORT_COLS_KEY`. `xlsxMapping.test.ts` XANH (tiêu chí #10). lint+test xanh (194 test file); `dod-auditor`: không vi phạm. **Hai lệch spec cần U36.3 lưu ý:** (a) §6 liệt kê THIẾU `exportCols.test.tsx:25` — nó ghi chuỗi cứng `vat.exportCols.v1` nên bump khóa làm nó đỏ; đã sửa sang hằng `EXPORT_COLS_KEY`; (b) Gói 5 chỉ SAI dòng: `06-BINDING_MAP.md:104` là dòng `huy`/`thay_the` của `/reconcile`, KHÔNG phải catalog cột phẳng — số cột catalog phẳng **không được ghi ở đâu** trong `06-BINDING_MAP.md`; chỗ lệch thật là `:34` và `:48` |
 | U36.3 (Gói 3+4+5) | DONE (mã) — **còn nghiệm thu thủ công** | `7a763af` | `summarize.ts` loại mã 4 khỏi TIỀN bằng `filter` trong aggregate; `count` giữ nguyên nghĩa (QĐ-7); `ChieuSummary` +8 trường; `ThongBaoTrangThai.tsx` mới (thông báo theo chiều + thuế phải nộp một lần + cảnh báo `soMaLa`); `Stat` thêm `ghiChu`; changelog v2.0; 8 tài liệu + `06-BINDING_MAP` §4.6 mới (ghi TỪ MÃ). lint+test xanh (197 test file); `dod-auditor` + `security-reviewer` đều sạch. **Lệch kế hoạch có chủ đích:** (1) helper trừ tiền đặt ở `@vat/domain/tienChuoi.ts` chứ không sửa `format.ts` → drift số học thập phân hai nơi, đã ghi BACKLOG; (2) dòng thuế ghi "giảm 1.711.111 ₫" không phải "giảm -1.711.111 ₫" (mockup §4b tự mâu thuẫn với §2.3); (3) thêm `TTHAI` + `TTHAI_DA_KIEM_CHUNG` vào domain để không rải số 2/3/5 trần ở tầng truy vấn |
 
-## Việc còn lại (chưa xong — cập nhật 2026-07-28)
+## Đã deploy + nghiệm thu (2026-07-28)
+
+**Production:** `vat-api` version `53dd450f`, `vat-web` version `999992ee`. Migration 0018
+(của trục) đã áp + hậu kiểm bằng truy vấn thật. `vat-sync-worker` KHÔNG deploy — không phụ
+thuộc `@vat/query`/`@vat/domain`.
+
+**Nghiệm thu thủ công — ĐẠT.** Chủ dự án kiểm trên production 2026-07-28: kỳ 07/2026, chiều
+Bán ra, tổng thuế giảm **đúng 1.711.111 ₫**; thông báo hiển thị khớp nguyên văn mẫu §4b của
+kế hoạch (đã đối chiếu từng dòng). Con số 1.711.111 ₫ từ đây là **bằng chứng trên dữ liệu
+thật**, không còn là số đo lúc lập kế hoạch.
+
+**Còn một ô chưa kiểm:** tải file Excel xác nhận 3 cột trạng thái + hóa đơn mã 4 có
+"Tính vào tổng" = Không (`docs/CHECKLIST-NGHIEM-THU.md` mục U36).
+
+## Ghi chú deploy (đã thực hiện — giữ lại làm hồ sơ)
 
 **Nghiệm thu thủ công §5.1** trên dữ liệu production, 4 ô còn trống trong
 `docs/CHECKLIST-NGHIEM-THU.md` mục "U36". Cần deploy hoặc chạy local trỏ Neon —
