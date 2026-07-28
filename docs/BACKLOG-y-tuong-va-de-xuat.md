@@ -602,3 +602,32 @@ Bằng 0 rồi thì bỏ được cả cổng, cả hai cột, và cờ `phai_do
 - **Rủi ro nếu bỏ qua:** nếu CI cũng chạy `make test` với mức song song tương tự trên máy giới hạn tài nguyên, PR KHÔNG LIÊN QUAN tới `apps/sync-worker` có thể bị đỏ giả ngẫu nhiên, gây mất niềm tin vào cổng test.
 - **Đề xuất hướng xử lý:** khi tới lượt — (a) đo xem CI có tái hiện được flakiness này không (máy CI thường ít lõi hơn máy dev, có thể RÕ hơn); (b) cân nhắc giảm mức song song của `npm run test --workspaces` (vd `--workspaces --if-present` tuần tự hoặc giới hạn `--max-old-space-size`/số worker vitest) hoặc tách `apps/sync-worker` (nhóm test PGlite+crypto nặng nhất) chạy riêng.
 - **Nguồn phát hiện:** 3 lần chạy `make test` toàn repo khi đóng đơn vị U35, phiên 27/07.
+
+### [2026-07-27] Kết xuất giữa lúc đồng bộ đang chạy → dòng hàng trống (race export × sync)
+
+- **Trạng thái:** Chẩn đoán xong — dữ liệu KHÔNG mất; chưa cần fix dữ liệu, chỉ còn đề xuất UX.
+- **Hiện tượng:** File `vatengine-export-01042026-30042026.xlsx` (tạo 15:14:19 VN 27/07) có 2 dòng (STT 91, 324 — HĐ 2014 & 1788, C26MYY, sco) trống toàn bộ cột hàng hóa/số lượng/đơn giá/thành tiền.
+- **Nguyên nhân gốc (đã kiểm chứng Neon prod):** 2 HĐ này có header từ đợt sync 24/07 (521 HĐ, xmin 230561) nhưng pha 2 chi tiết bị SÓT riêng 2 HĐ (DLQ = 0 dòng, không còn dấu vết lý do sót). Run sold tháng 4 hôm 27/07 chạy 15:12:48→15:17:54; export bấm lúc 15:14:18 — GIỮA run, trước khi run vá chi tiết (~15:17:21, xmin 292727/292729 kề HĐ mới 1785). Sheet phẳng xuất `EMPTY_LINE` đúng thiết kế ("HĐ chưa đồng bộ chi tiết vẫn phải xuất hiện"). Sau run: 523/523 HĐ sold T4 đủ dòng hàng — xuất lại là đủ.
+- **Đề xuất (chờ duyệt):** cùng họ với đề xuất "UI cảnh báo ngày đuôi": khi tenant có run `running` chồng lấn khoảng lọc, UI/export cảnh báo "Đang đồng bộ — file có thể thiếu chi tiết, nên xuất lại sau khi đồng bộ xong" (đọc `GET /tax-accounts/:id/sync-status` sẵn có). Cân nhắc thêm cột/ô đánh dấu "chi tiết chưa đồng bộ" trong file thay vì ô trống câm.
+- **Nguồn phát hiện:** Phiên chẩn đoán 2026-07-27 (systematic-debugging), truy vấn trực tiếp Neon prod (xmin bracket + audit_log export + lan_dong_bo).
+
+### [2026-07-28] SỰ CỐ ĐÃ VÁ + nợ phòng ngừa: migration tạo bảng mà quên `GRANT` → `permission denied` chỉ lộ ra ở production
+
+- **Trạng thái:** Sự cố đã vá nóng (GRANT ba bảng). **Cổng phòng ngừa CHƯA làm** — chủ dự án hoãn, ghi vào đây.
+- **Hiện tượng:** 39 phiên `lan_dong_bo` trạng thái `failed` trong 24h (MST 019197004411: 16, 4201969169: 13, 4200730402: 5). Người dùng thấy "13 tác vụ đồng bộ chạy nền" không bao giờ dứt và tưởng hệ thống bị GDT chặn tốc độ.
+- **Nguyên nhân gốc (đã kiểm chứng, `lan_dong_bo.thong_diep_loi` nguyên văn):** `permission denied for table bo_dem_phien_ban`. Chuỗi kéo hoá đơn về ĐƯỢC, nhưng chết ở bước `capSoPhienBan` khi chốt phiên ⇒ run `failed` ⇒ queue retry ⇒ lặp vô hạn. **Không liên quan rate-limit GDT** (24h chỉ 1 lần breaker mở).
+- **Cơ chế:** repo KHÔNG có `ALTER DEFAULT PRIVILEGES` (grep = 0); `packages/db/provisioning/app-role.sql:28` chạy `GRANT … ON ALL TABLES` đúng MỘT LẦN (2026-07-14). Mọi bảng tạo sau mốc đó KHÔNG thừa hưởng quyền nào. Migration `0007:72-75` đã ghi cảnh báo này bằng chữ — nhưng `0008` (`dong_bo_that_bai`) và `0017` (U35: `bo_dem_phien_ban`, `lich_su_thay_doi_hoa_don`) vẫn quên. **Lỗi này chỉ lộ ra SAU deploy production**, vì test chạy trên PGlite với role owner (không có `vat_app`).
+- **Đã vá:** `scripts/va-quyen-bang-thieu.mjs` cấp quyền tối thiểu cho 3 bảng. Cần codify thành migration khi merge U35 (xem mục lệch nhánh bên dưới).
+- **Rủi ro nếu bỏ qua cổng phòng ngừa:** đây là lần thứ HAI dự án dính đúng bẫy này. Mọi migration tạo bảng trong tương lai đều có thể lặp lại, và triệu chứng luôn là "đồng bộ hỏng bí ẩn ở production" — tốn nhiều giờ chẩn đoán mỗi lần, như phiên 28/07.
+- **Đề xuất cổng chặn (chờ duyệt):** test tích hợp chạy dưới role non-owner thật, hoặc đơn giản hơn — test đọc `pg_class` liệt kê mọi bảng `public` rồi đối chiếu với bảng tra "quyền theo thiết kế" (đã có sẵn trong `scripts/kiem-quyen-bang.mjs`); bảng mới không khai quyền ⇒ CI đỏ. Liên quan mục `[2026-07-21] Không có test tự động nào chạy dưới role Postgres non-superuser thật`.
+- **Nợ kèm theo:** `scripts/kiem-quyen-bang.mjs` phát hiện một số bảng có quyền RỘNG HƠN thiết kế (di sản `GRANT … ON ALL TABLES`) — chưa rà, chưa thu hồi.
+- **Nguồn phát hiện:** Phiên chẩn đoán 2026-07-28, khởi đầu từ câu hỏi "quy tắc rate-limit đã áp cho mọi tài khoản chưa?".
+
+### [2026-07-28] Cron nền 03:00 sáng 28/07 KHÔNG sinh phiên nào — chưa rõ nguyên nhân
+
+- **Trạng thái:** Phát hiện, CHƯA điều tra (cần log Cloudflare, DB không trả lời được).
+- **Bằng chứng:** `lan_dong_bo` trống hoàn toàn từ 16:00 VN 27/07 đến 09:00 VN 28/07. Toàn bộ 307 hoá đơn sáng 28/07 là do chủ dự án bấm tay lúc 09:00–09:36.
+- **Ba giả thuyết (chưa phân xử):** (a) cổng egress đóng — `isEgressBlocked(health)` ở `apps/sync-worker/src/index.ts:91` khiến `scheduled()` bỏ qua im lặng, log `[GATE] egress GEO_BLOCKED`; (b) `enumerateDueAccounts` trả rỗng nên không có message nào; (c) cron `0 20 * * *` (commit `4c5e7d1`) chưa thực sự deploy lên production.
+- **Rủi ro nếu bỏ qua:** đồng bộ nền coi như không tồn tại — mọi dữ liệu phụ thuộc thao tác tay của người dùng, phá vỡ lời hứa "chạy nền" của sản phẩm.
+- **Cách phân xử:** `npx wrangler tail --name vat-sync-worker` quanh 03:00 VN, hoặc mục Logs/Cron của Worker trên dashboard Cloudflare.
+- **Nguồn phát hiện:** Phiên chẩn đoán 2026-07-28.
