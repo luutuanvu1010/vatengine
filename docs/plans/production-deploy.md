@@ -1,5 +1,26 @@
 # Kế hoạch triển khai Production — `vatengine.tourdao.vn`
 
+> ## ✅ Migration 0018 — codify vá GRANT sự cố 28/07 (đã áp production, đã kiểm chứng)
+>
+> Theo đề nghị ở sự cố `vat-api` bị đè bản cũ (mục ngay dưới): viết migration
+> `0018_u35_grant_bang_thieu.sql` — `GRANT SELECT, INSERT, UPDATE` (không DELETE, khớp đúng
+> vá nóng sáng 28/07) cho `vat_app` trên `bo_dem_phien_ban`, `lich_su_thay_doi_hoa_don`,
+> `dong_bo_that_bai`, bọc guard `IF EXISTS (SELECT FROM pg_roles WHERE rolname='vat_app')`
+> (đúng idiom 0009/0011 — RAISE WARNING chứ không throw khi role vắng mặt, ví dụ PGlite).
+> Test mới `packages/db/test/integration/grantVatApp.test.ts` (3 ca) tạo role tên **đúng như
+> production** (`vat_app`, khác `app_user` mà mọi test khác trong repo dùng) và KHÔNG tự cấp
+> gì thêm — khẳng định quyền tới từ chính migration, đúng lớp lỗi từng lọt lưới 8 ngày ở
+> migration `0008`. `packages/db` 117 test xanh, `make lint` sạch. Trước `make migrate`:
+> kiểm `when` journal tăng đơn điệu so với 0017 (ADR-0008) — bắt đúng lệch giờ sandbox lần
+> nữa (`1785217300856` < `1785645720000`), sửa thành `+60000` trước khi chạy. Hậu kiểm trực
+> tiếp trên Neon (không tin thông điệp `[✓]` một mình — ADR-0008): `__drizzle_migrations`
+> mới nhất `id=19` khớp `when` vừa sửa; `has_table_privilege('vat_app', …)` cho cả 3 bảng =
+> SELECT/INSERT/UPDATE **true**, DELETE **false** — khớp chính xác vá nóng đã làm sáng nay.
+> Không cần deploy lại Worker nào (migration thuần GRANT, không đổi API/schema mà code phụ
+> thuộc).
+>
+> **Nhật ký deploy U35b + U35 — 2026-07-27 (đã kiểm chứng).** U35b (sửa hiển thị thuế suất/tiền thuế trong file xuất, commit `593c0b9`) + U35 (lưu vết + cảnh báo thay đổi trạng thái hóa đơn, commit `7751006`) thực hiện tuần tự theo cổng dừng bắt buộc (`docs/plans/U35-prompt-dieu-phoi.md`), cả hai `dod-auditor` PASS, U35 thêm `security-reviewer` PASS. Chi tiết kỹ thuật: `docs/plans/U35-tien-do.md`.
+>
 > ## 🔴 SỰ CỐ 2026-07-28 — `vat-api` bị GHI ĐÈ về bản TRƯỚC U35b bởi một deploy từ checkout cũ (đã vá)
 >
 > **Triệu chứng người dùng báo:** file xuất theo khoảng ngày vẫn KHÔNG có định dạng % cho
