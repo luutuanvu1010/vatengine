@@ -1,5 +1,18 @@
 # Kế hoạch triển khai Production — `vatengine.tourdao.vn`
 
+> ## ✅ Changelog v1.10 — 2026-07-28 (đã deploy, đã kiểm chứng)
+>
+> Ghi nhận hai sửa lỗi người dùng thật của phiên hôm nay (MST 12 chữ số cho hộ kinh doanh —
+> commit `0502677`, đã lên trục từ trước; đồng bộ không còn treo — hệ quả trực tiếp của
+> migration `0018` ngay dưới) vào `apps/web/src/lib/changelog.ts`. `apps/web` 317 test xanh
+> (không đổi hành vi ngoài dữ liệu tĩnh) → build lại (`VITE_API_BASE=/api`) → grep bundle xác
+> nhận tiêu đề mới trước deploy → deploy `vat-web` (Version
+> `274cf3fe-2991-4726-84f0-97dc73dd05c0`) → xác nhận bundle live chứa đúng chuỗi mới.
+> Quyết định vận hành đứng sau đợt vá hôm nay được ghi thành **ADR-0009**
+> (`docs/adr/0009-grant-tuong-minh-cho-bang-moi.md`) — mọi migration tạo bảng mới từ nay bắt
+> buộc kèm GRANT tường minh cho `vat_app`, không dựa vào cảnh báo bằng chữ (đã chứng minh
+> không đủ: bị bỏ qua 2 lần).
+
 > ## ✅ Migration 0018 — codify vá GRANT sự cố 28/07 (đã áp production, đã kiểm chứng)
 >
 > Theo đề nghị ở sự cố `vat-api` bị đè bản cũ (mục ngay dưới): viết migration
