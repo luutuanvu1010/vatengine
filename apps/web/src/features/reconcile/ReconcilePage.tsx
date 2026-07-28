@@ -2,7 +2,8 @@
 // soát khớp (U15-buoc4):
 //  B2 thieu_so_dau_ra: hiện nbmst+khhdon+shdonThieu (khoảng trống dãy số), nhãn "nghi thiếu"
 //     — KHÔNG "ít hơn kỳ trước ~%".
-//  B3 huy/thay_the: chỉ shdon + mã (chưa rõ) — KHÔNG "thay bằng HĐ X" (finding không có).
+//  B3 huy/thay_the: chỉ shdon + nhãn mã trạng thái — KHÔNG "thay bằng HĐ X" (finding không
+//     mang con trỏ tới hóa đơn thay thế; việc ghép cặp gốc↔mới thuộc U37).
 //  M2 lech_thue: nêu ĐÚNG bản chất (lệch số học header) + các cấu phần + `lech`.
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";

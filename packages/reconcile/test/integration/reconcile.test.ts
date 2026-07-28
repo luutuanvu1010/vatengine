@@ -7,7 +7,9 @@ import { findStatusAnomalies } from "../../src/statusAnomaly";
 import type { StatusCodeMap } from "../../src/types";
 import { type Db, freshDb, makeTenant, seedInvoice } from "../helpers";
 
-// Map GIẢ ĐỊNH (CHƯA KIỂM CHỨNG) — chỉ để kiểm cơ chế, KHÔNG phải mã production.
+// Map TIÊM cho test — cố ý KHÁC map production (`thayThe.tthai = [4]`) để chứng minh cơ
+// chế phân loại độc lập với GIÁ TRỊ mã. Mã "hủy" ở đây là GIẢ ĐỊNH: production vẫn giữ
+// `huy` RỖNG vì chưa có ca hủy pháp lý nào trong dữ liệu thật (biên bản 2026-07-28 §5.1).
 const TEST_MAP: StatusCodeMap = { huy: { tthai: [5] }, thayThe: { tthai: [3] } };
 
 describe("findStatusAnomalies (integration, PGlite)", () => {
@@ -86,7 +88,17 @@ describe("reconcile (integration, PGlite)", () => {
     expect(report.findings).toHaveLength(3);
   });
 
-  it("map mặc định (production RỖNG) → không sinh finding trạng thái", async () => {
+  // U36.1 — map production nay chốt ĐÚNG mã 4 (bằng chứng 2026-07-28 §3). Hai test dưới
+  // khóa cả hai vế: mã 4 phải được cờ, mã 5 phải KHÔNG (bản gốc bị điều chỉnh vẫn còn hiệu
+  // lực — biên bản §7), và `huy` vẫn luôn 0 vì mã hủy thật chưa có bằng chứng.
+  it("map mặc định (production) → hóa đơn `tthai=4` sinh finding thay_the", async () => {
+    await seedInvoice(db, tenantA, { shdon: "1", tthai: 4 });
+    const report = await reconcile(db, tenantA, {});
+    expect(report.summary.huy).toBe(0);
+    expect(report.summary.thayThe).toBe(1);
+  });
+
+  it("map mặc định (production) → `tthai=5` KHÔNG bị cờ (QĐ-4: chỉ loại mã 4)", async () => {
     await seedInvoice(db, tenantA, { shdon: "1", tthai: 5 });
     const report = await reconcile(db, tenantA, {});
     expect(report.summary.huy).toBe(0);

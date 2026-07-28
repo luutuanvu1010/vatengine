@@ -2,7 +2,8 @@
 // nguồn sự thật thứ hai; mục 7/CLAUDE.md). Mọi phát hiện đều trong phạm vi một tenant.
 
 /** Bảng mã trạng thái GDT (`tthai`/`ttxly`) → phân loại hủy / thay thế. Xem statusCodes.ts:
- * map production hiện RỖNG (mã CHƯA KIỂM CHỨNG — Nguyên tắc bằng chứng của Hiến pháp). */
+ * map production chỉ chốt phần ĐÃ có bằng chứng (`thayThe.tthai=[4]`, biên bản 2026-07-28);
+ * `huy` và mọi `ttxly` giữ RỖNG — Nguyên tắc bằng chứng của Hiến pháp. */
 export interface StatusCodeMap {
   huy: { tthai?: number[]; ttxly?: number[] };
   thayThe: { tthai?: number[]; ttxly?: number[] };

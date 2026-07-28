@@ -1,18 +1,19 @@
-// Nhãn trạng thái ttxly/tthai — U15 SỞ HỮU bảng nhãn này (columns.ts:2-3, U15-plan §4B).
-// NGUYÊN TẮC BẰNG CHỨNG: chỉ gán nhãn cho mã ĐÃ KIỂM CHỨNG. Đồng bộ kỷ luật với
-// @vat/reconcile statusCodes.ts (map production RỖNG có chủ đích). Mã chưa probe →
-// "số (chưa rõ)", KHÔNG đoán nhãn. Khi có probe thật (đơn vị đối chiếu), điền cả 2 nơi.
+// Nhãn trạng thái ttxly/tthai cho tầng trình bày.
+//
+// U36.1 — bảng nhãn `tthai` KHÔNG còn ở đây: nó chuyển về `@vat/domain` để web và file kết
+// xuất dùng CHUNG một nguồn (`ui.md`, "Nhãn một nguồn"). File này chỉ còn là lớp mỏng khoác
+// thêm quy ước riêng của bảng/chip: `null` hiện "—" (ô trống có dấu), trong khi file xuất
+// hiện chuỗi rỗng. Mọi logic fallback "<mã> (chưa rõ)" nằm MỘT NƠI: `nhanTthai()`.
+//
+// NGUYÊN TẮC BẰNG CHỨNG vẫn giữ nguyên cho `ttxly`: chưa mã nào kiểm chứng (biên bản
+// docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md §4) → bảng dưới GIỮ RỖNG.
+import { daKiemChungTthai, nhanTthai } from "@vat/domain";
 
 export interface StatusLabel {
   text: string;
   /** true CHỈ khi mã đã kiểm chứng bằng bằng chứng tái lập được. */
   verified: boolean;
 }
-
-// Mã tthai đã quan sát từ dữ liệu GDT thật (ADR-0001 dòng 45): chỉ `1` = trạng thái gốc.
-const TTHAI_VERIFIED: Record<number, string> = {
-  1: "Gốc",
-};
 
 // ttxly: CHƯA có mã nào kiểm chứng → không nhãn nào verified.
 const TTXLY_VERIFIED: Record<number, string> = {};
@@ -24,9 +25,10 @@ function mapCode(code: number | null | undefined, table: Record<number, string>)
   return { text: `${code} (chưa rõ)`, verified: false };
 }
 
-/** Nhãn trạng thái hóa đơn (`tthai`). */
+/** Nhãn trạng thái hóa đơn (`tthai`) — dẫn xuất từ `@vat/domain`. */
 export function labelTthai(code: number | null | undefined): StatusLabel {
-  return mapCode(code, TTHAI_VERIFIED);
+  if (code === null || code === undefined) return { text: "—", verified: false };
+  return { text: nhanTthai(code), verified: daKiemChungTthai(code) };
 }
 
 /** Nhãn trạng thái xử lý (`ttxly`). */

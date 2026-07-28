@@ -1,7 +1,8 @@
 // U10 — phát hiện hóa đơn HỦY / THAY THẾ theo bảng mã trạng thái. `classifyStatus` là
 // THUẦN (đơn vị test bằng map tiêm); `findStatusAnomalies` truy vấn (generic trên
 // PgDatabase, mẫu @vat/query) — LUÔN lọc tenant_id (buildWhere) + chạy trong withTenant.
-// Cơ chế tách rời khỏi GIÁ TRỊ mã: map production RỖNG cho tới khi probe (statusCodes.ts).
+// Cơ chế tách rời khỏi GIÁ TRỊ mã: map production (statusCodes.ts) chốt đúng phần ĐÃ có
+// bằng chứng — hiện `thayThe.tthai = [4]`; `huy` và mọi `ttxly` vẫn RỖNG.
 import { hoaDon } from "@vat/db";
 import { type InvoiceFilter, buildWhere } from "@vat/query";
 import { type SQL, and, inArray, or } from "drizzle-orm";
@@ -39,7 +40,7 @@ export async function findStatusAnomalies<
 ): Promise<StatusFinding[]> {
   const allTthai = [...(map.huy.tthai ?? []), ...(map.thayThe.tthai ?? [])];
   const allTtxly = [...(map.huy.ttxly ?? []), ...(map.thayThe.ttxly ?? [])];
-  // Map RỖNG (production chưa kiểm chứng) → không truy vấn, không cờ gì.
+  // Map RỖNG (vd map tiêm rỗng, hoặc phần chưa có bằng chứng) → không truy vấn, không cờ gì.
   if (allTthai.length === 0 && allTtxly.length === 0) return [];
 
   const codeConds: SQL[] = [];

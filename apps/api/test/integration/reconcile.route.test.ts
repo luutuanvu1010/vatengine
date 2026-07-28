@@ -41,6 +41,11 @@ describe("REST /reconcile (integration, PGlite)", () => {
       chieu: "sold",
       tdlap: new Date("2026-04-06T09:00:00Z"),
     });
+    // A: 1 hóa đơn ĐÃ BỊ THAY THẾ (`tthai=4`). U36.1 điền STATUS_CODE_MAP.thayThe.tthai=[4]
+    // (bằng chứng 2026-07-28) ⇒ findStatusAnomalies thoát nhánh "map rỗng → không truy vấn"
+    // và GET /reconcile ĐỔI HÀNH VI. Không có seed này thì thay đổi đó vào production mà
+    // không test nào phủ (mọi seed mặc định đều `tthai:1`).
+    await seedInvoice(db, tenantA, { shdon: "9", tthai: 4 });
     // B: 1 hóa đơn lệch thuế khác (để bắt rò tenant).
     await seedInvoice(db, tenantB, { shdon: "1", tgtttbso: "2222222" });
   });
@@ -52,10 +57,14 @@ describe("REST /reconcile (integration, PGlite)", () => {
     const body = (await res.json()) as ReconcileReport;
     expect(body.summary.lechThue).toBe(1);
     expect(body.summary.thieuSoDauRa).toBe(1);
-    // Production RỖNG mã trạng thái → không cờ hủy/thay thế.
+    // U36.1 — mã 4 (bị thay thế) ĐÃ kiểm chứng → được cờ. Mã HỦY vẫn RỖNG (chưa có bằng
+    // chứng) nên `huy` luôn 0, kể cả khi dữ liệu có mã lạ.
     expect(body.summary.huy).toBe(0);
-    expect(body.summary.thayThe).toBe(0);
-    expect(body.findings).toHaveLength(2);
+    expect(body.summary.thayThe).toBe(1);
+    expect(body.findings).toHaveLength(3);
+    const thayThe = body.findings.filter((f) => f.kind === "thay_the");
+    expect(thayThe).toHaveLength(1);
+    expect(thayThe[0]).toMatchObject({ shdon: "9", tthai: 4 });
   });
 
   it("cách ly tenant: JWT tenant B chỉ thấy đối chiếu của B", async () => {

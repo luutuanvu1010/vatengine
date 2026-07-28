@@ -28,7 +28,7 @@
 | `ncnhat` | ví dụ `"2026-04-13T09:44:51.456Z"` — khác nhau từng dòng (mili-giây) | string, ISO-8601 UTC **CÓ** mili giây, dạng `YYYY-MM-DDTHH:mm:ss.sssZ` — **khác `tdlap`** (không có `.sss`) |
 | `tgtcthue` / `tgtttbso` | ví dụ `1234567.0` (nhỏ) và `1.4727778E7` (lớn, dạng khoa học) | JSON number (không phải chuỗi); giá trị lớn có thể serialize ở **dạng khoa học** — `JSON.parse` chuẩn xử lý được, cần test riêng để không quên |
 | `ttxly` | `8` | JSON integer |
-| `tthai` | `1` | JSON integer |
+| `tthai` | `1` trong lô probe này; **cập nhật 2026-07-28:** đã giải mã đủ `1`–`5` trên 33.929 hóa đơn thật — xem `docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md` §3 | JSON integer |
 
 ### Kết luận
 
@@ -42,7 +42,7 @@
 - Chỉ quan sát **một lô** hóa đơn khởi tạo từ máy tính tiền (`khhdon=C26MYY`, cùng `thlap=202604`) nên **mọi dòng có `tdlap` giống hệt nhau** (cùng ngày lập) — quy luật `17:00:00Z ⇔ 00:00:00 ICT` suy ra từ **1 giá trị lặp lại**, chưa kiểm chứng với hóa đơn lập vào ngày/giờ khác hoặc hóa đơn **thường** (không phải máy tính tiền); chưa loại trừ khả năng GDT dùng giờ khác `00:00:00 ICT` làm mốc cho loại hóa đơn khác.
 - Chỉ quan sát chiều **mua vào** (`purchase`); `sold` **suy từ đối xứng cùng envelope** (đã có ở Amendment #5), chưa tự gọi lại riêng trong lần probe này.
 - Probe qua **trình duyệt người dùng đã đăng nhập sẵn** (thao tác thủ công, không qua Chrome extension MCP do lỗi kết nối nêu trên) — kiểm chứng **định dạng dữ liệu**, không kiểm lại egress T0 (đã có ở Amendment #3/#4).
-- Chưa quan sát `tdlap`/`ncnhat` khi hóa đơn bị điều chỉnh/thay thế (chỉ thấy `tthai=1`, trạng thái gốc).
+- Chưa quan sát `tdlap`/`ncnhat` khi hóa đơn bị điều chỉnh/thay thế (lô probe này chỉ thấy `tthai=1`, trạng thái gốc). **Cập nhật 2026-07-28:** giới hạn này đã được gỡ một phần — `docs/BANG-CHUNG-ma-trang-thai-hoa-don-2026-07-28.md` giải mã `tthai` 1–5 trên dữ liệu đã lưu (§3) và cho thấy `ncnhat` của bản gốc **KHÔNG đổi** khi hóa đơn bị thay thế (§6.1), nên `ncnhat` không dùng làm tín hiệu phát hiện thay đổi.
 
 ---
 

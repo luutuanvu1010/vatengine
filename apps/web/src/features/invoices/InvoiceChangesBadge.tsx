@@ -24,8 +24,8 @@ export function formatPhatHienLuc(iso: string): string {
   return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 }
 
-/** Nhãn trạng thái theo ĐÚNG trường đã đổi — Registry một-nguồn (statusLabels.ts, ui.md).
- * Mã chưa kiểm chứng tự rơi về "N (chưa rõ)" qua labelTtxly/labelTthai, không bịa nhãn. */
+/** Nhãn trạng thái theo ĐÚNG trường đã đổi — một nguồn (statusLabels.ts → @vat/domain,
+ * ui.md). Mã ngoài tập đã kiểm chứng tự rơi về "N (chưa rõ)", không bịa nhãn. */
 export function nhanTrangThai(truong: "ttxly" | "tthai", code: number | null): string {
   return (truong === "ttxly" ? labelTtxly(code) : labelTthai(code)).text;
 }

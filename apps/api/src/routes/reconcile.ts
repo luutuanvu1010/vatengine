@@ -1,8 +1,9 @@
 // Route đối chiếu (U10): GET /reconcile — chạy module đối chiếu ON-READ trên hóa đơn ĐÃ
 // đồng bộ (KHÔNG gọi GDT). Mọi truy vấn trong `withTenant` (RLS lớp 2) + lọc `tenant_id`
 // tường minh trong @vat/reconcile/@vat/query (lớp 1). tenantId lấy từ JWT (requireTenant).
-// Dùng bảng mã trạng thái MẶC ĐỊNH = production (RỖNG, chưa kiểm chứng — statusCodes.ts):
-// endpoint KHÔNG "chốt" mã hủy/thay thế cho tới khi có probe.
+// Dùng bảng mã trạng thái MẶC ĐỊNH = production (statusCodes.ts): chỉ cờ phần ĐÃ có bằng
+// chứng — `tthai=4` (bị thay thế, biên bản 2026-07-28). Mã HỦY thật và mọi `ttxly` vẫn
+// RỖNG ⇒ endpoint KHÔNG "chốt" chúng cho tới khi có bằng chứng.
 import { withTenant } from "@vat/db";
 import { invoiceFilterSchema } from "@vat/query";
 import { reconcile } from "@vat/reconcile";

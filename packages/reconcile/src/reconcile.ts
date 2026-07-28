@@ -14,7 +14,8 @@ import type { Finding, ReconcileReport, StatusCodeMap } from "./types";
 export interface ReconcileOptions {
   /** Dung sai lệch thuế (chuỗi numeric) — mặc định "0" (khớp tuyệt đối). */
   tolerance?: string | number;
-  /** Bảng mã hủy/thay thế — mặc định map production (RỖNG, chưa kiểm chứng — statusCodes.ts). */
+  /** Bảng mã hủy/thay thế — mặc định map production (statusCodes.ts: `thayThe.tthai=[4]`
+   * đã kiểm chứng; `huy` và mọi `ttxly` giữ RỖNG vì chưa có bằng chứng). */
   statusCodeMap?: StatusCodeMap;
   maxGapsPerGroup?: number;
 }
