@@ -10,7 +10,9 @@ import {
   EmptyState,
   ErrorState,
   Loading,
+  OChuaDoc,
   Popover,
+  SoChuaDoc,
 } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { labelTthai, labelTtxly } from "../../lib/statusLabels";
@@ -47,9 +49,20 @@ export function InvoiceChangesBadge() {
     <Popover
       ariaLabel="Hóa đơn vừa thay đổi"
       trigger={({ toggle }) => (
-        <Button type="button" variant="secondary" onClick={toggle}>
-          Hóa đơn vừa thay đổi{unreadCount > 0 ? ` (${unreadCount})` : ""}
-        </Button>
+        // Số chưa đọc hiện thành CHẤM ĐỎ góc nút (chủ dự án chốt 2026-07-28), không còn
+        // "(N)" trong chữ. Nhưng số vẫn phải tới được trình đọc màn hình ⇒ giữ nguyên ở
+        // `aria-label` với đúng chuỗi cũ; chấm tự đánh `aria-hidden` để không đọc trùng.
+        <OChuaDoc>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={toggle}
+            aria-label={`Hóa đơn vừa thay đổi${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
+          >
+            Hóa đơn vừa thay đổi
+            <SoChuaDoc so={unreadCount} />
+          </Button>
+        </OChuaDoc>
       )}
     >
       <div style={{ padding: "var(--sp-3)" }}>

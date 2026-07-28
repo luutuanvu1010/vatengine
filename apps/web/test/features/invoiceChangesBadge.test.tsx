@@ -178,3 +178,60 @@ describe("InvoiceChangesBadge", () => {
     );
   });
 });
+
+// Chấm đỏ số đếm chưa đọc (kiểu TikTok) — chủ dự án yêu cầu 2026-07-28.
+// Ràng buộc: SỐ vẫn phải tới được trình đọc màn hình. Nó rời khỏi chữ hiện trên nút nên
+// phải nằm ở `aria-label`; chính chấm thì `aria-hidden` để không bị đọc hai lần.
+describe("Chấm đỏ số chưa đọc", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("unreadCount > 0 → hiện chấm với đúng số, KHÔNG còn '(N)' trong chữ hiển thị", async () => {
+    mockRoutes({ list: { rows: [ROW_A], total: 1, unreadCount: 3 } });
+    renderWithProviders(<InvoiceChangesBadge />);
+    const nut = await screen.findByRole("button", { name: "Hóa đơn vừa thay đổi (3)" });
+    // Chữ nhìn thấy trên nút KHÔNG chứa số nữa — số nằm ở chấm.
+    expect(nut.textContent).toContain("Hóa đơn vừa thay đổi");
+    expect(nut.textContent).not.toContain("(3)");
+    const cham = within(nut).getByTestId("so-chua-doc");
+    expect(cham.textContent).toBe("3");
+  });
+
+  it("số vẫn tới được trình đọc màn hình qua aria-label; chấm KHÔNG bị đọc trùng", async () => {
+    mockRoutes({ list: { rows: [ROW_A], total: 1, unreadCount: 3 } });
+    renderWithProviders(<InvoiceChangesBadge />);
+    const nut = await screen.findByRole("button", { name: "Hóa đơn vừa thay đổi (3)" });
+    expect(nut.getAttribute("aria-label")).toBe("Hóa đơn vừa thay đổi (3)");
+    expect(within(nut).getByTestId("so-chua-doc").getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("unreadCount = 0 → KHÔNG có chấm (không để chấm đỏ trơ khi chẳng có gì mới)", async () => {
+    mockRoutes({ list: { rows: [], total: 0, unreadCount: 0 } });
+    renderWithProviders(<InvoiceChangesBadge />);
+    const nut = await screen.findByRole("button", { name: "Hóa đơn vừa thay đổi" });
+    expect(within(nut).queryByTestId("so-chua-doc")).toBeNull();
+  });
+
+  it("trên 99 → cắt thành '99+' để chấm không phình làm vỡ hàng nút", async () => {
+    mockRoutes({ list: { rows: [ROW_A], total: 1, unreadCount: 1234 } });
+    renderWithProviders(<InvoiceChangesBadge />);
+    const nut = await screen.findByRole("button", { name: "Hóa đơn vừa thay đổi (1234)" });
+    expect(within(nut).getByTestId("so-chua-doc").textContent).toBe("99+");
+  });
+
+  it("đúng 99 vẫn hiện đủ số (biên, không cắt sớm)", async () => {
+    mockRoutes({ list: { rows: [ROW_A], total: 1, unreadCount: 99 } });
+    renderWithProviders(<InvoiceChangesBadge />);
+    const nut = await screen.findByRole("button", { name: "Hóa đơn vừa thay đổi (99)" });
+    expect(within(nut).getByTestId("so-chua-doc").textContent).toBe("99");
+  });
+
+  it("tô bằng token --notify-*, KHÔNG mượn --danger-* (07-DESIGN_TOKENS: không dùng lẫn)", async () => {
+    mockRoutes({ list: { rows: [ROW_A], total: 1, unreadCount: 2 } });
+    renderWithProviders(<InvoiceChangesBadge />);
+    const cham = within(
+      await screen.findByRole("button", { name: "Hóa đơn vừa thay đổi (2)" }),
+    ).getByTestId("so-chua-doc");
+    expect(cham.style.background).toBe("var(--notify-600)");
+    expect(cham.style.color).toBe("var(--notify-fg)");
+  });
+});

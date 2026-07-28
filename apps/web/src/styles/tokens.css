@@ -11,6 +11,10 @@
   --danger-600: #d93025;
   --danger-50: #fce8e6;
   --danger-200: #f5c6c0;
+  /* notify (đỏ SỐ ĐẾM CHƯA ĐỌC — token thứ ba, TÁCH khỏi brand lẫn danger; chỉ dùng cho
+     chấm số chưa đọc, xem 07-DESIGN_TOKENS.md §1) */
+  --notify-600: #fe2c55;
+  --notify-fg: #ffffff;
   /* info (xanh dương) */
   --info-600: #1a73e8;
   --info-700: #1558b0;

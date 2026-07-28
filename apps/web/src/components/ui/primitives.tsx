@@ -284,6 +284,51 @@ export function Stat({
   );
 }
 
+// --- Số đếm chưa đọc (chấm đỏ nổi góc, kiểu ứng dụng di động) -------------------------
+// Chủ dự án chốt 2026-07-28. Token RIÊNG `--notify-*` (không mượn `--danger-*` vốn chỉ
+// dành cho cảnh báo lệch thuế/lỗi phá hủy — 07-DESIGN_TOKENS §1 "không dùng lẫn").
+//
+// A11Y: chấm mang `aria-hidden` vì con số phải tới trình đọc màn hình qua `aria-label` của
+// CHÍNH nút chứa nó — nếu để cả hai cùng đọc, người dùng nghe số hai lần.
+// TƯƠNG TÁC: đặt chấm BÊN TRONG nút (mốc định vị là `OChuaDoc` bọc ngoài). Chấm lệch ra
+// ngoài khung nút 6px; nhờ nằm trong nút, cú bấm trúng phần lòi ra đó vẫn nổi bọt lên nút
+// chứ không rơi vào khoảng chết. Vì vậy KHÔNG đặt `pointerEvents: none` — làm thế sẽ vô
+// hiệu hóa đúng phần lòi ra ấy.
+export function SoChuaDoc({ so, tran = 99 }: { so: number; tran?: number }) {
+  if (so <= 0) return null;
+  return (
+    <span
+      data-testid="so-chua-doc"
+      aria-hidden="true"
+      className="tabular"
+      style={{
+        position: "absolute",
+        top: "-6px",
+        right: "-6px",
+        minWidth: "18px",
+        height: "18px",
+        padding: "0 5px",
+        borderRadius: "var(--radius-pill)",
+        background: "var(--notify-600)",
+        color: "var(--notify-fg)",
+        fontSize: "var(--fs-xs)",
+        fontWeight: "var(--fw-bold)",
+        lineHeight: "18px",
+        textAlign: "center",
+        boxShadow: "0 0 0 2px var(--surface-card)",
+      }}
+    >
+      {so > tran ? `${tran}+` : so}
+    </span>
+  );
+}
+
+/** Bọc một nút để đặt được `SoChuaDoc` ở góc — chỗ DUY NHẤT khai `position: relative` cho
+ * mẫu này, để `features/` không phải tự tô. */
+export function OChuaDoc({ children }: { children: ReactNode }) {
+  return <span style={{ position: "relative", display: "inline-flex" }}>{children}</span>;
+}
+
 // --- Badge / Chip (pill) --------------------------------------------------------------
 // Pill nhỏ cho nhãn phụ (kỳ đang xem, tách theo chiều…). Tone neutral mặc định; info/success
 // dùng cho tách-theo-chiều nếu chủ dự án bật (mặc định TẮT).
