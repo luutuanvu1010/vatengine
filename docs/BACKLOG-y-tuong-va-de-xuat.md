@@ -875,5 +875,36 @@ lạc phạm vi U36.
   làm tròn nhiều dòng. Phải loại trừ hai yếu tố này TRƯỚC khi coi là phát hiện — nếu không sẽ
   lặp lại đúng cái bẫy false-positive mà `taxIntegrity` đã cẩn thận tránh (xem chú thích
   `packages/reconcile/src/taxIntegrity.ts:2-8`).
-- **Liên quan:** nếu bật `SHOW_RECONCILE`, nên làm phép kiểm này cùng lúc — bằng không màn Đối
-  chiếu sẽ ngầm nói "6,3% hóa đơn của bạn không có vấn đề gì", trong khi thực tế là chưa hỏi tới.
+- **Liên quan:** `SHOW_RECONCILE` đã BẬT ngày 2026-07-29 mà chưa có phép kiểm này ⇒ màn Đối
+  chiếu hiện ngầm nói "6,3% hóa đơn của bạn không có vấn đề gì", trong khi thực tế là chưa hỏi
+  tới. Đã ghi cảnh báo đó vào chú thích `apps/web/src/lib/featureFlags.ts`.
+
+### Đã THỬ và BẾ TẮC (2026-07-29) — đọc trước khi làm lại, đừng lặp
+
+Thử ba công thức trên 2.126 hóa đơn mẫu số 2 có dòng hàng, dung sai 0:
+
+| Công thức | Số hóa đơn lệch |
+|---|---|
+| `Σ thtien(dòng) = tgtttbso` | **25** |
+| `Σ (thtien − stckhau) = tgtttbso` (trừ chiết khấu MỨC DÒNG) | **28** — tệ hơn |
+| `Σ thtcthue(dòng) = tgtttbso` | **2.126** — trường này rỗng, vô dụng |
+
+Trừ chiết khấu ở mức hóa đơn (`ttcktmai`) cũng làm tệ hơn (25 → 28).
+
+**Điều đã biết chắc:**
+- Phân bố **nhị phân tuyệt đối**: 2.098 khớp ĐÚNG 0 đ, 28 lệch > 1.000 đ, KHÔNG ca nào ở giữa
+  ⇒ không có nhiễu làm tròn, dung sai 0 là đúng.
+- `Σ dòng / tgtttbso` **luôn ≥ 1** và rơi vào các mức RỜI RẠC lặp lại: `1.0020` xuất hiện 13
+  lần, rồi `1.0301`, `1.0593`, `1.0621`, `1.1678`… Một tỉ lệ lặp lại đúng 13 lần là **quy tắc
+  nghiệp vụ**, không phải 13 lỗi độc lập.
+- Hóa đơn 1 dòng lệch 16/2.112 (0,8%); hóa đơn **nhiều dòng lệch 12/14 (86%)**.
+- `dong_hang_hoa` **chưa map** `stckhau` (số tiền chiết khấu) và `tlckhau` (tỉ lệ chiết khấu)
+  ra cột — hai trường này CÓ trong `raw_json` của dòng.
+
+**Vì sao dừng:** chưa giải thích được 28 ca ⇒ dựng phép kiểm bây giờ là gắn nhãn "lệch" cho
+thứ nhiều khả năng là chiết khấu hợp lệ. Đúng cái bẫy false-positive mà `taxIntegrity` đã
+cẩn thận tránh (`packages/reconcile/src/taxIntegrity.ts:2-8`).
+
+**Bước tiếp theo phải làm TRƯỚC khi code:** map `stckhau`/`tlckhau` ra cột rồi đo lại; nếu vẫn
+không khớp thì soi tay 2–3 hóa đơn có tỉ lệ `1.0020` xem phần chênh nằm ở đâu. Chỉ khi giải
+thích được 28 ca mới chốt công thức.

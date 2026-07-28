@@ -62,9 +62,8 @@ where tgtcthue is not null and tgtthue is not null and tgtttbso is not null;
 ⇒ 15 phát hiện trên 31.807 hóa đơn là **tỷ lệ rất thấp, hoàn toàn dùng được** — không có
 chuyện "bật lên là ngập cảnh báo". Và 11/15 ca lệch trên 100.000 đ là **đáng xem thật**.
 
-**Đề xuất: bật `SHOW_RECONCILE = true`.** Nhưng đây là quyết định của chủ dự án — chính chủ
-dự án đã tắt nó ngày 22/07. Điều thay đổi so với lúc đó: nay đã có số đo cho thấy nó không
-nhiễu. Không tự bật.
+**✅ ĐÃ BẬT `SHOW_RECONCILE = true` ngày 2026-07-29** (chủ dự án chốt sau khi xem số đo trên).
+Kèm chú thích trong `featureFlags.ts` cảnh báo màn này CHƯA phủ nhóm hóa đơn bán hàng — xem §3.
 
 ---
 
@@ -175,7 +174,7 @@ Hai cơ chế **không che nhau** — bỏ `soMaLa` đi thì rủi ro 7.1 của 
 | # | Việc | Cỡ | Ai quyết |
 |---|---|---|---|
 | 1 | **Hiện `soDuocDieuChinh`** trong `ThongBaoTrangThai.tsx` — API tính sẵn, giao diện quên hiện (lỗi bỏ sót U36.3) | ~1 giờ | tự làm được |
-| 2 | **Bật `SHOW_RECONCILE`** — 15 phát hiện, 11 ca > 100.000 đ, tỷ lệ 0,047% không nhiễu | ~30 phút | **chủ dự án** (chính họ đã tắt 22/07) |
+| 2 | ~~Bật `SHOW_RECONCILE`~~ **✅ XONG 29/07** | — | — |
 | 3 | ~~Probe: vì sao 2.138 hóa đơn sco thiếu cột tiền~~ **ĐÃ XONG 29/07** — không phải lỗi, là hóa đơn bán hàng (mẫu số 2) vốn không có thuế GTGT. Việc còn lại: **thêm phép kiểm `Σ dòng hàng = tgtttbso`** cho nhóm này (§3.2) | vừa | chủ dự án |
 | 4 | **Cảnh báo vắt kỳ** (hóa đơn kỳ này bị sửa bởi hóa đơn kỳ sau) — cần ghép cặp qua `shdgoc` | lớn | **U37** |
 

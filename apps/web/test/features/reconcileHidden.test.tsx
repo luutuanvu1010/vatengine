@@ -3,10 +3,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
-// Cờ SHOW_RECONCILE tắt (quyết định chủ dự án 2026-07-22): trang "Đối chiếu" ẩn khỏi bảng
-// điều khiển, module @vat/reconcile + GET /reconcile giữ nguyên. Hai ca dưới khoá ĐÚNG hai
-// điểm nối dây — mục menu (Sidebar) và route (AppRouter) — để việc bật lại phải là một
-// thay đổi có chủ đích, không xảy ra do vô tình.
+// Cờ SHOW_RECONCILE — trang "Đối chiếu".
+//
+// LỊCH SỬ: tắt 2026-07-22 ("chức năng Lệch thuế chưa cần thiết"); BẬT LẠI 2026-07-29 sau khi
+// đo trên production — 15/31.807 hóa đơn đang lệch thuế (0,047%, không nhiễu), trong đó 11 ca
+// lệch > 100.000 đ. Số đo + lập luận: docs/RA-SOAT-thong-bao-lech-hoa-don-2026-07-28.md §2.
+//
+// Hai ca dưới khoá ĐÚNG hai điểm nối dây — mục menu (Sidebar) và route (AppRouter). Trước đây
+// chúng khoá trạng thái ẨN, nay khoá trạng thái HIỆN; ý đồ KHÔNG đổi: bật/tắt trang này phải
+// là thay đổi CÓ CHỦ ĐÍCH, không xảy ra do sửa một chỗ mà quên chỗ kia.
 
 /** Phiên đã có cookie hợp lệ: mockFetch KHÔNG khai `login` ⇒ /me trả hồ sơ ngay. */
 function moPhienDaDangNhap() {
@@ -21,22 +26,22 @@ function moPhienDaDangNhap() {
   });
 }
 
-describe("Ẩn trang Đối chiếu (SHOW_RECONCILE tắt)", () => {
+describe("Trang Đối chiếu (SHOW_RECONCILE bật)", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("sidebar KHÔNG có mục 'Đối chiếu'", async () => {
+  it("sidebar CÓ mục 'Đối chiếu'", async () => {
     moPhienDaDangNhap();
     renderWithProviders(<AppRouter />, "/");
-    // Chờ app vào được bên trong rồi mới khẳng định thiếu mục menu — nếu khẳng định sớm,
-    // test xanh giả vì lúc đó còn đang ở màn "Đang kiểm tra phiên".
+    // Chờ app vào được bên trong rồi mới khẳng định — khẳng định sớm sẽ đọc nhầm lúc còn ở
+    // màn "Đang kiểm tra phiên".
     await screen.findByRole("link", { name: "Danh sách hóa đơn" });
-    expect(screen.queryByRole("link", { name: "Đối chiếu" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Đối chiếu" })).toBeInTheDocument();
   });
 
-  it("vào thẳng /reconcile → tiếp đất ở Tổng quan (catch-all), không phải trang Đối chiếu", async () => {
+  it("vào thẳng /reconcile → tiếp đất ĐÚNG trang Đối chiếu, không rơi về Tổng quan", async () => {
     moPhienDaDangNhap();
     renderWithProviders(<AppRouter />, "/reconcile");
-    expect(await screen.findByRole("heading", { level: 1, name: "Tổng quan" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1, name: "Đối chiếu" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Đối chiếu" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1, name: "Tổng quan" })).not.toBeInTheDocument();
   });
 });
