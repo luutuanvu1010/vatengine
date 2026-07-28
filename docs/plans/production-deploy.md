@@ -185,8 +185,9 @@ _Kiểm chứng:_ connection string là `vat_app@...`, KHÔNG `neondb_owner`. N�
 
 **Bước 1b — ⚠️ PRECHECK + áp migration Drizzle đang chờ (CHẶN — `.claude/rules/deploy.md`):**
 ```sh
-DATABASE_URL="$(grep '^DATABASE_URL=' packages/db/.dev.vars | cut -d= -f2-)" npm run migrate -w packages/db
+make migrate
 ```
+_Từ 2026-07-28, `make migrate` TỰ nạp `DATABASE_URL` từ `packages/db/.dev.vars`_ (biến môi trường có sẵn vẫn thắng file, cho CI). Trước đó phải gõ tay `DATABASE_URL="$(grep '^DATABASE_URL=' packages/db/.dev.vars | cut -d= -f2-)" npm run migrate -w packages/db` — quên là gặp `[x] url: ''`, đã mất thời gian hai lần (gotcha U17b và 28/07). Không dùng `source .dev.vars`: chuỗi chứa `&` làm shell vỡ.
 _Kiểm chứng:_ `[✓] migrations applied successfully!`. **Chạy TRƯỚC Bước 2 mọi lần**, kể cả khi không chắc đã có migration mới — an toàn để chạy lại (idempotent). Bỏ qua bước này là nguyên nhân sự cố "đăng nhập vỡ" 2026-07-16 (`/me` 500 vì cột `ban_quyen`/`ghi_chu` chưa có trên DB dù code đã deploy).
 
 **Bước 2 — Phase 1 backend (sau khi dọn DB + xoay owner theo §PHASE 1):**
