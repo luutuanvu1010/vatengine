@@ -406,6 +406,11 @@ Tenant MST `4201969169`, chiều **Bán ra**:
 - [x] Thông báo hiện đúng số hóa đơn + tiền đã loại, **tách theo chiều** · *đã đối chiếu nguyên văn với mẫu §4b kế hoạch: "Kỳ 01/07 – 31/07/2026 · Bán ra / 3 hóa đơn bị thay thế - đã loại khỏi tổng: thuế -1.711.111 ₫, tổng thanh toán -23.100.000 ₫ / 3 hóa đơn thay thế và 1 hóa đơn điều chỉnh lập trong kỳ - đã tính vào tổng"*
 - [x] Dòng *"Thuế phải nộp trên báo cáo giảm 1.711.111 ₫"* xuất hiện **một lần**, kèm chú
       giải "số thuế phải nộp thật không đổi" · *xác nhận 2026-07-28*
+      - ⚠️ **Câu chữ đã đổi 2026-07-29** (chủ dự án chốt) — ô nghiệm thu trên giữ nguyên làm
+        dấu vết lịch sử, nhưng tiêu chí HIỆN HÀNH là: dòng đó xuất hiện một lần dưới dạng
+        *"Việc loại hóa đơn bị thay thế làm thuế phải nộp trên báo cáo giảm 1.711.111 ₫."* và
+        **KHÔNG** còn chú giải. Lý do + phạm vi: `docs/plans/U36-tien-do.md` mục "Sửa đổi sau
+        nghiệm thu".
 - [x] Tải file Excel → có 3 cột trạng thái; hóa đơn mã 4 **vẫn có trong file** với
       "Tính vào tổng" = **Không** · *đã đối chiếu MÁY trên file thật
       `docs/doi_chieu_data/vatengine-export-01072026-31072026.xlsx` (2026-07-28): 19 cột đúng

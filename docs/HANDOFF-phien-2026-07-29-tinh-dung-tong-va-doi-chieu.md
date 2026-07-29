@@ -84,6 +84,12 @@ bản gốc cho bên mua" (cỡ mẫu = 1) ⇒ mã và test cố ý xử lý hai
 - Dòng *"Từ 28/07/2026, hóa đơn bị thay thế không còn được cộng vào tổng"* — `U36-plan.md`
   §7.2 ghi "bắt buộc" nhưng đã GỠ: là thông báo **di trú**, chỉ có nghĩa với người đã thấy số
   cũ, mà ghim vĩnh viễn và thừa. Nội dung nằm ở `changelog.ts` v2.0 → trang Lịch sử cập nhật.
+- Chú giải *"(số thuế phải nộp thật không đổi - trước đây phần mềm tính dư)"* — `U36-plan.md`
+  §2.1/§4b cũng ghi "bắt buộc", đã GỠ 2026-07-29 **kèm viết lại câu tiêu đề** thành *"Việc
+  loại hóa đơn bị thay thế làm thuế phải nộp trên báo cáo giảm X ₫."* Hai việc phải đi cùng
+  nhau: câu cũ không nêu giảm SO VỚI GÌ nên mới cần chú giải; câu mới tự nêu mốc so sánh nên
+  chú giải thừa thật. Gỡ một mình chú giải = mất rào chắn, giữ nguyên cái bẫy. Chi tiết:
+  `U36-tien-do.md` mục "Sửa đổi sau nghiệm thu".
 
 ## 5. Đang kẹt — cần bàn thêm
 

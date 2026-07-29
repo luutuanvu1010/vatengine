@@ -49,4 +49,23 @@ Lưu ý: U36.3 đổi hợp đồng `GET /invoices/summary`; `vat-api` phải l�
   ghim vĩnh viễn, và thừa vì khối phía trên đã nêu cụ thể hơn. Nội dung chuyển sang
   `apps/web/src/lib/changelog.ts` v2.0 → trang "Lịch sử cập nhật". **Đừng thêm lại** khi đọc
   §7.2 của kế hoạch.
+- ⚠️ **Đảo thêm một quyết định của kế hoạch:** §2.1 ghi *"Cách đọc phải ghi rõ trên giao
+  diện: số thuế phải nộp thật không đổi — chỉ là trước đây phần mềm tính dư"*, và §4b đưa nó
+  thành chú giải in nghiêng sau dòng thuế phải nộp. Chủ dự án chốt **GỠ chú giải** ngày
+  2026-07-29, kèm **viết lại câu tiêu đề** — hai việc phải đi cùng nhau:
+  - Chú giải gánh HAI việc: rào chắn hiểu nhầm ("thuế thật không đổi") và một câu DI TRÚ
+    ("trước đây phần mềm tính dư"). Chỉ vế thứ hai là thừa.
+  - Nhưng thứ **tạo ra** nhu cầu rào chắn chính là câu tiêu đề cũ: *"Thuế phải nộp trên báo
+    cáo giảm X ₫"* không nêu giảm **so với cái gì**. Gỡ chú giải mà giữ nguyên câu đó là gỡ
+    mất rào chắn nhưng vẫn để nguyên cái bẫy.
+  - Câu hiện hành tự nêu mốc so sánh: *"Việc loại hóa đơn bị thay thế làm thuế phải nộp trên
+    báo cáo giảm 1.711.111 ₫."* Mốc chuyển từ "phiên bản phần mềm cũ" sang "dữ liệu của chính
+    kỳ này" ⇒ người dùng MỚI đọc vẫn hiểu, và chú giải thành thừa **thật** chứ không bị cắt
+    cụt. Vế "số thuế phải nộp thật" không còn được khẳng định — mã chỉ mô tả một phép tính,
+    không phát biểu thay về nghĩa vụ thuế của doanh nghiệp (nguyên tắc bằng chứng).
+  - QĐ-12 (phép trừ hai chiều `mua vào − bán ra`) **giữ nguyên** — `deltaThuePhaiNop` không
+    đổi một dòng nào. Chỉ câu chữ trình bày đổi.
+  - Phạm vi: `apps/web/src/features/invoices/ThongBaoTrangThai.tsx` + golden test tương ứng
+    trong `apps/web/test/features/thongBaoTrangThai.test.tsx`. **Đừng thêm lại** khi đọc §2.1
+    hay §4b của kế hoạch.
 
