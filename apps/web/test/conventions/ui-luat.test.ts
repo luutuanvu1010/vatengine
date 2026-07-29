@@ -71,3 +71,50 @@ describe("Luật ui.md — ô nhập/ô chọn dùng primitive, không tô kiể
     expect(TEP.length).toBeGreaterThan(10);
   });
 });
+
+// --- Thang cỡ chữ: một nguồn sự thật + thân 16px (QĐ-9b) --------------------------------
+// 07-DESIGN_TOKENS.md tự tuyên bố là nguồn DUY NHẤT và `tokens.css` chỉ là serialization của
+// nó — nhưng trước đây KHÔNG có gì ép hai bên khớp, nên lệch được mà không ai biết. Hai phép
+// kiểm dưới đây biến lời tuyên bố đó thành cổng máy.
+const DUONG_DOC_TOKEN = resolve(process.cwd(), "..", "..", "docs", "07-DESIGN_TOKENS.md");
+const DUONG_TOKENS_CSS = resolve(GOC, "styles", "tokens.css");
+
+/** Rút mọi cặp `--fs-*: <px>` từ một nguồn CSS bất kỳ (block ```css trong .md cũng khớp). */
+function docCoChu(src: string): Record<string, string> {
+  const ra: Record<string, string> = {};
+  for (const [, ten, px] of src.matchAll(/(--fs-[\w-]+)\s*:\s*(\d+px)/g)) {
+    if (ten && px) ra[ten] = px;
+  }
+  return ra;
+}
+
+describe("Luật ui.md — thang cỡ chữ một nguồn, thân 16px (QĐ-9b)", () => {
+  const doc = docCoChu(readFileSync(DUONG_DOC_TOKEN, "utf8"));
+  const css = docCoChu(readFileSync(DUONG_TOKENS_CSS, "utf8"));
+
+  it("tokens.css khớp NGUYÊN VĂN thang trong 07-DESIGN_TOKENS.md §7", () => {
+    expect(Object.keys(css).length, "tokens.css không có --fs-* nào ⇒ regex hỏng").toBeGreaterThan(
+      5,
+    );
+    expect(css, "sửa docs/07-DESIGN_TOKENS.md TRƯỚC rồi đồng bộ về tokens.css").toEqual(doc);
+  });
+
+  it("thân là 16px và mọi bậc tiêu đề LỚN HƠN thân", () => {
+    const px = (t: string) => Number.parseInt(css[t] ?? "", 10);
+    expect(px("--fs-base")).toBe(16);
+    for (const t of ["--fs-lg", "--fs-xl", "--fs-2xl", "--fs-3xl"]) {
+      expect(px(t), `${t} phải lớn hơn thân 16px`).toBeGreaterThan(16);
+    }
+    // Bậc tăng đơn điệu — chống việc sửa lẻ một token làm thang gãy.
+    expect([px("--fs-lg"), px("--fs-xl"), px("--fs-2xl"), px("--fs-3xl")]).toEqual([
+      20, 24, 30, 36,
+    ]);
+  });
+
+  it("primitive ChuPhu (câu văn để ĐỌC) dùng --fs-base, không phải --fs-sm", () => {
+    const src = readFileSync(resolve(GOC, "components", "ui", "primitives.tsx"), "utf8");
+    const than = src.slice(src.indexOf("export function ChuPhu"));
+    expect(than).toContain('fontSize: "var(--fs-base)"');
+    expect(boChuThich(than)).not.toContain("var(--fs-sm)");
+  });
+});
