@@ -908,3 +908,26 @@ cẩn thận tránh (`packages/reconcile/src/taxIntegrity.ts:2-8`).
 **Bước tiếp theo phải làm TRƯỚC khi code:** map `stckhau`/`tlckhau` ra cột rồi đo lại; nếu vẫn
 không khớp thì soi tay 2–3 hóa đơn có tỉ lệ `1.0020` xem phần chênh nằm ở đâu. Chỉ khi giải
 thích được 28 ca mới chốt công thức.
+
+## [2026-07-29] U37c — ba việc từ review bảo mật, chưa đến lượt làm
+
+**1. Token backfill dẫn xuất từ bí mật đã phơi (đã đo, rủi ro hiện tại ≈ 0).**
+Migration `0021` backfill cột `token` bằng `regexp_replace(khoa_r2, ...)` — tức lấy lại chính
+đoạn ngẫu nhiên vốn nằm trần trong URL công khai cũ. Với 3 hàng cũ, "bí mật mới" TRÙNG bí mật
+đã từng công khai. Đo 2026-07-29: 2 hàng `da_thu_hoi`, 1 hàng `dang_tao` — cả ba đều trả 404
+qua `/tai/`, và custom domain đã gỡ nên URL cũ cũng chết. Chủ dự án xác nhận chưa gửi link nào
+cho khách. ⇒ **không có phơi nhiễm sống**, nhưng nếu hàng `dang_tao` kia có ngày được đóng gói
+thì nó sẽ `san_sang` với một token từng bị công khai. Việc cần làm: xoay token cho các hàng
+backfill, hoặc dọn hàng `dang_tao` treo. *Bài học chung: đừng dẫn xuất bí mật MỚI từ bí mật CŨ
+đã bị phơi — sinh mới độc lập, kể cả khi backfill.*
+
+**2. `GET /tai/:token` không có giới hạn tốc độ.** Đây là route duy nhất của ứng dụng không
+qua throttle nào. Ai có token hợp lệ tải lặp được vô hạn ⇒ (a) `so_luot_tai` — vốn thêm vào để
+làm *dữ kiện điều tra khi nghi lộ* — dễ bị thổi phồng, mất giá trị pháp chứng; (b) chi phí
+egress R2 + ghi DB không chặn. Cần rate-limit theo token hoặc IP trước khi coi `so_luot_tai`
+là số liệu đáng tin.
+
+**3. Kênh phụ độ trễ giữa bốn ca 404.** Ba ca (token sai / đã thu hồi / hết hạn) dừng sau MỘT
+truy vấn DB; ca "mất tệp" tốn thêm một vòng gọi R2 ⇒ phân biệt được bằng thời gian đáp. Tiêu
+chí đặt ra là "bốn ca KHÔNG phân biệt được nhau", mà test hiện chỉ so status + thân phản hồi.
+Rủi ro thấp (chỉ lộ "gói từng sẵn sàng nhưng mất object"), nhưng đúng là chưa khóa hết.
