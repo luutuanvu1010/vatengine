@@ -5,6 +5,7 @@ export * from "./boDemPhienBan";
 export * from "./cauHinhHeThong";
 export * from "./dongBoThatBai";
 export * from "./dongHangHoa";
+export * from "./goiChiaSe";
 export * from "./goiDichVu";
 export * from "./hoaDon";
 export * from "./lanDongBo";

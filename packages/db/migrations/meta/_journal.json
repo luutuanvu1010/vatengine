@@ -141,6 +141,13 @@
       "when": 1785645840000,
       "tag": "0019_u37a_tep_hoa_don_goc",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785645900000,
+      "tag": "0020_u37b_goi_chia_se",
+      "breakpoints": true
     }
   ]
 }
