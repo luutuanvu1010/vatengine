@@ -1,6 +1,6 @@
 // U37b Gói 4b — REST tạo gói hóa đơn gốc cho MỘT khách hàng. Đi ĐƯỜNG THẬT: createApp +
 // auth JWT + route + withTenant/RLS. Offline, không mạng.
-import { goiChiaSe, taiKhoanThue } from "@vat/db";
+import { auditLog, goiChiaSe, taiKhoanThue } from "@vat/db";
 import type { HoSoGocMessage } from "@vat/sync";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
@@ -221,6 +221,26 @@ describe("REST POST /goi-chia-se (integration, PGlite)", () => {
 
     expect(res.status).toBe(403);
     expect(q.sent).toHaveLength(0);
+  });
+
+  // Bước TẠO là chỗ người dùng CHỌN kéo hồ sơ gốc của khách hàng nào, kỳ nào — tức vừa là
+  // "đồng bộ hóa đơn" vừa là "xuất dữ liệu" theo `.claude/rules/security.md`, cả hai đều
+  // bắt buộc ghi audit. Trước bản này chỉ hai bước phát hành/thu hồi có ghi, nên gói được
+  // TẠO rồi bỏ đó (không phát hành) là không tra được qua audit_log — đúng kịch bản cần
+  // điều tra nhất khi nghi lạm dụng. Phát hiện ở review bảo mật U37b.
+  it("tạo gói → GHI audit_log, không để bước kéo dữ liệu không dấu vết", async () => {
+    await seedHoaDon(tenantA, "1");
+    const res = await goi(HOP_LE);
+    expect(res.status).toBe(201);
+
+    const rows = await db.select().from(auditLog);
+    const ghi = rows.filter((r) => r.hanhDong === "tao_goi_chia_se");
+    expect(ghi).toHaveLength(1);
+    expect(ghi[0]?.tenantId).toBe(tenantA);
+    // Tra cứu điều tra cần trả lời "kéo của khách nào, kỳ nào, bao nhiêu hóa đơn".
+    expect(ghi[0]?.chiTiet).toMatchObject({ nmmst: KHACH, tuNgay: "2026-07-01", soHoaDon: 1 });
+    // Khóa R2 là mật khẩu của tệp công khai — audit log nhiều người đọc được, không ghi vào.
+    expect(JSON.stringify(ghi[0]?.chiTiet)).not.toContain(".zip");
   });
 
   it("KHÔNG có JWT → 401", async () => {

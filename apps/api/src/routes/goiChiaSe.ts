@@ -173,8 +173,8 @@ export function goiChiaSeRoutes(deps: AppDeps) {
       const khoaR2 = sinhKhoaR2(now);
       const hetHanLuc = new Date(now.getTime() + SO_NGAY_SONG * 86_400_000);
 
-      const rows = await withTenant(db, tenantId, (tx) =>
-        tx
+      const rows = await withTenant(db, tenantId, async (tx) => {
+        const r = await tx
           .insert(goiChiaSe)
           .values({
             tenantId,
@@ -187,8 +187,28 @@ export function goiChiaSeRoutes(deps: AppDeps) {
             hetHanLuc,
             trangThai: "dang_tao",
           })
-          .returning({ id: goiChiaSe.id }),
-      );
+          .returning({ id: goiChiaSe.id });
+
+        // Bước TẠO là chỗ người dùng CHỌN kéo hồ sơ gốc của khách hàng nào, kỳ nào — vừa là
+        // "đồng bộ hóa đơn" vừa là "xuất dữ liệu", cả hai đều bắt buộc ghi audit theo
+        // `.claude/rules/security.md`. Bản đầu chỉ ghi ở hai bước phát hành/thu hồi, nên gói
+        // TẠO rồi bỏ đó (không phát hành) là không tra được qua `audit_log` — đúng kịch bản
+        // cần điều tra nhất khi nghi lạm dụng. Phát hiện ở review bảo mật U37b.
+        //
+        // Ghi TRONG CÙNG giao dịch với việc chèn gói: tách ra thì có cảnh gói tạo xong mà vết
+        // thì mất, và đó là chiều hỏng nguy hiểm.
+        //
+        // `chiTiet` KHÔNG chứa `khoa_r2` — cùng lý do như hai chỗ kia: audit log đọc được bởi
+        // nhiều người trong tenant, mà khóa là mật khẩu của tệp công khai.
+        await tx.insert(auditLog).values({
+          tenantId,
+          hanhDong: "tao_goi_chia_se",
+          doiTuong: r[0]?.id,
+          chiTiet: maskSensitive({ nmmst, tuNgay, denNgay, soHoaDon: hoaDons.length }),
+        });
+
+        return r;
+      });
       const id = rows[0]?.id;
       if (!id) return c.json({ error: "server_error" }, 500);
 

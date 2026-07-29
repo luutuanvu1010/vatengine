@@ -56,8 +56,11 @@ export const goiChiaSe = pgTable(
      * ép, và `audit_log` ghi độc lập ai phát hành. Ghi nhận để không quên. */
     nguoiTao: uuid("nguoi_tao"),
     taoLuc: timestamp("tao_luc", { withTimezone: true }).notNull().defaultNow(),
-    /** Mốc hết hạn dự kiến. Việc xóa THẬT do R2 Lifecycle làm (QĐ-6) và Cloudflare chỉ
-     * bảo đảm xóa "trong vòng 24h sau mốc" ⇒ giao diện phải nói "khoảng 30 ngày". */
+    /** Mốc hết hạn dự kiến. Việc xóa THẬT do R2 Lifecycle làm (QĐ-6, sửa 2026-07-29: 30
+     * ngày → 1 TUẦN) và Cloudflare chỉ bảo đảm xóa "trong vòng 24h sau mốc" ⇒ giao diện
+     * phải nói "khoảng 1 tuần", KHÔNG hứa mốc chính xác. Nguồn số ngày là hằng
+     * `SO_NGAY_SONG` ở `apps/api/src/routes/goiChiaSe.ts` — chú thích này chỉ mô tả, đừng
+     * gõ lại con số ở nơi thứ ba. */
     hetHanLuc: timestamp("het_han_luc", { withTimezone: true }).notNull(),
     /** TRANG_THAI_GOI_CHIA_SE. */
     trangThai: text("trang_thai").notNull(),
