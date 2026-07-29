@@ -69,20 +69,27 @@
 - **Font chữ:** `--font-sans: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;` — Be Vietnam Pro hỗ trợ **đầy đủ dấu tiếng Việt**, nét dày (brief §5). Icon: `'Material Symbols Outlined'`.
 - **Trọng lượng:** `--fw-regular:400` · `--fw-medium:500` · `--fw-semibold:600` · `--fw-bold:700` · `--fw-extrabold:800`. Tiêu đề/nhãn ưu tiên 600–800 (nét đậm dễ đọc).
 - **Số tabular:** cột tiền + số liệu dùng `font-variant-numeric: tabular-nums;` (class tiện ích `.tabular`).
-- **Thang cỡ chữ** (chuẩn hóa từ cụm 11.5–34px của export):
+- **Thang cỡ chữ — neo ở thân 16px** (chuẩn hóa từ cụm 11.5–34px của export; **tái neo 2026-07-29**, xem QĐ-9b bên dưới). Tiêu đề tỉ lệ theo thân với bước ~1.25×:
 
-| Token | px | Dùng |
-|---|---|---|
-| `--fs-xs` | 12 | Caption, nhãn nhỏ, mã |
-| `--fs-sm` | 13 | Phụ, meta bảng |
-| `--fs-base` | 16 | Thân mặc định, ô bảng |
-| `--fs-md` | 16 | Nhấn, input |
-| `--fs-lg` | 18 | Tiêu đề thẻ |
-| `--fs-xl` | 20 | Tiêu đề mục |
-| `--fs-2xl` | 24 | Tiêu đề trang |
-| `--fs-3xl` | 30 | Số liệu thẻ lớn (Dashboard) |
+| Token | px | Bội số so với thân | Dùng |
+|---|---|---|---|
+| `--fs-xs` | 13 | 0.8× | Caption, mã, nhãn trong chip — **KHÔNG dùng cho câu văn** |
+| `--fs-sm` | 14 | 0.875× | Nhãn phụ, meta bảng — **KHÔNG dùng cho câu văn** |
+| `--fs-base` | 16 | 1× | **Thân mặc định — MỌI đoạn để đọc**, ô bảng |
+| `--fs-md` | 16 | 1× | Nhấn, input |
+| `--fs-lg` | 20 | 1.25× | Tiêu đề thẻ |
+| `--fs-xl` | 24 | 1.5× | Tiêu đề mục |
+| `--fs-2xl` | 30 | 1.875× | Tiêu đề trang |
+| `--fs-3xl` | 36 | 2.25× | Số liệu thẻ lớn (Dashboard) |
 
 Line-height: thân `1.5`, tiêu đề `1.25`.
+
+**QĐ-9b (chủ dự án chốt 2026-07-29) — mở rộng QĐ-9 từ "vá chỗ" lên "tái neo thang".** QĐ-9 (U20) đã chốt "đoạn văn để ĐỌC luôn `--fs-base`, không bao giờ `--fs-sm`", nhưng chỉ sửa lẻ vài màn (trang Giới thiệu, Cài đặt) nên phàn nàn "chữ bé" quay lại ở màn khác (thẻ *Tải hóa đơn gốc*, U37b). Hai điều chỉnh ở **tầng token** để màn sau tự hưởng, không phải chép lại:
+
+1. **Thân là 16px và không có ngoại lệ.** `--fs-sm`/`--fs-xs` xuống còn đúng nghĩa *nhãn* (meta bảng, chip, caption); mọi câu văn hoàn chỉnh dùng `--fs-base`. Primitive `ChuPhu` (mô tả/ghi chú trong thẻ) do đó chuyển `--fs-sm` → `--fs-base` — nó vốn dùng cho câu văn, sắc độ đã do màu chữ đảm nhiệm chứ không cần bóp cỡ.
+2. **Tiêu đề neo theo thân, không neo theo 13px.** Thang cũ (18/20/24) được đặt khi thân thực tế bị dùng ở 13px; với thân 16px thì `--fs-lg:18` chỉ hơn thân 1.125× — không đủ tách bậc. Thang mới giữ bước ~1.25×: 20 / 24 / 30 / 36.
+
+Tiếng Việt: font `Be Vietnam Pro` nạp subset **`vietnamese`** (weight 400–800) ở `apps/web/src/main.tsx` — đủ dấu, không phụ thuộc CDN runtime.
 
 ## 5. Spacing (thang 4px)
 
@@ -121,7 +128,7 @@ Line-height: thân `1.5`, tiêu đề `1.25`.
   /* type */
   --font-sans:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --fw-regular:400; --fw-medium:500; --fw-semibold:600; --fw-bold:700; --fw-extrabold:800;
-  --fs-xs:12px; --fs-sm:13px; --fs-base:16px; --fs-md:16px; --fs-lg:18px; --fs-xl:20px; --fs-2xl:24px; --fs-3xl:30px;
+  --fs-xs:13px; --fs-sm:14px; --fs-base:16px; --fs-md:16px; --fs-lg:20px; --fs-xl:24px; --fs-2xl:30px; --fs-3xl:36px;
   --lh-body:1.5; --lh-heading:1.25;
   /* spacing */
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px; --sp-12:48px;

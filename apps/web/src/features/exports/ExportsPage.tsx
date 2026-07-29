@@ -83,7 +83,7 @@ export function ExportsPage() {
               onClick={() => setFormat("xlsx")}
             >
               <strong>Excel (.xlsx)</strong>
-              <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
+              <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
                 Bảng tính đầy đủ cột
               </div>
             </button>
@@ -93,7 +93,7 @@ export function ExportsPage() {
               onClick={() => setFormat("csv")}
             >
               <strong>CSV (.csv)</strong>
-              <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
+              <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
                 Dữ liệu thô, nhẹ
               </div>
             </button>
@@ -115,7 +115,7 @@ export function ExportsPage() {
               onClick={() => setProfile("native")}
             >
               <strong>Mẫu chuẩn (đầy đủ cột)</strong>
-              <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
+              <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
                 Toàn bộ cột hóa đơn.
               </div>
             </button>
@@ -129,7 +129,7 @@ export function ExportsPage() {
               >
                 <div>
                   <strong>Định dạng tham chiếu (reference)</strong>
-                  <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
+                  <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
                     Cấu trúc chuẩn, sẵn sàng dùng ngay.
                   </div>
                 </div>

@@ -19,7 +19,7 @@ function ProgressBar({
 }: { soXong: number; tong: number; thangHienTai?: string }) {
   return (
     <div style={{ display: "grid", gap: "var(--sp-2)" }}>
-      <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
+      <div style={{ fontSize: "var(--fs-base)", color: "var(--text-secondary)" }}>
         {tong > 0 ? (
           <>
             Đang lấy hóa đơn từ Tổng cục Thuế — <strong>{soXong}</strong>/<strong>{tong}</strong>{" "}

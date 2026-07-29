@@ -40,9 +40,22 @@ export const goiChiaSe = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull(),
-    /** Khóa object trong bucket công khai: `goi-hoa-don/<YYYY-MM>/<token ≥128-bit>.zip`.
-     * TUYỆT ĐỐI không chứa MST/tên doanh nghiệp/khoảng ngày — khóa LÀ thứ bảo vệ file. */
+    /** Khóa object trong kho. U37c: bucket chuyển thành RIÊNG TƯ ⇒ khóa này thuần nội bộ,
+     * KHÔNG rời khỏi máy chủ. Định danh công khai nay là `token` (xem dưới). */
     khoaR2: text("khoa_r2").notNull(),
+    /** Định danh CÔNG KHAI của liên kết: `/tai/<token>`.
+     *
+     * DUY NHẤT TOÀN CỤC, không theo tenant — cùng lý do `khoa_r2`: trùng token nghĩa là một
+     * liên kết mở ra gói của tenant khác. Đây là ràng buộc AN TOÀN, không phải gọn gàng.
+     *
+     * Tách khỏi `khoa_r2` để đổi được cách lưu trữ mà không đổi liên kết đã phát cho khách. */
+    token: text("token").notNull(),
+    /** Tên khách hàng CHỤP TẠI THỜI ĐIỂM TẠO.
+     *
+     * Cố ý lưu lại thay vì nối bảng `hoa_don` mỗi lần đọc: đây là bản ghi LỊCH SỬ — tên
+     * khách lúc phát hành mới là tên đúng để đối chiếu về sau, kể cả khi hóa đơn bị sửa hay
+     * doanh nghiệp đổi tên. Nối bảng sẽ cho tên "hiện tại", tức trả lời sai câu hỏi. */
+    nmten: text("nmten"),
     /** MST khách hàng của gói này (QĐ-B2: mỗi gói đúng một khách hàng). */
     nmmst: text("nmmst").notNull(),
     /** Khoảng ngày lập hóa đơn. QĐ-B9: KHÔNG cho trống — không phát gói phủ cả lịch sử. */
@@ -65,10 +78,17 @@ export const goiChiaSe = pgTable(
     /** TRANG_THAI_GOI_CHIA_SE. */
     trangThai: text("trang_thai").notNull(),
     maLoi: text("ma_loi"),
+    /** Số lượt tải đã phục vụ. Dữ kiện ĐIỀU TRA khi nghi lộ liên kết ("link này đã bị dùng
+     * mấy lần?"), và là nền cho hạn mức lượt tải/tháng ở backlog — nhưng U37c CHỈ đếm,
+     * không chặn. */
+    soLuotTai: integer("so_luot_tai").notNull().default(0),
+    /** Mốc dùng gần nhất. Cùng mục đích điều tra. */
+    lanTaiCuoi: timestamp("lan_tai_cuoi", { withTimezone: true }),
   },
   (t) => [
     // AN TOÀN: duy nhất TOÀN CỤC, không phải theo tenant. Xem chú thích đầu bảng.
     unique("goi_chia_se_khoa_r2_unique").on(t.khoaR2),
+    unique("goi_chia_se_token_unique").on(t.token),
     foreignKey({
       columns: [t.tenantId],
       foreignColumns: [tenants.id],

@@ -37,7 +37,7 @@ function Shortcut({ to, title, desc }: { to: string; title: string; desc: string
     <Link to={to} style={{ textDecoration: "none", color: "inherit" }}>
       <Card>
         <div style={{ fontWeight: "var(--fw-bold)" }}>{title}</div>
-        <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>{desc}</div>
+        <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>{desc}</div>
       </Card>
     </Link>
   );

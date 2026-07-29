@@ -32,9 +32,15 @@ async function makeTenant(db: Db, ten: string, mst: string): Promise<string> {
 
 /** Một gói "đã phát hành" tối thiểu hợp lệ. */
 function goi(tenantId: string, over: Record<string, unknown> = {}) {
+  // U37c: `token` suy TỪ `khoaR2` bằng đúng phép biến đổi migration 0021 dùng để backfill.
+  // Nhờ vậy ca nào ghi đè `khoaR2` là tự có token riêng — không phải nhớ sửa hai chỗ, và
+  // không có cảnh hai hàng khác khóa mà trùng token làm test đỏ vì lý do chẳng liên quan.
+  const khoaR2 =
+    (over.khoaR2 as string | undefined) ?? "goi-hoa-don/2026-07/abcdefghijklmnopqrstuvwxyz234567";
   return {
     tenantId,
-    khoaR2: "goi-hoa-don/2026-07/abcdefghijklmnopqrstuvwxyz234567",
+    khoaR2,
+    token: (khoaR2.split("/").pop() as string).replace(/\.zip$/, ""),
     nmmst: "0312000001",
     tuNgay: "2026-07-01",
     denNgay: "2026-07-31",
@@ -73,6 +79,27 @@ describe("goi_chia_se — ràng buộc (integration, PGlite)", () => {
 
     await db.insert(goiChiaSe).values(goi(a));
     await expect(db.insert(goiChiaSe).values(goi(b))).rejects.toThrow();
+  });
+
+  // U37c — `token` là ĐỊNH DANH CÔNG KHAI (`/tai/<token>`). Trùng token nghĩa là một liên
+  // kết mở ra gói của tenant KHÁC. Ràng buộc AN TOÀN, không phải chuyện gọn gàng — nên phải
+  // duy nhất TOÀN CỤC, y như `khoa_r2`, chứ không phải duy nhất trong phạm vi tenant.
+  it("token DUY NHẤT TOÀN CỤC — hai tenant không thể trùng định danh công khai", async () => {
+    const a = await makeTenant(db, "Cty A", "0100000001");
+    const b = await makeTenant(db, "Cty B", "0100000002");
+
+    await db.insert(goiChiaSe).values(goi(a));
+    // Khóa lưu trữ KHÁC nhau (loại trừ việc đỏ vì `khoa_r2`), chỉ token trùng.
+    await expect(
+      db
+        .insert(goiChiaSe)
+        .values(
+          goi(b, {
+            khoaR2: "goi-hoa-don/2026-07/khac-hoan-toan.zip",
+            token: "abcdefghijklmnopqrstuvwxyz234567",
+          }),
+        ),
+    ).rejects.toThrow();
   });
 
   it("ghi được ca THU HỒI và ca LỖI (không cần quyền DELETE)", async () => {

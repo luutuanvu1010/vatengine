@@ -148,6 +148,13 @@
       "when": 1785645900000,
       "tag": "0020_u37b_goi_chia_se",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785645960000,
+      "tag": "0021_u37c_token_tai_cong_khai",
+      "breakpoints": true
     }
   ]
 }

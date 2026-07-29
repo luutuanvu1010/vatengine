@@ -932,7 +932,12 @@ export function Cot({ children, khoang = "3" }: { children: ReactNode; khoang?: 
   );
 }
 
-/** Chữ phụ (mô tả, ghi chú, trạng thái). Gom cỡ chữ + màu về token, thôi tô trong features/. */
+/**
+ * Chữ phụ (mô tả, ghi chú, trạng thái). Gom cỡ chữ + màu về token, thôi tô trong features/.
+ *
+ * QĐ-9b: cỡ `--fs-base` (16px) chứ KHÔNG `--fs-sm` — đây là câu văn để ĐỌC, sắc độ "phụ" đã
+ * do MÀU chữ đảm nhiệm; bóp cỡ xuống 13–14px là gốc của phàn nàn "chữ bé khó đọc".
+ */
 export function ChuPhu({
   children,
   nhan = false,
@@ -944,7 +949,7 @@ export function ChuPhu({
   return (
     <span
       style={{
-        fontSize: "var(--fs-sm)",
+        fontSize: "var(--fs-base)",
         color: nhan ? "var(--text-tertiary)" : "var(--text-secondary)",
       }}
     >

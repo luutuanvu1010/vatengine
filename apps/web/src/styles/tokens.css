@@ -56,14 +56,17 @@
   --fw-semibold: 600;
   --fw-bold: 700;
   --fw-extrabold: 800;
-  --fs-xs: 12px;
-  --fs-sm: 13px;
+  /* Thang neo ở thân 16px, tiêu đề bước ~1.25× (QĐ-9b, 07-DESIGN_TOKENS.md §4).
+     --fs-xs/--fs-sm CHỈ dành cho NHÃN (caption, chip, meta bảng) — mọi câu văn dùng
+     --fs-base. */
+  --fs-xs: 13px;
+  --fs-sm: 14px;
   --fs-base: 16px;
   --fs-md: 16px;
-  --fs-lg: 18px;
-  --fs-xl: 20px;
-  --fs-2xl: 24px;
-  --fs-3xl: 30px;
+  --fs-lg: 20px;
+  --fs-xl: 24px;
+  --fs-2xl: 30px;
+  --fs-3xl: 36px;
   --lh-body: 1.5;
   --lh-heading: 1.25;
   /* spacing */

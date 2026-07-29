@@ -104,7 +104,7 @@ function Report({ report }: { report: ReconcileReport }) {
           >
             Lệch thuế (số học)
           </h2>
-          <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
+          <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
             Chưa thuế − chiết khấu + thuế ≠ tổng thanh toán.
           </p>
           {lech.map((f) =>
@@ -151,7 +151,7 @@ function Report({ report }: { report: ReconcileReport }) {
               chưa khẳng định
             </span>
           </h2>
-          <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
+          <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
             Khoảng trống trong dãy số hóa đơn — nghi thiếu, cần rà soát (không khẳng định).
           </p>
           {thieu.map((f) =>
