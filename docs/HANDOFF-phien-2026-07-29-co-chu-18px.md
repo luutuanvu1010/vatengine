@@ -144,7 +144,7 @@ phiên kia nguyên vẹn.
 |---|---|---|
 | `apps/api/.dev.vars` không dùng được: trỏ Postgres localhost không tồn tại + tên biến Hyperdrive lỗi thời (`WRANGLER_…` → `CLOUDFLARE_…`) | **trung bình** | Chặn mọi việc cần chạy API local. Sửa được trong ~15 phút nếu có Postgres cục bộ hoặc trỏ thẳng Neon |
 | Chế độ xem thử chỉ phủ ~8 endpoint đọc; ghi/hành động trả `{ok:true}` giả | thấp | Đủ để soi giao diện, KHÔNG phải bằng chứng về hành vi hệ thống |
-| **2 test tích hợp PGlite chập chờn khi chạy TOÀN REPO** | trung bình | `packages/query` — `getInvoice.test.ts` + `getInvoiceLines.test.ts`. Đỏ trong `make test`, nhưng **xanh khi chạy riêng** và cả gói xanh 149/149. Nghi tranh chấp PGlite dưới tải song song. Chưa chẩn đoán; đừng tin "đỏ = hồi quy" mà chạy lại gói đó trước |
+| **2 test tích hợp PGlite CHẬP CHỜN** | trung bình | `packages/query` — `getInvoice.test.ts` + `getInvoiceLines.test.ts`. Xem ô ngay dưới |
 | QĐ-9b mới phủ `apps/web`; `apps/admin` có thang token **riêng** (16/14) chưa đồng bộ | thấp | Chủ ý để ngoài phạm vi phiên này |
 
 ## 8. Vệ sinh repo đã bị vi phạm — CHƯA sửa
@@ -174,9 +174,26 @@ file **chưa track** của U37c đang viết dở (`error TS2304: Cannot find na
 > file họ vừa chạm vài phút trước (dễ xung đột hoặc xoá mất việc đang viết). Kiểm chủ sở hữu
 > bằng `git status --porcelain <file>` + `stat -f %Sm <file>` trước khi kết luận lỗi của ai.
 
-`make test`: xem nợ "2 test tích hợp PGlite chập chờn" ở §7 — không phải hồi quy của phiên này.
+`make test` **SẠCH** — lần chạy cuối xanh toàn bộ, exit 0, không một dòng `FAIL`.
 
-Riêng phần của phiên này (`apps/web`): **411/411 test xanh**, `tsc` sạch, Biome sạch 128 file.
+Riêng phần của phiên này (`apps/web`): **423/423 test xanh** trong lần chạy toàn repo, `tsc`
+sạch, Biome sạch 128 file.
+
+### Đã có một lần đỏ — và nó CHẬP CHỜN, không phải hồi quy
+
+Lần chạy `make test` trước đó đỏ 2 test tích hợp PGlite của `packages/query`
+(`getInvoice.test.ts`, `getInvoiceLines.test.ts`). Ba bằng chứng cho thấy là chập chờn:
+
+1. Chạy riêng từng file → **xanh**.
+2. Chạy trọn `packages/query` → **149/149 xanh**.
+3. Chạy lại **toàn repo** → **xanh sạch, exit 0**, chính hai test đó qua.
+
+Nghi tranh chấp PGlite dưới tải song song. **Chưa chẩn đoán gốc rễ** — nếu gặp lại, đừng vội
+kết luận "đỏ = hồi quy": chạy lại gói đó riêng trước đã. Đáng chẩn đoán tử tế vào một phiên
+rảnh, vì test chập chờn làm hỏng niềm tin vào chính cổng DoD.
+
+> Ghi chú đọc log: các dòng `Error: Not implemented: navigation (except hash changes)` trong
+> `apps/web` là **tiếng ồn của jsdom**, không phải test hỏng (56/56 file vẫn xanh).
 
 ## 10. Việc cần quyết
 
