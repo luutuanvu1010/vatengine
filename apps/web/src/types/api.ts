@@ -276,3 +276,16 @@ export interface BackfillProgress {
   tongSoThang: number;
   trangThaiTong: "dang_chay" | "hoan_thanh" | "co_loi" | "can_dang_nhap_lai";
 }
+
+// U37b — khách hàng (bên mua) để chọn khi tải hóa đơn gốc. Hình dạng khớp `@vat/query`
+// (`listKhachHang`) — nguồn sự thật ở server, đây chỉ là bản sao kiểu cho client.
+export interface KhachHang {
+  nmmst: string;
+  nmten: string;
+  soHoaDon: number;
+}
+export interface KhachHangResult {
+  items: KhachHang[];
+  /** true ⇒ danh sách đã bị cắt ở trần server; phải nói cho người dùng biết còn nữa. */
+  biCatBot: boolean;
+}

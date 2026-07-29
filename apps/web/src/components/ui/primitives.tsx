@@ -638,3 +638,251 @@ export function Popover({ trigger, children, ariaLabel, align = "left" }: Popove
     </span>
   );
 }
+
+// --- ComboBox (ô nhập + danh sách gợi ý lọc theo chữ đang gõ) ---------------------------
+// U37b — thiếu trong thư viện; `ui.md:21` bắt thêm primitive thay vì tô kiểu nội tuyến trong
+// `features/` (phép kiểm `test/conventions/ui-luat.test.ts` chặn `style=` trên input trong
+// features/). Primitive này THUẦN TRÌNH BÀY: không tự nạp dữ liệu, không biết "khách hàng" là
+// gì — caller đưa `items`, hàm `khop` và các thông báo trạng thái.
+export interface ComboBoxItem {
+  /** Giá trị ĐỊNH DANH trả về khi chọn (vd MST). */
+  giaTri: string;
+  /** Nhãn hiển thị + dùng để tìm. */
+  nhan: string;
+  /** Dòng phụ dưới nhãn (vd "MST · N hóa đơn"). */
+  phu?: string;
+}
+
+export interface ComboBoxProps {
+  label: string;
+  hideLabel?: boolean;
+  co?: CoO;
+  placeholder?: string;
+  /** Mục đang chọn. `undefined` = chưa chọn gì — caller dựa vào đây để khóa nút. */
+  daChon?: ComboBoxItem;
+  items: ComboBoxItem[];
+  /** Chuỗi đang gõ có khớp mục này không (caller quyết định: bỏ dấu, khớp cả mã…). */
+  khop: (daGo: string, item: ComboBoxItem) => boolean;
+  onChon: (item: ComboBoxItem) => void;
+  onXoa: () => void;
+  /** Thay cho danh sách khi đang tải / rỗng / lỗi (bốn trạng thái — ui.md:22). */
+  thongBao?: ReactNode;
+  /** Dòng chân panel (vd "còn nữa, gõ thêm để thu hẹp"). */
+  chanPanel?: ReactNode;
+}
+
+export function ComboBox({
+  label,
+  hideLabel,
+  co,
+  placeholder,
+  daChon,
+  items,
+  khop,
+  onChon,
+  onXoa,
+  thongBao,
+  chanPanel,
+}: ComboBoxProps) {
+  const genId = useId();
+  const listId = `${genId}-ds`;
+  const [daGo, setDaGo] = useState(daChon?.nhan ?? "");
+  const [mo, setMo] = useState(false);
+  const [viTri, setViTri] = useState(-1);
+  const khungRef = useRef<HTMLSpanElement>(null);
+
+  // Lựa chọn đổi từ BÊN NGOÀI (vd bấm "Lọc dữ liệu" xong, hoặc đổi chiều) → đồng bộ ô nhập.
+  useEffect(() => {
+    setDaGo(daChon?.nhan ?? "");
+  }, [daChon?.nhan]);
+
+  useEffect(() => {
+    if (!mo) return;
+    const ngoai = (e: MouseEvent) => {
+      if (khungRef.current && !khungRef.current.contains(e.target as Node)) setMo(false);
+    };
+    document.addEventListener("mousedown", ngoai);
+    return () => document.removeEventListener("mousedown", ngoai);
+  }, [mo]);
+
+  // Khi ô đang hiện đúng tên của mục đã chọn thì coi như "chưa gõ gì" → hiện cả danh sách,
+  // để người dùng đổi sang khách khác mà không phải xóa tay.
+  const chuoiLoc = daGo === daChon?.nhan ? "" : daGo;
+  const hienThi = items.filter((i) => khop(chuoiLoc, i));
+
+  const chon = (i: ComboBoxItem) => {
+    onChon(i);
+    setDaGo(i.nhan);
+    setMo(false);
+    setViTri(-1);
+  };
+
+  const banPhim = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setMo(false);
+      setViTri(-1);
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setMo(true);
+      setViTri((v) => Math.min(v + 1, hienThi.length - 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setViTri((v) => Math.max(v - 1, 0));
+      return;
+    }
+    if (e.key === "Enter") {
+      const muc = hienThi[viTri];
+      if (muc) {
+        e.preventDefault();
+        chon(muc);
+      }
+    }
+  };
+
+  return (
+    <span ref={khungRef} style={{ ...boc(co), position: "relative", display: "inline-flex" }}>
+      <label htmlFor={genId} style={hideLabel ? srOnly : nhanCss}>
+        {label}
+      </label>
+      <input
+        id={genId}
+        role="combobox"
+        aria-expanded={mo}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        autoComplete="off"
+        placeholder={placeholder}
+        value={daGo}
+        onChange={(e) => {
+          setDaGo(e.target.value);
+          setMo(true);
+          setViTri(-1);
+        }}
+        onFocus={() => setMo(true)}
+        onClick={() => setMo(true)}
+        onKeyDown={banPhim}
+        style={oNhapVoiCo(co)}
+      />
+      {daChon ? (
+        <button
+          type="button"
+          aria-label="Xóa khách hàng đã chọn"
+          onClick={() => {
+            onXoa();
+            setDaGo("");
+            setMo(false);
+          }}
+          style={{
+            position: "absolute",
+            right: "var(--sp-2)",
+            top: "50%",
+            transform: "translateY(-50%)",
+            border: "none",
+            background: "transparent",
+            color: "var(--text-tertiary)",
+            cursor: "pointer",
+            fontSize: "var(--fs-md)",
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+      ) : null}
+      {mo ? (
+        <ul
+          id={listId}
+          aria-label={label}
+          style={{
+            position: "absolute",
+            top: "calc(100% + var(--sp-1))",
+            left: 0,
+            minWidth: "100%",
+            maxHeight: 280,
+            overflowY: "auto",
+            background: "var(--surface-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--shadow-md)",
+            zIndex: 20,
+            padding: "var(--sp-1)",
+          }}
+        >
+          {thongBao ? (
+            <li
+              style={{
+                display: "block",
+                padding: "var(--sp-2) var(--sp-3)",
+                fontSize: "var(--fs-sm)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              {thongBao}
+            </li>
+          ) : hienThi.length === 0 ? (
+            <li
+              style={{
+                display: "block",
+                padding: "var(--sp-2) var(--sp-3)",
+                fontSize: "var(--fs-sm)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              Không tìm thấy khách hàng nào khớp.
+            </li>
+          ) : (
+            hienThi.map((i, n) => (
+              <li key={i.giaTri}>
+                <button
+                  type="button"
+                  aria-current={n === viTri}
+                  onMouseEnter={() => setViTri(n)}
+                  onClick={() => chon(i)}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "var(--sp-2) var(--sp-3)",
+                    borderRadius: "var(--radius-sm)",
+                    background: n === viTri ? "var(--surface-hover)" : "transparent",
+                  }}
+                >
+                  <span style={{ display: "block", fontSize: "var(--fs-sm)" }}>{i.nhan}</span>
+                  {i.phu ? (
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "var(--fs-xs)",
+                        color: "var(--text-tertiary)",
+                      }}
+                    >
+                      {i.phu}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ))
+          )}
+          {chanPanel ? (
+            <li
+              style={{
+                display: "block",
+                padding: "var(--sp-2) var(--sp-3)",
+                borderTop: "1px solid var(--border-subtle)",
+                fontSize: "var(--fs-xs)",
+                color: "var(--text-tertiary)",
+              }}
+            >
+              {chanPanel}
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </span>
+  );
+}

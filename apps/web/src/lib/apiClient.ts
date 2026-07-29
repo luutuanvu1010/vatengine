@@ -15,6 +15,7 @@ import type {
   InvoiceListResult,
   InvoiceSort,
   InvoiceSummary,
+  KhachHangResult,
   MeResponse,
   Page,
   ReconcileReport,
@@ -263,6 +264,12 @@ export const api = {
   },
   downloadExport(id: string): Promise<Blob> {
     return requestBlob(`/exports/${id}`);
+  },
+
+  // U37b — khách hàng (bên mua) để chọn khi tải hóa đơn gốc. Danh sách nhỏ (đo thật: 167
+  // mục ở tenant lớn nhất) nên trả trọn, lọc/tìm làm ở máy khách.
+  listKhachHang(): Promise<KhachHangResult> {
+    return request("GET", "/invoices/khach-hang");
   },
 
   // A1 — hồ sơ tenant + vai.

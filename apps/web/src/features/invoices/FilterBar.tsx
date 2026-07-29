@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Button, Field, SegmentedControl, Select } from "../../components/ui/primitives";
 import type { DateRange } from "../../lib/period";
 import type { Chieu, InvoiceFilter, Nguon } from "../../types/api";
+import { ChonKhachHang } from "./ChonKhachHang";
 import { ChonKy } from "./ChonKy";
 
 /** Lựa chọn enum của một trường trong Registry (chiều/nguồn) — một nguồn, không gõ lại. */
@@ -134,15 +135,11 @@ export function FilterBar({
               onChange={(e) => set({ nbmst: e.target.value || undefined })}
             />
           ) : null}
+          {/* U37b — chiều BÁN RA: chọn khách hàng bằng ô TÌM LIVE thay vì gõ MST thô. Người
+              dùng nhớ TÊN khách chứ không nhớ MST, nhưng thứ ràng vào bộ lọc vẫn là MST
+              (khớp chính xác ở `filters.ts`). Xem docs/plans/U37b-plan.md §4 Gói 1. */}
           {showNmmst ? (
-            <Field
-              label="MST người mua"
-              hideLabel
-              co="lg"
-              placeholder="MST người mua"
-              value={draft.nmmst ?? ""}
-              onChange={(e) => set({ nmmst: e.target.value || undefined })}
-            />
+            <ChonKhachHang nmmst={draft.nmmst} onChange={(k) => set({ nmmst: k?.nmmst })} />
           ) : null}
         </div>
 
