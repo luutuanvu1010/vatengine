@@ -71,6 +71,38 @@ describe("TaiHoaDonGoc — chỉ hiện ở chiều Bán ra", () => {
     ve();
     expect(screen.getByRole("button", { name: /tải hóa đơn gốc/i })).toBeInTheDocument();
   });
+
+  /**
+   * ĐỔI CHIỀU trên CÙNG một instance — chế độ hỏng mà mọi ca trên bỏ lọt.
+   *
+   * Các ca khác đều `render()` mới tinh cho từng chiều, nên chúng xanh kể cả khi
+   * `if (chieu !== "sold") return null` nằm SAI chỗ (đầu hàm, trước các hook). Người dùng
+   * thật thì không mount lại: `InvoicesPage` render `<TaiHoaDonGoc>` vô điều kiện và chỉ
+   * đổi prop `filter`, nên `return null` sớm sẽ bỏ qua 3 `useMutation` + 1 `useQuery` +
+   * 1 `useEffect` bên dưới ⇒ React ném "Rendered fewer hooks than expected" và vỡ cả màn
+   * Danh sách hóa đơn. Ca này rerender đúng như trang thật, nên nó đỏ nếu ai đó dời dòng
+   * đó lên đầu hàm.
+   */
+  it("Bán ra → Mua vào → Bán ra trên CÙNG instance: ẩn/hiện được, không vỡ Rules of Hooks", () => {
+    mockApi({});
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const cay = (filter: InvoiceFilter) => (
+      <QueryClientProvider client={qc}>
+        <TaiHoaDonGoc filter={filter} />
+      </QueryClientProvider>
+    );
+
+    const { container, rerender } = render(cay(DU));
+    expect(screen.getByRole("button", { name: /tải hóa đơn gốc/i })).toBeInTheDocument();
+
+    // Đổi chiều, KHÔNG unmount — đây là bước làm vỡ bản đặt `return null` ở đầu hàm.
+    rerender(cay({ ...DU, chieu: "purchase" }));
+    expect(container).toBeEmptyDOMElement();
+
+    // Quay lại Bán ra thì thẻ phải sống lại nguyên vẹn, không kẹt ở trạng thái rỗng.
+    rerender(cay(DU));
+    expect(screen.getByRole("button", { name: /tải hóa đơn gốc/i })).toBeInTheDocument();
+  });
 });
 
 describe("TaiHoaDonGoc — hai vế còn lại mở nút, mỗi vế một lý do riêng", () => {
