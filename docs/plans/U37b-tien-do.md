@@ -9,7 +9,9 @@ Một dòng mỗi gói: `[gói] — DONE/BLOCKED — commit — ghi chú`.
 | Gói 1 — ô tìm live chọn khách hàng | ✅ DONE | `9cfa5cf` | Primitive `ComboBox` + `boDau/khopTim` + `ChonKhachHang` + đấu vào FilterBar. 24 test mới. GOLDEN ĐỔI CÓ CHỦ ĐÍCH: `filterBarDirection.test.tsx` — nhãn ô bên mua đổi "MST người mua" → "Khách hàng", và FilterBar từ nay CẦN QueryClientProvider |
 | Gói 2 — bảng `goi_chia_se` + migration | ✅ DONE | `3bd87f4` | 8 test xanh. Bẫy `_journal.json` NỔ đúng dự đoán: 0020.when sinh ra là 29/07 < 0019 (02/08) ⇒ đã đặt lại `0019.when + 60000`. **Cổng dừng 1 ĐÃ QUA**: migration áp production 2026-07-29, hậu kiểm `hau-kiem-bang.mjs goi_chia_se` → **8/8 ĐẠT** (bảng, RLS ENABLE+FORCE, policy, vat_app S/I/U và KHÔNG DELETE; UNIQUE khoa_r2 + 2 FK + 3 index đều có thật) |
 | Gói 3 — hạ tầng bucket công khai | ✅ DONE (hạ tầng đã dựng) | `20cee3f` | Bucket `vat-chia-se` + `docs.tourdao.vn` (min-TLS 1.2) + lifecycle 30 ngày prefix `goi-hoa-don/` + `r2.dev` **disabled** — hậu kiểm 4/4 đạt. ✅ Phần treo đã kiểm chứng: `ssl_status` active; gốc bucket và khóa không tồn tại đều trả **404** ⇒ không liệt kê được nội dung, giả định "khóa là thứ duy nhất bảo vệ file" đứng vững |
-| Gói 4 — phát hành gói | ⏸ | — | |
+| Gói 4a — tầng truy vấn phát hành gói | ✅ DONE | `d82802e` | `listHoaDonChoGoi` (NGUỒN DUY NHẤT sinh `ref` — ràng buộc bảo mật) + `demTienDoGoi` (đếm từ `tep_hoa_don_goc`, QĐ-B8). 11 test xanh |
+| Gói 4b — endpoint tạo gói | ⏸ | — | Chặn ngày trống (QĐ-B9), dựng `ref` từ DB, enqueue `kind:"hoso"`, tạo hàng `goi_chia_se` trạng thái `dang_tao` |
+| Gói 4c — đóng ZIP + phát link | ⏸ | — | ZIP phẳng khử trùng lặp, ghi bucket công khai, khóa ngẫu nhiên, cổng "0 hóa đơn ⇒ không phát link" |
 | Gói 5 — thu hồi + audit | ⏸ | — | |
 | Gói 6 — giao diện | ⏸ | — | |
 | Gói 7 — tài liệu | ⏸ | — | |
