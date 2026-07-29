@@ -108,23 +108,29 @@ bản ghi đang chạy nào.
 **Cloudflare tự thêm một rule nữa:** `Default Multipart Abort Rule` (hủy multipart upload dở
 sau 7 ngày, mọi prefix). Không đụng gì tới object của ta — giữ nguyên.
 
-### 🔶 CÒN TREO — phải kiểm lại trước khi nghiệm thu Gói 4
+### ✅ Phần từng treo — ĐÃ KIỂM CHỨNG 2026-07-29
 
-`ssl_status: pending` ngay sau khi gắn, và `curl https://docs.tourdao.vn/` trả **HTTP 000**
-(chưa phân giải DNS). Bình thường: bản ghi CNAME + cấp chứng chỉ mất vài phút. **Chưa kiểm
-chứng được** hai điều dưới đây, phải chạy lại khi SSL chuyển `active`:
+Lúc vừa gắn tên miền, `ssl_status: pending` và curl trả HTTP 000 nên chưa kiểm được. Chạy
+lại sau ít phút:
+
+| Kiểm | Kết quả |
+|---|---|
+| `ssl_status` | **active** |
+| `GET https://docs.tourdao.vn/` (gốc bucket) | **HTTP 404** — KHÔNG liệt kê được nội dung |
+| `GET …/goi-hoa-don/2026-07/khong-co-that.zip` | **HTTP 404** |
+
+⇒ Tài liệu Cloudflare đúng (*"public buckets do not let you list the bucket contents at the
+root"*). Đây là bằng chứng cho **giả định an toàn cốt lõi của U37b**: khóa ngẫu nhiên là thứ
+DUY NHẤT bảo vệ file, và không ai dò được danh sách gói đã phát hành.
+
+**Bẫy công cụ gặp phải, ghi lại để đỡ mất thì giờ lần sau:** `dig` trả đúng IP nhưng `curl`
+vẫn báo không tra được tên miền (exit 6) — bộ đệm ÂM của trình phân giải hệ thống macOS
+(`mDNSResponder`), mà `dig` không đi qua. Cách vượt:
 
 ```
-npx wrangler r2 bucket domain list vat-chia-se     # ssl_status phải là active
-curl -s -o /dev/null -w "%{http_code}\n" https://docs.tourdao.vn/
-curl -s -o /dev/null -w "%{http_code}\n" https://docs.tourdao.vn/goi-hoa-don/2026-07/khong-co-that.zip
+IP=$(dig @1.1.1.1 +short docs.tourdao.vn | head -1)
+curl --resolve "docs.tourdao.vn:443:$IP" https://docs.tourdao.vn/
 ```
-
-Kỳ vọng: **không liệt kê được nội dung ở gốc** (tài liệu Cloudflare: *"public buckets do not
-let you list the bucket contents at the root"*) và khóa không tồn tại trả **404**. Đây không
-phải hình thức — nó là bằng chứng cho giả định an toàn cốt lõi của U37b: *khóa ngẫu nhiên là
-thứ DUY NHẤT bảo vệ file*. Nếu gốc bucket liệt kê được thì giả định đó sụp, và toàn bộ thiết
-kế chia sẻ phải xem lại.
 
 ---
 
