@@ -42,7 +42,7 @@ describe("labelChieu / labelNguon — enum cố định", () => {
     expect(labelChieu("sold")).toBe("Bán ra");
   });
   it("nguồn", () => {
-    expect(labelNguon("normal")).toBe("HĐĐT thường");
+    expect(labelNguon("normal")).toBe("Hóa đơn điện tử thường");
     expect(labelNguon("sco")).toBe("Máy tính tiền");
   });
 });

@@ -45,7 +45,7 @@ export function labelChieu(chieu: string): string {
 
 /** Enum nguồn — cố định (BINDING_MAP §4.2). */
 export function labelNguon(nguon: string): string {
-  if (nguon === "normal") return "HĐĐT thường";
+  if (nguon === "normal") return "Hóa đơn điện tử thường";
   if (nguon === "sco") return "Máy tính tiền";
   return nguon;
 }

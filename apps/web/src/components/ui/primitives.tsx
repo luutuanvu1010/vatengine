@@ -218,23 +218,52 @@ export function Checkbox({
   );
 }
 
-// --- Nhãn section nhỏ (đầu mỗi Card: "BỘ LỌC" / "KẾT QUẢ"…) ---------------------------
-// Chữ nhỏ, in hoa, giãn chữ — dẫn hướng thị giác giữa các khối. Một primitive để 3 card dùng
-// chung, KHÔNG lặp style nội tuyến ở features/ (Luật ui.md: thiếu kiểu → thêm primitive).
+// --- Tiêu đề khối trong Card ("Tra cứu hóa đơn" / "Kết quả"…) -------------------------
+// SỬA 2026-07-29 (chuẩn hoá phân cấp tiêu đề). Bản trước render `<h2>` ở `--fs-sm` (15px)
+// + `textTransform: uppercase`: tiêu đề mục NHỎ HƠN chữ thân 18px — đúng thứ mà cấp tiêu đề
+// không được phép làm, và chữ hoa toàn phần thuộc diện cấm ở quy chuẩn văn phong. Nay neo
+// theo thang: `--fs-lg` (22px) + `--fw-bold`, màu chữ chính.
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <h2
       style={{
-        fontSize: "var(--fs-sm)",
+        fontSize: "var(--fs-lg)",
         fontWeight: "var(--fw-bold)",
-        textTransform: "uppercase",
-        letterSpacing: "0.05em",
-        color: "var(--text-tertiary)",
+        lineHeight: "var(--lh-heading)",
+        color: "var(--text-primary)",
         marginBottom: "var(--sp-4)",
       }}
     >
       {children}
     </h2>
+  );
+}
+
+// --- Tiêu đề mục dùng chung -----------------------------------------------------------
+// Gom kiểu `--fs-lg` + `--fw-bold` vốn bị gõ lại nội tuyến ở 12 chỗ trong features/ (Luật
+// ui.md: thiếu kiểu → thêm primitive, không tô nội tuyến). `as` cho phép chọn đúng cấp ngữ
+// nghĩa (h2/h3) mà không đổi kích cỡ — cấp HTML là ngữ nghĩa, cỡ chữ là trình bày.
+export function SectionTitle({
+  children,
+  as: Tag = "h2",
+  style,
+}: {
+  children: ReactNode;
+  as?: "h2" | "h3";
+  style?: React.CSSProperties;
+}) {
+  return (
+    <Tag
+      style={{
+        fontSize: "var(--fs-lg)",
+        fontWeight: "var(--fw-bold)",
+        lineHeight: "var(--lh-heading)",
+        color: "var(--text-primary)",
+        ...style,
+      }}
+    >
+      {children}
+    </Tag>
   );
 }
 
@@ -457,7 +486,11 @@ export function Alert({ tone = "info", children }: { tone?: Tone; children: Reac
         borderRadius: "var(--radius-md)",
         padding: "var(--sp-3) var(--sp-4)",
         color: s.fg,
-        fontSize: "var(--fs-sm)",
+        // QĐ-9b: nội dung Alert LUÔN là câu văn để ĐỌC (cảnh báo pháp lý, thông báo lỗi) ⇒
+        // `--fs-base`. Bản trước dùng `--fs-sm` — cùng lỗi "chữ bé" đã tái diễn ở U20/U37b,
+        // nhưng nằm ở tầng primitive nên không lần rà nào bắt được (sửa 2026-07-29).
+        fontSize: "var(--fs-base)",
+        lineHeight: "var(--lh-body)",
       }}
     >
       {children}
@@ -770,7 +803,7 @@ export function ComboBox({
       {daChon ? (
         <button
           type="button"
-          aria-label="Xóa khách hàng đã chọn"
+          aria-label="Xóa người mua đã chọn"
           onClick={() => {
             onXoa();
             setDaGo("");
@@ -831,7 +864,7 @@ export function ComboBox({
                 color: "var(--text-secondary)",
               }}
             >
-              Không tìm thấy khách hàng nào khớp.
+              Không tìm thấy người mua nào phù hợp.
             </li>
           ) : (
             hienThi.map((i, n) => (
@@ -935,8 +968,8 @@ export function Cot({ children, khoang = "3" }: { children: ReactNode; khoang?: 
 /**
  * Chữ phụ (mô tả, ghi chú, trạng thái). Gom cỡ chữ + màu về token, thôi tô trong features/.
  *
- * QĐ-9b: cỡ `--fs-base` (16px) chứ KHÔNG `--fs-sm` — đây là câu văn để ĐỌC, sắc độ "phụ" đã
- * do MÀU chữ đảm nhiệm; bóp cỡ xuống 13–14px là gốc của phàn nàn "chữ bé khó đọc".
+ * QĐ-9b: cỡ `--fs-base` (18px) chứ KHÔNG `--fs-sm` — đây là câu văn để ĐỌC, sắc độ "phụ" đã
+ * do MÀU chữ đảm nhiệm; bóp cỡ xuống 13–15px là gốc của phàn nàn "chữ bé khó đọc".
  */
 export function ChuPhu({
   children,
@@ -955,5 +988,55 @@ export function ChuPhu({
     >
       {children}
     </span>
+  );
+}
+
+// --- Khối hướng dẫn cuối trang --------------------------------------------------------
+// Quy ước trình bày (chốt 2026-07-29): NHÃN NGẮN trong nút/menu — MÔ TẢ ĐẦY ĐỦ ở đây.
+// Trước đó mô tả chức năng nằm chen ngay trong thẻ hành động hoặc giấu sau tooltip ⓘ; cái
+// thứ nhất làm chật chỗ thao tác, cái thứ hai coi như không có với người dùng chạm.
+// Đặt CUỐI nội dung chính: người đã biết việc thì lướt qua, người chưa biết thì cuộn xuống
+// một chỗ duy nhất là đủ. Chỉ dùng token có sẵn — không style riêng.
+export function HuongDanTrang({
+  children,
+  tieuDe = "Hướng dẫn sử dụng trang này",
+}: {
+  /** Danh sách `<MucHuongDan>`. */
+  children: ReactNode;
+  tieuDe?: string;
+}) {
+  return (
+    <section
+      style={{
+        marginTop: "var(--sp-8)",
+        padding: "var(--sp-6)",
+        background: "var(--surface-muted)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)",
+      }}
+    >
+      <SectionTitle as="h2" style={{ marginTop: 0, marginBottom: "var(--sp-4)" }}>
+        {tieuDe}
+      </SectionTitle>
+      <dl style={{ margin: 0, display: "grid", gap: "var(--sp-4)" }}>{children}</dl>
+    </section>
+  );
+}
+
+/** Một chức năng trong khối hướng dẫn: nhãn đúng như trên nút + câu mô tả đầy đủ. */
+export function MucHuongDan({ nhan, children }: { nhan: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt style={{ fontWeight: "var(--fw-semibold)", color: "var(--text-primary)" }}>{nhan}</dt>
+      <dd
+        style={{
+          margin: "var(--sp-1) 0 0",
+          color: "var(--text-secondary)",
+          lineHeight: "var(--lh-body)",
+        }}
+      >
+        {children}
+      </dd>
+    </div>
   );
 }

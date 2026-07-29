@@ -184,7 +184,7 @@ export const INVOICE_FIELDS: readonly InvoiceField[] = [
     kieu: "enum",
     locDuoc: "enum",
     enum: [
-      ["normal", "HĐĐT thường"],
+      ["normal", "Hóa đơn điện tử thường"],
       ["sco", "Máy tính tiền"],
     ],
     sapDuoc: true,

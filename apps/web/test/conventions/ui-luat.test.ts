@@ -120,4 +120,60 @@ describe("Luật ui.md — thang cỡ chữ một nguồn, thân 18px (QĐ-9b)",
     expect(than).toContain('fontSize: "var(--fs-base)"');
     expect(boChuThich(than)).not.toContain("var(--fs-sm)");
   });
+
+  // Thêm 2026-07-29 (chuẩn hoá phân cấp tiêu đề). Vì sao cần MÁY kiểm chứ không chỉ ghi luật:
+  // QĐ-9 (U20) đã cấm dùng cỡ nhãn cho câu văn, nhưng chỉ sửa lẻ vài màn nên lỗi tái diễn ở
+  // U37b — rồi lần rà 2026-07-29 phát hiện nó vẫn còn ở TẦNG PRIMITIVE (`Alert` 15px,
+  // `SectionLabel` là <h2> 15px). Không có phép kiểm thì đây là lần thứ ba, không phải lần cuối.
+  it("Alert (câu văn để ĐỌC: cảnh báo, lỗi) dùng --fs-base, không phải --fs-sm", () => {
+    const src = readFileSync(resolve(GOC, "components", "ui", "primitives.tsx"), "utf8");
+    const than = src.slice(src.indexOf("export function Alert"));
+    const thanAlert = than.slice(0, than.indexOf("\n}\n") + 3);
+    expect(thanAlert).toContain('fontSize: "var(--fs-base)"');
+    expect(boChuThich(thanAlert)).not.toContain("var(--fs-sm)");
+  });
+
+  it("tiêu đề mục (SectionLabel/SectionTitle) LỚN HƠN thân và KHÔNG in hoa toàn phần", () => {
+    const src = readFileSync(resolve(GOC, "components", "ui", "primitives.tsx"), "utf8");
+    for (const ten of ["export function SectionLabel", "export function SectionTitle"]) {
+      const tu = src.indexOf(ten);
+      expect(tu, `thiếu primitive ${ten}`).toBeGreaterThan(-1);
+      const than = src.slice(tu);
+      const khoi = boChuThich(than.slice(0, than.indexOf("\n}\n") + 3));
+      expect(khoi, `${ten} phải dùng --fs-lg (22px > thân 18px)`).toContain(
+        'fontSize: "var(--fs-lg)"',
+      );
+      expect(khoi, `${ten} không được dùng cỡ NHÃN cho tiêu đề`).not.toContain("var(--fs-sm)");
+      expect(khoi, `${ten}: cấm text-transform uppercase (quy chuẩn văn phong)`).not.toContain(
+        "uppercase",
+      );
+    }
+  });
+});
+
+// --- Quy chuẩn văn phong: nhãn ngắn trong nút, không khẩu ngữ ---------------------------
+// Ép thi hành hai điều đã ghi thành luật ở ui.md ngày 2026-07-29. Chỉ quét CHUỖI HIỂN THỊ
+// (bỏ chú thích) — chú thích được phép nhắc từ cấm để giải thích lịch sử.
+describe("Luật ui.md — quy chuẩn văn phong", () => {
+  /** Từ khẩu ngữ tuyệt đối không xuất hiện trong chuỗi hiển thị. */
+  const TU_CAM = [
+    /\bkéo (dữ liệu|bản gốc|hóa đơn|phần|về)\b/i,
+    /\btải file\b/i,
+    /\btạo file\b/i,
+    /\bfile Excel\b/i,
+    /\bđã xuất cho\b/i,
+    /\bđăng nhập GDT\b/i,
+    /\bTổng TT\b/,
+    /\bHĐĐT\b/,
+  ];
+
+  it("không tệp nào trong features/ chứa từ khẩu ngữ / thuật ngữ đã bị thay", () => {
+    const pham: string[] = [];
+    for (const tep of TEP) {
+      const ma = boChuThich(readFileSync(tep, "utf8"));
+      const hit = TU_CAM.filter((re) => re.test(ma)).map((re) => String(re));
+      if (hit.length) pham.push(`${relative(process.cwd(), tep)}: ${hit.join(", ")}`);
+    }
+    expect(pham, `xem quy chuẩn văn phong ở .claude/rules/ui.md:\n${pham.join("\n")}`).toEqual([]);
+  });
 });

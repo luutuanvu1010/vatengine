@@ -222,7 +222,7 @@ describe("locDuoc — ô lọc trên bảng", () => {
       ["sold", "Bán ra"],
     ]);
     expect(INVOICE_FIELDS.find((x) => x.key === "nguon")?.enum).toEqual([
-      ["normal", "HĐĐT thường"],
+      ["normal", "Hóa đơn điện tử thường"],
       ["sco", "Máy tính tiền"],
     ]);
   });
