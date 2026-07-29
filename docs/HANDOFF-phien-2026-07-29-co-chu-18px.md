@@ -144,6 +144,7 @@ phiên kia nguyên vẹn.
 |---|---|---|
 | `apps/api/.dev.vars` không dùng được: trỏ Postgres localhost không tồn tại + tên biến Hyperdrive lỗi thời (`WRANGLER_…` → `CLOUDFLARE_…`) | **trung bình** | Chặn mọi việc cần chạy API local. Sửa được trong ~15 phút nếu có Postgres cục bộ hoặc trỏ thẳng Neon |
 | Chế độ xem thử chỉ phủ ~8 endpoint đọc; ghi/hành động trả `{ok:true}` giả | thấp | Đủ để soi giao diện, KHÔNG phải bằng chứng về hành vi hệ thống |
+| **2 test tích hợp PGlite chập chờn khi chạy TOÀN REPO** | trung bình | `packages/query` — `getInvoice.test.ts` + `getInvoiceLines.test.ts`. Đỏ trong `make test`, nhưng **xanh khi chạy riêng** và cả gói xanh 149/149. Nghi tranh chấp PGlite dưới tải song song. Chưa chẩn đoán; đừng tin "đỏ = hồi quy" mà chạy lại gói đó trước |
 | QĐ-9b mới phủ `apps/web`; `apps/admin` có thang token **riêng** (16/14) chưa đồng bộ | thấp | Chủ ý để ngoài phạm vi phiên này |
 
 ## 8. Vệ sinh repo đã bị vi phạm — CHƯA sửa
@@ -162,18 +163,20 @@ commit đúng tên (`4cd0f62`). Muốn dọn thì làm **sau khi U37c đóng l�
 
 ## 9. Trạng thái cổng DoD lúc đóng phiên
 
-`make lint` **ĐỎ**, nhưng lỗi **không thuộc phiên này**:
+`make lint` **SẠCH** (toàn bộ 12 workspace).
 
-```
-apps/api/test/integration/taiCongKhai.test.ts(24,47): error TS2304: Cannot find name 'BlobPart'
-```
+Trong lúc phiên chạy, cổng từng đỏ vì `apps/api/test/integration/taiCongKhai.test.ts` —
+file **chưa track** của U37c đang viết dở (`error TS2304: Cannot find name 'BlobPart'`). Đã
+**tự hết đỏ** khi họ commit `5a65a8a`.
 
-File **chưa track**, thuộc U37c, đang được viết dở. `@vat/web` và mọi workspace khác đều
-**SẠCH**; `apps/web` có 411/411 test xanh, Biome sạch 128 file.
+> **Bài học lặp lại, ghi cho phiên sau:** hook DoD gác **toàn repo**, không gác riêng diff của
+> ai — việc dở của phiên khác chặn cổng của mọi người. Đúng cách là **chờ**, không phải sửa
+> file họ vừa chạm vài phút trước (dễ xung đột hoặc xoá mất việc đang viết). Kiểm chủ sở hữu
+> bằng `git status --porcelain <file>` + `stat -f %Sm <file>` trước khi kết luận lỗi của ai.
 
-Hook DoD gác **toàn repo**, không gác riêng diff của ai — nên việc dở của phiên khác chặn cổng
-của mọi người. **Cổng tự hết đỏ khi họ commit.** Không sửa file họ vừa chạm vài phút trước:
-dễ xung đột hoặc xoá mất việc đang viết.
+`make test`: xem nợ "2 test tích hợp PGlite chập chờn" ở §7 — không phải hồi quy của phiên này.
+
+Riêng phần của phiên này (`apps/web`): **411/411 test xanh**, `tsc` sạch, Biome sạch 128 file.
 
 ## 10. Việc cần quyết
 
