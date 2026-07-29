@@ -76,6 +76,34 @@
 | `GET /invoices/changes` | query: `unread?` + `tuNgay?/denNgay?` (YYYY-MM-DD, giờ VN) + `limit`(≤200,mđ 50) + `offset`(≥0) | `200 {rows: [{id,hoaDonId,truong,giaTriCu,giaTriMoi,lanDongBoId,phatHienLuc,daDoc,khmshdon,khhdon,shdon,nbten}], total, limit, offset, unreadCount}` — `unreadCount` LUÔN của TOÀN tenant (không phụ thuộc filter) · `400` sai định dạng | 3 vai | `apps/api/src/routes/invoiceChanges.ts` |
 | `POST /invoices/changes/mark-read` | `{ids?: string[]}` — thiếu/rỗng = đánh dấu TẤT CẢ chưa đọc; thân rỗng cũng hợp lệ (= mark-all) | `200 {ok:true, markedCount}` — id thuộc tenant khác trong `ids[]` → lặng lẽ không đổi (không 403/404, không rò tồn tại chéo tenant) · `400` JSON hỏng hoặc `ids[]` không phải UUID | 3 vai | như trên |
 
+## 3d. Endpoint bổ sung U37b (tải hóa đơn GỐC cho một khách hàng, chia sẻ qua link công khai, 2026-07-29)
+
+> Đọc **TỪ MÃ** (`apps/api/src/routes/goiChiaSe.ts`, `apps/api/src/routes/invoices.ts`), không chép từ kế hoạch.
+>
+> Bề mặt: nút **"Tải hóa đơn gốc"** trong thanh lọc trang *Danh sách hóa đơn*
+> (`apps/web/src/features/invoices/TaiHoaDonGoc.tsx`), và ô **tìm khách hàng** thay ô nhập MST thô
+> (`ChonKhachHang.tsx`). KHÔNG có màn riêng — dùng chung bộ lọc của trang (QĐ-B5).
+
+| Method + path | Request | Response OK | Lỗi | RBAC | Nguồn |
+|---|---|---|---|---|---|
+| `GET /invoices/khach-hang` | — | `200 {items:[{nmmst,nmten,soHoaDon}], biCatBot}` — gộp theo MST, chỉ chiều bán ra, chỉ khách có ĐỦ MST+tên; sắp theo tên; trần 2.000 và báo `biCatBot` khi cắt | `401` | 3 vai | `routes/invoices.ts` |
+| `POST /goi-chia-se` | `{nmmst, tuNgay, denNgay}` — Zod `.strict()`, **cả ba BẮT BUỘC** | `201 {id, soHoaDon, trangThai:"dang_tao"}` | `400` `bad_request` (thiếu trường / gửi kèm `ref`) · `400` `khoang_ngay_khong_hop_le` · `400` `khong_co_hoa_don` · `409` `thieu_tai_khoan_thue` · `503` `sync_unavailable` | `ke_toan_truong`,`quan_tri` | `routes/goiChiaSe.ts` |
+| `GET /goi-chia-se` | — | `200 {items:[{id,nmmst,tuNgay,denNgay,soHoaDon,kichThuoc,trangThai,taoLuc,hetHanLuc,url}]}` — `url` chỉ khác `null` khi `san_sang` | `401` | 3 vai | như trên |
+| `GET /goi-chia-se/:id` | `:id` UUID | `200 {id,trangThai,soHoaDon,tienDo:{tong,xong,khongCoHoSoGoc,loi,conCho},hetHanLuc,url}` — **THUẦN ĐỌC**, không đóng gói | `400` · `404` | 3 vai | như trên |
+| `POST /goi-chia-se/:id/dong-goi` | `:id` UUID | `200 {id,trangThai:"san_sang",soHoaDon,soThieu,hetHanLuc,url}` | `409` `chua_du` (kèm `tienDo`) · `409` `khong_tai_duoc_hoa_don_nao` · `409` `dang_dong_goi` · `409` `trang_thai_khong_hop_le` · `404` | `ke_toan_truong`,`quan_tri` | như trên |
+| `POST /goi-chia-se/:id/thu-hoi` | `:id` UUID | `200 {id, trangThai:"da_thu_hoi"}` — idempotent | `400` · `404` | **3 vai** (thu hồi là hành động GIẢM rủi ro) | như trên |
+
+**Trạng thái gói** (`TRANG_THAI_GOI_CHIA_SE`, `packages/db/src/schema/goiChiaSe.ts`):
+`dang_tao` → `dang_dong_goi` → `san_sang` → `da_thu_hoi`; nhánh lỗi `loi`.
+
+**Ràng buộc bề mặt phải tôn trọng:**
+- Nút mở khi và chỉ khi **đủ BA vế**: đã CHỌN khách hàng (không phải "ô tìm có chữ") ∧ chiều = bán ra
+  ∧ có đủ `tuNgay`+`denNgay`. Thiếu vế nào báo đúng lý do vế đó.
+- Trước khi phát hành phải có **cảnh báo link công khai + checkbox xác nhận** (QĐ-7).
+- Thời hiệu nói **"khoảng 1 tuần"**, KHÔNG hứa mốc chính xác — Cloudflare chỉ bảo đảm xóa trong
+  vòng 24h sau mốc. Khớp lifecycle `het-han-1-tuan` trên bucket `vat-chia-se`.
+- `url` là đường dẫn CÔNG KHAI không cần đăng nhập ⇒ chỉ hiện khi `san_sang`, ẩn khi đã thu hồi.
+
 Bề mặt UI bổ sung (ngoài S0–S5, từ brief §3 + quyết định): **Dashboard** (chỉ `GET /tax-accounts` — 1 dòng trạng thái kết nối GDT theo `tokenHetHan`, KHÔNG số tiền/đối chiếu; U23-C) · **Cài đặt chung** (`/me` — bỏ địa chỉ, hiện MST; B6). S5 dùng A2 để khôi phục stepper + panel token. S0 "Ghi nhớ đăng nhập"/"Quên mật khẩu?" dựng sẵn chỗ, chờ backend A3/A4 (tách unit sau).
 
 ## 4. Ánh xạ trường dữ liệu (API → hiển thị)
