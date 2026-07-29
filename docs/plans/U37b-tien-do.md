@@ -19,7 +19,7 @@ Một dòng mỗi gói: `[gói] — DONE/BLOCKED — commit — ghi chú`.
 | **Nghiệm thu THẬT bằng tay** | 🔶 CHƯA LÀM | — | Cần chủ dự án: chọn khách hàng → xuất → mở link ở cửa sổ ẩn danh → giải nén, **mở `invoice.html` bằng trình duyệt thấy đúng tờ hóa đơn** → đối chiếu số hóa đơn/MST/tổng tiền → thu hồi → link trả 404 |
 | Thiết kế lại bố cục nút tải | ✅ DONE | `22bccff` | Chủ dự án: nút "chen chúc, chật hẹp". Nguyên nhân là SAI TẦNG chứ không phải px: `hanhDongPhu` đã chứa 5 nhóm trên một hàng ngang, mà đây là quy trình nhiều bước có trạng thái sống. Tách thành Card riêng xếp dọc, đặt giữa thẻ Tra cứu và thẻ Kết quả. Thêm 3 primitive bố cục `Hang`/`Cot`/`ChuPhu` (chỉ nhận khoảng cách theo thang token) vì thư viện chưa hề có — trước đó mọi màn phải tự tô `display:flex` trong `features/`, đúng thứ ui.md mục 2 cấm. **13 test của TaiHoaDonGoc không phải sửa một dòng** — bố cục đổi mà hợp đồng hành vi không đổi |
 | **Tiêu chí 9 — review chéo** | ✅ ĐẠT | `22bccff` | Chạy `dod-auditor` + `security-reviewer` độc lập trên `af4a181..22bccff` (Gói 4b→7 + refactor UI). Kết quả tóm tắt ở mục "Kết quả review chéo" bên dưới |
-| Vá theo review | ✅ DONE | `2b1ec6d` | 2 phát hiện đã đóng: (a) `POST /goi-chia-se` thiếu audit_log; (b) comment schema còn nói "30 ngày" sau khi QĐ-6 đổi sang 1 tuần |
+| Vá theo review | ✅ DONE | `fac690d` | 2 phát hiện đã đóng: (a) `POST /goi-chia-se` thiếu audit_log; (b) comment schema còn nói "30 ngày" sau khi QĐ-6 đổi sang 1 tuần |
 
 ## Kết quả review chéo (2026-07-29, phạm vi `af4a181..22bccff`)
 
