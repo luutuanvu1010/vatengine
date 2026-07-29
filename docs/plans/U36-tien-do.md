@@ -36,3 +36,17 @@ mã mới cho ra đúng con số đó trên production (Nguyên tắc bằng ch�
 
 Thứ tự deploy theo `.claude/rules/deploy.md`: DB → worker → api → web.
 Lưu ý: U36.3 đổi hợp đồng `GET /invoices/summary`; `vat-api` phải lên TRƯỚC `vat-web`.
+
+## Sửa đổi sau nghiệm thu (2026-07-29)
+
+- **U39** — bổ sung đủ BỘ BA số tiền (mã 4 trước đây thiếu tiền trước thuế; mã 5 không có số
+  tiền nào), cờ lọc `biSua`, và nút bung danh sách hóa đơn bị sửa ngay tại thông báo.
+- **U40** — đổi ruột nút "Hóa đơn vừa thay đổi" thành "Hóa đơn bị sửa ở kỳ khác": bỏ hẳn
+  trạng thái "đã đọc", con số dẫn xuất từ dữ liệu × bộ lọc.
+- ⚠️ **Đảo một quyết định của kế hoạch:** §7.2 và §4b ghi dòng *"Từ 28/07/2026, hóa đơn bị
+  thay thế không còn được cộng vào tổng"* là **bắt buộc**. Chủ dự án chốt **GỠ** ngày
+  2026-07-29 — nó là thông báo DI TRÚ (chỉ có nghĩa với người đã từng thấy số cũ) nhưng lại
+  ghim vĩnh viễn, và thừa vì khối phía trên đã nêu cụ thể hơn. Nội dung chuyển sang
+  `apps/web/src/lib/changelog.ts` v2.0 → trang "Lịch sử cập nhật". **Đừng thêm lại** khi đọc
+  §7.2 của kế hoạch.
+

@@ -115,16 +115,21 @@ describe("ThongBaoTrangThai — nội dung theo từng chiều", () => {
     expect(noiDung).not.toContain("Mua vào");
   });
 
-  it("#15 LUÔN kèm dòng giải thích mốc đổi cách tính (§7.2 — bắt buộc)", () => {
+  // GOLDEN ĐỔI CÓ CHỦ ĐÍCH (chủ dự án chốt 2026-07-29): dòng "Từ 28/07/2026…" đã gỡ. Nó là
+  // thông báo DI TRÚ, chỉ có nghĩa với người đã từng thấy số cũ, mà lại ghim vĩnh viễn — và
+  // thừa, vì khối phía trên đã nêu cụ thể hơn. Nội dung chuyển sang `changelog.ts` v2.0.
+  // Test nay khóa điều thay thế: thông báo phải TỰ ĐỦ NGHĨA mà không cần câu chính sách đó.
+  it("#15 thông báo tự đủ nghĩa; KHÔNG ghim câu chính sách theo ngày", () => {
     render(
       <ThongBaoTrangThai
         badgeKy={KY}
         byChieu={[chieu({ chieu: "sold", soLoaiKhoiTong: 1, thueDaLoai: "100" })]}
       />,
     );
-    expect(screen.getByRole("status").textContent).toContain(
-      "Từ 28/07/2026, hóa đơn bị thay thế không còn được cộng vào tổng.",
-    );
+    const n = screen.getByRole("status").textContent ?? "";
+    expect(n).toContain("bị thay thế");
+    expect(n).toContain("đã loại khỏi tổng");
+    expect(n).not.toContain("Từ 28/07/2026");
   });
 
   it("QĐ-12 — dòng thuế phải nộp xuất hiện ĐÚNG MỘT LẦN dù có hai chiều", () => {

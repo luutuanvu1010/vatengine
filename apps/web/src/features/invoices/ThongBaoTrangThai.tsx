@@ -16,8 +16,15 @@ import { formatDateVN, formatMoney } from "../../lib/format";
 import { labelChieu } from "../../lib/statusLabels";
 import type { ChieuSummary, InvoiceFilter } from "../../types/api";
 
-/** Ngày đổi cách tính — nêu thẳng cho người dùng, không giấu trong changelog. */
-export const NGAY_DOI_CACH_TINH = "28/07/2026";
+// Dòng "Từ 28/07/2026, hóa đơn bị thay thế không còn được cộng vào tổng" ĐÃ GỠ (chủ dự án
+// chốt 2026-07-29), tuy `U36-plan.md` §7.2 từng ghi là bắt buộc. Ba lý do:
+//   • Nó là thông báo DI TRÚ — chỉ có nghĩa với người ĐÃ TỪNG thấy số cũ. Người dùng mới
+//     đọc thấy một câu đố.
+//   • Nó vĩnh viễn. Thông báo di trú mà ghim mãi thì thành nhiễu.
+//   • Nó THỪA: khối ngay bên trên đã nói cụ thể hơn nhiều — "3 hóa đơn bị thay thế - đã loại
+//     khỏi tổng: trước thuế −X, thuế −Y, tổng thanh toán −Z".
+// Nội dung này nay nằm ở `lib/changelog.ts` v2.0 → trang "Lịch sử cập nhật", đúng chỗ dành
+// cho tin về thay đổi của phần mềm.
 
 const soLoai = (c: ChieuSummary): number => c.soLoaiKhoiTong ?? 0;
 
@@ -188,9 +195,6 @@ export function ThongBaoTrangThai({
               {moDs ? <DanhSachBiSua filter={filter} /> : null}
             </div>
           ) : null}
-          <div style={{ fontSize: "var(--fs-xs)" }}>
-            <em>Từ {NGAY_DOI_CACH_TINH}, hóa đơn bị thay thế không còn được cộng vào tổng.</em>
-          </div>
         </Alert>
       ) : null}
 
