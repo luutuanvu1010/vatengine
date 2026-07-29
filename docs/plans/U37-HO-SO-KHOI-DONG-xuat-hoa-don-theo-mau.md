@@ -39,7 +39,7 @@ Mục đích của file: **hỗ trợ tổng hợp và đối soát**. **Không 
 
 | # | Quyết định | Trạng thái sau khi đổi hướng |
 |---|---|---|
-| QĐ-1 | ~~Chỉ làm hóa đơn BÁN RA (`chieu = 'sold'`)~~ | ❌ **VÔ HIỆU.** Lý do loại mua vào là "không có đường lấy logo người bán". Không dựng bản thể hiện nữa ⇒ hết lý do ⇒ **làm CẢ HAI CHIỀU**. Bundle GDT có sẵn nhãn `"Xuất xml (hóa đơn mua vào)"` |
+| QĐ-1 | **Chỉ làm hóa đơn BÁN RA (`chieu = 'sold'`)** | ⚠️ **VÔ HIỆU rồi KHÔI PHỤC — cùng kết luận, khác lý do.** 28/07: lý do cũ ("không lấy được logo người bán") hết hiệu lực ⇒ mở ra cả hai chiều. **29/07: quay lại CHỈ BÁN RA** vì nhu cầu thật của khách là *"tải hóa đơn ĐÃ XUẤT cho một khách hàng cụ thể"* (§4.8). Kỹ thuật vẫn làm được mua vào (bundle GDT có nhãn `"Xuất xml (hóa đơn mua vào)"`), nhưng **ngoài phạm vi U37b** |
 | QĐ-2 | ~~Định dạng bên trong ZIP = PDF~~ | ❌ **VÔ HIỆU.** Bên trong ZIP là **XML gốc có chữ ký số** do GDT phát |
 | QĐ-3 | **Trường rỗng thì để trống** — không bịa, không suy diễn | ✅ Còn hiệu lực (áp cho báo cáo kèm gói và cho U38) |
 | QĐ-4 | ~~Logo do người dùng TỰ TẢI LÊN~~ | ❌ **VÔ HIỆU.** Không dựng bản thể hiện ⇒ không cần logo. **Đường tải file lên đầu tiên của hệ thống RA KHỎI phạm vi**, kèm toàn bộ rủi ro §6.3 |
@@ -231,6 +231,40 @@ Lệnh: `node scripts/probe-export-xml-u37.mjs` (token GDT thật lấy từ DB,
 
 **CHƯA KIỂM CHỨNG (không chốt):** GDT có kìm nhịp riêng cho endpoint này không — hai lần gọi mất 353 ms rồi 2.261 ms, **hai mẫu là quá ít** để kết luận. Đo khi chạy lô thật ở U37a.
 
+### 4.8 ⭐ NHU CẦU THẬT của khách — chủ dự án làm rõ 2026-07-29 (đổi hẳn phạm vi U37b)
+
+Trước mốc này, kế hoạch ngầm hiểu "một lần xuất = cả kỳ của doanh nghiệp". **Sai đơn vị.**
+Chủ dự án nêu rõ nhu cầu thật:
+
+> *"khách tải hoá đơn đã xuất cho **1 khách hàng cụ thể** trong tháng"*
+
+Đo lại theo đúng đơn vị đó (`node scripts/do-hsgoc-u37.mjs`, chỉ SELECT, 2026-07-29):
+
+| Đơn vị đo | Số hóa đơn | Thời gian tải ở nhịp 2 req/giây |
+|---|---|---|
+| Cả kỳ, cả hai chiều *(hiểu sai ban đầu)* | **10.958** | ~1,5 giờ — **vượt ngân sách đẩy lùi 30 phút** |
+| Cả kỳ, chỉ bán ra | 3.741 | ~31 phút — **sát mép ngân sách** |
+| **Một khách hàng × một tháng *(nhu cầu thật)*** | **lớn nhất 56**, trung bình **6,6**, p95 ~29 | **28 giây / ~3 giây** |
+
+⇒ **Không có vấn đề quy mô nào.** Hạ tầng hàng đợi hiện tại dư sức gấp hàng chục lần. Mọi
+phương án từng cân nhắc (nới `FANOUT_MAX_BACKPRESSURE`, cron tải sẵn ban đêm, chặn trần số
+hóa đơn) đều **không cần** — miễn là **bắt buộc chọn khách hàng** trước khi cho bấm.
+
+**Phạm vi phục vụ được (đo thật):**
+
+| | |
+|---|---|
+| Hóa đơn bán ra có MST người mua | **2.006 / 11.758 (17%)** — 83% còn lại là khách lẻ (CCCD / "Bán cho người tiêu dùng") |
+| Khách hàng hiện trong danh sách gợi ý (có ĐỦ MST + tên) | **167** |
+| Hóa đơn xuất được | **1.957** |
+| Độ sạch dữ liệu tên | 165/169 MST có **đúng một** cách viết tên ⇒ live search chính xác, không gây chọn nhầm |
+
+**Ca "có MST mà tên trống" — đã truy nguyên, KHÔNG phải lỗi của ta:** 5 MST rơi vào ca này,
+toàn bộ là `nguon='sco'` (máy tính tiền) và MST bắt đầu bằng **8** (mã số thuế **cá nhân**).
+`raw_json` có khóa `nmten` nhưng **chính GDT trả giá trị `null`**. Tức là khách lẻ đọc MST cá
+nhân để lấy hóa đơn, không phải doanh nghiệp thiếu tên. ⇒ Luật "MST hoặc tên trống thì chặn
+nút" là **đúng**, và còn tự loại nhóm này ra khỏi tính năng — khớp phạm vi "chỉ doanh nghiệp".
+
 ---
 
 ## 5. CHƯA KIỂM CHỨNG — phải làm xong trước khi chốt kế hoạch (Bước R)
@@ -338,7 +372,39 @@ XML lấy từ GDT theo **định danh hóa đơn** (`nbmst`/`khhdon`/`shdon`/`k
 
    *(Đối chiếu số học ở bản cũ không còn cần: XML là bản gốc do người bán ký, ta không tự tính lại con số nào.)*
 6. **Lưu trữ & chia sẻ:** bucket **mới** `vat-chia-se` + `docs.tourdao.vn`, khóa ngẫu nhiên (§4.3); bảng `goi_chia_se` (`tenant_id`, khóa, `tao_luc`, `het_han_luc`, người tạo, trạng thái) + audit log **phát hành** và **thu hồi**; lifecycle 30 ngày + nút **thu hồi ngay**. Kiểm quyền **tại thời điểm tạo** (§6.4).
-7. **Giao diện:** nút mới trong `hanhDongPhu` của `FilterBar` (`InvoicesPage.tsx:130-150`). Theo `.claude/rules/ui.md:23` đây là **hành động nặng chạy nền** — tên/vị trí phải phản ánh đúng, không đặt ngang hàng "Xuất Excel". Cảnh báo + checkbox xác nhận (QĐ-7) dùng `Checkbox`/`Alert` sẵn có; **`Modal` chưa tồn tại** ⇒ nếu cần thì thêm primitive vào `components/ui/primitives.tsx`, không tô kiểu nội tuyến trong `features/` (`ui-luat.test.ts` sẽ đỏ). Nhãn mới khai trong Registry `packages/domain/src/registry.ts`.
+7. **Phạm vi xuất — CHỐT 2026-07-29 (§4.8):**
+   - **Chỉ chiều BÁN RA.** Chiều mua vào ra khỏi phạm vi U37b.
+   - **Bắt buộc chọn MỘT khách hàng doanh nghiệp cụ thể.** Không cho xuất "cả tháng".
+   - **Không có bộ lọc riêng cho nút xuất** — dùng CHUNG bộ lọc của trang Danh sách hóa đơn
+     (module *Tra cứu hóa đơn*), để người dùng thấy gì tải nấy. `InvoiceExportButtons` vốn
+     đã nhận sẵn prop `filter`.
+
+8. **Thiếu bộ lọc MST — phải bổ sung vào module Tra cứu hóa đơn.** Bộ lọc hiện có trên trang
+   đó (đo từ Registry): `shdon`, `nbten`, `nmten`, `tgtttbso`, `chieu`, `nguon` — **không có
+   MST nào**. Lọc theo *tên* là không đủ chắc (viết tắt/thiếu dấu là trượt). Server **đã sẵn
+   sàng**: `packages/query/src/filters.ts:43` nhận `nmmst`, dòng `:222` khớp CHÍNH XÁC
+   (`eq(hoaDon.nmmst, …)`). Chỉ thiếu khai `locDuoc` cho `nmmst` ở `packages/domain/src/registry.ts:87`
+   (hiện chỉ có `tren: { fileXuat: true }`). ⚠️ Lưu ý ngữ nghĩa: `nmmst` khớp **chính xác**,
+   khác `nmten` dùng `ilike` — nhãn phải nói rõ để người dùng không tưởng là tìm gần đúng.
+
+9. **Live search chọn khách hàng.** Nguồn dữ liệu: chính hóa đơn của tenant
+   (`DISTINCT nmmst, nmten WHERE chieu='sold'`), bọc `withTenant`. **167 mục** ⇒ trả cả danh
+   sách rồi lọc trên máy khách là đủ, KHÔNG cần tìm kiếm phía server hay phân trang.
+   Gõ được **cả tên lẫn MST**, hiển thị cặp `Tên — MST` để người dùng thấy mình chọn đúng ai.
+
+10. **Điều kiện mở nút — chốt chặn tính chính xác.** Nút mở **khi và chỉ khi đã CHỌN được một
+    khách hàng từ danh sách** (tức có `nmmst` xác định ràng vào bộ lọc). **KHÔNG** dùng điều
+    kiện "ô tìm kiếm không trống": người dùng gõ dở rồi bấm luôn thì ô có chữ nhưng chưa ràng
+    vào MST nào ⇒ lọt qua, và kết quả là gói rỗng hoặc sai khách hàng. MST hoặc tên trống ⇒
+    **chặn/ẩn nút** (chủ dự án chốt).
+
+11. **Giao diện:** nút mới trong `hanhDongPhu` của `FilterBar` (`InvoicesPage.tsx:130-150`).
+    Theo `.claude/rules/ui.md:23` đây là **hành động nặng chạy nền** — tên/vị trí phải phản ánh
+    đúng, không đặt ngang hàng "Xuất Excel". Nhưng vì quy mô thật chỉ vài giây (§4.8), màn theo
+    dõi tiến trình **không cần cầu kỳ**: "đang chuẩn bị…" rồi hiện link là đủ. Cảnh báo + checkbox
+    xác nhận (QĐ-7) dùng `Checkbox`/`Alert` sẵn có; **`Modal` chưa tồn tại** ⇒ nếu cần thì thêm
+    primitive vào `components/ui/primitives.tsx`, không tô kiểu nội tuyến trong `features/`
+    (`ui-luat.test.ts` sẽ đỏ). Nhãn mới khai trong Registry, không gõ chuỗi rời.
 
 ### Ngoài phạm vi U37 (→ U38, đã co lại rất nhiều)
 

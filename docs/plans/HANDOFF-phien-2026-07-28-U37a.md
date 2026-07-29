@@ -23,7 +23,7 @@ kiểm chứng đúng, và hóa ra tốt hơn kỳ vọng.
 
 | Vô hiệu | Vì sao |
 |---|---|
-| QĐ-1 chỉ làm hóa đơn bán ra | Lý do loại mua vào là "không lấy được logo". Hết lý do ⇒ **làm cả hai chiều** |
+| QĐ-1 chỉ làm hóa đơn bán ra | Lý do CŨ ("không lấy được logo") hết hiệu lực 28/07 ⇒ mở ra cả hai chiều. **Nhưng 29/07 quay lại CHỈ BÁN RA** vì lý do KHÁC hẳn: nhu cầu thật là "hóa đơn đã xuất cho một khách hàng" (§4). Kết quả trùng quyết định cũ, lý do thì không — đừng nhầm |
 | QĐ-2 định dạng trong ZIP là PDF | Thực tế là **XML gốc có chữ ký số + HTML bản thể hiện** |
 | QĐ-4 logo người dùng tự tải lên | Không dựng bản thể hiện ⇒ **đường upload đầu tiên RA KHỎI phạm vi** |
 | QĐ-8 in tuyên bố "không thay thế hóa đơn gốc" | File **chính là** bản gốc ⇒ in lên là **sai sự thật** |
@@ -78,7 +78,30 @@ Nên deploy vừa rồi **chưa đổi hành vi gì** của hệ thống đang c
 
 ## 4. U37b — việc tiếp theo, kèm mọi cạm bẫy đã biết
 
-Thiết kế đầy đủ ở hồ sơ §8 mục "U37b". Tóm tắt + những gì phiên này học được:
+> **⭐ PHẠM VI ĐÃ CHỐT 2026-07-29 — đọc kỹ, nó khác hẳn những gì ghi ngày 28/07.**
+> Chủ dự án làm rõ nhu cầu thật: *"khách tải hoá đơn đã xuất cho **1 khách hàng cụ thể** trong tháng"*.
+> Trước đó kế hoạch ngầm hiểu "một lần xuất = cả kỳ" — **sai đơn vị, lệch 200 lần**.
+>
+> - **Chỉ chiều BÁN RA.** Mua vào ra khỏi phạm vi.
+> - **Bắt buộc chọn MỘT khách hàng doanh nghiệp.** MST hoặc tên trống ⇒ **chặn/ẩn nút**.
+> - Nút mở khi đã **CHỌN** từ danh sách gợi ý, **không** phải khi ô tìm có chữ (gõ dở rồi bấm
+>   ⇒ gói rỗng/sai khách).
+> - **Live search** theo tên và MST; nguồn là hóa đơn của chính tenant, **167 mục** ⇒ trả cả
+>   danh sách rồi lọc trên máy khách, không cần tìm kiếm phía server.
+> - Kỳ + khách hàng **dùng CHUNG bộ lọc** trang Danh sách hóa đơn (module *Tra cứu hóa đơn*).
+> - **Phải bổ sung bộ lọc MST người mua vào module đó** — trang hiện chỉ lọc được theo *tên*.
+>   Server đã sẵn sàng (`filters.ts:43` + `:222` khớp chính xác); chỉ thiếu khai `locDuoc` cho
+>   `nmmst` ở `registry.ts:87`.
+>
+> **Quy mô thật (đo 2026-07-29):** một lần xuất lớn nhất **56 hóa đơn**, trung bình **6,6** ⇒
+> **28 giây / ~3 giây**. Ngân sách hàng đợi là 30 phút ⇒ **không có vấn đề quy mô nào**. Mọi lo
+> ngại về `FANOUT_MAX_BACKPRESSURE` / cron tải sẵn ban đêm ghi ở §5 cũ đều **KHÔNG còn áp dụng**,
+> miễn giữ ràng buộc "bắt buộc chọn khách hàng".
+>
+> **Phạm vi phục vụ:** 167 khách hàng doanh nghiệp, **1.957 hóa đơn** (17% hóa đơn bán ra có MST;
+> 83% còn lại là khách lẻ dùng CCCD — nằm ngoài tính năng theo đúng thiết kế).
+
+Thiết kế đầy đủ ở hồ sơ §8 mục "U37b" (đã cập nhật) và §4.8 (số đo). Tóm tắt + những gì phiên này học được:
 
 ### 4.1 🔴 Ràng buộc BẮT BUỘC về tenant (phát hiện ở review bảo mật)
 
