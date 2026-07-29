@@ -4,6 +4,9 @@
 > QĐ-B7…QĐ-B11 ở §2. Sẵn sàng thực thi theo `docs/plans/U37b-prompt-dieu-phoi.md`.
 > Gói 0 đã hoàn thành **trước khi** có kế hoạch này (xem §4, ghi chú trung thực).
 >
+> **Bàn giao phiên gần nhất: `docs/plans/HANDOFF-phien-2026-07-29-U37b.md`** — đọc file đó trước
+> nếu bạn là phiên mới. Xong Gói 0–3 + 4a; tiếp theo là Gói 4b.
+>
 > Đặc tả nền: `docs/plans/U37-HO-SO-KHOI-DONG-xuat-hoa-don-theo-mau.md` — §4.5/§4.7 (bằng chứng
 > endpoint + nội dung gói GDT), §4.6/§4.8 (số đo production), §8 (hướng thiết kế đã duyệt).
 > Bàn giao U37a: `docs/plans/HANDOFF-phien-2026-07-28-U37a.md`.
