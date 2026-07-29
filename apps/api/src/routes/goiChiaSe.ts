@@ -171,6 +171,12 @@ export function goiChiaSeRoutes(deps: AppDeps) {
 
       const now = new Date();
       const khoaR2 = sinhKhoaR2(now);
+      // U37c — ĐỊNH DANH CÔNG KHAI, tách khỏi khóa lưu trữ. Sinh RIÊNG chứ không cắt lại từ
+      // `khoaR2`: hai thứ này sẽ đi hai đường đời khác nhau (khóa lưu trữ đổi được khi dọn
+      // kho, liên kết đã phát cho khách thì không), buộc chúng vào nhau là tự trói.
+      const token = sinhToken();
+      // Tên khách CHỤP TẠI THỜI ĐIỂM TẠO — bản ghi lịch sử, xem chú thích ở schema.
+      const nmten = hoaDons.find((h) => h.nmten)?.nmten ?? null;
       const hetHanLuc = new Date(now.getTime() + SO_NGAY_SONG * 86_400_000);
 
       const rows = await withTenant(db, tenantId, async (tx) => {
@@ -179,6 +185,8 @@ export function goiChiaSeRoutes(deps: AppDeps) {
           .values({
             tenantId,
             khoaR2,
+            token,
+            nmten,
             nmmst,
             tuNgay,
             denNgay,

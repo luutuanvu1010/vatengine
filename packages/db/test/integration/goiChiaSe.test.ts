@@ -91,14 +91,12 @@ describe("goi_chia_se — ràng buộc (integration, PGlite)", () => {
     await db.insert(goiChiaSe).values(goi(a));
     // Khóa lưu trữ KHÁC nhau (loại trừ việc đỏ vì `khoa_r2`), chỉ token trùng.
     await expect(
-      db
-        .insert(goiChiaSe)
-        .values(
-          goi(b, {
-            khoaR2: "goi-hoa-don/2026-07/khac-hoan-toan.zip",
-            token: "abcdefghijklmnopqrstuvwxyz234567",
-          }),
-        ),
+      db.insert(goiChiaSe).values(
+        goi(b, {
+          khoaR2: "goi-hoa-don/2026-07/khac-hoan-toan.zip",
+          token: "abcdefghijklmnopqrstuvwxyz234567",
+        }),
+      ),
     ).rejects.toThrow();
   });
 
