@@ -39,7 +39,7 @@ import { HanhDongLienKet } from "./HanhDongLienKet";
  */
 function lyDoChuaBamDuoc(filter: InvoiceFilter): string[] {
   const ds: string[] = [];
-  if (!filter.nmmst) ds.push("Chọn một khách hàng để tải hóa đơn đã xuất cho họ");
+  if (!filter.nmmst) ds.push("Chọn một người mua để tải hóa đơn đã phát hành cho họ");
   if (filter.chieu !== "sold") ds.push("Chỉ tải được hóa đơn bán ra");
   if (!filter.tuNgay || !filter.denNgay) ds.push("Chọn khoảng thời gian");
   return ds;
@@ -48,12 +48,12 @@ function lyDoChuaBamDuoc(filter: InvoiceFilter): string[] {
 function thongBaoLoi(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.code === "khong_co_hoa_don" || err.status === 400)
-      return "Không có hóa đơn nào khớp khách hàng và khoảng thời gian đã chọn.";
-    if (err.status === 403) return "Bạn không có quyền phát hành đường dẫn chia sẻ.";
+      return "Không có hóa đơn nào khớp người mua và khoảng thời gian đã chọn.";
+    if (err.status === 403) return "Bạn không có quyền phát hành liên kết chia sẻ.";
     if (err.code === "thieu_tai_khoan_thue")
       return "Chưa có tài khoản thuế cho mã số thuế của những hóa đơn này.";
   }
-  return "Không tạo được đường dẫn. Thử lại.";
+  return "Không tạo được liên kết. Vui lòng thử lại.";
 }
 
 export function TaiHoaDonGoc({ filter }: { filter: InvoiceFilter }) {
@@ -118,13 +118,8 @@ export function TaiHoaDonGoc({ filter }: { filter: InvoiceFilter }) {
 
   return (
     <Card style={{ marginBottom: "var(--sp-4)" }}>
-      <SectionLabel>Tải hóa đơn gốc gửi khách hàng</SectionLabel>
+      <SectionLabel>Tải hóa đơn gốc gửi người mua</SectionLabel>
       <Cot khoang="3">
-        <ChuPhu>
-          Kéo bản gốc có chữ ký số từ Tổng cục Thuế cho những hóa đơn đã xuất cho khách hàng đang
-          chọn, gói thành một tệp ZIP và tạo đường dẫn để gửi cho họ.
-        </ChuPhu>
-
         <Hang khoang="3" xuongDong>
           <Button
             variant="secondary"
@@ -153,18 +148,18 @@ export function TaiHoaDonGoc({ filter }: { filter: InvoiceFilter }) {
         {bamDuoc && moCanhBao && !goiId && (
           <Cot khoang="2">
             <Alert tone="warning">
-              Đường dẫn tạo ra là CÔNG KHAI: ai có đường dẫn đều tải được tệp, không cần đăng nhập.
-              Chỉ gửi cho đúng người nhận. Đường dẫn tự hết hạn sau khoảng 1 tuần, và bạn có thể thu
-              hồi bất cứ lúc nào.
+              Liên kết tạo ra là <strong>công khai</strong>: bất kỳ ai có liên kết đều tải được tệp
+              mà không cần đăng nhập. Chỉ gửi cho đúng người nhận. Liên kết tự hết hạn sau khoảng 1
+              tuần, và bạn có thể thu hồi bất cứ lúc nào.
             </Alert>
             <Checkbox
-              label="Tôi hiểu đường dẫn này là công khai"
+              label="Tôi hiểu liên kết này là công khai"
               checked={daXacNhan}
               onChange={setDaXacNhan}
             />
             <Hang>
               <Button disabled={!daXacNhan || tao.isPending} onClick={() => tao.mutate()}>
-                {tao.isPending ? "Đang tạo…" : "Tạo đường dẫn chia sẻ"}
+                {tao.isPending ? "Đang tạo…" : "Tạo liên kết chia sẻ"}
               </Button>
             </Hang>
           </Cot>
@@ -190,12 +185,40 @@ export function TaiHoaDonGoc({ filter }: { filter: InvoiceFilter }) {
               </Button>
             </Hang>
             {typeof g?.soThieu === "number" && g.soThieu > 0 && (
-              <ChuPhu nhan>{g.soThieu} hóa đơn không lấy được — xem bao-cao.txt trong tệp</ChuPhu>
+              <ChuPhu nhan>
+                {g.soThieu} hóa đơn không truy xuất được — xem tệp bao-cao.txt trong gói tải về.
+              </ChuPhu>
             )}
           </Cot>
         )}
 
-        {daThuHoi && <ChuPhu nhan>Đã thu hồi — đường dẫn không còn tải được.</ChuPhu>}
+        {daThuHoi && (
+          <Cot khoang="2">
+            <ChuPhu nhan>Đã thu hồi — liên kết không còn tải được.</ChuPhu>
+            {/* Thu hồi xong mà không có đường quay lại thì là ngõ cụt — nghiệm thu tay
+                2026-07-29 bắt được. Đưa thẻ về trạng thái ban đầu để phát hành gói MỚI.
+
+                TẠO MỚI chứ KHÔNG hồi sinh gói cũ: token cũ đã nằm trong tay người mà ta vừa
+                thu hồi, dùng lại là xóa sạch ý nghĩa của việc thu hồi. Phải `reset()` cả ba
+                mutation — `g` đọc từ `dongGoi.data ?? trangThai.data`, chỉ xóa `goiId` thì
+                dữ liệu cũ còn nguyên và thẻ vẫn hiện gói vừa thu hồi. */}
+            <Hang>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setGoiId(null);
+                  setMoCanhBao(false);
+                  setDaXacNhan(false);
+                  tao.reset();
+                  dongGoi.reset();
+                  thuHoi.reset();
+                }}
+              >
+                Tạo liên kết mới
+              </Button>
+            </Hang>
+          </Cot>
+        )}
       </Cot>
     </Card>
   );

@@ -52,20 +52,22 @@ describe("U15.4 — kết xuất & convert", () => {
 
   it("mẫu chuẩn (native) → POST /exports?format=xlsx rồi tải", async () => {
     renderWithProviders(<ExportsPage />);
-    await userEvent.click(screen.getByRole("button", { name: "Tạo & tải file" }));
+    await userEvent.click(screen.getByRole("button", { name: "Tạo và tải tệp" }));
     await waitFor(() => {
       expect(calls.some((c) => c.method === "POST" && c.url.includes("/exports?format=xlsx"))).toBe(
         true,
       );
       expect(calls.some((c) => c.url.includes("/exports/e1"))).toBe(true);
     });
-    expect(await screen.findByText(/bắt đầu tải xuống/)).toBeInTheDocument();
+    expect(await screen.findByText(/bắt đầu tải về/)).toBeInTheDocument();
   });
 
   it("chọn reference → POST /exports/convert?profile=reference", async () => {
     renderWithProviders(<ExportsPage />);
-    await userEvent.click(screen.getByText("Định dạng tham chiếu (reference)"));
-    await userEvent.click(screen.getByRole("button", { name: "Tạo & tải file" }));
+    // Hai nơi cùng mang chữ "Định dạng tham chiếu" từ 2026-07-29 (thẻ chọn + dòng tóm tắt
+    // bên phải) — nhắm ĐÚNG thẻ chọn bấm được, không để query mơ hồ.
+    await userEvent.click(screen.getByRole("button", { name: /Định dạng tham chiếu/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Tạo và tải tệp" }));
     await waitFor(() => {
       expect(calls.some((c) => c.url.includes("/exports/convert?profile=reference"))).toBe(true);
     });

@@ -96,7 +96,7 @@ describe("Thẻ 'Kết quả' — 4 số thống kê (Task 13)", () => {
   it("nút Xuất Excel/CSV hiện cạnh nút Đồng bộ từ Thuế (hàng hành động)", async () => {
     mockApi({ count: 10, tongTcthue: "1", tongTthue: "1", tongTtbso: "1" });
     renderWithProviders(<InvoicesPageAs />);
-    expect(await screen.findByRole("button", { name: "Đồng bộ từ Thuế" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Đồng bộ từ Tổng cục Thuế" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Xuất Excel" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Xuất CSV" })).toBeTruthy();
   });
@@ -176,7 +176,7 @@ describe("U36 — trang Danh sách khi có hóa đơn bị thay thế", () => {
     );
     renderWithProviders(<InvoicesPageAs />);
     expect(await screen.findByText("3")).toBeTruthy();
-    expect(screen.getByText("(3 hóa đơn bị thay thế - không tính vào tổng)")).toBeTruthy();
+    expect(screen.getByText("(3 hóa đơn bị thay thế — không tính vào tổng)")).toBeTruthy();
     expect(screen.getByText(/đã loại khỏi tổng/)).toBeTruthy();
   });
 

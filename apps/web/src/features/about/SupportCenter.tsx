@@ -133,7 +133,7 @@ export function SupportCenter() {
             }}
           >
             <li>Ảnh chụp màn hình lúc gặp lỗi.</li>
-            <li>Mã số thuế (MST) đang thao tác.</li>
+            <li>Mã số thuế đang thao tác.</li>
             <li>Thời điểm xảy ra.</li>
             <li>Thao tác đang làm khi gặp lỗi.</li>
           </ul>

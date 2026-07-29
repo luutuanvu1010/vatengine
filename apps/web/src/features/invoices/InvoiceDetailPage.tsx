@@ -55,7 +55,7 @@ function LinesTable({ lines }: { lines: InvoiceLineRow[] }) {
             <tr>
               <th style={th}>STT</th>
               <th style={th}>Tên hàng hóa, dịch vụ</th>
-              <th style={th}>ĐVT</th>
+              <th style={th}>Đơn vị tính</th>
               <th style={{ ...th, textAlign: "right" }}>Số lượng</th>
               <th style={{ ...th, textAlign: "right" }}>Đơn giá</th>
               <th style={{ ...th, textAlign: "right" }}>Thành tiền</th>
@@ -101,15 +101,15 @@ function Detail({ inv }: { inv: InvoiceDetailResponse }) {
           </Row>
           <Row label="Ngày lập">{formatDateVN(inv.tdlap, true)}</Row>
           <Row label="Người bán">
-            {inv.nbten ?? "—"} · MST {inv.nbmst}
+            {inv.nbten ?? "—"} · Mã số thuế {inv.nbmst}
           </Row>
           <Row label="Người mua">
-            {inv.nmten ?? "—"} · MST {inv.nmmst ?? "—"}
+            {inv.nmten ?? "—"} · Mã số thuế {inv.nmmst ?? "—"}
           </Row>
           <Row label="Tiền chưa thuế">
             <Money v={inv.tgtcthue} /> {inv.dvtte ?? ""}
           </Row>
-          <Row label="Chiết khấu TM">
+          <Row label="Chiết khấu thương mại">
             <Money v={inv.ttcktmai} />
           </Row>
           <Row label="Tiền thuế">
@@ -165,7 +165,7 @@ export function InvoiceDetailPage() {
       {q.isPending ? (
         <Loading />
       ) : notFound ? (
-        <EmptyState message="Không tìm thấy hóa đơn (có thể đã bị xóa hoặc ngoài phạm vi doanh nghiệp)." />
+        <EmptyState message="Không tìm thấy hóa đơn. Hóa đơn có thể đã bị xóa hoặc nằm ngoài phạm vi doanh nghiệp." />
       ) : q.isError ? (
         <ErrorState message="Không tải được chi tiết hóa đơn." onRetry={() => q.refetch()} />
       ) : (

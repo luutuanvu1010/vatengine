@@ -82,7 +82,7 @@ describe("U15.3 — chi tiết hóa đơn (header)", () => {
     expect(screen.getByText("VW tiêu chuẩn TE")).toBeInTheDocument();
     // Cột bảng dòng hàng.
     expect(screen.getByText("Tên hàng hóa, dịch vụ")).toBeInTheDocument();
-    expect(screen.getByText("ĐVT")).toBeInTheDocument();
+    expect(screen.getByText("Đơn vị tính")).toBeInTheDocument();
     expect(screen.getByText("Thuế suất")).toBeInTheDocument();
     // Giá trị định dạng tiền của một dòng.
     expect(screen.getByText("1.300.000")).toBeInTheDocument();

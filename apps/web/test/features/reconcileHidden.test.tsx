@@ -5,13 +5,15 @@ import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
 // Cờ SHOW_RECONCILE — trang "Đối chiếu".
 //
-// LỊCH SỬ: tắt 2026-07-22 ("chức năng Lệch thuế chưa cần thiết"); BẬT LẠI 2026-07-29 sau khi
-// đo trên production — 15/31.807 hóa đơn đang lệch thuế (0,047%, không nhiễu), trong đó 11 ca
-// lệch > 100.000 đ. Số đo + lập luận: docs/RA-SOAT-thong-bao-lech-hoa-don-2026-07-28.md §2.
+// LỊCH SỬ: tắt 2026-07-22 ("chức năng Lệch thuế chưa cần thiết"); bật 2026-07-29 sau khi đo
+// trên production (15/31.807 hóa đơn lệch thuế, 11 ca > 100.000 đ); TẮT LẠI 2026-07-29 —
+// chủ dự án tạm ẩn khỏi trang người dùng để nghiên cứu thêm. Số đo cũ KHÔNG bị bác bỏ:
+// docs/RA-SOAT-thong-bao-lech-hoa-don-2026-07-28.md §2, điều kiện bật lại ghi ở
+// docs/BACKLOG-y-tuong-va-de-xuat.md mục "Đối chiếu — tạm ẩn 2026-07-29".
 //
-// Hai ca dưới khoá ĐÚNG hai điểm nối dây — mục menu (Sidebar) và route (AppRouter). Trước đây
-// chúng khoá trạng thái ẨN, nay khoá trạng thái HIỆN; ý đồ KHÔNG đổi: bật/tắt trang này phải
-// là thay đổi CÓ CHỦ ĐÍCH, không xảy ra do sửa một chỗ mà quên chỗ kia.
+// Hai ca dưới khoá ĐÚNG hai điểm nối dây — mục menu (Sidebar) và route (AppRouter). Chúng đã
+// đảo kỳ vọng theo cờ hai lần; ý đồ KHÔNG đổi qua các lần đó: bật/tắt trang này phải là thay
+// đổi CÓ CHỦ ĐÍCH, không xảy ra do sửa một chỗ mà quên chỗ kia.
 
 /** Phiên đã có cookie hợp lệ: mockFetch KHÔNG khai `login` ⇒ /me trả hồ sơ ngay. */
 function moPhienDaDangNhap() {
@@ -26,22 +28,22 @@ function moPhienDaDangNhap() {
   });
 }
 
-describe("Trang Đối chiếu (SHOW_RECONCILE bật)", () => {
+describe("Trang Đối chiếu (SHOW_RECONCILE tắt)", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("sidebar CÓ mục 'Đối chiếu'", async () => {
+  it("sidebar KHÔNG có mục 'Đối chiếu'", async () => {
     moPhienDaDangNhap();
     renderWithProviders(<AppRouter />, "/");
     // Chờ app vào được bên trong rồi mới khẳng định — khẳng định sớm sẽ đọc nhầm lúc còn ở
-    // màn "Đang kiểm tra phiên".
+    // màn "Đang kiểm tra phiên" (khi đó chưa link nào tồn tại, ca test xanh giả).
     await screen.findByRole("link", { name: "Danh sách hóa đơn" });
-    expect(screen.getByRole("link", { name: "Đối chiếu" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Đối chiếu" })).not.toBeInTheDocument();
   });
 
-  it("vào thẳng /reconcile → tiếp đất ĐÚNG trang Đối chiếu, không rơi về Tổng quan", async () => {
+  it("vào thẳng /reconcile → rơi về Tổng quan, không vào được trang Đối chiếu", async () => {
     moPhienDaDangNhap();
     renderWithProviders(<AppRouter />, "/reconcile");
-    expect(await screen.findByRole("heading", { level: 1, name: "Đối chiếu" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 1, name: "Tổng quan" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Tổng quan" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1, name: "Đối chiếu" })).not.toBeInTheDocument();
   });
 });

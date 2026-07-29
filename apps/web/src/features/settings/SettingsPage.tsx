@@ -2,7 +2,7 @@
 // Vai khác: chỉ đọc. Email + Bản quyền luôn chỉ đọc. KHÔNG bịa dữ liệu.
 import { useState } from "react";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Alert, Card } from "../../components/ui/primitives";
+import { Alert, Card, SectionTitle } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { labelRole } from "../../lib/rbac";
 import { useAuth } from "../auth/auth-context";
@@ -54,7 +54,7 @@ export function SettingsPage() {
       applyMe(updated);
       setSaved(true);
     } catch {
-      setErr("Lưu không thành công. Vui lòng thử lại.");
+      setErr("Không lưu được thông tin doanh nghiệp. Vui lòng thử lại.");
     } finally {
       setSaving(false);
     }
@@ -62,12 +62,10 @@ export function SettingsPage() {
 
   return (
     <div style={{ display: "grid", gap: "var(--sp-4)" }}>
-      <PageHeader title="Cài đặt chung" subtitle="Thông tin doanh nghiệp & sản phẩm" />
+      <PageHeader title="Cài đặt chung" subtitle="Thông tin doanh nghiệp và sản phẩm" />
 
       <Card>
-        <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>
-          Thông tin doanh nghiệp
-        </h2>
+        <SectionTitle>Thông tin doanh nghiệp</SectionTitle>
         <dl style={{ margin: "var(--sp-3) 0 0" }}>
           <Row label="Tên cá nhân / doanh nghiệp">
             {isAdmin ? (

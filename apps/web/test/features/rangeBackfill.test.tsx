@@ -168,7 +168,7 @@ describe("RangeSyncPanel — render từng trạng thái (thuần tiến độ +
         },
       },
     );
-    expect(screen.getByText(/tác vụ đồng bộ chạy nền/)).toBeInTheDocument();
+    expect(screen.getByText(/tác vụ đồng bộ xử lý nền/)).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument(); // số tác vụ
     expect(screen.getByText(/07\/2026/)).toBeInTheDocument(); // kỳ khử trùng (2 chiều → 1 lần)
     expect(screen.getByText(/không tạo.*trùng/i)).toBeInTheDocument();

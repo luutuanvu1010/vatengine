@@ -18,18 +18,18 @@ import { useAuth } from "./auth-context";
 const LOGIN_FACTS: ReadonlyArray<{ title: string; desc: ReactNode }> = [
   {
     title: "Dữ liệu gốc từ Tổng cục Thuế",
-    desc: "Hóa đơn mua vào & bán ra truy xuất trực tiếp từ Hệ thống HĐĐT của Tổng cục Thuế bằng chính tài khoản MST của bạn — đầy đủ dữ liệu.",
+    desc: "Hóa đơn mua vào và bán ra truy xuất trực tiếp từ Hệ thống Hóa đơn điện tử của Tổng cục Thuế, bằng chính tài khoản mã số thuế của doanh nghiệp bạn, đầy đủ dữ liệu.",
   },
   {
     title: "Đủ hai chiều, đủ loại hóa đơn",
-    desc: "Đồng bộ cả HĐĐT thường lẫn hóa đơn máy tính tiền, cả mua vào và bán ra; tự khử trùng lặp và cập nhật trạng thái hủy/thay thế.",
+    desc: "Đồng bộ cả hóa đơn điện tử thường lẫn hóa đơn máy tính tiền, cả mua vào và bán ra; tự khử trùng lặp và cập nhật trạng thái hủy hoặc thay thế.",
   },
   {
     title: "Bảo mật & đúng pháp lý",
     // Căn cứ pháp lý in ĐẬM + NGHIÊNG để nổi bật (yêu cầu chủ dự án 2026-07-23).
     desc: (
       <>
-        VATengine được xây dựng theo các nguyên tắc bảo mật của{" "}
+        VATEngine được xây dựng theo các nguyên tắc bảo mật của{" "}
         <strong>
           <em>ISO/IEC 27001</em>
         </strong>{" "}
@@ -42,7 +42,7 @@ const LOGIN_FACTS: ReadonlyArray<{ title: string; desc: ReactNode }> = [
   },
   {
     title: "Sẵn sàng đối chiếu & kê khai",
-    desc: "Tra cứu theo kỳ, phát hiện lệch thuế và kết xuất Excel/CSV chỉ trong vài cú nhấp — phục vụ đối chiếu, kê khai và tích hợp kế toán.",
+    desc: "Tra cứu theo kỳ kê khai, phát hiện lệch thuế và kết xuất Excel hoặc CSV chỉ trong vài thao tác, phục vụ đối chiếu, kê khai và tích hợp kế toán.",
   },
 ];
 

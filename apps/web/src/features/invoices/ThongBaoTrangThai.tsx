@@ -103,7 +103,7 @@ function DanhSachBiSua({ filter }: { filter: InvoiceFilter }) {
       ))}
       {ds.data.total > ds.data.rows.length ? (
         <div>
-          Hiện {ds.data.rows.length}/{ds.data.total} hóa đơn - tải file Excel để xem đủ.
+          Đang hiển thị {ds.data.rows.length}/{ds.data.total} hóa đơn — tải tệp Excel để xem đầy đủ.
         </div>
       ) : null}
     </div>
@@ -121,7 +121,7 @@ function KhoiChieu({ c, badgeKy }: { c: ChieuSummary; badgeKy: string | null }) 
       </div>
       {loai > 0 ? (
         <div>
-          {loai} hóa đơn <strong>bị thay thế</strong> - đã loại khỏi tổng: trước thuế{" "}
+          {loai} hóa đơn <strong>bị thay thế</strong> — đã loại khỏi tổng: trước thuế{" "}
           <strong className="tabular">{tien(c.tcthueDaLoai ?? "0", true)}</strong>, thuế{" "}
           <strong className="tabular">{tien(c.thueDaLoai ?? "0", true)}</strong>, tổng thanh toán{" "}
           <strong className="tabular">{tien(c.ttbsoDaLoai ?? "0", true)}</strong>
@@ -131,7 +131,7 @@ function KhoiChieu({ c, badgeKy }: { c: ChieuSummary; badgeKy: string | null }) 
           trừ nhầm phần này ra khỏi sổ — sai theo chiều ngược lại (biên bản §7). */}
       {(c.soDuocDieuChinh ?? 0) > 0 ? (
         <div>
-          {c.soDuocDieuChinh} hóa đơn <strong>bị điều chỉnh</strong> - <em>vẫn tính vào tổng</em>:
+          {c.soDuocDieuChinh} hóa đơn <strong>bị điều chỉnh</strong> — <em>vẫn tính vào tổng</em>:
           trước thuế <strong className="tabular">{tien(c.tcthueBiDieuChinh ?? "0")}</strong>, thuế{" "}
           <strong className="tabular">{tien(c.thueBiDieuChinh ?? "0")}</strong>, tổng thanh toán{" "}
           <strong className="tabular">{tien(c.ttbsoBiDieuChinh ?? "0")}</strong>
@@ -141,7 +141,7 @@ function KhoiChieu({ c, badgeKy }: { c: ChieuSummary; badgeKy: string | null }) 
         <div>
           {(c.soHdThayThe ?? 0) > 0 ? `${c.soHdThayThe} hóa đơn thay thế` : ""}
           {(c.soHdThayThe ?? 0) > 0 && (c.soHdDieuChinh ?? 0) > 0 ? " và " : ""}
-          {(c.soHdDieuChinh ?? 0) > 0 ? `${c.soHdDieuChinh} hóa đơn điều chỉnh` : ""} lập trong kỳ -
+          {(c.soHdDieuChinh ?? 0) > 0 ? `${c.soHdDieuChinh} hóa đơn điều chỉnh` : ""} lập trong kỳ —
           đã tính vào tổng
         </div>
       ) : null}
@@ -219,7 +219,7 @@ export function ThongBaoTrangThai({
           còn khối này bỏ qua thì có HẬU QUẢ PHÁP LÝ — tờ khai kỳ cũ có thể phải làm lại. */}
       {soBiSua > 0 ? (
         <Alert tone="warning">
-          {soBiSua} hóa đơn của kỳ này đã bị thay thế hoặc điều chỉnh bởi hóa đơn ở kỳ khác - kiểm
+          {soBiSua} hóa đơn của kỳ này đã bị thay thế hoặc điều chỉnh bởi hóa đơn ở kỳ khác — kiểm
           tra trước khi kê khai.
         </Alert>
       ) : null}
@@ -229,7 +229,7 @@ export function ThongBaoTrangThai({
           duy nhất giữ cho rủi ro đó không im lặng. */}
       {soMaLa > 0 ? (
         <Alert tone="warning">
-          Có {soMaLa} hóa đơn mang mã trạng thái chưa xác định - cần kiểm tra.
+          Có {soMaLa} hóa đơn mang mã trạng thái chưa xác định — cần kiểm tra.
         </Alert>
       ) : null}
     </div>

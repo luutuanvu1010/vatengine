@@ -49,19 +49,19 @@ export function ChonKhachHang({
     : undefined;
 
   const thongBao = ds.isPending
-    ? "Đang tải danh sách khách hàng…"
+    ? "Đang tải danh sách người mua…"
     : ds.isError
-      ? "Không tải được danh sách khách hàng."
+      ? "Không tải được danh sách người mua."
       : items.length === 0
-        ? "Chưa có khách hàng nào có mã số thuế."
+        ? "Chưa có người mua nào có mã số thuế."
         : undefined;
 
   return (
     <ComboBox
-      label="Khách hàng"
+      label="Người mua"
       hideLabel
       co="lg"
-      placeholder="Tìm khách hàng theo tên hoặc MST"
+      placeholder="Tìm người mua theo tên hoặc mã số thuế"
       daChon={daChon}
       items={items}
       // Khớp CẢ nhãn lẫn dòng phụ ⇒ gõ MST cũng tìm được, không chỉ tên.

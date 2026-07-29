@@ -63,7 +63,7 @@ describe("TaiHoaDonGoc — ba vế mở nút, mỗi vế một lý do riêng", (
     ve({ ...DU, nmmst: undefined });
 
     expect(nut()).toBeDisabled();
-    expect(screen.getByText(/chọn một khách hàng/i)).toBeInTheDocument();
+    expect(screen.getByText(/chọn một người mua/i)).toBeInTheDocument();
   });
 
   it("đang ở chiều Mua vào → khóa nút, nói ĐÚNG lý do đó", () => {
@@ -88,7 +88,7 @@ describe("TaiHoaDonGoc — ba vế mở nút, mỗi vế một lý do riêng", (
     mockApi({});
     ve({ chieu: "purchase" });
 
-    expect(screen.getByText(/chọn một khách hàng/i)).toBeInTheDocument();
+    expect(screen.getByText(/chọn một người mua/i)).toBeInTheDocument();
     expect(screen.getByText(/chỉ tải được hóa đơn bán ra/i)).toBeInTheDocument();
   });
 });
@@ -101,7 +101,7 @@ describe("TaiHoaDonGoc — cảnh báo có xác nhận (QĐ-7)", () => {
 
     await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
 
-    expect(screen.getByText(/ai có đường dẫn/i)).toBeInTheDocument();
+    expect(screen.getByText(/ai có liên kết/i)).toBeInTheDocument();
     expect(f).not.toHaveBeenCalled();
   });
 
@@ -111,7 +111,7 @@ describe("TaiHoaDonGoc — cảnh báo có xác nhận (QĐ-7)", () => {
     ve();
 
     await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
-    expect(screen.getByRole("button", { name: /^tạo đường dẫn/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^tạo liên kết/i })).toBeDisabled();
   });
 
   it("tick xác nhận rồi mới phát hành được", async () => {
@@ -125,7 +125,7 @@ describe("TaiHoaDonGoc — cảnh báo có xác nhận (QĐ-7)", () => {
 
     await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
     await nguoiDung.click(screen.getByRole("checkbox"));
-    await nguoiDung.click(screen.getByRole("button", { name: /^tạo đường dẫn/i }));
+    await nguoiDung.click(screen.getByRole("button", { name: /^tạo liên kết/i }));
 
     await waitFor(() => expect(f).toHaveBeenCalled());
     const goiPost = f.mock.calls.find((c) => (c[1]?.method ?? "GET") === "POST");
@@ -146,7 +146,7 @@ describe("TaiHoaDonGoc — bốn trạng thái", () => {
 
     await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
     await nguoiDung.click(screen.getByRole("checkbox"));
-    await nguoiDung.click(screen.getByRole("button", { name: /^tạo đường dẫn/i }));
+    await nguoiDung.click(screen.getByRole("button", { name: /^tạo liên kết/i }));
 
     expect(await screen.findByText(/1\s*\/\s*3/)).toBeInTheDocument();
     expect(screen.queryByRole("link")).toBeNull();
@@ -171,7 +171,7 @@ describe("TaiHoaDonGoc — bốn trạng thái", () => {
 
     await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
     await nguoiDung.click(screen.getByRole("checkbox"));
-    await nguoiDung.click(screen.getByRole("button", { name: /^tạo đường dẫn/i }));
+    await nguoiDung.click(screen.getByRole("button", { name: /^tạo liên kết/i }));
 
     // U37c — KHÔNG phơi URL trần nữa: một chuỗi 26 ký tự ngẫu nhiên dán giữa giao diện vừa
     // rối vừa mời chép tay sai. Anchor mang chữ có nghĩa, URL nằm ở `href`.
@@ -186,7 +186,7 @@ describe("TaiHoaDonGoc — bốn trạng thái", () => {
     expect(screen.getByRole("button", { name: /thu hồi/i })).toBeInTheDocument();
   });
 
-  it("có hóa đơn không lấy được → NÓI RA, không im lặng", async () => {
+  it("có hóa đơn không truy xuất được → NÓI RA, không im lặng", async () => {
     mockApi({
       "POST /goi-chia-se": () => json({ id: "g1", soHoaDon: 3, trangThai: "dang_tao" }, 201),
       "GET /goi-chia-se/g1": () =>
@@ -199,9 +199,9 @@ describe("TaiHoaDonGoc — bốn trạng thái", () => {
 
     await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
     await nguoiDung.click(screen.getByRole("checkbox"));
-    await nguoiDung.click(screen.getByRole("button", { name: /^tạo đường dẫn/i }));
+    await nguoiDung.click(screen.getByRole("button", { name: /^tạo liên kết/i }));
 
-    expect(await screen.findByText(/1 hóa đơn không lấy được/i)).toBeInTheDocument();
+    expect(await screen.findByText(/1 hóa đơn không truy xuất được/i)).toBeInTheDocument();
   });
 
   it("API lỗi → hiện lỗi, KHÔNG nuốt im lặng", async () => {
@@ -211,7 +211,7 @@ describe("TaiHoaDonGoc — bốn trạng thái", () => {
 
     await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
     await nguoiDung.click(screen.getByRole("checkbox"));
-    await nguoiDung.click(screen.getByRole("button", { name: /^tạo đường dẫn/i }));
+    await nguoiDung.click(screen.getByRole("button", { name: /^tạo liên kết/i }));
 
     expect(await screen.findByText(/không có hóa đơn nào/i)).toBeInTheDocument();
   });
@@ -226,5 +226,52 @@ describe("TaiHoaDonGoc — nói đúng về thời hiệu", () => {
     await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
     // Cloudflare chỉ bảo đảm xóa TRONG VÒNG 24h sau mốc — hứa đúng ngày là hứa sai.
     expect(screen.getByText(/khoảng 1 tuần/i)).toBeInTheDocument();
+  });
+});
+
+describe("Thu hồi xong KHÔNG được là ngõ cụt (nghiệm thu tay 2026-07-29)", () => {
+  const mocks = {
+    "POST /goi-chia-se": () => json({ id: "g1", soHoaDon: 1, trangThai: "dang_tao" }, 201),
+    "GET /goi-chia-se/g1": () =>
+      json({ id: "g1", trangThai: "dang_tao", tienDo: { tong: 1, xong: 1, conCho: 0 } }),
+    "POST /goi-chia-se/g1/dong-goi": () =>
+      json({ id: "g1", trangThai: "san_sang", soHoaDon: 1, soThieu: 0, url: "https://x/tai/abc" }),
+    "POST /goi-chia-se/g1/thu-hoi": () => json({ id: "g1", trangThai: "da_thu_hoi", url: null }),
+  };
+
+  async function toiBuocDaThuHoi() {
+    const nguoiDung = userEvent.setup();
+    ve();
+    await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
+    await nguoiDung.click(screen.getByRole("checkbox"));
+    await nguoiDung.click(screen.getByRole("button", { name: /^tạo liên kết chia sẻ/i }));
+    await screen.findByRole("link", { name: "Liên kết tải hóa đơn" });
+    await nguoiDung.click(screen.getByRole("button", { name: /^thu hồi$/i }));
+    await screen.findByText(/không còn tải được/i);
+    return nguoiDung;
+  }
+
+  it("sau khi thu hồi → CÓ nút tạo đường dẫn mới", async () => {
+    mockApi(mocks);
+    await toiBuocDaThuHoi();
+
+    expect(screen.getByRole("button", { name: /tạo liên kết mới/i })).toBeInTheDocument();
+  });
+
+  // Chỉ xóa `goiId` là chưa đủ: `g` đọc từ `dongGoi.data ?? trangThai.data`, dữ liệu cũ còn
+  // nguyên thì thẻ vẫn hiện gói vừa thu hồi — phải reset cả ba mutation.
+  it("bấm → thẻ về trạng thái ban đầu, KHÔNG còn dấu vết gói cũ", async () => {
+    mockApi(mocks);
+    const nguoiDung = await toiBuocDaThuHoi();
+
+    await nguoiDung.click(screen.getByRole("button", { name: /tạo liên kết mới/i }));
+
+    expect(screen.getByRole("button", { name: /tải hóa đơn gốc/i })).toBeEnabled();
+    expect(screen.queryByText(/không còn tải được/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Liên kết tải hóa đơn" })).toBeNull();
+    // Ô xác nhận phải trở lại chưa tích — không cho phát hành lại mà bỏ qua cảnh báo.
+    await nguoiDung.click(screen.getByRole("button", { name: /tải hóa đơn gốc/i }));
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /^tạo liên kết chia sẻ/i })).toBeDisabled();
   });
 });

@@ -1,17 +1,12 @@
 // Trang "Giới thiệu & Hỗ trợ" (U16b) — mục đích phần mềm + Trung tâm hỗ trợ & tài liệu
 // (FAQ + liên hệ) + Lịch sử cập nhật. Đóng góp QR ẩn bằng cờ SHOW_DONATION, code giữ
 // nguyên để bật lại. Thuần tĩnh: không gọi API, không dữ liệu tenant.
-import type { ReactNode } from "react";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Alert, Card } from "../../components/ui/primitives";
+import { Alert, Card, SectionTitle } from "../../components/ui/primitives";
 import { SHOW_DONATION } from "../../lib/donation";
 import { Changelog } from "./Changelog";
 import { DonationQr } from "./DonationQr";
 import { SupportCenter } from "./SupportCenter";
-
-function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>{children}</h2>;
-}
 
 const bodyStyle = {
   color: "var(--text-secondary)",
@@ -63,7 +58,7 @@ export function AboutPage() {
             <DonationQr />
           </div>
           <div style={{ marginTop: "var(--sp-5)" }}>
-            <Alert tone="success">Cảm ơn bạn đã đồng hành cùng VATEngine. 🙏</Alert>
+            <Alert tone="success">Cảm ơn bạn đã đồng hành cùng VATEngine.</Alert>
           </div>
         </Card>
       )}

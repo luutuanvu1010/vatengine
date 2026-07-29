@@ -8,8 +8,9 @@ import {
   Card,
   EmptyState,
   ErrorState,
-  InfoTip,
+  HuongDanTrang,
   Loading,
+  MucHuongDan,
   SectionLabel,
   Stat,
 } from "../../components/ui/primitives";
@@ -128,7 +129,7 @@ export function InvoicesPage() {
     <div>
       <PageHeader
         title="Danh sách hóa đơn"
-        subtitle="Hóa đơn điện tử kéo trực tiếp từ Tổng cục Thuế"
+        subtitle="Hóa đơn điện tử truy xuất trực tiếp từ Tổng cục Thuế"
       />
 
       {/* (a) Tra cứu hóa đơn — lọc (đọc nhẹ) + đồng bộ (kéo nặng) trong MỘT thẻ; hai nút
@@ -146,12 +147,8 @@ export function InvoicesPage() {
               {nenHienPanelDongBo(filter, canSync) && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-1)" }}>
                   <Button onClick={backfill.start} disabled={backfillRunning}>
-                    {backfillRunning ? "Đang đồng bộ…" : "Đồng bộ từ Thuế"}
+                    {backfillRunning ? "Đang đồng bộ…" : "Đồng bộ từ Tổng cục Thuế"}
                   </Button>
-                  <InfoTip
-                    label="Giải thích đồng bộ"
-                    text="Kiểm tra và kéo phần còn thiếu từ máy chủ thuế cho kỳ đã chọn — chạy nền."
-                  />
                 </span>
               )}
               {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
@@ -194,8 +191,8 @@ export function InvoicesPage() {
           <EmptyState
             message={
               backfillRunning
-                ? "Đang đồng bộ khoảng đã lọc từ Tổng cục Thuế — số liệu sẽ cập nhật khi lấy xong (xem tiến độ ở khung Đồng bộ phía trên)."
-                : "Không có hóa đơn khớp bộ lọc. Thử mở rộng kỳ hoặc bỏ bớt điều kiện."
+                ? "Đang đồng bộ khoảng đã lọc từ Tổng cục Thuế. Số liệu sẽ cập nhật khi xong; xem tiến độ ở phía trên."
+                : "Không có hóa đơn khớp bộ lọc. Vui lòng mở rộng kỳ hoặc bỏ bớt điều kiện."
             }
           />
         ) : (
@@ -223,7 +220,7 @@ export function InvoicesPage() {
                 label="hóa đơn khớp bộ lọc"
                 ghiChu={
                   soLoaiKhoiTong > 0
-                    ? `(${formatMoney(String(soLoaiKhoiTong))} hóa đơn bị thay thế - không tính vào tổng)`
+                    ? `(${formatMoney(String(soLoaiKhoiTong))} hóa đơn bị thay thế — không tính vào tổng)`
                     : undefined
                 }
                 badge={
@@ -253,6 +250,36 @@ export function InvoicesPage() {
           </>
         )}
       </Card>
+
+      {/* Nhãn ngắn ở nút — mô tả đầy đủ ở đây (quy ước ui.md §4.5). Trước đó mô tả của
+          "Đồng bộ" nằm trong tooltip ⓘ và mô tả của "Tải hóa đơn gốc" chen trong thẻ. */}
+      <HuongDanTrang>
+        <MucHuongDan nhan="Lọc dữ liệu">
+          Đọc lại tập hóa đơn <strong>đã có</strong> trong hệ thống theo điều kiện bạn đặt: khoảng
+          ngày, chiều mua vào hoặc bán ra, nguồn hóa đơn, mã số thuế người bán hoặc người mua. Thao
+          tác này không gọi sang Tổng cục Thuế nên có kết quả ngay.
+        </MucHuongDan>
+        <MucHuongDan nhan="Đồng bộ từ Tổng cục Thuế">
+          Đối chiếu từng tháng trong kỳ đã chọn với hệ thống Tổng cục Thuế và truy xuất phần còn
+          thiếu. Việc này xử lý nền: bạn có thể tiếp tục thao tác khác, số liệu sẽ đầy dần. Chỉ vai
+          quản trị tài khoản thuế thấy chức năng này.
+        </MucHuongDan>
+        <MucHuongDan nhan="Tùy chỉnh cột và Xuất Excel / CSV">
+          Chọn những cột cần đưa vào tệp kết xuất, rồi xuất toàn bộ kết quả khớp bộ lọc ra tệp Excel
+          hoặc CSV để đối chiếu và kê khai. Đây là kết xuất dữ liệu đã có, không truy xuất mới.
+        </MucHuongDan>
+        <MucHuongDan nhan="Tải hóa đơn gốc (.zip)">
+          Truy xuất bản gốc có chữ ký số từ Tổng cục Thuế đối với các hóa đơn đã phát hành cho người
+          mua đang chọn, đóng gói thành tệp nén .zip và tạo liên kết tải về để gửi cho người mua.
+          Chức năng mở khi bộ lọc đủ ba điều kiện: đã chọn người mua, chiều bán ra, và khoảng thời
+          gian. Liên kết tạo ra là công khai và tự hết hạn sau khoảng một tuần; bạn có thể thu hồi
+          bất cứ lúc nào ở trang Liên kết chia sẻ.
+        </MucHuongDan>
+        <MucHuongDan nhan="Hóa đơn bị sửa ở kỳ khác">
+          Liệt kê những hóa đơn đã bị thay thế hoặc điều chỉnh bởi một hóa đơn thuộc kỳ kê khai
+          khác. Nếu tờ khai của kỳ đó đã nộp, cần cân nhắc khai bổ sung.
+        </MucHuongDan>
+      </HuongDanTrang>
     </div>
   );
 }

@@ -8,7 +8,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Alert, Card, EmptyState, ErrorState, Loading } from "../../components/ui/primitives";
+import {
+  Alert,
+  Card,
+  EmptyState,
+  ErrorState,
+  Loading,
+  SectionTitle,
+} from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { loadInvoiceFilter } from "../../lib/filterStore";
 import { formatMoney } from "../../lib/format";
@@ -95,15 +102,7 @@ function Report({ report }: { report: ReconcileReport }) {
 
       {lech.length > 0 ? (
         <Card>
-          <h2
-            style={{
-              fontSize: "var(--fs-lg)",
-              fontWeight: "var(--fw-bold)",
-              color: "var(--danger-600)",
-            }}
-          >
-            Lệch thuế (số học)
-          </h2>
+          <SectionTitle style={{ color: "var(--danger-600)" }}>Lệch thuế (số học)</SectionTitle>
           <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
             Chưa thuế − chiết khấu + thuế ≠ tổng thanh toán.
           </p>
@@ -117,7 +116,8 @@ function Report({ report }: { report: ReconcileReport }) {
                     <strong>HĐ {f.shdon}</strong>
                     <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
                       Chưa thuế {formatMoney(f.tgtcthue) || "—"} · Thuế{" "}
-                      {formatMoney(f.tgtthue) || "—"} · Tổng TT {formatMoney(f.tgtttbso) || "—"}
+                      {formatMoney(f.tgtthue) || "—"} · Tổng thanh toán{" "}
+                      {formatMoney(f.tgtttbso) || "—"}
                     </div>
                   </div>
                   <div
@@ -139,25 +139,20 @@ function Report({ report }: { report: ReconcileReport }) {
 
       {thieu.length > 0 ? (
         <Card>
-          <h2
-            style={{
-              fontSize: "var(--fs-lg)",
-              fontWeight: "var(--fw-bold)",
-              color: "var(--warning-800)",
-            }}
-          >
+          <SectionTitle style={{ color: "var(--warning-800)" }}>
             Nghi thiếu hóa đơn đầu ra{" "}
-            <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-disabled)" }}>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}>
               chưa khẳng định
             </span>
-          </h2>
+          </SectionTitle>
           <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
             Khoảng trống trong dãy số hóa đơn — nghi thiếu, cần rà soát (không khẳng định).
           </p>
           {thieu.map((f) =>
             f.kind === "thieu_so_dau_ra" ? (
               <FindingRow key={`${f.nbmst}-${f.khhdon}-${f.shdonThieu}`}>
-                <strong>Số {f.shdonThieu}</strong> · ký hiệu {f.khhdon} · MST bán {f.nbmst}
+                <strong>Số {f.shdonThieu}</strong> · ký hiệu {f.khhdon} · mã số thuế người bán{" "}
+                {f.nbmst}
               </FindingRow>
             ) : null,
           )}
@@ -172,9 +167,9 @@ function Report({ report }: { report: ReconcileReport }) {
         }}
       >
         <Card>
-          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>Hóa đơn hủy</h2>
+          <SectionTitle>Hóa đơn hủy</SectionTitle>
           {huy.length === 0 ? (
-            <EmptyState message="Không có" />
+            <EmptyState message="Không có hóa đơn hủy trong kỳ đã lọc." />
           ) : (
             huy.map((f) =>
               f.kind === "huy" ? (
@@ -189,9 +184,9 @@ function Report({ report }: { report: ReconcileReport }) {
           )}
         </Card>
         <Card>
-          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>Bị thay thế</h2>
+          <SectionTitle>Bị thay thế</SectionTitle>
           {thay.length === 0 ? (
-            <EmptyState message="Không có" />
+            <EmptyState message="Không có hóa đơn bị thay thế trong kỳ đã lọc." />
           ) : (
             thay.map((f) =>
               f.kind === "thay_the" ? (
@@ -219,7 +214,7 @@ export function ReconcilePage() {
 
   return (
     <div>
-      <PageHeader title="Đối chiếu" subtitle="Phát hiện lệch thuế, nghi thiếu, hủy & thay thế" />
+      <PageHeader title="Đối chiếu" subtitle="Phát hiện lệch thuế, nghi thiếu, hủy và thay thế" />
       {q.isPending ? (
         <Loading />
       ) : q.isError ? (

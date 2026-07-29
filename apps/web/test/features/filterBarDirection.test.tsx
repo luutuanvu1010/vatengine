@@ -41,23 +41,23 @@ afterEach(() => {
 describe("B1 — ẩn ô MST theo chiều lọc (segmented, mặc định Mua vào)", () => {
   it("MẶC ĐỊNH Mua vào → chỉ hiện MST người bán (ẩn ô chọn Khách hàng)", () => {
     setup({});
-    expect(screen.getByLabelText("MST người bán")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Khách hàng")).toBeNull();
+    expect(screen.getByLabelText("Mã số thuế người bán")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Người mua")).toBeNull();
   });
 
   it("bấm 'Bán ra' → KHÔNG render MST người bán, hiện ô chọn Khách hàng", async () => {
     setup({});
     await userEvent.click(screen.getByRole("button", { name: "Bán ra" }));
-    expect(screen.queryByLabelText("MST người bán")).toBeNull();
-    expect(screen.getByLabelText("Khách hàng")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Mã số thuế người bán")).toBeNull();
+    expect(screen.getByLabelText("Người mua")).toBeInTheDocument();
   });
 
   it("Bán ra rồi bấm 'Mua vào' → quay lại chỉ MST người bán", async () => {
     setup({ chieu: "sold" });
-    expect(screen.getByLabelText("Khách hàng")).toBeInTheDocument();
+    expect(screen.getByLabelText("Người mua")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Mua vào" }));
-    expect(screen.queryByLabelText("Khách hàng")).toBeNull();
-    expect(screen.getByLabelText("MST người bán")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Người mua")).toBeNull();
+    expect(screen.getByLabelText("Mã số thuế người bán")).toBeInTheDocument();
   });
 
   it("đang Bán ra có MST người mua → bấm 'Mua vào' → nmmst bị xóa khi Lọc dữ liệu", async () => {

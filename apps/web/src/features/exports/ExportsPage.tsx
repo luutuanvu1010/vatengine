@@ -4,7 +4,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Alert, Button, Card } from "../../components/ui/primitives";
+import {
+  Alert,
+  Button,
+  Card,
+  HuongDanTrang,
+  MucHuongDan,
+  SectionTitle,
+} from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { saveBlob } from "../../lib/download";
 import { loadInvoiceFilter } from "../../lib/filterStore";
@@ -53,7 +60,7 @@ export function ExportsPage() {
     <div>
       <PageHeader
         title="Kết xuất & Convert"
-        subtitle="Xuất dữ liệu & chuyển đổi cho phần mềm kế toán"
+        subtitle="Xuất dữ liệu và chuyển đổi cho phần mềm kế toán"
       />
 
       <div
@@ -65,7 +72,7 @@ export function ExportsPage() {
         }}
       >
         <Card>
-          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>Chọn định dạng</h2>
+          <SectionTitle>Chọn định dạng</SectionTitle>
           <p style={{ color: "var(--text-tertiary)", marginTop: "var(--sp-1)" }}>
             Áp dụng cho tập hóa đơn theo bộ lọc hiện tại.
           </p>
@@ -84,7 +91,7 @@ export function ExportsPage() {
             >
               <strong>Excel (.xlsx)</strong>
               <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
-                Bảng tính đầy đủ cột
+                Bảng tính đầy đủ cột.
               </div>
             </button>
             <button
@@ -94,20 +101,14 @@ export function ExportsPage() {
             >
               <strong>CSV (.csv)</strong>
               <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
-                Dữ liệu thô, nhẹ
+                Dữ liệu dạng bảng thuần, dung lượng nhỏ.
               </div>
             </button>
           </div>
 
-          <h2
-            style={{
-              fontSize: "var(--fs-lg)",
-              fontWeight: "var(--fw-bold)",
-              marginTop: "var(--sp-6)",
-            }}
-          >
-            Profile phần mềm kế toán
-          </h2>
+          <SectionTitle style={{ marginTop: "var(--sp-6)" }}>
+            Định dạng cho phần mềm kế toán
+          </SectionTitle>
           <div style={{ display: "grid", gap: "var(--sp-2)", marginTop: "var(--sp-3)" }}>
             <button
               type="button"
@@ -128,7 +129,7 @@ export function ExportsPage() {
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
               >
                 <div>
-                  <strong>Định dạng tham chiếu (reference)</strong>
+                  <strong>Định dạng tham chiếu</strong>
                   <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
                     Cấu trúc chuẩn, sẵn sàng dùng ngay.
                   </div>
@@ -169,9 +170,7 @@ export function ExportsPage() {
         </Card>
 
         <Card style={{ alignSelf: "start" }}>
-          <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>
-            Tạo file kết xuất
-          </h2>
+          <SectionTitle>Tạo tệp kết xuất</SectionTitle>
           <dl style={{ margin: "var(--sp-3) 0", display: "grid", gap: "var(--sp-2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <dt style={{ color: "var(--text-tertiary)" }}>Định dạng</dt>
@@ -180,27 +179,44 @@ export function ExportsPage() {
               </dd>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <dt style={{ color: "var(--text-tertiary)" }}>Profile</dt>
+              <dt style={{ color: "var(--text-tertiary)" }}>Định dạng kế toán</dt>
               <dd style={{ margin: 0, fontWeight: "var(--fw-semibold)" }}>
-                {profile === "reference" ? "reference" : "mẫu chuẩn"}
+                {profile === "reference" ? "Định dạng tham chiếu" : "Mẫu chuẩn"}
               </dd>
             </div>
           </dl>
           <Button onClick={() => run.mutate()} disabled={run.isPending} style={{ width: "100%" }}>
-            {run.isPending ? "Đang tạo…" : "Tạo & tải file"}
+            {run.isPending ? "Đang tạo…" : "Tạo và tải tệp"}
           </Button>
           {run.isSuccess ? (
             <div style={{ marginTop: "var(--sp-3)" }}>
-              <Alert tone="success">Đã tạo file và bắt đầu tải xuống.</Alert>
+              <Alert tone="success">Đã tạo tệp và bắt đầu tải về.</Alert>
             </div>
           ) : null}
           {run.isError ? (
             <div style={{ marginTop: "var(--sp-3)" }}>
-              <Alert tone="danger">Không tạo được file kết xuất. Vui lòng thử lại.</Alert>
+              <Alert tone="danger">Không tạo được tệp kết xuất. Vui lòng thử lại.</Alert>
             </div>
           ) : null}
         </Card>
       </div>
+
+      <HuongDanTrang>
+        <MucHuongDan nhan="Chọn định dạng">
+          Quyết định kiểu tệp nhận được. <strong>Excel (.xlsx)</strong> là bảng tính đầy đủ cột, mở
+          trực tiếp bằng Excel. <strong>CSV (.csv)</strong> là dữ liệu dạng bảng thuần, dung lượng
+          nhỏ, phù hợp khi cần nạp vào phần mềm khác.
+        </MucHuongDan>
+        <MucHuongDan nhan="Định dạng cho phần mềm kế toán">
+          <strong>Mẫu chuẩn</strong> giữ toàn bộ cột hóa đơn theo cấu trúc của VATEngine.{" "}
+          <strong>Định dạng tham chiếu</strong> sắp xếp lại cột theo cấu trúc chuẩn để nạp thẳng vào
+          phần mềm kế toán. Các định dạng MISA, FAST và SmartKTSC đang được xây dựng.
+        </MucHuongDan>
+        <MucHuongDan nhan="Tạo và tải tệp">
+          Kết xuất tập hóa đơn theo bộ lọc bạn đang dùng ở trang Danh sách hóa đơn. Tệp được tạo rồi
+          tải về ngay; thao tác này không truy xuất dữ liệu mới từ Tổng cục Thuế.
+        </MucHuongDan>
+      </HuongDanTrang>
     </div>
   );
 }

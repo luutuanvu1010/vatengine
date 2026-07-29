@@ -163,9 +163,9 @@ describe("Thẻ 'Tra cứu hóa đơn' — gộp lọc + đồng bộ, bỏ tự
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
     expect(screen.getByText("Tra cứu hóa đơn")).toBeInTheDocument();
-    expect(screen.queryByText("Đồng bộ từ Tổng cục Thuế")).toBeNull();
+    expect(screen.queryByRole("heading", { name: /Đồng bộ từ Tổng cục Thuế/ })).toBeNull();
     expect(screen.queryByText(/Đồng bộ và tải xuống/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Đồng bộ từ Thuế" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Đồng bộ từ Tổng cục Thuế" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lọc dữ liệu" })).toBeInTheDocument();
     expect(posts).toHaveLength(0);
   });
@@ -174,7 +174,7 @@ describe("Thẻ 'Tra cứu hóa đơn' — gộp lọc + đồng bộ, bỏ tự
     const { posts } = mockApi({ accounts: [ACC], rows: [ROW], progressTong: "hoan_thanh" });
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
-    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Thuế" }));
+    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Tổng cục Thuế" }));
     expect(await screen.findByText(/Đã đồng bộ xong/)).toBeInTheDocument();
     expect(posts).toContain("backfill");
     expect(posts.filter((p) => p === "export")).toHaveLength(0);
@@ -184,7 +184,7 @@ describe("Thẻ 'Tra cứu hóa đơn' — gộp lọc + đồng bộ, bỏ tự
     const { posts } = mockApi({ accounts: [ACC], rows: [ROW], progressTong: "hoan_thanh" });
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
-    const nut = () => screen.getByRole("button", { name: "Đồng bộ từ Thuế" });
+    const nut = () => screen.getByRole("button", { name: "Đồng bộ từ Tổng cục Thuế" });
     await userEvent.click(nut());
     expect(await screen.findByText(/Đã đồng bộ xong/)).toBeInTheDocument();
     const soLanSauLan1 = posts.filter((p) => p === "backfill").length;
@@ -235,18 +235,23 @@ describe("Thẻ 'Tra cứu hóa đơn' — gộp lọc + đồng bộ, bỏ tự
     });
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
-    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Thuế" }));
+    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Tổng cục Thuế" }));
     expect(await screen.findByText(/Đã đồng bộ xong/)).toBeInTheDocument();
     expect(posts).toContain("backfill");
   });
 
-  it("5. Icon ⓘ 'Giải thích đồng bộ' → focus → thấy tooltip 'kéo phần còn thiếu'", async () => {
+  // ĐỔI 2026-07-29 (chuẩn hoá ngôn ngữ, Hạng mục 3): mô tả chức năng KHÔNG còn giấu sau
+  // tooltip ⓘ — người dùng dùng cảm ứng thì không bao giờ hover thấy — mà nằm ở khối
+  // "Hướng dẫn sử dụng trang này" cuối trang, luôn đọc được.
+  it("5. Mô tả chức năng Đồng bộ nằm ở khối hướng dẫn cuối trang, KHÔNG giấu trong tooltip", async () => {
     mockApi({ accounts: [ACC], rows: [ROW] });
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
-    const trigger = screen.getByLabelText("Giải thích đồng bộ");
-    trigger.focus();
-    expect(await screen.findByText(/kéo phần còn thiếu/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Giải thích đồng bộ")).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Hướng dẫn sử dụng trang này" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/truy xuất phần còn thiếu/)).toBeInTheDocument();
   });
 
   it("6. Vai ke_toan → không thấy nút Đồng bộ (gate canSync giữ nguyên)", async () => {

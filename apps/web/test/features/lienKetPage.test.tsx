@@ -72,7 +72,7 @@ describe("Trang Liên kết chia sẻ — bốn trạng thái", () => {
     ve();
 
     expect(await screen.findByText("Công ty TNHH ABC")).toBeInTheDocument();
-    expect(screen.getByText(/MST 0312000001/)).toBeInTheDocument();
+    expect(screen.getByText(/Mã số thuế 0312000001/)).toBeInTheDocument();
     expect(screen.getByText(/Đã tải 3 lượt/)).toBeInTheDocument();
   });
 });
@@ -162,5 +162,89 @@ describe("Nội dung chia sẻ — hàm thuần", () => {
 
   it("KHÔNG điền sẵn người nhận — hóa đơn không mang email người mua", () => {
     expect(mailtoChiaSe(T).startsWith("mailto:?")).toBe(true);
+  });
+});
+
+describe("Chia sẻ lại sau khi thu hồi (nghiệm thu tay 2026-07-29)", () => {
+  const DA_THU_HOI = { ...GOI, trangThai: "da_thu_hoi" as const, url: null };
+
+  it("gói đã thu hồi → CÓ nút Chia sẻ lại, không để người dùng vào ngõ cụt", async () => {
+    mockApi({ "GET /goi-chia-se": () => json({ items: [DA_THU_HOI] }) });
+    ve();
+    expect(await screen.findByRole("button", { name: /chia sẻ lại/i })).toBeInTheDocument();
+  });
+
+  // Token cũ đã nằm trong tay người mà ta vừa thu hồi. Hồi sinh gói cũ là xóa sạch ý nghĩa
+  // của việc thu hồi ⇒ phải TẠO MỚI, và phải mang đúng khách hàng + kỳ của gói cũ.
+  it("bấm → TẠO GÓI MỚI theo đúng khách hàng và kỳ cũ, KHÔNG hồi sinh gói cũ", async () => {
+    const f = mockApi({
+      "GET /goi-chia-se": () => json({ items: [DA_THU_HOI] }),
+      "POST /goi-chia-se": () => json({ id: "g2", soHoaDon: 12, trangThai: "dang_tao" }, 201),
+    });
+    const nguoiDung = userEvent.setup();
+    ve();
+
+    await nguoiDung.click(await screen.findByRole("button", { name: /chia sẻ lại/i }));
+
+    await waitFor(() => {
+      const post = f.mock.calls.find((c) => (c[1]?.method ?? "GET").toUpperCase() === "POST");
+      expect(post).toBeTruthy();
+      const than = JSON.parse(String(post?.[1]?.body ?? "{}"));
+      expect(than).toEqual({ nmmst: GOI.nmmst, tuNgay: GOI.tuNgay, denNgay: GOI.denNgay });
+    });
+    // KHÔNG có đường "bỏ thu hồi" nào được gọi trên gói cũ.
+    expect(
+      f.mock.calls.some((c) => String(typeof c[0] === "string" ? c[0] : "").includes("/g1/")),
+    ).toBe(false);
+  });
+
+  it("tạo lại thất bại → NÓI RA, không im lặng", async () => {
+    mockApi({
+      "GET /goi-chia-se": () => json({ items: [DA_THU_HOI] }),
+      "POST /goi-chia-se": () => json({ error: "khong_co_hoa_don" }, 400),
+    });
+    const nguoiDung = userEvent.setup();
+    ve();
+
+    await nguoiDung.click(await screen.findByRole("button", { name: /chia sẻ lại/i }));
+    expect(await screen.findByText(/không tạo được liên kết mới/i)).toBeInTheDocument();
+  });
+});
+
+describe("Gói kẹt ở 'dang_tao' tự lành", () => {
+  // Trước bản này CHỈ thẻ bên trang Danh sách hóa đơn biết gọi `dong-goi`. Gói tạo ở nơi
+  // khác — hoặc gói mà người dùng đóng tab giữa chừng — nằm chết ở `dang_tao` VĨNH VIỄN.
+  // Đã thấy đúng một hàng như vậy trên production.
+  it("hàng dang_tao đã tải xong → trang tự gọi dong-goi, không nằm chết", async () => {
+    const f = mockApi({
+      "GET /goi-chia-se": () => json({ items: [{ ...GOI, trangThai: "dang_tao", url: null }] }),
+      "GET /goi-chia-se/g1": () =>
+        json({ id: "g1", trangThai: "dang_tao", tienDo: { tong: 12, xong: 12, conCho: 0 } }),
+      "POST /goi-chia-se/g1/dong-goi": () =>
+        json({ id: "g1", trangThai: "san_sang", soHoaDon: 12, url: GOI.url }),
+    });
+    ve();
+
+    await waitFor(() =>
+      expect(
+        f.mock.calls.some(
+          (c) =>
+            new URL(String(typeof c[0] === "string" ? c[0] : (c[0] as Request).url), "http://t")
+              .pathname === "/goi-chia-se/g1/dong-goi",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("hàng dang_tao còn đang tải → hiện tiến độ, CHƯA đóng gói vội", async () => {
+    const f = mockApi({
+      "GET /goi-chia-se": () => json({ items: [{ ...GOI, trangThai: "dang_tao", url: null }] }),
+      "GET /goi-chia-se/g1": () =>
+        json({ id: "g1", trangThai: "dang_tao", tienDo: { tong: 12, xong: 5, conCho: 7 } }),
+    });
+    ve();
+
+    expect(await screen.findByText(/5\s*\/\s*12/)).toBeInTheDocument();
+    expect(f.mock.calls.some((c) => String(c[0]).includes("dong-goi"))).toBe(false);
   });
 });

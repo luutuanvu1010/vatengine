@@ -75,7 +75,7 @@ function DanhSachTheoKy({
 
   if (ds.isPending) return <Loading />;
   if (ds.isError)
-    return <ErrorState message="Không tải được danh sách." onRetry={() => ds.refetch()} />;
+    return <ErrorState message="Không tải được danh sách hóa đơn." onRetry={() => ds.refetch()} />;
 
   const kyDang =
     filter.tuNgay && filter.denNgay ? { tu: filter.tuNgay, den: filter.denNgay } : null;

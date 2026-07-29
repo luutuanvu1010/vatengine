@@ -5,7 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Card, Loading } from "../../components/ui/primitives";
+import { Card, Loading, SectionTitle } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { formatDateVN } from "../../lib/format";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
@@ -83,15 +83,7 @@ export function DashboardPage() {
       </Card>
 
       <div>
-        <h2
-          style={{
-            fontSize: "var(--fs-lg)",
-            fontWeight: "var(--fw-bold)",
-            marginBottom: "var(--sp-3)",
-          }}
-        >
-          Lối tắt
-        </h2>
+        <SectionTitle style={{ marginBottom: "var(--sp-3)" }}>Lối tắt</SectionTitle>
         <div
           style={{
             display: "grid",

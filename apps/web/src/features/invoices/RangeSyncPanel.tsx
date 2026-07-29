@@ -7,7 +7,7 @@
 // Task 12 — nút "Đồng bộ từ Thuế" chuyển lên hàng nút của FilterBar (thẻ "Tra cứu hóa đơn"
 // gộp lọc + đồng bộ); panel này CHỈ còn tiến độ + cảnh báo. Cơ chế tự-tải-file sau đồng bộ
 // (và `loiTaiXuong`) đã bỏ hoàn toàn — người dùng bấm nút Xuất riêng khi cần.
-import { Alert } from "../../components/ui/primitives";
+import { Alert, ChuPhu } from "../../components/ui/primitives";
 import type { SyncStatusView } from "../../types/api";
 import type { LineBackfillResult, RangeBackfillState } from "./useRangeBackfill";
 import { formatPeriod } from "./useRangeBackfill";
@@ -69,10 +69,11 @@ export function RangeSyncPanel({ backfill }: { backfill: RangeBackfill }) {
           tránh nói cùng một việc hai lần. */}
       {!running && tacVuNen && tacVuNen.soTacVu > 0 && (
         <Alert tone="info">
-          Đang có <strong>{tacVuNen.soTacVu}</strong> tác vụ đồng bộ chạy nền (tháng{" "}
-          <strong>{thangDangChayNen(tacVuNen)}</strong>). Bấm <strong>Đồng bộ từ Thuế</strong> lúc
-          này sẽ <strong>không tạo phiên trùng</strong> — hệ thống tự ghép vào phiên đang chạy, dữ
-          liệu sẽ đầy dần.
+          Đang có <strong>{tacVuNen.soTacVu}</strong> tác vụ đồng bộ xử lý nền (tháng{" "}
+          <strong>{thangDangChayNen(tacVuNen)}</strong>). Chọn{" "}
+          <strong>Đồng bộ từ Tổng cục Thuế</strong> lúc này sẽ{" "}
+          <strong>không tạo phiên trùng</strong>: hệ thống tự ghép vào phiên đang chạy và dữ liệu sẽ
+          đầy dần.
         </Alert>
       )}
       {running && (
@@ -85,33 +86,33 @@ export function RangeSyncPanel({ backfill }: { backfill: RangeBackfill }) {
 
       {/* Dòng hàng (U26) chạy song song — hiện ngay khi có kết quả, không phụ thuộc header. */}
       {lineResult && lineResult.soDaXepHang > 0 && (
-        <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>
-          Đồng thời đang đổ dòng hàng cho <strong>{lineResult.soDaXepHang}</strong> hóa đơn cũ
-          {lineResult.conLai > 0 ? <> (còn {lineResult.conLai} — sẽ tiếp ở đợt sau)</> : null} — cột{" "}
+        <ChuPhu nhan>
+          Đồng thời đang bổ sung dòng hàng cho <strong>{lineResult.soDaXepHang}</strong> hóa đơn cũ
+          {lineResult.conLai > 0 ? <> (còn {lineResult.conLai} — tiếp tục ở đợt sau)</> : null}. Cột{" "}
           <strong>Hàng hóa, dịch vụ</strong> và <strong>Số lượng</strong> sẽ đầy dần.
-        </div>
+        </ChuPhu>
       )}
 
       {state.kind === "phien_het_han" && (
         <Alert tone="danger">
-          Phiên đăng nhập thuế đã hết hạn — vui lòng <strong>kết nối lại</strong> ở trang{" "}
-          <strong>Tài khoản thuế</strong> rồi bấm lại.
+          Phiên đăng nhập Tổng cục Thuế đã hết hạn. Vui lòng <strong>kết nối lại</strong> ở trang{" "}
+          <strong>Kết nối tài khoản thuế</strong> rồi thực hiện lại.
         </Alert>
       )}
       {state.kind === "loi_gui" && (
-        <Alert tone="danger">Không gửi được yêu cầu đồng bộ. Thử lại sau ít phút.</Alert>
+        <Alert tone="danger">Không gửi được yêu cầu đồng bộ. Vui lòng thử lại sau ít phút.</Alert>
       )}
       {state.kind === "loi_dong_bo" && (
         <Alert tone="warning">
-          Yêu cầu đồng bộ <strong>đã nhận</strong>, nhưng {state.soThangLoi} tháng chưa kéo được dữ
-          liệu — thường do máy chủ Tổng cục Thuế đang giới hạn tốc độ. Hệ thống sẽ tự giãn nhịp và
-          thử lại; bạn có thể bấm lại sau ít phút. Bấm liên tục không làm nhanh hơn.
+          Yêu cầu đồng bộ <strong>đã nhận</strong>, nhưng {state.soThangLoi} tháng chưa truy xuất
+          được dữ liệu, thường do hệ thống Tổng cục Thuế đang giới hạn tốc độ. Hệ thống sẽ tự giãn
+          nhịp và thực hiện lại; bạn có thể thử lại sau ít phút.
         </Alert>
       )}
       {state.kind === "xong" && (
         <Alert tone="info">
-          Đã đồng bộ xong khoảng này. Dữ liệu sẽ hiển thị đầy đủ trong ít phút — tải lại danh sách
-          nếu chưa thấy.
+          Đã đồng bộ xong khoảng này. Dữ liệu sẽ hiển thị đầy đủ trong ít phút; vui lòng tải lại
+          danh sách nếu chưa thấy.
         </Alert>
       )}
     </div>

@@ -9,7 +9,7 @@
 // Khác biệt với "buộc đổi": không có cổng chặn đường, không có màn hình bắt buộc. Người
 // dùng tự vào Cài đặt khi muốn — như mọi phần mềm khác.
 import { type FormEvent, useState } from "react";
-import { Alert, Button, Card, TextField } from "../../components/ui/primitives";
+import { Alert, Button, Card, SectionTitle, TextField } from "../../components/ui/primitives";
 import { ApiError, api } from "../../lib/apiClient";
 import { vi } from "../../lib/i18n/vi";
 import { useAuth } from "../auth/auth-context";
@@ -65,7 +65,7 @@ export function DoiMatKhauCard() {
 
   return (
     <Card>
-      <h2 style={{ marginTop: 0, fontSize: "var(--fs-lg)" }}>Đổi mật khẩu</h2>
+      <SectionTitle style={{ marginTop: 0 }}>Đổi mật khẩu</SectionTitle>
 
       {dangDungMatKhauTam && (
         // NHẮC, không chặn. Người dùng vẫn dùng app bình thường; đây chỉ là chỗ duy nhất

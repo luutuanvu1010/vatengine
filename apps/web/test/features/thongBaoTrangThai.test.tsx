@@ -433,7 +433,7 @@ describe("DanhSachBiSua — nội dung danh sách bung ra (U39)", () => {
     mockDs([hd()], 250);
     moBang([chieu({ chieu: "sold", soLoaiKhoiTong: 250, thueDaLoai: "1" })]);
     await userEvent.click(screen.getByRole("button", { name: /Xem danh sách/ }));
-    expect(await screen.findByText(/Hiện 1\/250 hóa đơn/)).toBeTruthy();
+    expect(await screen.findByText(/Đang hiển thị 1\/250 hóa đơn/)).toBeTruthy();
   });
 
   it("bấm lần nữa → ẩn danh sách", async () => {

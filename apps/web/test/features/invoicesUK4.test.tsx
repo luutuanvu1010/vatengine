@@ -180,7 +180,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ từ Thu
     mockApi();
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
-    expect(screen.getByRole("button", { name: "Đồng bộ từ Thuế" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Đồng bộ từ Tổng cục Thuế" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Đồng bộ và tải xuống" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Đồng bộ khoảng này" })).toBeNull();
   });
@@ -189,7 +189,7 @@ describe("U-K4 — nút Lọc dữ liệu (đọc nhẹ) + Đồng bộ từ Thu
     const { calls } = mockApi({ progressTong: "hoan_thanh" });
     renderWithProviders(<InvoicesPageAs />);
     await screen.findByText("hóa đơn khớp bộ lọc");
-    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Thuế" }));
+    await userEvent.click(screen.getByRole("button", { name: "Đồng bộ từ Tổng cục Thuế" }));
     await screen.findByText(/Đã đồng bộ xong/);
     expect(calls.some((c) => c.method === "POST" && c.url.includes("/exports"))).toBe(false);
   });

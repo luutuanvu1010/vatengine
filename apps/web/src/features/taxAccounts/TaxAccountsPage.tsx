@@ -8,7 +8,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { Alert, Button, Card, Loading, TextField } from "../../components/ui/primitives";
+import {
+  Alert,
+  Button,
+  Card,
+  HuongDanTrang,
+  Loading,
+  MucHuongDan,
+  SectionTitle,
+  TextField,
+} from "../../components/ui/primitives";
 import { ApiError, api } from "../../lib/apiClient";
 import { formatDateVN } from "../../lib/format";
 import type { TaxAccountView } from "../../types/api";
@@ -81,7 +90,7 @@ function RegisterForm({ mst, onDone }: { mst: string | null; onDone: () => void 
     return (
       <Card>
         <Alert tone="warning">
-          Doanh nghiệp <strong>chưa khai mã số thuế</strong>. Vui lòng cập nhật MST ở{" "}
+          Doanh nghiệp <strong>chưa khai mã số thuế</strong>. Vui lòng cập nhật mã số thuế ở{" "}
           <strong>Cài đặt chung</strong> trước khi kết nối Tổng cục Thuế.
         </Alert>
       </Card>
@@ -89,7 +98,7 @@ function RegisterForm({ mst, onDone }: { mst: string | null; onDone: () => void 
   }
   return (
     <Card>
-      <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>Kết nối mã số thuế</h2>
+      <SectionTitle>Kết nối mã số thuế</SectionTitle>
       <div style={{ display: "grid", gap: "var(--sp-3)", marginTop: "var(--sp-3)", maxWidth: 360 }}>
         <div>
           <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
@@ -105,7 +114,9 @@ function RegisterForm({ mst, onDone }: { mst: string | null; onDone: () => void 
         <Button onClick={() => m.mutate()} disabled={m.isPending}>
           {m.isPending ? "Đang kết nối…" : "Kết nối tài khoản thuế"}
         </Button>
-        {m.isError ? <Alert tone="danger">Không kết nối được. Thử lại sau ít phút.</Alert> : null}
+        {m.isError ? (
+          <Alert tone="danger">Không kết nối được. Vui lòng thử lại sau ít phút.</Alert>
+        ) : null}
       </div>
     </Card>
   );
@@ -122,7 +133,7 @@ export function SubAccountBlock({ mst, onDone }: { mst: string; onDone: () => vo
   });
   return (
     <Card>
-      <h3 style={{ fontSize: "var(--fs-md)", fontWeight: "var(--fw-bold)" }}>Thêm tài khoản con</h3>
+      <SectionTitle>Thêm tài khoản con</SectionTitle>
       <div style={{ display: "grid", gap: "var(--sp-3)", marginTop: "var(--sp-3)", maxWidth: 360 }}>
         <TextField
           label={`Mã số thuế nhánh (bắt đầu bằng ${maskMst(mst)})`}
@@ -133,7 +144,9 @@ export function SubAccountBlock({ mst, onDone }: { mst: string; onDone: () => vo
           {m.isPending ? "Đang thêm…" : "Thêm tài khoản con"}
         </Button>
         {username && !valid ? (
-          <Alert tone="warning">Mã số thuế nhánh phải bắt đầu bằng MST gốc của doanh nghiệp.</Alert>
+          <Alert tone="warning">
+            Mã số thuế nhánh phải bắt đầu bằng mã số thuế gốc của doanh nghiệp.
+          </Alert>
         ) : null}
       </div>
     </Card>
@@ -147,9 +160,9 @@ function AuthorizeStep({ account, onDone }: { account: TaxAccountView; onDone: (
   });
   return (
     <Card>
-      <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>Ủy quyền truy cập</h2>
+      <SectionTitle>Ủy quyền truy cập</SectionTitle>
       <p style={{ color: "var(--text-secondary)", marginTop: "var(--sp-2)" }}>
-        Xác nhận ủy quyền cho VATEngine đăng nhập tài khoản thuế MST{" "}
+        Xác nhận ủy quyền cho VATEngine đăng nhập tài khoản thuế mang mã số thuế{" "}
         <strong>{maskMst(account.username)}</strong> để đồng bộ hóa đơn (theo Nghị định
         13/2023/NĐ-CP). Bạn có thể thu hồi bất cứ lúc nào.
       </p>
@@ -158,7 +171,9 @@ function AuthorizeStep({ account, onDone }: { account: TaxAccountView; onDone: (
           {m.isPending ? "Đang ghi nhận…" : "Tôi đồng ý ủy quyền"}
         </Button>
       </div>
-      {m.isError ? <Alert tone="danger">Không ghi nhận được ủy quyền. Thử lại.</Alert> : null}
+      {m.isError ? (
+        <Alert tone="danger">Không ghi nhận được ủy quyền. Vui lòng thử lại.</Alert>
+      ) : null}
     </Card>
   );
 }
@@ -192,15 +207,13 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
   const loginError =
     login.error instanceof ApiError
       ? login.error.status === 409
-        ? "Chưa ủy quyền — vui lòng ủy quyền trước."
-        : "Sai captcha hoặc mật khẩu. Vui lòng nhập captcha mới."
+        ? "Chưa ủy quyền. Vui lòng thực hiện bước ủy quyền trước."
+        : "Captcha hoặc mật khẩu không đúng. Vui lòng nhập lại với captcha mới."
       : null;
 
   return (
     <Card>
-      <h2 style={{ fontSize: "var(--fs-lg)", fontWeight: "var(--fw-bold)" }}>
-        Nhập captcha để đăng nhập GDT
-      </h2>
+      <SectionTitle>Nhập captcha để đăng nhập Tổng cục Thuế</SectionTitle>
       <p
         style={{
           color: "var(--text-tertiary)",
@@ -216,7 +229,7 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
           {captcha.isPending ? (
             <Loading label="Đang tải captcha…" />
           ) : captcha.isError ? (
-            <Alert tone="danger">Không tải được captcha.</Alert>
+            <Alert tone="danger">Không tải được captcha. Vui lòng thử lại.</Alert>
           ) : (
             <img
               alt="Ảnh captcha — nhập ký tự bạn nhìn thấy"
@@ -256,7 +269,7 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
         </div>
         {loginError ? <Alert tone="danger">{loginError}</Alert> : null}
         <Button onClick={() => login.mutate()} disabled={!password || !cvalue || login.isPending}>
-          {login.isPending ? "Đang đăng nhập…" : "Đăng nhập GDT"}
+          {login.isPending ? "Đang đăng nhập…" : "Đăng nhập Tổng cục Thuế"}
         </Button>
       </div>
     </Card>
@@ -271,10 +284,9 @@ function syncErrorStatus(err: unknown): number | undefined {
 }
 function syncErrorMessage(err: unknown): string {
   const status = syncErrorStatus(err);
-  if (status === 409) return "Phiên đã hết hạn — vui lòng kết nối lại.";
-  if (status === 503)
-    return "Hệ thống đang quá tải do yêu cầu đồng thời từ nhiều doanh nghiệp, vui lòng thử lại sau 10 phút.";
-  return "Không gửi được yêu cầu đồng bộ. Thử lại sau ít phút.";
+  if (status === 409) return "Phiên đăng nhập đã hết hạn. Vui lòng kết nối lại.";
+  if (status === 503) return "Hệ thống đang bận. Vui lòng thử lại sau khoảng 10 phút.";
+  return "Không gửi được yêu cầu đồng bộ. Vui lòng thử lại sau ít phút.";
 }
 
 // Trạng thái ĐÃ KẾT NỐI (token còn hạn): báo thành công rõ ràng + CTA Đồng bộ ngay.
@@ -306,10 +318,10 @@ function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: 
         <div style={{ display: "grid", gap: "var(--sp-3)" }}>
           <Alert tone="success">
             <strong>Đã kết nối mã số thuế {maskMst(account.username)} thành công.</strong> VATEngine
-            đang giữ phiên đăng nhập Tổng cục Thuế cho MST này.
+            đang giữ phiên đăng nhập Tổng cục Thuế cho mã số thuế này.
           </Alert>
           <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-            Bấm <strong>Đồng bộ ngay</strong> để kéo hóa đơn mua vào &amp; bán ra mới nhất về.
+            Chọn <strong>Đồng bộ ngay</strong> để truy xuất hóa đơn mua vào và bán ra mới nhất.
           </p>
           <div
             style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", flexWrap: "wrap" }}
@@ -354,7 +366,8 @@ function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: 
           {confirmDisconnect ? (
             <div style={{ display: "grid", gap: "var(--sp-2)", justifyItems: "start" }}>
               <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>
-                Ngắt kết nối sẽ xóa phiên đăng nhập Tổng cục Thuế đã lưu (giữ MST). Xác nhận?
+                Ngắt kết nối sẽ xóa phiên đăng nhập Tổng cục Thuế đã lưu và giữ nguyên mã số thuế.
+                Bạn xác nhận?
               </span>
               <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center" }}>
                 <Button onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
@@ -379,7 +392,7 @@ function ConnectedPanel({ account, onDone }: { account: TaxAccountView; onDone: 
             </button>
           )}
           {disconnect.isError ? (
-            <Alert tone="danger">Không ngắt kết nối được. Thử lại.</Alert>
+            <Alert tone="danger">Không ngắt kết nối được. Vui lòng thử lại.</Alert>
           ) : null}
         </div>
       </Card>
@@ -434,7 +447,7 @@ export function TaxAccountsPage() {
           {account.tokenHetHan && (
             <Alert tone="warning">
               Phiên đăng nhập Tổng cục Thuế đã hết hạn ({formatDateVN(account.tokenHetHan, true)}).
-              Đăng nhập lại để tiếp tục đồng bộ.
+              Vui lòng đăng nhập lại để tiếp tục đồng bộ.
             </Alert>
           )}
           <LoginStep account={account} onDone={refresh} />
@@ -445,6 +458,32 @@ export function TaxAccountsPage() {
       {SUB_ACCOUNT_UI_ENABLED && account && mst ? (
         <SubAccountBlock mst={mst} onDone={refresh} />
       ) : null}
+
+      <HuongDanTrang>
+        <MucHuongDan nhan="Kết nối tài khoản thuế">
+          Ghi nhận mã số thuế của doanh nghiệp vào hệ thống để chuẩn bị đăng nhập Tổng cục Thuế. Mã
+          số thuế lấy từ hồ sơ doanh nghiệp, không nhập tay ở đây; nếu chưa có, hãy cập nhật ở trang
+          Cài đặt chung.
+        </MucHuongDan>
+        <MucHuongDan nhan="Tôi đồng ý ủy quyền">
+          Xác nhận bạn được ủy quyền hợp pháp cho VATEngine đăng nhập tài khoản thuế của doanh
+          nghiệp để đồng bộ hóa đơn, theo Nghị định 13/2023/NĐ-CP. Bạn có thể thu hồi bất cứ lúc nào
+          bằng chức năng Ngắt kết nối.
+        </MucHuongDan>
+        <MucHuongDan nhan="Đăng nhập Tổng cục Thuế">
+          Nhập mật khẩu tài khoản thuế và mã captcha để lấy phiên đăng nhập. Hệ thống không tự giải
+          captcha và không lưu mật khẩu tài khoản thuế; chỉ phiên đăng nhập do cơ quan thuế cấp được
+          lưu ở dạng đã mã hóa.
+        </MucHuongDan>
+        <MucHuongDan nhan="Đồng bộ ngay">
+          Truy xuất hóa đơn mua vào và bán ra mới nhất về hệ thống. Việc này xử lý nền; hóa đơn sẽ
+          xuất hiện ở trang Danh sách hóa đơn sau ít phút.
+        </MucHuongDan>
+        <MucHuongDan nhan="Ngắt kết nối">
+          Xóa phiên đăng nhập Tổng cục Thuế đang lưu và dừng mọi đồng bộ nền. Mã số thuế và dữ liệu
+          hóa đơn đã truy xuất được giữ nguyên; bạn có thể kết nối lại bất cứ lúc nào.
+        </MucHuongDan>
+      </HuongDanTrang>
     </div>
   );
 }

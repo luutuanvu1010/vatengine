@@ -66,7 +66,7 @@ export function HanhDongLienKet({ thongTin }: { thongTin: ThongTinChiaSe }) {
       )}
       <a href={mailtoChiaSe(thongTin)}>Gửi Email</a>
       {loiChep && (
-        <ChuPhu nhan>Không sao chép được — hãy mở liên kết rồi chép từ thanh địa chỉ.</ChuPhu>
+        <ChuPhu nhan>Không sao chép được. Vui lòng mở liên kết rồi chép từ thanh địa chỉ.</ChuPhu>
       )}
     </Hang>
   );

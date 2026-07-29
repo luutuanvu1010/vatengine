@@ -9,7 +9,7 @@
 // hoá**, để chạy đồng bộ nền — và **không** lưu mật khẩu thuế thô. Câu dưới đây đã điều
 // chỉnh để nói ĐÚNG hành vi đó. Không được đổi ngược lại: một tuyên bố sai lệch với thực
 // tế trong văn bản pháp lý là rủi ro thật, không phải chuyện chữ nghĩa.
-import { Card } from "../../components/ui/primitives";
+import { Card, SectionTitle } from "../../components/ui/primitives";
 import { ORG } from "../../lib/orgInfo";
 import { OrgIdentity } from "../about/OrgIdentity";
 
@@ -20,18 +20,13 @@ const doanVan: React.CSSProperties = {
   margin: "0 0 var(--sp-3)",
 };
 
-const tieuDe: React.CSSProperties = {
-  fontSize: "var(--fs-lg)",
-  fontWeight: "var(--fw-bold)",
-  marginTop: 0,
-  marginBottom: "var(--sp-3)",
-};
-
 export function ThongTinSanPham() {
   return (
     <>
       <Card>
-        <h2 style={tieuDe}>Về phần mềm</h2>
+        <SectionTitle style={{ marginTop: 0, marginBottom: "var(--sp-3)" }}>
+          Về phần mềm
+        </SectionTitle>
         <p style={doanVan}>
           <strong>{ORG.sanPham} — phiên bản v1.0.</strong> {ORG.sanPham} giúp doanh nghiệp trích
           xuất đầy đủ hóa đơn điện tử <strong>đầu vào (mua vào)</strong> và{" "}
@@ -48,7 +43,9 @@ export function ThongTinSanPham() {
       </Card>
 
       <Card>
-        <h2 style={tieuDe}>Chính sách sử dụng &amp; Điều khoản bảo mật</h2>
+        <SectionTitle style={{ marginTop: 0, marginBottom: "var(--sp-3)" }}>
+          Chính sách sử dụng và điều khoản bảo mật
+        </SectionTitle>
         <p style={doanVan}>
           Người dùng cần tuân thủ Chính sách sử dụng và Điều khoản bảo mật khi dùng {ORG.sanPham}.
         </p>
@@ -60,7 +57,7 @@ export function ThongTinSanPham() {
             nối": hệ thống có lưu token, đã mã hoá, để đồng bộ nền hoạt động. */}
         <p style={doanVan}>
           <strong>Chúng tôi không lưu mật khẩu tài khoản thuế của người dùng.</strong> Phiên kết nối
-          (token) do cơ quan thuế cấp được <strong>mã hoá khi lưu trữ</strong> và chỉ dùng để đồng
+          (token) do cơ quan thuế cấp được <strong>mã hóa khi lưu trữ</strong> và chỉ dùng để đồng
           bộ hóa đơn theo yêu cầu của chính người dùng.
         </p>
         <p style={{ ...doanVan, marginBottom: 0 }}>
@@ -76,7 +73,9 @@ export function ThongTinSanPham() {
       <OrgIdentity />
 
       <Card>
-        <h2 style={tieuDe}>Quyền lợi tài khoản</h2>
+        <SectionTitle style={{ marginTop: 0, marginBottom: "var(--sp-3)" }}>
+          Quyền lợi tài khoản
+        </SectionTitle>
         {/* CỐ Ý KHÔNG lặp lại "Gói dịch vụ" ở đây: card hồ sơ phía trên đã hiện nó, lấy
             ĐỘNG từ `/me`. Nhắc lại bằng chuỗi tĩnh vừa thừa, vừa sẽ NÓI DỐI ngay khi có
             tenant dùng gói khác Free — hai chỗ hiển thị cùng một thứ thì chỗ tĩnh luôn là

@@ -128,7 +128,7 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
     });
     renderWithProviders(<TaxAccountsPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Đồng bộ ngay" }));
-    expect(await screen.findByText(/quá tải/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Hệ thống đang bận/i)).toBeInTheDocument();
     // KHÔNG hiện thông báo lỗi chung chung khi là 503 sync_busy.
     expect(screen.queryByText(/Không gửi được yêu cầu đồng bộ/)).toBeNull();
   });
@@ -138,7 +138,7 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
     renderWithProviders(<TaxAccountsPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Ngắt kết nối" }));
     // Bước xác nhận hiện ra; CHƯA gọi endpoint.
-    expect(screen.getByText(/Xác nhận\?/)).toBeInTheDocument();
+    expect(screen.getByText(/Bạn xác nhận\?/)).toBeInTheDocument();
     expect(calls.some((c) => c.url.includes("/disconnect"))).toBe(false);
     await userEvent.click(screen.getByRole("button", { name: "Xác nhận ngắt kết nối" }));
     await waitFor(() =>
@@ -155,7 +155,7 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
     expect(document.getElementById("cap")).toBeNull(); // KHÔNG chèn SVG thô
     await userEvent.type(screen.getByLabelText("Mật khẩu thuế"), "matkhauthue");
     await userEvent.type(screen.getByLabelText("Mã captcha"), "7K9P2");
-    await userEvent.click(screen.getByRole("button", { name: "Đăng nhập GDT" }));
+    await userEvent.click(screen.getByRole("button", { name: "Đăng nhập Tổng cục Thuế" }));
     await waitFor(() => expect(calls.some((c) => c.url.includes("/login"))).toBe(true));
     // Sau đăng nhập: ô mật khẩu được xóa (không giữ state) + KHÔNG rơi vào localStorage.
     await waitFor(() =>
@@ -204,7 +204,7 @@ describe("U23-D — SubAccountBlock (dựng nền, validate tiền tố MST gố
     expect(btn).toBeDisabled(); // rỗng
     await userEvent.type(field, "999");
     expect(btn).toBeDisabled(); // sai tiền tố
-    expect(screen.getByText(/phải bắt đầu bằng MST gốc/i)).toBeInTheDocument();
+    expect(screen.getByText(/phải bắt đầu bằng mã số thuế gốc/i)).toBeInTheDocument();
     await userEvent.clear(field);
     await userEvent.type(field, "0311772540-001");
     expect(btn).toBeEnabled(); // đúng tiền tố (nhánh)

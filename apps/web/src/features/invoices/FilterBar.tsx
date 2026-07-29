@@ -127,10 +127,10 @@ export function FilterBar({
           </Select>
           {showNbmst ? (
             <Field
-              label="MST người bán"
+              label="Mã số thuế người bán"
               hideLabel
               co="lg"
-              placeholder="MST người bán"
+              placeholder="Mã số thuế người bán"
               value={draft.nbmst ?? ""}
               onChange={(e) => set({ nbmst: e.target.value || undefined })}
             />

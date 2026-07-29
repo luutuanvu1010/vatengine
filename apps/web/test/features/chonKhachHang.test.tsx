@@ -42,7 +42,7 @@ describe("ChonKhachHang — nạp và hiển thị", () => {
     const nguoiDung = userEvent.setup();
     ve();
 
-    await nguoiDung.click(await screen.findByLabelText(/khách hàng/i));
+    await nguoiDung.click(await screen.findByLabelText(/người mua/i));
 
     expect(await screen.findByText(/CÔNG TY TNHH ABC/)).toBeInTheDocument();
     // Dòng phụ gộp MST + số hóa đơn. Khớp CẢ CỤM: `/12/` trần trụi sẽ dính luôn chuỗi MST
@@ -55,8 +55,8 @@ describe("ChonKhachHang — nạp và hiển thị", () => {
     const nguoiDung = userEvent.setup();
     ve();
 
-    await nguoiDung.click(await screen.findByLabelText(/khách hàng/i));
-    expect(await screen.findByText(/chưa có khách hàng/i)).toBeInTheDocument();
+    await nguoiDung.click(await screen.findByLabelText(/người mua/i));
+    expect(await screen.findByText(/chưa có người mua/i)).toBeInTheDocument();
   });
 
   it("API lỗi → hiện lỗi, KHÔNG nuốt im lặng", async () => {
@@ -64,7 +64,7 @@ describe("ChonKhachHang — nạp và hiển thị", () => {
     const nguoiDung = userEvent.setup();
     ve();
 
-    await nguoiDung.click(await screen.findByLabelText(/khách hàng/i));
+    await nguoiDung.click(await screen.findByLabelText(/người mua/i));
     expect(await screen.findByText(/không tải được/i)).toBeInTheDocument();
   });
 
@@ -73,7 +73,7 @@ describe("ChonKhachHang — nạp và hiển thị", () => {
     const nguoiDung = userEvent.setup();
     ve();
 
-    await nguoiDung.click(await screen.findByLabelText(/khách hàng/i));
+    await nguoiDung.click(await screen.findByLabelText(/người mua/i));
     expect(await screen.findByText(/gõ thêm/i)).toBeInTheDocument();
   });
 });
@@ -84,7 +84,7 @@ describe("ChonKhachHang — tìm live", () => {
     const nguoiDung = userEvent.setup();
     ve();
 
-    const o = await screen.findByLabelText(/khách hàng/i);
+    const o = await screen.findByLabelText(/người mua/i);
     await nguoiDung.type(o, "cong ty");
 
     expect(await screen.findByText(/CÔNG TY TNHH ABC/)).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe("ChonKhachHang — tìm live", () => {
     const nguoiDung = userEvent.setup();
     ve();
 
-    await nguoiDung.type(await screen.findByLabelText(/khách hàng/i), "dao");
+    await nguoiDung.type(await screen.findByLabelText(/người mua/i), "dao");
     expect(await screen.findByText(/TOUR ĐẢO/)).toBeInTheDocument();
   });
 
@@ -105,7 +105,7 @@ describe("ChonKhachHang — tìm live", () => {
     const nguoiDung = userEvent.setup();
     ve();
 
-    await nguoiDung.type(await screen.findByLabelText(/khách hàng/i), "42019");
+    await nguoiDung.type(await screen.findByLabelText(/người mua/i), "42019");
     expect(await screen.findByText(/Minh Khang/)).toBeInTheDocument();
     expect(screen.queryByText(/CÔNG TY TNHH ABC/)).toBeNull();
   });
@@ -115,7 +115,7 @@ describe("ChonKhachHang — tìm live", () => {
     const nguoiDung = userEvent.setup();
     ve();
 
-    await nguoiDung.type(await screen.findByLabelText(/khách hàng/i), "khongcoai");
+    await nguoiDung.type(await screen.findByLabelText(/người mua/i), "khongcoai");
     expect(await screen.findByText(/không tìm thấy/i)).toBeInTheDocument();
   });
 });
@@ -126,7 +126,7 @@ describe("ChonKhachHang — chọn và xóa", () => {
     const nguoiDung = userEvent.setup();
     const { onChange } = ve();
 
-    await nguoiDung.type(await screen.findByLabelText(/khách hàng/i), "cong ty tnhh abc");
+    await nguoiDung.type(await screen.findByLabelText(/người mua/i), "cong ty tnhh abc");
     await nguoiDung.click(await screen.findByText(/CÔNG TY TNHH ABC/));
 
     expect(onChange).toHaveBeenCalledWith({ nmmst: "0312000001", nmten: "CÔNG TY TNHH ABC" });
@@ -138,7 +138,7 @@ describe("ChonKhachHang — chọn và xóa", () => {
     const nguoiDung = userEvent.setup();
     const { onChange } = ve();
 
-    await nguoiDung.type(await screen.findByLabelText(/khách hàng/i), "CÔNG TY TNHH");
+    await nguoiDung.type(await screen.findByLabelText(/người mua/i), "CÔNG TY TNHH");
 
     for (const goi of (onChange as ReturnType<typeof vi.fn>).mock.calls) {
       expect(goi[0]?.nmmst).toBeUndefined();
@@ -171,7 +171,7 @@ describe("ChonKhachHang — bàn phím", () => {
     const nguoiDung = userEvent.setup();
     const { onChange } = ve();
 
-    const o = await screen.findByLabelText(/khách hàng/i);
+    const o = await screen.findByLabelText(/người mua/i);
     await nguoiDung.click(o);
     await nguoiDung.keyboard("{ArrowDown}{Enter}");
 
@@ -183,7 +183,7 @@ describe("ChonKhachHang — bàn phím", () => {
     const nguoiDung = userEvent.setup();
     const { onChange } = ve();
 
-    const o = await screen.findByLabelText(/khách hàng/i);
+    const o = await screen.findByLabelText(/người mua/i);
     await nguoiDung.click(o);
     expect(await screen.findByText(/CÔNG TY TNHH ABC/)).toBeInTheDocument();
 

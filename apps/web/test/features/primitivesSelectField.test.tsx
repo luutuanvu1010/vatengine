@@ -29,8 +29,8 @@ describe("Select — ô chọn primitive", () => {
 
 describe("Field — ô nhập primitive (nhãn tuỳ chọn ẩn)", () => {
   it("render <input> gốc với nhãn gắn đúng id", () => {
-    render(<Field label="MST người bán" value="" onChange={() => {}} />);
-    const el = screen.getByLabelText("MST người bán");
+    render(<Field label="Mã số thuế người bán" value="" onChange={() => {}} />);
+    const el = screen.getByLabelText("Mã số thuế người bán");
     expect(el.tagName).toBe("INPUT");
     expect(document.querySelector(`label[for="${el.id}"]`)).not.toBeNull();
   });
