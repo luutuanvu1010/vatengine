@@ -21,9 +21,9 @@ import { monthRangeOf, vnYearMonth } from "../../lib/period";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
 import type { InvoiceFilter } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
+import { BiSuaKyKhacBadge } from "./BiSuaKyKhacBadge";
 import { ChonCotXuat } from "./ChonCotXuat";
 import { FilterBar } from "./FilterBar";
-import { InvoiceChangesBadge } from "./InvoiceChangesBadge";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { RangeSyncPanel } from "./RangeSyncPanel";
 import { ThongBaoTrangThai } from "./ThongBaoTrangThai";
@@ -95,6 +95,16 @@ export function InvoicesPage() {
   // tab đang mở giữ dữ liệu shape CŨ trong cache tới lần refetch (queryKey không đổi).
   const soLoaiKhoiTong = summary.data?.total.soLoaiKhoiTong ?? 0;
   const byChieu = summary.data?.byChieu ?? [];
+  // Hóa đơn BỊ SỬA của kỳ đang xem (mã 4 + mã 5) — thẻ Kết quả đã liệt kê đủ. Truyền xuống
+  // badge để nó trừ ra, chỉ báo phần NGOÀI kỳ; hai chỗ không chồng lấn nhau.
+  // `undefined` khi summary trong cache còn shape CŨ (chưa có hai trường này) — badge sẽ
+  // im lặng thay vì đếm nhầm toàn bộ hóa đơn bị sửa thành "ở kỳ khác".
+  const shapeCu =
+    byChieu.length > 0 &&
+    byChieu.every((c) => c.soLoaiKhoiTong === undefined && c.soDuocDieuChinh === undefined);
+  const soBiSuaTrongKy = shapeCu
+    ? undefined
+    : byChieu.reduce((n, c) => n + (c.soLoaiKhoiTong ?? 0) + (c.soDuocDieuChinh ?? 0), 0);
   // Rỗng = đã tải xong summary và đếm được 0. Dùng để tự đồng bộ (không để màn rỗng gây hiểu nhầm).
   const khongCoHoaDon = summary.isSuccess && count === 0;
 
@@ -145,7 +155,11 @@ export function InvoicesPage() {
               )}
               {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
               <InvoiceExportButtons filter={filter} cols={cols} />
-              <InvoiceChangesBadge />
+              <BiSuaKyKhacBadge
+                filter={filter}
+                trongKy={soBiSuaTrongKy}
+                onChonKy={(tuNgay, denNgay) => applyFilter({ ...filter, tuNgay, denNgay })}
+              />
             </span>
           }
         />

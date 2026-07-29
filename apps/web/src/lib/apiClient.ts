@@ -10,7 +10,6 @@ import type {
   ConvertResult,
   ExportFormat,
   ExportResult,
-  InvoiceChangeListResult,
   InvoiceDetailResponse,
   InvoiceFilter,
   InvoiceListResult,
@@ -221,21 +220,11 @@ export const api = {
   getInvoice(id: string): Promise<InvoiceDetailResponse> {
     return request("GET", `/invoices/${id}`);
   },
-  // U35 — badge/panel "Hóa đơn vừa thay đổi". `unread`/`limit` tùy chọn: mặc định lấy
-  // trang đầu (mọi trạng thái) để badge tính unreadCount TỪ CÙNG một lần gọi.
-  getInvoiceChanges(
-    opts: { unread?: boolean; limit?: number } = {},
-  ): Promise<InvoiceChangeListResult> {
-    return request("GET", "/invoices/changes", {
-      query: { unread: opts.unread ? "true" : undefined, limit: opts.limit },
-    });
-  },
-  /** Thiếu/rỗng `ids` = đánh dấu TẤT CẢ chưa đọc của tenant. */
-  markInvoiceChangesRead(ids?: readonly string[]): Promise<{ ok: true; markedCount: number }> {
-    return request("POST", "/invoices/changes/mark-read", {
-      body: ids && ids.length > 0 ? { ids } : {},
-    });
-  },
+  // U40 — hai hàm `getInvoiceChanges`/`markInvoiceChangesRead` ĐÃ GỠ cùng nút "Hóa đơn vừa
+  // thay đổi": cảnh báo nay dẫn xuất từ dữ liệu × bộ lọc, không còn khái niệm "đã đọc".
+  // Endpoint `/invoices/changes` và bảng `lich_su_thay_doi_hoa_don` GIỮ NGUYÊN phía server —
+  // chúng là dấu vết kiểm toán ("hệ thống phát hiện thay đổi này lúc nào"), chỉ thôi đóng vai
+  // nguồn cảnh báo. Cần màn lịch sử thì thêm lại hai hàm này, vài dòng.
   getReconcile(filter: InvoiceFilter): Promise<ReconcileReport> {
     return request("GET", "/reconcile", { query: filterQuery(filter) });
   },

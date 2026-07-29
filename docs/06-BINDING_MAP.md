@@ -67,7 +67,9 @@
 
 ## 3c. Endpoint bổ sung U35 (lưu vết + cảnh báo thay đổi trạng thái hóa đơn, 2026-07-27)
 
-> Đọc/đánh dấu kho nội bộ `lich_su_thay_doi_hoa_don` (ghi bởi trigger DB) — KHÔNG endpoint nào gọi GDT. Badge/panel "Hóa đơn vừa thay đổi" trên màn Tra cứu hóa đơn.
+> Đọc/đánh dấu kho nội bộ `lich_su_thay_doi_hoa_don` (ghi bởi trigger DB) — KHÔNG endpoint nào gọi GDT.
+>
+> ⚠️ **Từ 2026-07-29 (U40) KHÔNG còn giao diện nào gọi hai endpoint này.** Nút "Hóa đơn vừa thay đổi" đã đổi ruột thành "Hóa đơn bị sửa ở kỳ khác", đọc `GET /invoices?biSua=true` và tính DẪN XUẤT (không còn khái niệm "đã đọc"). Lý do đổi: trigger `AFTER UPDATE` chỉ ghi khi trạng thái ĐỔI trong lúc hệ thống theo dõi, nên 16/17 hóa đơn mã 4 không bao giờ xuất hiện — nút báo "1" trong khi thực có 17. Endpoint và bảng **GIỮ NGUYÊN** làm dấu vết kiểm toán ("phát hiện thay đổi lúc nào"); cần màn lịch sử thì thêm lại lời gọi ở `apiClient`.
 
 | Method + path | Request | Response OK | RBAC | Nguồn |
 |---|---|---|---|---|
