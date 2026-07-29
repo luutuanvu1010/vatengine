@@ -1,7 +1,8 @@
 # U37b — Phát hành gói hóa đơn gốc cho MỘT khách hàng, chia sẻ qua link công khai
 
-> **Trạng thái:** 🟡 **KẾ HOẠCH — CHỜ DUYỆT (QA1).** Có **5 điểm mơ hồ ở §8 phải chốt trước khi
-> code**. Gói 0 đã hoàn thành trước khi có kế hoạch này (xem §4, ghi chú trung thực).
+> **Trạng thái:** 🟢 **ĐÃ DUYỆT (QA1) 2026-07-29** — 5 điểm mơ hồ ở §8 đã chốt, nâng thành
+> QĐ-B7…QĐ-B11 ở §2. Sẵn sàng thực thi theo `docs/plans/U37b-prompt-dieu-phoi.md`.
+> Gói 0 đã hoàn thành **trước khi** có kế hoạch này (xem §4, ghi chú trung thực).
 >
 > Đặc tả nền: `docs/plans/U37-HO-SO-KHOI-DONG-xuat-hoa-don-theo-mau.md` — §4.5/§4.7 (bằng chứng
 > endpoint + nội dung gói GDT), §4.6/§4.8 (số đo production), §8 (hướng thiết kế đã duyệt).
@@ -32,6 +33,11 @@ Người nhận mở link tải về mà **không cần tài khoản**; link s�
 | QĐ-6 | Tự xóa sau **~30 ngày** bằng R2 Lifecycle theo prefix | Hồ sơ §3 |
 | QĐ-7 | **Cảnh báo rủi ro link công khai có checkbox xác nhận** + nút thu hồi + audit log | Hồ sơ §3 |
 | QĐ-3 | Trường rỗng để trống — không bịa | Hồ sơ §3 |
+| QĐ-B7 | **`vat-api` đóng gói ZIP** (không phải sync-worker) — worker giữ đơn nhiệm là tải hồ sơ gốc | Chủ dự án 2026-07-29 |
+| QĐ-B8 | **Tiến trình đếm trực tiếp từ `tep_hoa_don_goc`** — không thêm cột đếm, không tạo nguồn sự thật thứ hai | Chủ dự án 2026-07-29 |
+| QĐ-B9 | **Khoảng ngày trống ⇒ CHẶN.** Không cho phát gói phủ toàn bộ lịch sử | Chủ dự án 2026-07-29 |
+| QĐ-B10 | Tên file tải về `hoa-don-<tên khách rút gọn>-<tuNgay>-<denNgay>.zip` qua `contentDisposition`. Tên khách **KHÔNG** được vào khóa R2 | Chủ dự án 2026-07-29 |
+| QĐ-B11 | Cảnh báo QĐ-7 là **khối inline cạnh nút**, không dựng primitive `Modal` | Chủ dự án 2026-07-29 |
 
 **Quyết định cũ KHÔNG áp dụng:** QĐ-1/2/4/8 đã vô hiệu (hồ sơ §3). Đặc biệt **QĐ-8 (in tuyên bố
 "không thay thế hóa đơn gốc") là SAI SỰ THẬT** ở U37b — file phát ra **chính là** bản gốc có chữ
@@ -169,28 +175,26 @@ Cột: `id`, `tenant_id`, `khoa_r2`, `nmmst`, `tu_ngay`, `den_ngay`, `so_hoa_don
 
 ## 7. Trạng thái duyệt
 
-- [ ] Chủ dự án duyệt kế hoạch (QA1)
-- [ ] Chốt 5 điểm mơ hồ ở §8
-- [ ] Sinh `U37b-prompt-dieu-phoi.md`
+- [x] Chốt 5 điểm mơ hồ ở §8 — chủ dự án trả lời 2026-07-29 (thành QĐ-B7…QĐ-B11 ở §2)
+- [x] Chủ dự án duyệt kế hoạch (QA1) — ngầm định qua việc chốt đủ 5 điểm chặn
+- [x] Sinh `U37b-prompt-dieu-phoi.md`
 
-## 8. ĐIỂM MƠ HỒ — DỪNG VÀ HỎI trước khi code
+## 8. Năm điểm mơ hồ — ĐÃ CHỐT 2026-07-29
 
-Theo Hiến pháp §"Khi gặp mơ hồ" và skill `plan-unit`: **không tự giả định thầm rồi code tiếp.**
+Nêu theo Hiến pháp §"Khi gặp mơ hồ" trước khi code; chủ dự án đã trả lời đủ. Chép lên §2 thành
+QĐ-B7…QĐ-B11 để chúng là **quyết định**, không còn là câu hỏi.
 
-1. **Ai đóng gói ZIP, và lúc nào?** Tải hóa đơn chạy **bất đồng bộ** qua queue, nên gói chỉ dựng
-   được khi hóa đơn cuối đã về. (a) `sync-worker` tự phát hiện job cuối rồi đóng gói; (b) `vat-api`
-   đóng gói khi client hỏi lại và thấy đã đủ. Đề xuất **(b)** — giữ worker đơn nhiệm, và quy mô nhỏ
-   nên client hỏi lại vài giây là xong.
-2. **Theo dõi tiến trình bằng gì?** (a) đếm trực tiếp từ `tep_hoa_don_goc`; (b) thêm cột đếm vào
-   `goi_chia_se`. Đề xuất **(a)** — không tạo nguồn sự thật thứ hai.
-3. **Khoảng ngày lấy từ đâu?** Bộ lọc trang danh sách có `tuNgay`/`denNgay`. Nếu người dùng để
-   trống thì gói phủ **toàn bộ lịch sử** của khách đó — có chặn không, hay cho phép?
-4. **Tên file ZIP khi tải về** (`contentDisposition`): đề xuất
-   `hoa-don-<tên khách rút gọn>-<tuNgay>-<denNgay>.zip`. ⚠️ Tên khách vào **tên file tải về** thì
-   được, nhưng **TUYỆT ĐỐI KHÔNG** vào **khóa R2** (khóa là thứ duy nhất bảo vệ file).
-5. **Cảnh báo QĐ-7 đặt ở đâu?** `Modal` **chưa tồn tại** trong thư viện primitive. (a) thêm
-   primitive `Modal`; (b) dùng `Popover` sẵn có; (c) khối cảnh báo inline hiện ra cạnh nút. Đề xuất
-   **(c)** cho gọn, (a) nếu bạn muốn dứt khoát hơn.
+| # | Câu hỏi | Chốt |
+|---|---|---|
+| 1 | Ai đóng gói ZIP, lúc nào? | **`vat-api`** dựng khi client hỏi lại và thấy đã đủ (QĐ-B7) |
+| 2 | Theo dõi tiến trình bằng gì? | Đếm trực tiếp từ **`tep_hoa_don_goc`** (QĐ-B8) |
+| 3 | Khoảng ngày để trống thì sao? | **CHẶN** — không phát gói phủ toàn bộ lịch sử (QĐ-B9) |
+| 4 | Tên file ZIP tải về | `hoa-don-<khách>-<từ>-<đến>.zip`; tên khách KHÔNG vào khóa R2 (QĐ-B10) |
+| 5 | Cảnh báo QĐ-7 đặt ở đâu? | **Khối inline** cạnh nút, không dựng `Modal` (QĐ-B11) |
+
+**Hệ quả QĐ-B9 lên Gói 6:** điều kiện mở nút thành **ba** vế — đã chọn khách hàng **và**
+`chieu === "sold"` **và** có đủ `tuNgay`+`denNgay`. Thiếu vế nào thì nút mờ kèm đúng lý do của
+vế đó (đừng gộp một thông báo chung chung).
 
 ## 9. Liên quan
 
