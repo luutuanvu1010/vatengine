@@ -18,6 +18,15 @@ export {
   type Page,
 } from "./filters";
 export { getInvoiceById, getInvoiceLines, type DongHangHoaRow } from "./getInvoice";
+// U37b Gói 4a — tầng truy vấn phát hành gói hóa đơn gốc. `listHoaDonChoGoi` là NGUỒN
+// DUY NHẤT sinh `ref` cho message queue (ràng buộc bảo mật — xem chú thích trong file).
+export {
+  demTienDoGoi,
+  listHoaDonChoGoi,
+  type HoaDonChoGoi,
+  type PhamViGoi,
+  type TienDoGoi,
+} from "./goiHoaDon";
 // U37b — danh sách khách hàng để chọn khi tải hóa đơn gốc (chỉ chiều bán ra).
 export {
   listKhachHang,
