@@ -943,3 +943,25 @@ nhưng **CHƯA KIỂM CHỨNG** là có chèn được liên kết hay không (c
 U37c đi đường Web Share API (`navigator.share`) — chuẩn, không phụ thuộc endpoint chưa kiểm
 chứng, và trên di động khay chia sẻ đã có Zalo. Chỉ dựng nút Zalo riêng nếu probe bằng trình
 duyệt thật chứng minh được nó hoạt động.
+
+## [2026-07-29] Đối chiếu — tạm ẩn khỏi trang người dùng, cần nghiên cứu trước khi bật lại
+
+- **Trạng thái:** Đang ẩn. `SHOW_RECONCILE = false` (`apps/web/src/lib/featureFlags.ts`) — ẩn cả mục menu lẫn route `/reconcile` (vào thẳng URL sẽ rơi về Tổng quan). **Module giữ nguyên**: `packages/reconcile`, `GET /reconcile`, `ReconcilePage.tsx` và toàn bộ test của chúng không đụng tới.
+- **Quyết định:** Chủ dự án, 2026-07-29 — tạm ẩn để nghiên cứu thêm trước khi phơi ra cho khách. Đây là **hoãn phát hành**, không phải kết luận màn hình sai.
+- **Lịch sử cờ (đủ ba lần, để lần sau không đọc thiếu):**
+
+  | Ngày | Cờ | Lý do |
+  |---|---|---|
+  | 2026-07-22 | `false` | "Chức năng Lệch thuế chưa cần thiết" |
+  | 2026-07-29 | `true` | Đo production: 15/31.807 hóa đơn lệch thuế (0,047%), 11 ca > 100.000 đ ⇒ không nhiễu, đáng hiện |
+  | 2026-07-29 | `false` | **Tạm ẩn** — cần nghiên cứu thêm trước khi cho khách thấy |
+
+- **Số đo vẫn còn giá trị, KHÔNG bị bác bỏ:** `docs/RA-SOAT-thong-bao-lech-hoa-don-2026-07-28.md` §2 (lệch thuế), §3 (điểm mù mẫu số 2), §4 (thiếu số đầu ra). Khi bật lại thì đo lại để cập nhật, chứ không phải làm lại từ đầu.
+- **Câu hỏi còn treo — cần trả lời trước khi bật lại:**
+  1. **15 ca lệch thuế đó thực chất là gì?** Chưa ai soi tay một hóa đơn nào trong số đó. Chúng có thể là lỗi thật của bên bán, hoặc là hóa đơn có chiết khấu/điều chỉnh mà công thức `tgtcthue − ttcktmai + tgtthue = tgtttbso` chưa xét đủ. **Chưa phân biệt được ⇒ chưa nên báo cho khách**, vì báo sai một lần là mất lòng tin.
+  2. **Điểm mù 2.138 hóa đơn bán hàng (mẫu số 2, 6,3%) chưa được kiểm gì cả** (§3). Bật màn này lên khi vẫn còn điểm mù dễ khiến khách đọc thành "mọi hóa đơn đều sạch". Đường bịt đã có: so `Σ thtien(dòng hàng)` với `tgtttbso` (§3.2), nhưng phải trừ chiết khấu + xét làm tròn trước khi gọi là lệch.
+  3. **Khách nên LÀM GÌ khi thấy một phát hiện?** Màn hình hiện chỉ liệt kê, không hướng dẫn hành động. Một cảnh báo không kèm việc phải làm thì chỉ gây lo lắng.
+  4. **Bốn loại phát hiện có nên hiện cùng một chỗ không?** "Lệch thuế" (số học), "Nghi thiếu đầu ra" (dãy số), "Hóa đơn hủy", "Bị thay thế" — bốn mức độ nghiêm trọng rất khác nhau đang xếp ngang hàng.
+- **Điều kiện bật lại (đề xuất):** trả lời xong ít nhất câu 1 và 3. Bật lại = đổi `SHOW_RECONCILE` về `true` **và** đảo kỳ vọng trong `apps/web/test/features/reconcileHidden.test.tsx` (test khoá cả hai điểm nối dây — đỏ khi đổi một chỗ mà quên chỗ kia là hành vi đúng, không phải hồi quy).
+- **Mức ưu tiên đề xuất:** Trung bình — không chặn ai, nhưng đang có 11 hóa đơn lệch > 100.000 đ mà không ai nhìn thấy.
+- **Nguồn phát hiện:** Phiên Cowork 2026-07-29 — yêu cầu trực tiếp của chủ dự án.

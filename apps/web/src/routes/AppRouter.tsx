@@ -97,7 +97,8 @@ export function AppRouter() {
         <Route index element={<DashboardPage />} />
         <Route path="invoices" element={<InvoicesPage />} />
         <Route path="invoices/:id" element={<InvoiceDetailPage />} />
-        {/* Ẩn bằng cờ (2026-07-22). Giữ import ReconcilePage để không sinh file mồ côi.
+        {/* Đang ẩn bằng cờ SHOW_RECONCILE (tạm ẩn 2026-07-29 — xem lịch sử trong
+            lib/featureFlags.ts). Giữ import ReconcilePage để không sinh file mồ côi.
             Route tắt ⇒ /reconcile rơi vào catch-all "*" cuối file → về Tổng quan. React
             Router bỏ qua child không phải element, nên `false` ở đây là hợp lệ. */}
         {SHOW_RECONCILE && <Route path="reconcile" element={<ReconcilePage />} />}
