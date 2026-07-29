@@ -15,7 +15,8 @@ const DU: InvoiceFilter = {
 
 function ve(filter: InvoiceFilter = DU) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  // Trả kết quả render để ca "chiều Mua vào ⇒ không render gì" soi được `container`.
+  return render(
     <QueryClientProvider client={qc}>
       <TaiHoaDonGoc filter={filter} />
     </QueryClientProvider>,
@@ -49,29 +50,44 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("TaiHoaDonGoc — ba vế mở nút, mỗi vế một lý do riêng", () => {
+// Chiều BÁN RA là điều kiện HIỆN thẻ (sửa 2026-07-29), không còn là một lý do khóa nút.
+// Trang mở mặc định ở chiều Mua vào, mà ở chiều đó `FilterBar` ẩn hẳn ô chọn người mua —
+// nên bản cũ hiện thường trực một nút mờ kèm dòng bảo người dùng làm việc KHÔNG CÓ Ô ĐỂ LÀM.
+describe("TaiHoaDonGoc — chỉ hiện ở chiều Bán ra", () => {
+  it("chiều Mua vào → KHÔNG render gì cả (không nút mờ, không dòng lý do)", () => {
+    mockApi({});
+    const { container } = ve({ ...DU, chieu: "purchase" });
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("button", { name: /tải hóa đơn gốc/i })).toBeNull();
+    // Hai dòng lý do cũ phải BIẾN MẤT hẳn khỏi chiều Mua vào — đây là điểm dễ hồi quy nhất
+    // nếu ai đó gộp `chieu` trở lại vào `lyDoChuaBamDuoc`.
+    expect(screen.queryByText(/chọn một người mua/i)).toBeNull();
+    expect(screen.queryByText(/chỉ tải được hóa đơn bán ra/i)).toBeNull();
+  });
+
+  it("chiều Bán ra → thẻ hiện lại", () => {
+    mockApi({});
+    ve();
+    expect(screen.getByRole("button", { name: /tải hóa đơn gốc/i })).toBeInTheDocument();
+  });
+});
+
+describe("TaiHoaDonGoc — hai vế còn lại mở nút, mỗi vế một lý do riêng", () => {
   const nut = () => screen.getByRole("button", { name: /tải hóa đơn gốc/i });
 
-  it("đủ ba vế → nút bấm được", () => {
+  it("đủ vế → nút bấm được", () => {
     mockApi({});
     ve();
     expect(nut()).toBeEnabled();
   });
 
-  it("chưa chọn khách hàng → khóa nút, nói ĐÚNG lý do đó", () => {
+  it("chưa chọn người mua → khóa nút, nói ĐÚNG lý do đó", () => {
     mockApi({});
     ve({ ...DU, nmmst: undefined });
 
     expect(nut()).toBeDisabled();
     expect(screen.getByText(/chọn một người mua/i)).toBeInTheDocument();
-  });
-
-  it("đang ở chiều Mua vào → khóa nút, nói ĐÚNG lý do đó", () => {
-    mockApi({});
-    ve({ ...DU, chieu: "purchase" });
-
-    expect(nut()).toBeDisabled();
-    expect(screen.getByText(/chỉ tải được hóa đơn bán ra/i)).toBeInTheDocument();
   });
 
   it("thiếu khoảng thời gian → khóa nút, nói ĐÚNG lý do đó", () => {
@@ -84,12 +100,12 @@ describe("TaiHoaDonGoc — ba vế mở nút, mỗi vế một lý do riêng", (
 
   // Thiếu nhiều vế mà gộp một câu chung chung thì người dùng sửa xong vế này vẫn không
   // bấm được và không hiểu vì sao.
-  it("thiếu HAI vế → nêu cả hai, không gộp thành một câu chung", () => {
+  it("thiếu CẢ HAI vế → nêu cả hai, không gộp thành một câu chung", () => {
     mockApi({});
-    ve({ chieu: "purchase" });
+    ve({ ...DU, nmmst: undefined, tuNgay: undefined, denNgay: undefined });
 
     expect(screen.getByText(/chọn một người mua/i)).toBeInTheDocument();
-    expect(screen.getByText(/chỉ tải được hóa đơn bán ra/i)).toBeInTheDocument();
+    expect(screen.getByText(/chọn khoảng thời gian/i)).toBeInTheDocument();
   });
 });
 

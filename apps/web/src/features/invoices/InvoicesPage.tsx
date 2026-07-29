@@ -271,9 +271,9 @@ export function InvoicesPage() {
         <MucHuongDan nhan="Tải hóa đơn gốc (.zip)">
           Truy xuất bản gốc có chữ ký số từ Tổng cục Thuế đối với các hóa đơn đã phát hành cho người
           mua đang chọn, đóng gói thành tệp nén .zip và tạo liên kết tải về để gửi cho người mua.
-          Chức năng mở khi bộ lọc đủ ba điều kiện: đã chọn người mua, chiều bán ra, và khoảng thời
-          gian. Liên kết tạo ra là công khai và tự hết hạn sau khoảng một tuần; bạn có thể thu hồi
-          bất cứ lúc nào ở trang Liên kết chia sẻ.
+          Thẻ này chỉ hiện khi bộ lọc đang ở <strong>chiều Bán ra</strong>; sau đó cần chọn thêm
+          người mua và khoảng thời gian thì mới tải được. Liên kết tạo ra là công khai và tự hết hạn
+          sau khoảng một tuần; bạn có thể thu hồi bất cứ lúc nào ở trang Liên kết chia sẻ.
         </MucHuongDan>
         <MucHuongDan nhan="Hóa đơn bị sửa ở kỳ khác">
           Liệt kê những hóa đơn đã bị thay thế hoặc điều chỉnh bởi một hóa đơn thuộc kỳ kê khai

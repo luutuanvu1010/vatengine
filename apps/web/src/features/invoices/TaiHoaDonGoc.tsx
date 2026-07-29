@@ -36,11 +36,13 @@ import { HanhDongLienKet } from "./HanhDongLienKet";
 /**
  * Ba vế mở nút (QĐ-B4 + B1 + B9). Trả DANH SÁCH lý do, không phải một câu gộp: thiếu hai
  * vế mà chỉ báo một thì người dùng sửa xong vế đó vẫn không bấm được và không hiểu vì sao.
+ *
+ * KHÔNG còn vế `chieu` ở đây (sửa 2026-07-29) — nó đã lên thành điều kiện HIỆN cả thẻ,
+ * xem `TaiHoaDonGoc`. Giữ lại thì thẻ ẩn rồi mà hàm vẫn sinh một lý do không ai đọc được.
  */
 function lyDoChuaBamDuoc(filter: InvoiceFilter): string[] {
   const ds: string[] = [];
   if (!filter.nmmst) ds.push("Chọn một người mua để tải hóa đơn đã phát hành cho họ");
-  if (filter.chieu !== "sold") ds.push("Chỉ tải được hóa đơn bán ra");
   if (!filter.tuNgay || !filter.denNgay) ds.push("Chọn khoảng thời gian");
   return ds;
 }
@@ -115,6 +117,22 @@ export function TaiHoaDonGoc({ filter }: { filter: InvoiceFilter }) {
 
   const sanSang = g?.trangThai === "san_sang" && g.url;
   const daThuHoi = g?.trangThai === "da_thu_hoi" || thuHoi.data?.trangThai === "da_thu_hoi";
+
+  // Chiều BÁN RA là điều kiện HIỆN thẻ, không phải một lý do khóa nút (sửa 2026-07-29).
+  //
+  // Vì sao: trang mở mặc định ở chiều MUA VÀO (`InvoicesPage`), và ở chiều đó `setChieu` xóa
+  // `nmmst` rồi ẩn hẳn ô chọn người mua (`FilterBar`). Nên bản cũ hiện THƯỜNG TRỰC — mọi lần
+  // mở trang — một nút mờ kèm dòng "Chọn một người mua…", tức bảo người dùng làm một việc
+  // KHÔNG CÓ Ô ĐỂ LÀM. Hai điều kiện đó không ngang hàng mà phụ thuộc nhau: phải sang Bán ra
+  // trước thì mới có ô chọn người mua.
+  //
+  // Ẩn cả thẻ giải quyết đúng gốc: ở Mua vào không còn nút mờ nào phải giải thích; sang Bán ra
+  // thì thẻ hiện và mọi lý do còn lại đều là việc làm được ngay tại chỗ. Điều kiện mở vẫn được
+  // nói ra ở khối "Hướng dẫn sử dụng trang này" cuối trang — không mất thông tin.
+  //
+  // ĐẶT SAU TOÀN BỘ HOOK, không đặt đầu hàm: `return null` sớm sẽ bỏ qua các
+  // `useMutation`/`useQuery`/`useEffect` bên trên và vỡ Rules of Hooks ngay khi đổi chiều.
+  if (filter.chieu !== "sold") return null;
 
   return (
     <Card style={{ marginBottom: "var(--sp-4)" }}>
