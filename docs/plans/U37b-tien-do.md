@@ -10,7 +10,7 @@ Một dòng mỗi gói: `[gói] — DONE/BLOCKED — commit — ghi chú`.
 | Gói 2 — bảng `goi_chia_se` + migration | ✅ DONE | `3bd87f4` | 8 test xanh. Bẫy `_journal.json` NỔ đúng dự đoán: 0020.when sinh ra là 29/07 < 0019 (02/08) ⇒ đã đặt lại `0019.when + 60000`. **Cổng dừng 1 ĐÃ QUA**: migration áp production 2026-07-29, hậu kiểm `hau-kiem-bang.mjs goi_chia_se` → **8/8 ĐẠT** (bảng, RLS ENABLE+FORCE, policy, vat_app S/I/U và KHÔNG DELETE; UNIQUE khoa_r2 + 2 FK + 3 index đều có thật) |
 | Gói 3 — hạ tầng bucket công khai | ✅ DONE (hạ tầng đã dựng) | `20cee3f` | Bucket `vat-chia-se` + `docs.tourdao.vn` (min-TLS 1.2) + lifecycle 30 ngày prefix `goi-hoa-don/` + `r2.dev` **disabled** — hậu kiểm 4/4 đạt. ✅ Phần treo đã kiểm chứng: `ssl_status` active; gốc bucket và khóa không tồn tại đều trả **404** ⇒ không liệt kê được nội dung, giả định "khóa là thứ duy nhất bảo vệ file" đứng vững |
 | Gói 4a — tầng truy vấn phát hành gói | ✅ DONE | `d82802e` | `listHoaDonChoGoi` (NGUỒN DUY NHẤT sinh `ref` — ràng buộc bảo mật) + `demTienDoGoi` (đếm từ `tep_hoa_don_goc`, QĐ-B8). 11 test xanh |
-| Gói 4b — endpoint tạo gói | ⏸ | — | Chặn ngày trống (QĐ-B9), dựng `ref` từ DB, enqueue `kind:"hoso"`, tạo hàng `goi_chia_se` trạng thái `dang_tao` |
+| Gói 4b — endpoint tạo gói | ✅ DONE | `<pending>` | `POST /goi-chia-se`. 14 test xanh. Test bắt 2 lỗi THẬT: token chỉ có 100 bit (không phải 128 — ánh xạ 1 byte→1 ký tự vứt 3 bit), và `nguoi_tao` vỡ FK khi token còn hạn mà người dùng đã bị xóa |
 | Gói 4c — đóng ZIP + phát link | ⏸ | — | ZIP phẳng khử trùng lặp, ghi bucket công khai, khóa ngẫu nhiên, cổng "0 hóa đơn ⇒ không phát link" |
 | Gói 5 — thu hồi + audit | ⏸ | — | |
 | Gói 6 — giao diện | ⏸ | — | |

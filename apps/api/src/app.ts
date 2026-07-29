@@ -12,6 +12,7 @@ import { backfillRoutes } from "./routes/backfill";
 import { dangKyRoutes } from "./routes/dangKy";
 import { datMatKhauRoutes } from "./routes/datMatKhau";
 import { exportsRoutes } from "./routes/exports";
+import { goiChiaSeRoutes } from "./routes/goiChiaSe";
 import { invoiceChangesRoutes } from "./routes/invoiceChanges";
 import { invoicesRoutes } from "./routes/invoices";
 import { meRoutes } from "./routes/me";
@@ -57,6 +58,8 @@ export function createApp(deps: AppDeps) {
   app.route("/invoices", invoicesRoutes(deps));
   // U7: kết xuất (POST /exports) + tải (GET /exports/:id) — đều sau requireTenant.
   app.route("/exports", exportsRoutes(deps));
+  // U37b — phát hành gói hóa đơn gốc cho MỘT khách hàng, chia sẻ qua link công khai.
+  app.route("/goi-chia-se", goiChiaSeRoutes(deps));
   // U10: đối chiếu (GET /reconcile) — đọc-only, sau requireTenant + RBAC.
   app.route("/reconcile", reconcileRoutes(deps));
   // U14: quản lý tài khoản thuế (POST /tax-accounts, ...) — sau requireTenant + RBAC.
