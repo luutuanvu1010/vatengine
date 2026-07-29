@@ -56,6 +56,16 @@ function withSecurityHeaders(res: Response): Response {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // U37c — ĐƯỜNG TẢI CÔNG KHAI `/tai/<token>`, chuyển thẳng tới vat-api giữ nguyên path.
+    //
+    // Vì sao đi qua front-door này thay vì gắn `docs.tourdao.vn` vào vat-api: gắn thẳng sẽ
+    // phơi TOÀN BỘ route của vat-api ra công cộng trên hostname đó — mở rộng bề mặt tấn
+    // công để đổi lấy đúng một đường tải. Ở đây chỉ đúng tiền tố `/tai/` lọt qua.
+    if (url.pathname.startsWith("/tai/")) {
+      return withSecurityHeaders(await env.API.fetch(new Request(url.toString(), request)));
+    }
+
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
       // U18 — CỬA KHÁCH KHÔNG DẪN TỚI MIỀN QUẢN TRỊ.
       //

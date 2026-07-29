@@ -17,6 +17,7 @@ import { invoiceChangesRoutes } from "./routes/invoiceChanges";
 import { invoicesRoutes } from "./routes/invoices";
 import { meRoutes } from "./routes/me";
 import { reconcileRoutes } from "./routes/reconcile";
+import { taiCongKhaiRoutes } from "./routes/taiCongKhai";
 import { taxAccountsRoutes } from "./routes/taxAccounts";
 import { xacThucEmailRoutes } from "./routes/xacThucEmail";
 import { requireSameOrigin } from "./session";
@@ -29,6 +30,13 @@ export function createApp(deps: AppDeps) {
   app.get("/health", (c) =>
     c.json({ status: "ok", service: "vat-api", env: c.env.ENVIRONMENT ?? "dev" }),
   );
+
+  // U37c — ĐƯỜNG TẢI CÔNG KHAI. Đặt TRƯỚC `requireSameOrigin` một cách CÓ CHỦ ĐÍCH:
+  // liên kết này được dán vào Zalo/email rồi mở bằng điều hướng cấp cao nhất, tức không
+  // có `Origin` cùng gốc — qua cổng CSRF thì sẽ bị chặn oan. An toàn không dựa vào cổng
+  // đó mà dựa vào token 130 bit + kiểm hiệu lực trong DB ở MỖI lượt tải, và route này
+  // chỉ có GET (không đổi trạng thái nào ngoài bộ đếm lượt tải).
+  app.route("/tai", taiCongKhaiRoutes(deps));
 
   // ADR-0003 Amendment #1 (C6) — chặn CSRF cho MỌI method đổi trạng thái, đặt TRƯỚC mọi
   // route nghiệp vụ. Từ khi phiên đi bằng cookie, trình duyệt tự đính cookie vào cả

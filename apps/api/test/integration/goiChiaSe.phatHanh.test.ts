@@ -189,7 +189,10 @@ describe("U37b — phát hành / thu hồi gói (integration, PGlite)", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as { trangThai: string; url: string };
       expect(body.trangThai).toBe("san_sang");
-      expect(body.url).toContain("docs.tourdao.vn");
+      // U37c — link nay là `/tai/<token>` trên miền ứng dụng, KHÔNG còn là khóa R2 trên
+      // bucket. Khóa lưu trữ thuần nội bộ; hiệu lực liên kết do DB quyết ở mỗi lượt tải.
+      expect(body.url).toMatch(/\/tai\/[a-z0-9]{20,}$/);
+      expect(body.url).not.toContain("goi-hoa-don/");
 
       // Ghi đúng bucket chia sẻ, KHÔNG ghi nhầm vào kho nội bộ.
       expect(chiaSe.kho.size).toBe(1);
@@ -375,7 +378,7 @@ describe("U37b — phát hành / thu hồi gói (integration, PGlite)", () => {
       const sau = (await (await goi("/goi-chia-se")).json()) as {
         items: Array<{ url: string | null }>;
       };
-      expect(sau.items[0]?.url).toContain("docs.tourdao.vn/goi-hoa-don/");
+      expect(sau.items[0]?.url).toMatch(/\/tai\/[a-z0-9]{20,}$/);
     });
 
     it("gói ĐÃ THU HỒI → url về null, không còn chào mời link chết", async () => {

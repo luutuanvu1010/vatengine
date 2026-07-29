@@ -50,6 +50,8 @@ export interface Env {
   CHIA_SE: R2Bucket;
   /** Gốc URL công khai của bucket chia sẻ. Phải khớp tên miền đã gắn ở Gói 3. */
   URL_CHIA_SE?: string;
+  /** Gốc URL đường tải công khai `/tai/<token>` (U37c). Mặc định miền ứng dụng. */
+  URL_TAI?: string;
   // U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
   TOKEN_KEK: string;
   // Hàng đợi đồng bộ nền — producer cho "Đồng bộ ngay" (POST /tax-accounts/:id/sync)

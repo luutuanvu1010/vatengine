@@ -249,9 +249,13 @@ export function goiChiaSeRoutes(deps: AppDeps) {
     }
   });
 
-  /** Đường dẫn công khai của một gói. Tên miền khớp bucket đã gắn ở Gói 3. */
-  const urlCongKhai = (goc: string | undefined, khoaR2: string) =>
-    `${goc ?? "https://docs.tourdao.vn"}/${khoaR2}`;
+  /** Đường dẫn công khai của một gói: `/tai/<token>` trên chính miền ứng dụng (U37c).
+   *
+   * ĐỔI TỪ `<bucket>/<khoa_r2>`: khóa lưu trữ nay THUẦN NỘI BỘ, không rời khỏi máy chủ.
+   * Trước đây khóa R2 chính là URL, nên nó vừa là đường dẫn vừa là mật khẩu — và việc thu
+   * hồi phụ thuộc vào xóa được object, thứ mà cache CDN vô hiệu hóa (probe 2026-07-29). */
+  const urlCongKhai = (goc: string | undefined, token: string) =>
+    `${goc ?? "https://vatengine.tourdao.vn"}/tai/${token}`;
 
   /** Nạp một gói của ĐÚNG tenant đang gọi. `null` ⇒ 404, không lộ cả sự tồn tại. */
   async function napGoi(db: AnyDb, tenantId: string, id: string) {
@@ -290,7 +294,7 @@ export function goiChiaSeRoutes(deps: AppDeps) {
           trangThai: g.trangThai,
           taoLuc: g.taoLuc,
           hetHanLuc: g.hetHanLuc,
-          url: g.trangThai === "san_sang" ? urlCongKhai(c.env.URL_CHIA_SE, g.khoaR2) : null,
+          url: g.trangThai === "san_sang" ? urlCongKhai(c.env.URL_TAI, g.token) : null,
         })),
       });
     } finally {
@@ -328,7 +332,7 @@ export function goiChiaSeRoutes(deps: AppDeps) {
         soHoaDon: g.soHoaDon,
         tienDo,
         hetHanLuc: g.hetHanLuc,
-        url: g.trangThai === "san_sang" ? urlCongKhai(c.env.URL_CHIA_SE, g.khoaR2) : null,
+        url: g.trangThai === "san_sang" ? urlCongKhai(c.env.URL_TAI, g.token) : null,
       });
     } finally {
       await close();
@@ -349,7 +353,7 @@ export function goiChiaSeRoutes(deps: AppDeps) {
         return c.json({
           id: g.id,
           trangThai: g.trangThai,
-          url: urlCongKhai(c.env.URL_CHIA_SE, g.khoaR2),
+          url: urlCongKhai(c.env.URL_TAI, g.token),
         });
       }
       if (g.trangThai !== "dang_tao") return c.json({ error: "trang_thai_khong_hop_le" }, 409);
@@ -509,7 +513,7 @@ export function goiChiaSeRoutes(deps: AppDeps) {
         soHoaDon: goi.soTepTrongGoi,
         soThieu: thieu.length,
         hetHanLuc,
-        url: urlCongKhai(c.env.URL_CHIA_SE, g.khoaR2),
+        url: urlCongKhai(c.env.URL_TAI, g.token),
       });
     } finally {
       await close();

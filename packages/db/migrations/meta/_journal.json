@@ -155,6 +155,13 @@
       "when": 1785645960000,
       "tag": "0021_u37c_token_tai_cong_khai",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785646020000,
+      "tag": "0022_u37c_ham_tra_goi_cong_khai",
+      "breakpoints": true
     }
   ]
 }
