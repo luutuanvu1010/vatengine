@@ -15,11 +15,19 @@ import { tenants } from "./tenants";
 
 /** Trạng thái một gói chia sẻ. Nguồn chân lý ở tầng ứng dụng (text ở DB, không enum cứng)
  * — cùng quy ước `lan_dong_bo.trang_thai`, `tep_hoa_don_goc.trang_thai`. */
-export const TRANG_THAI_GOI_CHIA_SE = ["dang_tao", "san_sang", "loi", "da_thu_hoi"] as const;
+export const TRANG_THAI_GOI_CHIA_SE = [
+  "dang_tao",
+  /** Đã có người nhận đóng gói — bầu bằng UPDATE có điều kiện để hai lần bấm/hai tab
+   * không cùng dựng và cùng ghi đè một khóa. Cột là `text`, KHÔNG cần migration. */
+  "dang_dong_goi",
+  "san_sang",
+  "loi",
+  "da_thu_hoi",
+] as const;
 export type TrangThaiGoiChiaSe = (typeof TRANG_THAI_GOI_CHIA_SE)[number];
 
 // U37b — sổ theo dõi các gói hóa đơn gốc đã phát hành qua LINK CÔNG KHAI (bucket
-// `vat-chia-se` gắn `docs.tourdao.vn`, hạn ~30 ngày).
+// `vat-chia-se` gắn `docs.tourdao.vn`, hạn ~1 TUẦN — QĐ-6 sửa 2026-07-29).
 //
 // Bảng này nhạy cảm hơn `tep_hoa_don_goc`: nó trỏ tới file nằm NGOÀI hàng rào RLS/JWT.
 // Sau khi phát hành, ai có khóa là tải được — không còn cửa nào chặn. Vì vậy:

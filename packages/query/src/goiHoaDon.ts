@@ -12,6 +12,8 @@ type AnyTx = PgDatabase<PgQueryResultHKT, Record<string, unknown>, TablesRelatio
 /** Một hóa đơn trong gói, kèm ĐỦ dữ kiện để dựng `HoSoGocMessage.ref`. */
 export interface HoaDonChoGoi {
   hoaDonId: string;
+  /** Tên khách hàng — chỉ dùng để đặt tên tệp tải về, KHÔNG bao giờ vào khóa R2. */
+  nmten: string | null;
   nbmst: string;
   khhdon: string;
   khmshdon: string;
@@ -46,6 +48,7 @@ export async function listHoaDonChoGoi(
   const rows = await tx
     .select({
       hoaDonId: hoaDon.id,
+      nmten: hoaDon.nmten,
       nbmst: hoaDon.nbmst,
       khhdon: hoaDon.khhdon,
       khmshdon: hoaDon.khmshdon,
@@ -70,6 +73,7 @@ export async function listHoaDonChoGoi(
 
   return rows.map((r) => ({
     hoaDonId: r.hoaDonId,
+    nmten: r.nmten,
     nbmst: r.nbmst,
     khhdon: r.khhdon,
     khmshdon: r.khmshdon,

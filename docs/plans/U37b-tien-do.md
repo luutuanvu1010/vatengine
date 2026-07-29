@@ -11,7 +11,8 @@ Một dòng mỗi gói: `[gói] — DONE/BLOCKED — commit — ghi chú`.
 | Gói 3 — hạ tầng bucket công khai | ✅ DONE (hạ tầng đã dựng) | `20cee3f` | Bucket `vat-chia-se` + `docs.tourdao.vn` (min-TLS 1.2) + lifecycle 30 ngày prefix `goi-hoa-don/` + `r2.dev` **disabled** — hậu kiểm 4/4 đạt. ✅ Phần treo đã kiểm chứng: `ssl_status` active; gốc bucket và khóa không tồn tại đều trả **404** ⇒ không liệt kê được nội dung, giả định "khóa là thứ duy nhất bảo vệ file" đứng vững |
 | Gói 4a — tầng truy vấn phát hành gói | ✅ DONE | `d82802e` | `listHoaDonChoGoi` (NGUỒN DUY NHẤT sinh `ref` — ràng buộc bảo mật) + `demTienDoGoi` (đếm từ `tep_hoa_don_goc`, QĐ-B8). 11 test xanh |
 | Gói 4b — endpoint tạo gói | ✅ DONE | `af4a181` | `POST /goi-chia-se`. 14 test xanh. Test bắt 2 lỗi THẬT: token chỉ có 100 bit (không phải 128 — ánh xạ 1 byte→1 ký tự vứt 3 bit), và `nguoi_tao` vỡ FK khi token còn hạn mà người dùng đã bị xóa |
-| Gói 4c — đóng ZIP + phát link | ⏸ | — | ZIP phẳng khử trùng lặp, ghi bucket công khai, khóa ngẫu nhiên, cổng "0 hóa đơn ⇒ không phát link" |
-| Gói 5 — thu hồi + audit | ⏸ | — | |
+| Gói 4c-1 — hàm thuần `dungGoiZip` | ✅ DONE | `5c98f1d` | Đặt ở `packages/export` (đã có fflate + @vat/domain) chứ không phải apps/api. `boDau` chuyển sang @vat/domain dùng chung. 14 test |
+| Gói 4c-2/4c-3 — GET tiến độ + POST đóng gói | ✅ DONE | `<pending>` | GET thuần đọc; POST bầu người đóng bằng UPDATE có điều kiện; hết hạn 7 ngày đặt lúc PHÁT HÀNH |
+| Gói 5 — thu hồi + danh sách + audit | ✅ DONE | `<pending>` | Thu hồi mở MỌI VAI, xóa R2 trước đổi trạng thái sau, idempotent; audit cả phát hành lẫn thu hồi, chiTiet không chứa khóa |
 | Gói 6 — giao diện | ⏸ | — | |
 | Gói 7 — tài liệu | ⏸ | — | |

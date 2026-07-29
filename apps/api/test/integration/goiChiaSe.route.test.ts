@@ -201,15 +201,17 @@ describe("REST POST /goi-chia-se (integration, PGlite)", () => {
     expect(rows[0]?.khoaR2).not.toBe(rows[1]?.khoaR2);
   });
 
-  it("hết hạn khoảng 30 ngày kể từ lúc tạo", async () => {
+  // Lúc TẠO chỉ đặt mốc tạm (cột NOT NULL); mốc THẬT được đặt lại lúc PHÁT HÀNH, vì
+  // lifecycle của R2 đếm từ khi ghi object chứ không từ khi tạo hàng (điểm 2 đã chốt).
+  it("hết hạn tạm lúc tạo là 7 ngày (khớp lifecycle het-han-1-tuan), không phải 30", async () => {
     await seedHoaDon(tenantA, "1");
     await goi(HOP_LE);
 
     const r = (await db.select().from(goiChiaSe))[0];
     if (!r) throw new Error("không tìm thấy gói vừa tạo");
     const soNgay = (r.hetHanLuc.getTime() - r.taoLuc.getTime()) / 86_400_000;
-    expect(soNgay).toBeGreaterThan(29.9);
-    expect(soNgay).toBeLessThan(30.1);
+    expect(soNgay).toBeGreaterThan(6.9);
+    expect(soNgay).toBeLessThan(7.1);
   });
 
   // ─── Quyền ──────────────────────────────────────────────────────────────────
