@@ -12,7 +12,7 @@ Một dòng mỗi gói: `[gói] — DONE/BLOCKED — commit — ghi chú`.
 | Gói 4a — tầng truy vấn phát hành gói | ✅ DONE | `d82802e` | `listHoaDonChoGoi` (NGUỒN DUY NHẤT sinh `ref` — ràng buộc bảo mật) + `demTienDoGoi` (đếm từ `tep_hoa_don_goc`, QĐ-B8). 11 test xanh |
 | Gói 4b — endpoint tạo gói | ✅ DONE | `af4a181` | `POST /goi-chia-se`. 14 test xanh. Test bắt 2 lỗi THẬT: token chỉ có 100 bit (không phải 128 — ánh xạ 1 byte→1 ký tự vứt 3 bit), và `nguoi_tao` vỡ FK khi token còn hạn mà người dùng đã bị xóa |
 | Gói 4c-1 — hàm thuần `dungGoiZip` | ✅ DONE | `5c98f1d` | Đặt ở `packages/export` (đã có fflate + @vat/domain) chứ không phải apps/api. `boDau` chuyển sang @vat/domain dùng chung. 14 test |
-| Gói 4c-2/4c-3 — GET tiến độ + POST đóng gói | ✅ DONE | `<pending>` | GET thuần đọc; POST bầu người đóng bằng UPDATE có điều kiện; hết hạn 7 ngày đặt lúc PHÁT HÀNH |
-| Gói 5 — thu hồi + danh sách + audit | ✅ DONE | `<pending>` | Thu hồi mở MỌI VAI, xóa R2 trước đổi trạng thái sau, idempotent; audit cả phát hành lẫn thu hồi, chiTiet không chứa khóa |
+| Gói 4c-2/4c-3 — GET tiến độ + POST đóng gói | ✅ DONE | `ed7ee67` | GET thuần đọc; POST bầu người đóng bằng UPDATE có điều kiện; hết hạn 7 ngày đặt lúc PHÁT HÀNH |
+| Gói 5 — thu hồi + danh sách + audit | ✅ DONE | `ed7ee67` | Thu hồi mở MỌI VAI, xóa R2 trước đổi trạng thái sau, idempotent; audit cả phát hành lẫn thu hồi, chiTiet không chứa khóa |
 | Gói 6 — giao diện | ⏸ | — | |
 | Gói 7 — tài liệu | ⏸ | — | |
