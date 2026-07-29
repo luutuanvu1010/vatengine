@@ -298,6 +298,23 @@ export interface TienDoGoi {
   loi?: number;
   conCho: number;
 }
+/** Một dòng trong danh sách "Liên kết chia sẻ" (U37c). */
+export interface GoiChiaSeItem {
+  id: string;
+  nmmst: string;
+  nmten?: string | null;
+  tuNgay: string;
+  denNgay: string;
+  soHoaDon: number;
+  trangThai: "dang_tao" | "dang_dong_goi" | "san_sang" | "loi" | "da_thu_hoi";
+  soLuotTai?: number;
+  lanTaiCuoi?: string | null;
+  taoLuc: string;
+  hetHanLuc: string;
+  /** Chỉ có khi `san_sang`. */
+  url?: string | null;
+}
+
 export interface GoiChiaSeView {
   id: string;
   trangThai: "dang_tao" | "dang_dong_goi" | "san_sang" | "loi" | "da_thu_hoi";

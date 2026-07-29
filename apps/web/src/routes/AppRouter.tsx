@@ -12,6 +12,7 @@ import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { ExportsPage } from "../features/exports/ExportsPage";
 import { InvoiceDetailPage } from "../features/invoices/InvoiceDetailPage";
 import { InvoicesPage } from "../features/invoices/InvoicesPage";
+import { LienKetPage } from "../features/lienket/LienKetPage";
 import { ReconcilePage } from "../features/reconcile/ReconcilePage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { TaxAccountsPage } from "../features/taxAccounts/TaxAccountsPage";
@@ -100,6 +101,9 @@ export function AppRouter() {
             Route tắt ⇒ /reconcile rơi vào catch-all "*" cuối file → về Tổng quan. React
             Router bỏ qua child không phải element, nên `false` ở đây là hợp lệ. */}
         {SHOW_RECONCILE && <Route path="reconcile" element={<ReconcilePage />} />}
+        {/* U37c — quản lý liên kết đã phát hành. Mở cho MỌI vai: xem là vô hại, còn thu
+            hồi là hành động GIẢM rủi ro nên chặn người phát hiện lộ link là hại hơn lợi. */}
+        <Route path="lien-ket" element={<LienKetPage />} />
         <Route
           path="exports"
           element={

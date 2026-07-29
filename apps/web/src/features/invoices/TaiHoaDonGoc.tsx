@@ -31,6 +31,7 @@ import {
 } from "../../components/ui/primitives";
 import { ApiError, api } from "../../lib/apiClient";
 import type { InvoiceFilter } from "../../types/api";
+import { HanhDongLienKet } from "./HanhDongLienKet";
 
 /**
  * Ba vế mở nút (QĐ-B4 + B1 + B9). Trả DANH SÁCH lý do, không phải một câu gộp: thiếu hai
@@ -180,9 +181,10 @@ export function TaiHoaDonGoc({ filter }: { filter: InvoiceFilter }) {
         {sanSang && !daThuHoi && (
           <Cot khoang="2">
             <Hang khoang="3" xuongDong>
-              <a href={g?.url as string} target="_blank" rel="noreferrer">
-                {g?.url}
-              </a>
+              {/* U37c — anchor + Sao chép/Chia sẻ/Email thay cho URL trần. */}
+              <HanhDongLienKet
+                thongTin={{ url: g?.url as string, tuNgay: filter.tuNgay, denNgay: filter.denNgay }}
+              />
               <Button variant="danger" onClick={() => thuHoi.mutate()} disabled={thuHoi.isPending}>
                 {thuHoi.isPending ? "Đang thu hồi…" : "Thu hồi"}
               </Button>

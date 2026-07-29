@@ -173,8 +173,16 @@ describe("TaiHoaDonGoc — bốn trạng thái", () => {
     await nguoiDung.click(screen.getByRole("checkbox"));
     await nguoiDung.click(screen.getByRole("button", { name: /^tạo đường dẫn/i }));
 
-    const link = await screen.findByRole("link", { name: /docs\.tourdao\.vn/ });
+    // U37c — KHÔNG phơi URL trần nữa: một chuỗi 26 ký tự ngẫu nhiên dán giữa giao diện vừa
+    // rối vừa mời chép tay sai. Anchor mang chữ có nghĩa, URL nằm ở `href`.
+    const link = await screen.findByRole("link", { name: "Liên kết tải hóa đơn" });
     expect(link).toHaveAttribute("href", "https://docs.tourdao.vn/goi-hoa-don/2026-07/abc.zip");
+    expect(screen.queryByText(/goi-hoa-don\/2026-07\/abc\.zip/)).toBeNull();
+    expect(screen.getByRole("button", { name: /sao chép liên kết/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /gửi email/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("mailto:") as unknown as string,
+    );
     expect(screen.getByRole("button", { name: /thu hồi/i })).toBeInTheDocument();
   });
 

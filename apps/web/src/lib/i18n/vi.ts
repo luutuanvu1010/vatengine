@@ -16,6 +16,7 @@ export const vi = {
   navDashboard: "Tổng quan",
   navInvoices: "Danh sách hóa đơn",
   navReconcile: "Đối chiếu",
+  navLienKet: "Liên kết chia sẻ",
   navExports: "Kết xuất & Convert",
   navTaxAccounts: "Kết nối tài khoản thuế",
   navSettings: "Cài đặt chung",

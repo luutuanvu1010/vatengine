@@ -19,6 +19,7 @@ const MAIN: NavItem[] = [
   // Cờ tính năng, KHÔNG dùng `visible` — `visible` dành riêng cho RBAC theo vai; trộn hai
   // thứ khác bản chất vào một chỗ sẽ làm mờ ý nghĩa của cả hai.
   ...(SHOW_RECONCILE ? [{ to: "/reconcile", label: vi.navReconcile }] : []),
+  { to: "/lien-ket", label: vi.navLienKet },
   { to: "/exports", label: vi.navExports, visible: canExport },
   { to: "/tax-accounts", label: vi.navTaxAccounts, visible: canManageTaxAccounts },
 ];

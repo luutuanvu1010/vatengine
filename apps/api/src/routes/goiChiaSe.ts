@@ -289,9 +289,14 @@ export function goiChiaSeRoutes(deps: AppDeps) {
           nmmst: g.nmmst,
           tuNgay: g.tuNgay,
           denNgay: g.denNgay,
+          // U37c — tên khách chụp lúc tạo; màn quản lý cần nó để người dùng nhận ra gói nào
+          // là gói nào (MST trần thì phải tra mới biết).
+          nmten: g.nmten,
           soHoaDon: g.soHoaDon,
           kichThuoc: g.kichThuoc,
           trangThai: g.trangThai,
+          soLuotTai: g.soLuotTai,
+          lanTaiCuoi: g.lanTaiCuoi,
           taoLuc: g.taoLuc,
           hetHanLuc: g.hetHanLuc,
           url: g.trangThai === "san_sang" ? urlCongKhai(c.env.URL_TAI, g.token) : null,

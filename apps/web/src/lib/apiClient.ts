@@ -10,6 +10,7 @@ import type {
   ConvertResult,
   ExportFormat,
   ExportResult,
+  GoiChiaSeItem,
   GoiChiaSeView,
   InvoiceDetailResponse,
   InvoiceFilter,
@@ -274,6 +275,9 @@ export const api = {
   },
 
   // U37b — phát hành / theo dõi / thu hồi gói hóa đơn gốc.
+  dsGoiChiaSe(): Promise<{ items: GoiChiaSeItem[] }> {
+    return request("GET", "/goi-chia-se");
+  },
   taoGoiChiaSe(body: { nmmst: string; tuNgay: string; denNgay: string }): Promise<GoiChiaSeView> {
     return request("POST", "/goi-chia-se", { body });
   },
