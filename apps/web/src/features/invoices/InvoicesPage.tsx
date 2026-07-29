@@ -26,6 +26,7 @@ import { ChonCotXuat } from "./ChonCotXuat";
 import { FilterBar } from "./FilterBar";
 import { InvoiceExportButtons } from "./InvoiceExportButtons";
 import { RangeSyncPanel } from "./RangeSyncPanel";
+import { TaiHoaDonGoc } from "./TaiHoaDonGoc";
 import { ThongBaoTrangThai } from "./ThongBaoTrangThai";
 import { useRangeBackfill } from "./useRangeBackfill";
 
@@ -154,6 +155,9 @@ export function InvoicesPage() {
                 </span>
               )}
               {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
+              {/* U37b — tải hóa đơn GỐC cho MỘT khách hàng, chia sẻ qua link công khai.
+                  Tự khóa khi bộ lọc chưa đủ ba vế (khách hàng + bán ra + khoảng ngày). */}
+              <TaiHoaDonGoc filter={filter} />
               <InvoiceExportButtons filter={filter} cols={cols} />
               <BiSuaKyKhacBadge
                 filter={filter}

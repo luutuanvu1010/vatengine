@@ -289,3 +289,22 @@ export interface KhachHangResult {
   /** true ⇒ danh sách đã bị cắt ở trần server; phải nói cho người dùng biết còn nữa. */
   biCatBot: boolean;
 }
+
+// U37b — gói hóa đơn gốc chia sẻ qua link công khai.
+export interface TienDoGoi {
+  tong: number;
+  xong: number;
+  khongCoHoSoGoc?: number;
+  loi?: number;
+  conCho: number;
+}
+export interface GoiChiaSeView {
+  id: string;
+  trangThai: "dang_tao" | "dang_dong_goi" | "san_sang" | "loi" | "da_thu_hoi";
+  soHoaDon?: number;
+  soThieu?: number;
+  tienDo?: TienDoGoi;
+  hetHanLuc?: string;
+  /** Chỉ có khi `san_sang`. Chưa sẵn sàng hoặc đã thu hồi ⇒ null. */
+  url?: string | null;
+}

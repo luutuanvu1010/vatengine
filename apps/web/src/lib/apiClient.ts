@@ -10,6 +10,7 @@ import type {
   ConvertResult,
   ExportFormat,
   ExportResult,
+  GoiChiaSeView,
   InvoiceDetailResponse,
   InvoiceFilter,
   InvoiceListResult,
@@ -270,6 +271,20 @@ export const api = {
   // mục ở tenant lớn nhất) nên trả trọn, lọc/tìm làm ở máy khách.
   listKhachHang(): Promise<KhachHangResult> {
     return request("GET", "/invoices/khach-hang");
+  },
+
+  // U37b — phát hành / theo dõi / thu hồi gói hóa đơn gốc.
+  taoGoiChiaSe(body: { nmmst: string; tuNgay: string; denNgay: string }): Promise<GoiChiaSeView> {
+    return request("POST", "/goi-chia-se", { body });
+  },
+  layGoiChiaSe(id: string): Promise<GoiChiaSeView> {
+    return request("GET", `/goi-chia-se/${id}`);
+  },
+  dongGoiChiaSe(id: string): Promise<GoiChiaSeView> {
+    return request("POST", `/goi-chia-se/${id}/dong-goi`);
+  },
+  thuHoiGoiChiaSe(id: string): Promise<GoiChiaSeView> {
+    return request("POST", `/goi-chia-se/${id}/thu-hoi`);
   },
 
   // A1 — hồ sơ tenant + vai.
