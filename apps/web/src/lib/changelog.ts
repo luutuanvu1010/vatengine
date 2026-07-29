@@ -13,6 +13,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.1",
+    date: "2026-07-29",
+    title: "Chữ to hơn, dễ đọc hơn trên mọi màn hình",
+    changes: [
+      "Cỡ chữ thân bài tăng từ 13–16px lên 18px trên toàn bộ phần mềm. Trước đây nhiều đoạn mô tả và ghi chú bị thu nhỏ xuống 13px cho gọn, khiến người dùng phải căng mắt — nay mọi câu văn hoàn chỉnh đều dùng chung một cỡ chữ đủ lớn để đọc lâu không mỏi.",
+      "Các tiêu đề được phóng to tương ứng theo cỡ chữ thân bài, nên thứ bậc trang vẫn rõ ràng: tiêu đề trang, tiêu đề mục và tiêu đề thẻ tách bậc dứt khoát thay vì gần bằng nhau.",
+      "Con số lớn ở phần Kết quả và Tổng quan (Tiền chưa thuế, Tiền thuế, Tổng thanh toán) cũng to hơn để liếc là thấy.",
+      "Nhãn phụ và chú thích nhỏ giữ cỡ nhỏ hơn thân bài — có chủ đích, để mắt phân biệt được đâu là nội dung chính, đâu là ghi chú.",
+    ],
+    kind: "improvement",
+  },
+  {
     version: "v2.0",
     date: "2026-07-28",
     title: "Hóa đơn bị thay thế không còn được cộng vào tổng",

@@ -88,7 +88,7 @@ function docCoChu(src: string): Record<string, string> {
   return ra;
 }
 
-describe("Luật ui.md — thang cỡ chữ một nguồn, thân 16px (QĐ-9b)", () => {
+describe("Luật ui.md — thang cỡ chữ một nguồn, thân 18px (QĐ-9b)", () => {
   const doc = docCoChu(readFileSync(DUONG_DOC_TOKEN, "utf8"));
   const css = docCoChu(readFileSync(DUONG_TOKENS_CSS, "utf8"));
 
@@ -99,15 +99,18 @@ describe("Luật ui.md — thang cỡ chữ một nguồn, thân 16px (QĐ-9b)",
     expect(css, "sửa docs/07-DESIGN_TOKENS.md TRƯỚC rồi đồng bộ về tokens.css").toEqual(doc);
   });
 
-  it("thân là 16px và mọi bậc tiêu đề LỚN HƠN thân", () => {
+  it("thân là 18px và mọi bậc tiêu đề LỚN HƠN thân", () => {
     const px = (t: string) => Number.parseInt(css[t] ?? "", 10);
-    expect(px("--fs-base")).toBe(16);
-    for (const t of ["--fs-lg", "--fs-xl", "--fs-2xl", "--fs-3xl"]) {
-      expect(px(t), `${t} phải lớn hơn thân 16px`).toBeGreaterThan(16);
+    const than = px("--fs-base");
+    expect(than).toBe(18);
+    // Nhãn phải NHỎ hơn thân — nếu không, `--fs-sm` lại bị dùng như thân và vòng lặp
+    // "chữ bé" (U20 → U37b) tái diễn theo chiều ngược lại.
+    for (const t of ["--fs-xs", "--fs-sm"]) {
+      expect(px(t), `${t} là NHÃN, phải nhỏ hơn thân ${than}px`).toBeLessThan(than);
     }
     // Bậc tăng đơn điệu — chống việc sửa lẻ một token làm thang gãy.
     expect([px("--fs-lg"), px("--fs-xl"), px("--fs-2xl"), px("--fs-3xl")]).toEqual([
-      20, 24, 30, 36,
+      22, 26, 32, 40,
     ]);
   });
 
