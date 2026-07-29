@@ -43,9 +43,11 @@ export function makeEnv(over: Partial<Env> = {}): Env {
     JWT_SECRET: TEST_SECRET,
     ADMIN_JWT_SECRET: TEST_ADMIN_SECRET,
     TURNSTILE_SECRET_KEY: TEST_TURNSTILE_SECRET,
-    // HYPERDRIVE/RAW không dùng khi getDb/getStorage được tiêm — cast dummy ở ranh giới test.
+    // HYPERDRIVE/RAW/CHIA_SE không dùng khi getDb/getStorage được tiêm — cast dummy ở
+    // ranh giới test.
     HYPERDRIVE: {} as Hyperdrive,
     RAW: {} as R2Bucket,
+    CHIA_SE: {} as R2Bucket,
     TOKEN_KEK: TEST_KEK,
     ...over,
   };

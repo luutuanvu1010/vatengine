@@ -41,7 +41,14 @@
 
   // U7: R2 lưu file kết xuất (xlsx/csv). Tạo bucket lúc deploy:
   // `wrangler r2 bucket create vat-raw`. Dev local: Miniflare mô phỏng R2 tự động.
-  "r2_buckets": [{ "binding": "RAW", "bucket_name": "vat-raw" }],
+  "r2_buckets": [
+    { "binding": "RAW", "bucket_name": "vat-raw" },
+    // U37b — bucket CÔNG KHAI cho gói hóa đơn chia sẻ (gắn docs.tourdao.vn, lifecycle
+    // 30 ngày theo prefix `goi-hoa-don/`). TÁCH khỏi `vat-raw` là CÓ CHỦ ĐÍCH: `vat-raw`
+    // chứa hồ sơ gốc + file kết xuất của mọi tenant và PHẢI ở chế độ riêng tư. Gộp chung
+    // rồi mở công khai một bucket là lộ toàn bộ kho.
+    { "binding": "CHIA_SE", "bucket_name": "vat-chia-se" }
+  ],
 
   // Nhãn môi trường (KHÔNG nhạy cảm) — /health báo env, phân nhánh hành vi nếu cần.
   // H-A.5a — PBKDF2_ITERATIONS: số vòng băm mật khẩu SaaS cho hash MỚI. GIỮ 100000 trên

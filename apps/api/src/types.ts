@@ -45,6 +45,9 @@ export interface Env {
   URL_CONG_ADMIN?: string;
   // R2: lưu file kết xuất (U7) — không giữ file lớn trong RAM Worker (ADR-0001).
   RAW: R2Bucket;
+  // U37b — bucket CÔNG KHAI (docs.tourdao.vn). Chỉ chứa gói ZIP đã phát hành; KHÔNG
+  // bao giờ ghi hồ sơ gốc hay file kết xuất của tenant vào đây.
+  CHIA_SE: R2Bucket;
   // U14 — KEK mã hóa token thuế tại nghỉ (base64 32 byte). Workers Secret (security.md).
   TOKEN_KEK: string;
   // Hàng đợi đồng bộ nền — producer cho "Đồng bộ ngay" (POST /tax-accounts/:id/sync)
