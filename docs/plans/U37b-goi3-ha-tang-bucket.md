@@ -1,7 +1,10 @@
 # U37b Gói 3 — Dựng bucket công khai `vat-chia-se` (chủ dự án thao tác)
 
-> **Vì sao Claude không tự chạy:** tạo bucket công khai + gắn tên miền là hành động hạ tầng
-> đối ngoại, mở một bề mặt ai-có-link-cũng-tải-được. Claude soạn lệnh và hậu kiểm; **bạn bấm**.
+> **✅ ĐÃ THỰC HIỆN 2026-07-29** — chủ dự án cấp Zone ID và ủy quyền chạy; kết quả hậu kiểm
+> thật ở §5. Giữ nguyên tài liệu này làm biên bản + hướng dẫn dựng lại (DR, môi trường mới).
+>
+> **Vì sao ban đầu định để chủ dự án tự chạy:** tạo bucket công khai + gắn tên miền là hành
+> động hạ tầng đối ngoại, mở một bề mặt ai-có-link-cũng-tải-được.
 >
 > Cú pháp dưới đây lấy từ chính `wrangler` đang cài (`npx wrangler r2 bucket … --help`,
 > bản 4.110.0, 2026-07-29), **không** chép từ trí nhớ hay tài liệu chung.
@@ -89,6 +92,39 @@ npx wrangler r2 bucket lifecycle list vat-chia-se # đúng MỘT rule, 30 ngày,
 **Đạt** khi cả bốn đúng. Riêng mục `dev-url` mà không phải `disabled` thì **dừng lại**, đừng
 đi tiếp sang Gói 4 — lúc đó mọi gói phát hành sau này đều có thêm một đường truy cập không
 kiểm soát.
+
+### Kết quả THẬT — chạy 2026-07-29
+
+| # | Mục | Kết quả |
+|---|---|---|
+| 1 | Bucket | ✅ `vat-chia-se`, tạo `2026-07-29T05:02:28Z` |
+| 2 | Tên miền | ✅ `docs.tourdao.vn` — `enabled: Yes`, `ownership_status: active`, `min_tls: 1.2`, zone `tourdao.vn` |
+| 3 | `r2.dev` | ✅ **disabled** |
+| 4 | Lifecycle | ✅ `het-han-30-ngay`, prefix `goi-hoa-don/`, hết hạn sau **30 ngày** |
+
+Kiểm trước khi gắn: `docs.tourdao.vn` **chưa phân giải** và không phục vụ gì — không đè lên
+bản ghi đang chạy nào.
+
+**Cloudflare tự thêm một rule nữa:** `Default Multipart Abort Rule` (hủy multipart upload dở
+sau 7 ngày, mọi prefix). Không đụng gì tới object của ta — giữ nguyên.
+
+### 🔶 CÒN TREO — phải kiểm lại trước khi nghiệm thu Gói 4
+
+`ssl_status: pending` ngay sau khi gắn, và `curl https://docs.tourdao.vn/` trả **HTTP 000**
+(chưa phân giải DNS). Bình thường: bản ghi CNAME + cấp chứng chỉ mất vài phút. **Chưa kiểm
+chứng được** hai điều dưới đây, phải chạy lại khi SSL chuyển `active`:
+
+```
+npx wrangler r2 bucket domain list vat-chia-se     # ssl_status phải là active
+curl -s -o /dev/null -w "%{http_code}\n" https://docs.tourdao.vn/
+curl -s -o /dev/null -w "%{http_code}\n" https://docs.tourdao.vn/goi-hoa-don/2026-07/khong-co-that.zip
+```
+
+Kỳ vọng: **không liệt kê được nội dung ở gốc** (tài liệu Cloudflare: *"public buckets do not
+let you list the bucket contents at the root"*) và khóa không tồn tại trả **404**. Đây không
+phải hình thức — nó là bằng chứng cho giả định an toàn cốt lõi của U37b: *khóa ngẫu nhiên là
+thứ DUY NHẤT bảo vệ file*. Nếu gốc bucket liệt kê được thì giả định đó sụp, và toàn bộ thiết
+kế chia sẻ phải xem lại.
 
 ---
 
