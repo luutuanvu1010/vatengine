@@ -1,5 +1,5 @@
+import { boDau, khopTim } from "@vat/domain";
 import { describe, expect, it } from "vitest";
-import { boDau, khopTim } from "../../src/lib/boDau";
 
 describe("boDau — chuẩn hóa chuỗi để tìm kiếm", () => {
   it("bỏ dấu thanh và dấu mũ tiếng Việt", () => {

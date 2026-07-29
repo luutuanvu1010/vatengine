@@ -1,4 +1,7 @@
-// Chuẩn hóa chuỗi tiếng Việt để TÌM KIẾM (không dùng để hiển thị hay so khớp dữ liệu).
+// Chuẩn hóa chuỗi tiếng Việt — dùng CHUNG cho web (tìm kiếm) và server (đặt tên tệp).
+//
+// Đặt ở gói dùng chung thay vì nhân đôi: chỗ xử lý `Đ` bên dưới là loại dễ làm sai và
+// dễ để hai bản lệch nhau — một bản sửa, bản kia quên.
 //
 // Vì sao cần: người dùng gõ nhanh thì hiếm khi bỏ dấu đúng — gõ "cong ty tour dao" phải ra
 // "CÔNG TY TNHH TOUR ĐẢO". Không có bước này thì ô tìm live gần như vô dụng với tên tiếng Việt.

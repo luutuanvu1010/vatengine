@@ -53,3 +53,11 @@ export {
   isProfileId,
 } from "./profiles/registry";
 export type { MappingColumn, MappingProfile } from "./profiles/types";
+// U37b — đóng gói hồ sơ gốc thành MỘT file ZIP giao cho khách hàng (hàm thuần, không I/O).
+export {
+  dungGoiZip,
+  type GoiDaDung,
+  type HoaDonThieu,
+  type TepHoaDon,
+  type ThongTinGoi,
+} from "./goiHoaDonZip";

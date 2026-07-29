@@ -8,9 +8,9 @@
 // nhưng chưa ràng vào MST nào ⇒ gói rỗng hoặc sai khách. Component này KHÔNG BAO GIỜ gọi
 // `onChange` khi người dùng chỉ đang gõ.
 import { useQuery } from "@tanstack/react-query";
+import { khopTim } from "@vat/domain";
 import { ComboBox, type ComboBoxItem } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
-import { khopTim } from "../../lib/boDau";
 
 export interface KhachHangDaChon {
   nmmst: string;
