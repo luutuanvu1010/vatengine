@@ -155,9 +155,6 @@ export function InvoicesPage() {
                 </span>
               )}
               {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
-              {/* U37b — tải hóa đơn GỐC cho MỘT khách hàng, chia sẻ qua link công khai.
-                  Tự khóa khi bộ lọc chưa đủ ba vế (khách hàng + bán ra + khoảng ngày). */}
-              <TaiHoaDonGoc filter={filter} />
               <InvoiceExportButtons filter={filter} cols={cols} />
               <BiSuaKyKhacBadge
                 filter={filter}
@@ -178,6 +175,13 @@ export function InvoicesPage() {
           Đã ghi nhớ bộ lọc gần nhất · Giờ hiển thị theo VN (UTC+7)
         </div>
       </Card>
+
+      {/* (b) Tải hóa đơn gốc — thẻ RIÊNG, không chen vào thanh hành động của bộ lọc.
+          Đây là quy trình nhiều bước có trạng thái sống (chờ → tiến độ → link → thu hồi),
+          khác hẳn "Xuất Excel" bấm-phát-ra-file. Nó ăn theo bộ lọc đã áp dụng nên đứng
+          NGAY DƯỚI thẻ tra cứu và TRÊN kết quả — đọc từ trên xuống là đúng thứ tự việc.
+          Component tự khóa khi bộ lọc chưa đủ ba vế (khách hàng + bán ra + khoảng ngày). */}
+      <TaiHoaDonGoc filter={filter} />
 
       {/* (c) Kết quả + Xuất — số đếm là tiêu điểm (Stat). Đủ 4 trạng thái. */}
       <Card>

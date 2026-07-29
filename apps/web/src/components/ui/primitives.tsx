@@ -886,3 +886,69 @@ export function ComboBox({
     </span>
   );
 }
+
+// --- Bố cục: Hang / Cot / ChuPhu -------------------------------------------------------
+// U37b — thư viện trước đây KHÔNG có primitive bố cục, nên mọi màn phải tự tô
+// `display:flex; gap:var(--sp-N)` rải rác trong `features/` — đúng thứ ui.md mục 2 cấm
+// ("thiếu primitive thì THÊM primitive, không tô kiểu nội tuyến"). Ba primitive dưới đây
+// gom việc đó về một chỗ; màn khác thêm sau tự hưởng, không phải chép lại.
+
+/** Khoảng cách theo thang token, KHÔNG nhận px thô. */
+type Khoang = "1" | "2" | "3" | "4" | "6";
+
+/** Hàng ngang. `xuongDong` cho phép gãy dòng khi hẹp (thanh công cụ nhiều nút). */
+export function Hang({
+  children,
+  khoang = "2",
+  canGiua = true,
+  xuongDong = false,
+}: {
+  children: ReactNode;
+  khoang?: Khoang;
+  canGiua?: boolean;
+  xuongDong?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: canGiua ? "center" : "flex-start",
+        flexWrap: xuongDong ? "wrap" : "nowrap",
+        gap: `var(--sp-${khoang})`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Cột dọc — dùng khi nội dung cần thở (cảnh báo, xác nhận, kết quả), không nhồi ngang. */
+export function Cot({ children, khoang = "3" }: { children: ReactNode; khoang?: Khoang }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: `var(--sp-${khoang})` }}>
+      {children}
+    </div>
+  );
+}
+
+/** Chữ phụ (mô tả, ghi chú, trạng thái). Gom cỡ chữ + màu về token, thôi tô trong features/. */
+export function ChuPhu({
+  children,
+  nhan = false,
+}: {
+  children: ReactNode;
+  /** `true` = nhạt hơn nữa (ghi chú thứ yếu). */
+  nhan?: boolean;
+}) {
+  return (
+    <span
+      style={{
+        fontSize: "var(--fs-sm)",
+        color: nhan ? "var(--text-tertiary)" : "var(--text-secondary)",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
