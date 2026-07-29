@@ -965,3 +965,59 @@ duyệt thật chứng minh được nó hoạt động.
 - **Điều kiện bật lại (đề xuất):** trả lời xong ít nhất câu 1 và 3. Bật lại = đổi `SHOW_RECONCILE` về `true` **và** đảo kỳ vọng trong `apps/web/test/features/reconcileHidden.test.tsx` (test khoá cả hai điểm nối dây — đỏ khi đổi một chỗ mà quên chỗ kia là hành vi đúng, không phải hồi quy).
 - **Mức ưu tiên đề xuất:** Trung bình — không chặn ai, nhưng đang có 11 hóa đơn lệch > 100.000 đ mà không ai nhìn thấy.
 - **Nguồn phát hiện:** Phiên Cowork 2026-07-29 — yêu cầu trực tiếp của chủ dự án.
+
+## [2026-07-29] Dọn kho: đã gỡ 2 worktree; 49 nhánh local GIỮ NGUYÊN theo quyết định chủ dự án
+
+- **Trạng thái:** Worktree đã dọn xong. Nhánh **giữ nguyên toàn bộ** — nợ kỹ thuật mở, chờ rà soát kỹ về sau.
+
+### Phần đã làm: gỡ 2 worktree
+
+Trước khi gỡ, mỗi worktree được kiểm hai điều: `git status --short` rỗng (không có thay đổi chưa commit) và `git rev-list --count feat/cloudflare-stack-u0..HEAD` = 0 (không có commit nằm ngoài trục).
+
+| Worktree | Nhánh / HEAD | Bằng chứng | Dung lượng |
+|---|---|---|---|
+| `/Users/tuanbao/Documents/Projects/vat-u18` | `feat/u33-turnstile` @ 6cd428b | status sạch, only=0 | ~420 MB |
+| `.claude/worktrees/u35b-u35-sequential-4d3ad9` | detached @ 9dac73a | status sạch, only=0 | ~415 MB |
+
+Sau khi gỡ, `git worktree list` chỉ còn checkout chính; `git worktree prune --dry-run -v` không còn gì để dọn. **Không mất commit nào** — cả hai nhánh/HEAD vẫn nằm trong lịch sử trục.
+
+### Quyết định: GIỮ LẠI TOÀN BỘ 49 nhánh local
+
+**Chủ dự án, 2026-07-29.** Đã có đề xuất xoá 38–42 nhánh (kèm bằng chứng an toàn bên dưới); chủ dự án **bác đề xuất, quyết định giữ nguyên tất cả** để rà soát thật kỹ về sau. **Phiên sau không đề xuất xoá lại** khi chưa có việc rà soát nói trên — nhánh cũ không tốn gì ngoài chỗ trong danh sách, còn xoá nhầm thì không lấy lại được bằng công cụ thông thường.
+
+### Bằng chứng đã thu thập (đừng đo lại từ đầu)
+
+Đo 2026-07-29. Tiền đề đã tự kiểm: trục local **trùng khớp** trục remote — `feat/cloudflare-stack-u0` local và `origin/feat/cloudflare-stack-u0` cùng là `9ef0fdc`, `git rev-list --left-right --count` cho `0 0`. Nên "nằm trong trục" đồng thời là "đã có trên origin".
+
+**50 nhánh local = 1 đang checkout + 42 đã gộp + 7 chưa gộp.**
+
+**42 nhánh đã gộp** — mỗi nhánh chạy hai phép độc lập, **cả 42 đều đạt**:
+1. `git merge-base --is-ancestor <nhánh> feat/cloudflare-stack-u0` → exit 0 (mọi commit object của nhánh nằm trong lịch sử trục).
+2. `git rev-list --count feat/cloudflare-stack-u0..<nhánh>` → `0` (không commit nào chỉ có ở nhánh).
+
+⇒ Về mặt commit, xoá ref local của 42 nhánh này **không làm mất gì**. Đây là dữ kiện đã kiểm chứng, độc lập với quyết định giữ ở trên.
+
+**7 nhánh CHƯA gộp — tuyệt đối không xoá, còn commit riêng:**
+
+| Nhánh | Commit riêng | Commit cuối |
+|---|---|---|
+| `backup/hb6-before-rebase-20260720` | 18 | 2026-07-20 |
+| `claude/u23-unit-execution-59b6aa` | 13 | 2026-07-16 |
+| `backup/u17b-before-rebase-20260720` | 6 | 2026-07-20 |
+| `feat/doi-mst-cong-admin` | 3 | 2026-07-23 |
+| `feat/u27-web-loc-ketxuat-dongbo` | 3 | 2026-07-18 |
+| `feat/u34-lat3-dat-mat-khau` | 1 | 2026-07-22 |
+| `wip/line-view-snapshot-20260717` | 1 | 2026-07-17 |
+
+### Nợ kỹ thuật — cần rà soát kỹ về sau
+
+1. **7 nhánh chưa gộp: công việc còn dở hay đã bỏ?** Đây là món nặng nhất. `backup/hb6` (18 commit) và `claude/u23` (13 commit) là hai khối lớn nhất, đều từ 2026-07-16…20 — chưa ai xác định là *đã cherry-pick sang trục dưới dạng khác*, hay *thật sự bị bỏ quên*. `is-ancestor` **không trả lời được câu này**: một nhánh bị squash-merge cũng hiện ra là "chưa gộp" dù nội dung đã vào trục. Muốn biết phải so **nội dung** (`git diff trục...nhánh`, hoặc `git cherry -v`), không so commit. Chưa làm.
+2. **`main` chỉ tồn tại local.** `main` @ e598ac8 là tổ tiên của trục, và **không có `origin/main`**. CI (`.github/workflows/ci.yml:13`) chỉ nghe `feat/cloudflare-stack-u0`. Vậy `main` hiện là ref mồ côi, không ai dùng — nhưng cái tên thì gây hiểu nhầm cho người/công cụ mặc định "main là trục". Cần quyết: đổi tên, hay để yên và ghi rõ trục thật là `feat/cloudflare-stack-u0` (README/CHEATSHEET).
+3. **3 nhánh con trỏ deploy chưa có ai quản.** `deploy/u17b` (behind 286), `trunk-check` (behind 242), `trunk-deploy` (behind 231) — đều là ảnh chụp trục tại một lần deploy nào đó, **không file nào trong repo tham chiếu tên chúng** (grep = 0). Chúng là dấu mốc "lúc đó deploy cái gì", có giá trị đúng theo bài học *checkout cũ đè deploy âm thầm* — nhưng đang trôi tự do, không quy ước, không cập nhật. Nên chuyển sang **tag** (`deploy/2026-07-xx`) thay vì nhánh, hoặc bỏ hẳn và dựa vào nhật ký deploy trong `docs/`.
+4. **`feat/u27-clean` lệch hai chiều với remote.** Local `[ahead 1, behind 4]` so với `origin/feat/u27-clean`: 1 commit local chưa đẩy (đã kiểm: **có** trong trục), và 4 commit trên origin mà local không có (**CHƯA KIỂM CHỨNG** 4 commit đó đã vào trục hay chưa). Phải kiểm trước khi động tới nhánh này ở cả hai phía.
+5. **Hai stash treo, một cái chưa rõ số phận.** `stash@{0}` — "Registry UI (phiên khác)", neo trên `feat/doi-mst-cong-admin` (bb793dc), base **KHÔNG** nằm trong trục ⇒ chưa biết nội dung đã vào trục chưa, phải soi diff trước khi bỏ. `stash@{1}` — "line-view WIP 2026-07-17", base 9e3a11a **có** trong trục và đã có nhánh backup `wip/line-view-snapshot-20260717`, bỏ được. Ghi rõ để lần sau không lo hão: **xoá nhánh không xoá stash** — `refs/stash` tự giữ commit sống, kể cả khi nhánh gốc biến mất.
+6. **Danh sách nhánh mất khả năng đọc.** 50 nhánh với 4–5 quy ước đặt tên trộn lẫn (`claude/*`, `feat/*`, `docs/*`, `fix/*`, `backup/*`, `wip/*`, `trunk-*`, `deploy/*`, trần trụi như `fordex-hardening`, `worktree-fix-queue-429`). Không có quy ước nào được ghi ở đâu. Khi rà soát về sau, chốt quy ước đặt tên + vòng đời nhánh trước, rồi mới dọn theo quy ước đó.
+
+- **Điều kiện dọn về sau (đề xuất):** làm xong mục (1) — phân loại 7 nhánh chưa gộp bằng so **nội dung** chứ không so commit — rồi mới bàn tới xoá. Trước khi xoá bất kỳ nhánh nào: `git tag archive/<tên-nhánh> <sha>` để giữ đường quay lại, vì tag không bị `git gc` dọn như ref đã xoá.
+- **Mức ưu tiên đề xuất:** Thấp cho việc dọn (không chặn ai, không tốn hạ tầng) — **Trung bình** cho riêng mục (1), vì 18+13 commit chưa rõ số phận là công việc thật có thể đang bị bỏ quên.
+- **Nguồn phát hiện:** Phiên Cowork 2026-07-29 — dọn worktree theo yêu cầu, kiểm nhánh khi chủ dự án yêu cầu "kiểm tra lại 42 nhánh một cách chắc chắn và có bằng chứng".
