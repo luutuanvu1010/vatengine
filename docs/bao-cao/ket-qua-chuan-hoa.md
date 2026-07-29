@@ -61,6 +61,7 @@ Thang chữ 18 / 22 / 26 / 32 / 40 trong `docs/07-DESIGN_TOKENS.md` §4 đã đ�
 | `SectionTitle` **(mới)** | `--fs-lg` + `--fw-bold`, `as="h2" \| "h3"` | Gom kiểu tiêu đề vốn bị gõ lại nội tuyến ở **12 chỗ** trong `features/`. `as` tách **cấp ngữ nghĩa HTML** khỏi **cỡ chữ** |
 | `HuongDanTrang` + `MucHuongDan` **(mới)** | Khối hướng dẫn cuối trang, dùng `--surface-muted` / `--border` / `--radius-lg` / `--sp-*` có sẵn | Hiện thực quy ước "nhãn ngắn — mô tả đầy đủ ở cuối trang" |
 | `ChuPhu` | Sửa chú thích `(16px)` → `(18px)` | Chú thích lệch thực tế sau khi tái neo thang QĐ-9b |
+| `optionCard` (ExportsPage) | Thêm `fontFamily: inherit` + `fontSize: --fs-base` | **Chỉ lộ ra khi đo trên trình duyệt thật.** `<button>` không kế thừa font của trang ⇒ trình duyệt áp mặc định **13,33px**, khiến tiêu đề mỗi lựa chọn nhỏ hơn chính dòng mô tả 18px bên dưới. Đây là *hardcode do bỏ sót*: không có con số nào trong mã để phép kiểm hex/px bắt được |
 
 ## 5. Trang đã thêm khối mô tả cuối trang
 
@@ -88,6 +89,20 @@ h2 "Hướng dẫn sử dụng trang này"    22px / 700 / transform: none
 ```
 
 Cấu trúc `h1 → h2`, **không nhảy cấp**, mọi tiêu đề đậm và lớn hơn thân. Khối hướng dẫn: nền `rgb(241,243,244)` (= `--surface-muted`), mô tả 18px màu `rgb(60,64,67)` (= `--text-secondary`), 5 nhãn dài **11–33 ký tự** (đều ≤ 40).
+
+Soi thêm hai trang còn lại ở khổ 1280×1600:
+
+```
+/exports        h1 32px · h2 22px ×4 (Chọn định dạng · Định dạng cho phần mềm kế toán
+                                      · Tạo tệp kết xuất · Hướng dẫn sử dụng trang này)
+/tax-accounts   h1 32px · h2 22px (Hướng dẫn sử dụng trang này)
+                5 nhãn hướng dẫn dài 12–23 ký tự
+```
+
+**Việc soi bằng mắt bắt được một lỗi mà mã và test đều không thấy:** thẻ chọn ở `/exports`
+render tiêu đề ở **13,33px** — mặc định `<button>` của trình duyệt — trong khi mô tả ngay dưới
+là 18px. Xem `optionCard` ở §4. Sau khi vá: quét toàn trang **không còn phần tử tương tác nào
+dưới 14px**.
 
 ### 6.2 Cổng máy
 
@@ -135,7 +150,7 @@ Thêm mục mới **Quy chuẩn văn phong** — bảng từ cấm, bảng một
 | 2 | **`labelNguon` trùng nguồn với Registry.** `apps/web/src/lib/statusLabels.ts:48` và `packages/domain/src/registry.ts:187` cùng khai nhãn `nguon`, phải sửa hai chỗ | Sửa đúng tầng = cho `labelNguon` dẫn xuất từ Registry. Đó là refactor, vượt phạm vi "chỉ đổi chữ". Lần này giữ hai chỗ **đồng bộ thủ công** + test khoá cả hai |
 | 3 | **`lib/changelog.ts`** còn "file", "kéo dữ liệu", "mất trắng" ở 13 mốc đã phát hành | QĐ-C: không viết lại lịch sử. Nếu chủ dự án đổi ý, sửa được trong một commit riêng |
 | 4 | **Nhãn nhóm vẫn in hoa**: `CHÍNH` / `HỆ THỐNG` (Sidebar), `KỲ NHANH` (ChonKy) | Đây là **nhãn nhóm**, không phải tiêu đề hay câu văn, nên không thuộc diện cấm. Nêu ra để chủ dự án quyết nếu muốn bỏ luôn `uppercase` khỏi mọi bề mặt |
-| 5 | **Ảnh chụp trước/sau** cho 3 trang tiêu biểu | Đã đo bằng số liệu computed style thật (§6.1) thay cho ảnh — chụp ảnh qua công cụ hiện tại không ổn định. Chủ dự án xem trực tiếp bằng `npm run dev -w apps/web` rồi mở `/invoices?xem-thu=1` |
+| 5 | ~~Ảnh chụp trước/sau cho 3 trang~~ | **ĐÃ XONG** — soi trực tiếp 3 trang trên dev server ở khổ 1280×1600 (§6.1). Việc soi này là thứ phát hiện lỗi `optionCard` mà cả mã lẫn test đều không thấy |
 
 ---
 
