@@ -88,7 +88,7 @@
 |---|---|---|---|---|---|
 | `GET /invoices/khach-hang` | — | `200 {items:[{nmmst,nmten,soHoaDon}], biCatBot}` — gộp theo MST, chỉ chiều bán ra, chỉ khách có ĐỦ MST+tên; sắp theo tên; trần 2.000 và báo `biCatBot` khi cắt | `401` | 3 vai | `routes/invoices.ts` |
 | `POST /goi-chia-se` | `{nmmst, tuNgay, denNgay}` — Zod `.strict()`, **cả ba BẮT BUỘC** | `201 {id, soHoaDon, trangThai:"dang_tao"}` | `400` `bad_request` (thiếu trường / gửi kèm `ref`) · `400` `khoang_ngay_khong_hop_le` · `400` `khong_co_hoa_don` · `409` `thieu_tai_khoan_thue` · `503` `sync_unavailable` | `ke_toan_truong`,`quan_tri` | `routes/goiChiaSe.ts` |
-| `GET /goi-chia-se` | — | `200 {items:[{id,nmmst,tuNgay,denNgay,soHoaDon,kichThuoc,trangThai,taoLuc,hetHanLuc,url}]}` — `url` chỉ khác `null` khi `san_sang` | `401` | 3 vai | như trên |
+| `GET /goi-chia-se` | — | `200 {items:[{id,nmmst,nmten,tuNgay,denNgay,soHoaDon,kichThuoc,trangThai,soLuotTai,lanTaiCuoi,taoLuc,hetHanLuc,url}]}` — `url` chỉ khác `null` khi `san_sang`; **KHÔNG bao giờ trả `khoa_r2`** | `401` | 3 vai | như trên |
 | `GET /goi-chia-se/:id` | `:id` UUID | `200 {id,trangThai,soHoaDon,tienDo:{tong,xong,khongCoHoSoGoc,loi,conCho},hetHanLuc,url}` — **THUẦN ĐỌC**, không đóng gói | `400` · `404` | 3 vai | như trên |
 | `POST /goi-chia-se/:id/dong-goi` | `:id` UUID | `200 {id,trangThai:"san_sang",soHoaDon,soThieu,hetHanLuc,url}` | `409` `chua_du` (kèm `tienDo`) · `409` `khong_tai_duoc_hoa_don_nao` · `409` `dang_dong_goi` · `409` `trang_thai_khong_hop_le` · `404` | `ke_toan_truong`,`quan_tri` | như trên |
 | `POST /goi-chia-se/:id/thu-hoi` | `:id` UUID | `200 {id, trangThai:"da_thu_hoi"}` — idempotent | `400` · `404` | **3 vai** (thu hồi là hành động GIẢM rủi ro) | như trên |
@@ -105,6 +105,39 @@
 - `url` là đường dẫn CÔNG KHAI không cần đăng nhập ⇒ chỉ hiện khi `san_sang`, ẩn khi đã thu hồi.
 
 Bề mặt UI bổ sung (ngoài S0–S5, từ brief §3 + quyết định): **Dashboard** (chỉ `GET /tax-accounts` — 1 dòng trạng thái kết nối GDT theo `tokenHetHan`, KHÔNG số tiền/đối chiếu; U23-C) · **Cài đặt chung** (`/me` — bỏ địa chỉ, hiện MST; B6). S5 dùng A2 để khôi phục stepper + panel token. S0 "Ghi nhớ đăng nhập"/"Quên mật khẩu?" dựng sẵn chỗ, chờ backend A3/A4 (tách unit sau).
+
+## 3e. Endpoint CÔNG KHAI U37c (đường tải, KHÔNG xác thực, 2026-07-29)
+
+> Sinh ra từ một lỗ hổng THẬT: trước đó file nằm trên bucket công khai gắn custom domain R2
+> nên "thu hồi" = xóa object — mà probe production cho thấy xóa object KHÔNG vô hiệu hóa bản
+> đã cache ở CDN (gói đã thu hồi vẫn trả `200 · HIT · age 2856`, tức còn tải được **tới 4
+> giờ**). U37c chuyển hiệu lực liên kết thành **một câu truy vấn DB ở MỖI lượt tải**.
+
+| Endpoint | Vào | Ra | Lỗi | Vai | Nguồn |
+|---|---|---|---|---|---|
+| `GET /tai/:token` | `:token` khớp `^[a-z0-9]{20,64}$` | `200` thân là **stream** ZIP; `content-type: application/zip`; `content-disposition: attachment`; **`cache-control: no-store`** | `404` `text/plain` cho **MỌI** lý do | **KHÔNG xác thực** — công khai | `routes/taiCongKhai.ts` |
+
+**Bốn ca 404 phải KHÔNG phân biệt được nhau** (token sai · đã thu hồi · hết hạn · mất tệp).
+Phân biệt được là xác nhận cho người dò rằng token đó từng tồn tại. Có test so nguyên văn cả
+status lẫn thân phản hồi. *(Còn một kênh phụ chưa khóa: ca "mất tệp" tốn thêm một vòng gọi R2
+nên phân biệt được bằng ĐỘ TRỄ — đã ghi backlog.)*
+
+**Đường đi:** `vat-web` nhận `/tai/*` → chuyển tiếp qua service binding tới `vat-api`.
+KHÔNG gắn tên miền nào thẳng vào `vat-api` — làm vậy sẽ phơi TOÀN BỘ route của nó ra công
+cộng để đổi lấy đúng một đường tải.
+
+**Mount TRƯỚC `requireSameOrigin`** (có chủ đích): liên kết dán vào Zalo/email mở bằng điều
+hướng cấp cao nhất, không có `Origin` cùng gốc. An toàn dựa vào token **130 bit**
+(26 ký tự × 5 bit) + kiểm hiệu lực trong DB, không dựa vào cổng CSRF.
+
+**Vượt RLS có kiểm soát:** hai hàm `SECURITY DEFINER` (`0022`) thuộc sở hữu role
+`auth_lookup` (BYPASSRLS) — `tai_tra_goi` gộp cả ba điều kiện hiệu lực, `tai_ghi_nhan_luot`
+chỉ được `UPDATE` đúng hai cột đếm nên **không tự nới được hiệu lực** của một liên kết.
+`REVOKE ALL FROM PUBLIC`, chỉ `vat_app` có `EXECUTE`.
+
+**Bucket `vat-chia-se` KHÔNG còn custom domain** (gỡ 2026-07-29, hậu kiểm: đường cũ trả
+`530`, `wrangler r2 bucket domain list` → "no custom domains connected") ⇒ không còn cửa nào
+tới file mà không qua kiểm tra hiệu lực trong DB.
 
 ## 4. Ánh xạ trường dữ liệu (API → hiển thị)
 

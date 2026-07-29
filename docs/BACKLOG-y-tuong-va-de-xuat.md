@@ -931,3 +931,15 @@ là số liệu đáng tin.
 truy vấn DB; ca "mất tệp" tốn thêm một vòng gọi R2 ⇒ phân biệt được bằng thời gian đáp. Tiêu
 chí đặt ra là "bốn ca KHÔNG phân biệt được nhau", mà test hiện chỉ so status + thân phản hồi.
 Rủi ro thấp (chỉ lộ "gói từng sẵn sàng nhưng mất object"), nhưng đúng là chưa khóa hết.
+
+**4. Hạn mức lượt tải/tháng — nay đã có nền.** Ý tưởng `[2026-07-16]` bị chặn vì không có
+chỗ đếm. U37c thêm `goi_chia_se.so_luot_tai` + `lan_tai_cuoi` ⇒ đã có dữ liệu để dựng hạn
+mức. Vẫn phụ thuộc lớp thương mại chưa có, và phải làm mục 2 ở trên (rate-limit) trước —
+không thì con số đếm được không đáng tin để chặn ai.
+
+**5. Endpoint chia sẻ Zalo — probe lại khi có nhu cầu thật.** Đo 2026-07-29:
+`zalo.me/share/link` trả **302 về trang không tồn tại**; `sp.zalo.me/plugins/share` trả 200
+nhưng **CHƯA KIỂM CHỨNG** là có chèn được liên kết hay không (có thể chỉ là trang cần app ID).
+U37c đi đường Web Share API (`navigator.share`) — chuẩn, không phụ thuộc endpoint chưa kiểm
+chứng, và trên di động khay chia sẻ đã có Zalo. Chỉ dựng nút Zalo riêng nếu probe bằng trình
+duyệt thật chứng minh được nó hoạt động.

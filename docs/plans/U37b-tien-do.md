@@ -40,3 +40,24 @@ Không tìm được đường rò dữ liệu chéo tenant. Những điểm đ�
 - Tiêu chí §5: 1,2,4,5,6 ĐẠT có dẫn chứng file:dòng. Tiêu chí 3 và 8 nằm ở Gói 2/3 (trước phạm vi review) — auditor **không tự tái lập được** vì không có `DATABASE_URL`/credentials Cloudflare, ghi rõ là dựa vào nhật ký cũ chứ không tự khẳng định.
 - Xác nhận tiêu chí 7 được đánh dấu CHƯA LÀM **trung thực**, không đánh dấu xong khống.
 - **Minor đã vá**: `packages/db/src/schema/goiChiaSe.ts` còn ghi "giao diện phải nói khoảng 30 ngày" trong khi QĐ-6 đã đổi sang 1 tuần và mọi nơi khác đã đúng.
+
+## Hậu quả phát hiện sau khi U37b đóng: "Thu hồi" KHÔNG thật sự thu hồi
+
+Chủ dự án báo 2026-07-29: thu hồi xong liên kết vẫn mở được. **Đúng.**
+
+`docs.tourdao.vn` là custom domain của R2 ⇒ phản hồi đi qua CDN Cloudflare, mặc định
+`max-age=14400`. Xóa object **không** vô hiệu hóa bản đã cache. Probe thật:
+
+```
+put (không đặt cache-control) → cache-control: max-age=14400 ; GET lần 2 → HIT
+DELETE khỏi R2                → GET VẪN 200 · HIT · trả nguyên nội dung  (tới 4 GIỜ)
+put --cache-control no-store  → BYPASS ; DELETE → GET 404 NGAY
+```
+
+Vá tạm ở `fac690d` (`cacheControl: "no-store"` lúc `put`), sửa gốc ở **U37c** (hiệu lực là
+truy vấn DB ở mỗi lượt tải).
+
+**Vì sao U37b không bắt được:** review bảo mật soi đúng đoạn thu hồi và kết luận thứ tự
+xóa-R2-trước là an toàn — đúng ở TẦNG MÃ, nhưng CDN nằm NGOÀI mã. Đồng thời kho R2 giả trong
+test tuy có giữ `meta` nhưng chưa ca nào khẳng định gì về nó, nên thiếu `cacheControl` không
+làm test nào đỏ. Đã ghi thành luật ở `.claude/rules/security.md`.

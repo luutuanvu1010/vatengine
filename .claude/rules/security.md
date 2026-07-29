@@ -42,3 +42,33 @@ Cụ thể hoá nguyên tắc "không hard-code bí mật, không lưu mật kh�
 ## Khi gặp mơ hồ
 
 Nếu một tính năng đòi hỏi lưu thêm dữ liệu nhạy cảm chưa có trong mô hình hiện tại (ví dụ lưu mật khẩu để "đăng nhập lại tự động"), dừng và hỏi — đây luôn là vi phạm ranh giới pháp lý của Hiến pháp, không có ngoại lệ kỹ thuật nào hợp lý hoá được.
+
+## Tài nguyên phục vụ qua HTTP công khai: PHẢI probe tầng cache
+
+Cụ thể hoá "Nguyên tắc bằng chứng" của Hiến pháp cho một điểm mù đã gây sự cố thật.
+
+**Sự cố nền (2026-07-29).** Gói hóa đơn gốc đặt trên bucket R2 gắn custom domain; "thu hồi" =
+xóa object. Mã đúng, review bảo mật đọc mã và kết luận an toàn, test xanh. Nhưng custom domain
+đi qua CDN Cloudflare với `max-age=14400` mặc định, và **xóa object không vô hiệu hóa bản đã
+cache**. Probe thật: gói đã thu hồi vẫn trả `HTTP 200 · cf-cache-status: HIT · age 2856` kèm
+nguyên nội dung — tệp còn tải được **tới 4 giờ** sau khi người dùng bấm Thu hồi.
+
+Không tầng nào phát hiện được, vì lỗi **không nằm trong bất kỳ file mã nào để mà đọc**.
+
+### Bắt buộc
+
+- Mọi tài nguyên phục vụ qua HTTP công khai (bucket gắn tên miền, asset, endpoint tải file)
+  phải được **probe tầng cache bằng lệnh thật**, ghi lại `cache-control` và `cf-cache-status`.
+  Suy luận từ mã KHÔNG được coi là bằng chứng.
+- Với tài nguyên **thu hồi được**, phép kiểm bắt buộc là: phát hành → tải được → thu hồi →
+  **tải lại ngay** phải hỏng. Ghi lệnh + kết quả. Không có phép kiểm này ⇒ tính năng thu hồi
+  coi như **chưa có**.
+- Kho giả (fake) trong test phải giữ metadata HTTP, và phải có **ca khẳng định** về nó. Bẫy
+  đã dính: kho R2 giả có lưu `meta` nhưng không ca nào kiểm, nên thiếu `Cache-Control` không
+  làm test nào đỏ.
+- Ưu tiên đặt hiệu lực ở nơi mình **kiểm soát được từng lượt truy cập** (truy vấn DB tại thời
+  điểm phục vụ) thay vì ở nơi phụ thuộc hạ tầng bên ngoài (xóa được file, cache chịu nhả,
+  lifecycle chạy đúng hạn).
+- **Không dẫn xuất bí mật MỚI từ bí mật CŨ đã bị phơi.** Khi backfill một cột bí mật, sinh giá
+  trị mới độc lập — tiện tay lấy lại đoạn ngẫu nhiên cũ là giữ nguyên mức phơi nhiễm dưới một
+  cái tên mới.
