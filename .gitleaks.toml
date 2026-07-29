@@ -70,6 +70,27 @@ regexes = [
   '''0x4AAAAAAD6d5RwMpZVh-PZq''',
 ]
 
+[[allowlists]]
+description = "FP đã kiểm chứng (2026-07-29): token GIẢ trong test integration đường tải công khai (U37c)."
+# Bối cảnh: CI trunk ĐỎ ở commit 5a65a8a vì rule `generic-api-key` (entropy 4.70) bắt hằng
+# `const TOKEN = "abcdefghijkmnpqrstuvwxyz23"` ở apps/api/test/integration/taiCongKhai.test.ts:12.
+# Entropy cao chỉ vì 26 ký tự đều KHÁC NHAU — đó chính xác là 26 ký tự ĐẦU của bảng chữ công
+# khai `CHU_CAI` trong apps/api/src/routes/goiChiaSe.ts:43, tức giá trị suy ra được từ mã nguồn,
+# ngược hẳn với "ngẫu nhiên 130 bit" mà token thật phải có. Không phải bí mật.
+# Không sửa được bằng cách đổi file hiện tại: gitleaks quét TOÀN LỊCH SỬ, nên giá trị vẫn nằm
+# ở commit cũ vĩnh viễn (cùng bài học mục 0xTEST_SECRET_KHONG_PHAI_THAT bên trên).
+#
+# Neo theo đúng chuỗi literal + đúng file, KHÔNG dùng mẫu rộng kiểu `[a-z2-9]{26}` — mẫu rộng
+# sẽ lặng lẽ tha cho MỌI token chia sẻ thật 26 ký tự sinh từ chính bảng chữ này nếu có ngày ai
+# đó dán nhầm một token production vào repo. Đúng thứ hàng rào ấy đang bảo vệ file công khai.
+condition = "AND"
+paths = [
+  '''apps/api/test/integration/taiCongKhai\.test\.ts''',
+]
+regexes = [
+  '''abcdefghijkmnpqrstuvwxyz23''',
+]
+
 # CHỦ Ý không allowlist các file *.example / .dev.vars.example: chúng chỉ chứa
 # placeholder (baseline scan 2026-07-15 sạch), và vẫn muốn gitleaks quét để bắt
 # trường hợp lỡ tay đưa bí mật thật vào file mẫu.
