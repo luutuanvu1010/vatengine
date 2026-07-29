@@ -142,6 +142,25 @@ Thêm mục mới **Quy chuẩn văn phong** — bảng từ cấm, bảng một
 
 ---
 
+## 7b. Trang Đối chiếu: ẩn CÓ CHỦ ĐÍCH — không phải việc còn dở
+
+`ReconcilePage.tsx` nằm trong phạm vi đợt này (sửa `Tổng TT` → `Tổng thanh toán`, `SectionTitle`,
+hai `EmptyState` cụt). Các sửa đó **đúng và đã có test phủ, nhưng hiện không hiển thị** vì trang
+đang ẩn bằng cờ `SHOW_RECONCILE = false`.
+
+**Đây là quyết định của chủ dự án ngày 2026-07-29 — hoãn phát hành để nghiên cứu thêm, không
+phải lỗi và không phải phần việc còn dở của đợt chuẩn hoá này.** Ghi vào đây để phiên sau đọc
+báo cáo không nêu lại thành cảnh báo.
+
+Nguồn sự thật (đọc ở đó, **không chép lại sang chỗ khác**):
+
+- `apps/web/src/lib/featureFlags.ts` — khối chú thích ghi đủ lịch sử ba lần đổi cờ.
+- `docs/BACKLOG-y-tuong-va-de-xuat.md` mục **"[2026-07-29] Đối chiếu — tạm ẩn"** — 4 câu hỏi còn
+  treo và điều kiện bật lại.
+- Bật lại phải đảo kỳ vọng trong `apps/web/test/features/reconcileHidden.test.tsx` cùng lúc.
+
+---
+
 ## 8. Còn tồn đọng — cần người quyết định
 
 | # | Việc | Vì sao chưa làm |
@@ -149,6 +168,7 @@ Thêm mục mới **Quy chuẩn văn phong** — bảng từ cấm, bảng một
 | 1 | **Gom chuỗi về từ điển tập trung.** `lib/i18n/vi.ts` mới có 20 khoá; ~78 chuỗi vẫn nằm rải trong component | Prompt §0.6 yêu cầu **báo cáo, không tự tái cấu trúc**. Đây là đơn vị công việc riêng, cần spec riêng — và là điều kiện cần nếu sau này làm đa ngữ |
 | 2 | **`labelNguon` trùng nguồn với Registry.** `apps/web/src/lib/statusLabels.ts:48` và `packages/domain/src/registry.ts:187` cùng khai nhãn `nguon`, phải sửa hai chỗ | Sửa đúng tầng = cho `labelNguon` dẫn xuất từ Registry. Đó là refactor, vượt phạm vi "chỉ đổi chữ". Lần này giữ hai chỗ **đồng bộ thủ công** + test khoá cả hai |
 | 3 | **`lib/changelog.ts`** còn "file", "kéo dữ liệu", "mất trắng" ở 13 mốc đã phát hành | QĐ-C: không viết lại lịch sử. Nếu chủ dự án đổi ý, sửa được trong một commit riêng |
+| 3b | ~~Trang Đối chiếu đang ẩn~~ | **KHÔNG phải việc tồn đọng** — ẩn có chủ đích, xem §7b |
 | 4 | **Nhãn nhóm vẫn in hoa**: `CHÍNH` / `HỆ THỐNG` (Sidebar), `KỲ NHANH` (ChonKy) | Đây là **nhãn nhóm**, không phải tiêu đề hay câu văn, nên không thuộc diện cấm. Nêu ra để chủ dự án quyết nếu muốn bỏ luôn `uppercase` khỏi mọi bề mặt |
 | 5 | ~~Ảnh chụp trước/sau cho 3 trang~~ | **ĐÃ XONG** — soi trực tiếp 3 trang trên dev server ở khổ 1280×1600 (§6.1). Việc soi này là thứ phát hiện lỗi `optionCard` mà cả mã lẫn test đều không thấy |
 
