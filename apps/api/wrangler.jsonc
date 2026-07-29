@@ -64,7 +64,6 @@
     // U37b — gốc URL công khai của bucket chia sẻ. Khai tường minh (không để mã tự đoán)
     // để nếu đổi tên miền thì chỉ sửa một chỗ, và để môi trường khác trỏ được chỗ khác.
     // PHẢI khớp custom domain đã gắn cho bucket `vat-chia-se` ở Gói 3.
-    "URL_CHIA_SE": "https://docs.tourdao.vn",
     // U37c — gốc đường tải công khai `/tai/<token>`, phục vụ bởi front-door vat-web.
     "URL_TAI": "https://vatengine.tourdao.vn",
     // U34b — AWS_REGION và EMAIL_FROM KHÔNG nhạy cảm nên khai ở đây. Hai khoá AWS thì nạp
