@@ -10,7 +10,7 @@
 | Phát hiện hóa đơn đã thay đổi / bị thay thế | ✅ **Xong** |
 | Tính ĐÚNG tổng: tiền trước thuế · tiền thuế · tổng sau thuế | ✅ **Xong, đã nghiệm thu trên dữ liệu thật** |
 | Thông báo **số lượng** hóa đơn lệch ra màn hình | ✅ **Xong** |
-| Hiện **chi tiết** hóa đơn lệch ra màn hình | ⚠️ **Một phần** — xem §4 |
+| Hiện **chi tiết** hóa đơn lệch ra màn hình | ✅ **Xong** (U39/U40, cuối phiên) |
 
 ## 2. Vấn đề đã sửa — nói bằng tiếng người
 
@@ -24,8 +24,9 @@ Nay hóa đơn bị thay thế **không còn được cộng vào tiền**, như
 trong file Excel** (đánh dấu "Tính vào tổng = Không") để không mất dấu vết.
 
 ⚠️ **Số thuế phải nộp THẬT của doanh nghiệp không hề thay đổi** — chỉ là trước đây phần mềm
-tính dư. Tổng của các kỳ đã xem trước đây sẽ khác con số cũ; màn hình có dòng giải thích và
-`changelog.ts` đã ghi (v2.0).
+tính dư. Tổng của các kỳ đã xem trước đây sẽ khác con số cũ — thông báo trên màn hình nêu rõ
+bao nhiêu hóa đơn bị loại và loại đi bao nhiêu tiền; lý do đổi cách tính ghi ở
+`changelog.ts` v2.0 → trang "Lịch sử cập nhật" (xem §4 vì sao không ghim vào màn nghiệp vụ).
 
 **Kiểm chứng thật** (kỳ 07/2026, chiều Bán ra, MST 4201969169): 3 hóa đơn bị thay thế, thuế
 giảm đúng **1.711.111 ₫**, tổng thanh toán giảm **23.100.000 ₫**. Đối chiếu bằng máy với file
@@ -40,21 +41,49 @@ Excel người dùng tải về — khớp **từng đồng**, 3.589 hóa đơn 
    khai bổ sung.
 3. **File Excel** thêm 3 cột: `Trạng thái HĐ (mã)` · `Trạng thái` (Gốc / Thay thế / Điều chỉnh
    / Bị thay thế / Bị điều chỉnh) · `Tính vào tổng` (Có/Không). Mặc định 19 cột.
-4. **Chấm đỏ** số chưa đọc trên nút "Hóa đơn vừa thay đổi" (kiểu ứng dụng di động).
+4. **Chấm đỏ** đếm số, kiểu ứng dụng di động — nay gắn trên nút "Hóa đơn bị sửa ở kỳ khác"
+   (xem §4; nút cũ "Hóa đơn vừa thay đổi" đã bỏ).
 5. **Trang Đối chiếu** bật lại trong menu — hiện danh sách chi tiết hóa đơn lệch thuế / nghi
    thiếu số / bị thay thế.
+6. **Đủ BỘ BA số tiền** trong thông báo (trước thuế · thuế · tổng sau thuế), tách hai nhóm:
+   mã 4 *"đã loại khỏi tổng"* và mã 5 *"VẪN tính vào tổng"* — không gộp, vì gộp sẽ khiến kế
+   toán trừ nhầm phần mã 5 ra khỏi sổ.
+7. **Nút "Xem danh sách N hóa đơn"** bung tại chỗ, liệt kê từng hóa đơn bị sửa của kỳ.
+8. **Nút "Hóa đơn bị sửa ở kỳ khác"** thay cho "Hóa đơn vừa thay đổi" — xem §4.
 
-## 4. ⚠️ Chưa xong — "chi tiết hóa đơn lệch" mới có một nửa
+## 4. Nút cảnh báo đã ĐỔI RUỘT — đọc kỹ nếu bạn từng dùng nút cũ
 
-| Nơi | Có gì |
-|---|---|
-| Trang **Đối chiếu** | ✅ Liệt kê **chi tiết từng hóa đơn** lệch thuế / nghi thiếu / bị thay thế |
-| Nút **"Hóa đơn vừa thay đổi"** | ✅ Liệt kê chi tiết từng hóa đơn đổi trạng thái |
-| Trang **Danh sách hóa đơn** | ❌ Chỉ hiện **số lượng + số tiền**, KHÔNG liệt kê hóa đơn nào |
+Nút **"Hóa đơn vừa thay đổi"** không còn. Thay bằng **"Hóa đơn bị sửa ở kỳ khác"**.
 
-Muốn xem *"3 hóa đơn bị thay thế đó là hóa đơn nào"* thì hiện phải sang trang Đối chiếu hoặc
-mở file Excel lọc cột "Tính vào tổng = Không". **Cần bàn:** có nên cho bấm vào con số trên
-trang Danh sách để bung ra danh sách hóa đơn không?
+Nút cũ sai ba chỗ (đo trên production 29/07):
+- **Thiếu** — nó đọc bảng lịch sử do trigger `AFTER UPDATE` ghi, nên chỉ thấy hóa đơn đổi
+  trạng thái TRONG LÚC hệ thống theo dõi. **16/17 hóa đơn mã 4 đã là mã 4 ngay lần đồng bộ
+  đầu** ⇒ nút báo "1" trong khi thực có 17.
+- **Dư** — hóa đơn của kỳ đang xem đã được thẻ Kết quả liệt kê đủ ngay bên dưới.
+- **Cảnh báo tự tắt khi bấm xem** — nhìn một cái là mất vĩnh viễn, không có đường quay lại.
+
+Mô hình mới (chủ dự án chốt): **cảnh báo luôn hiển thị, hết hiệu lực khi hóa đơn không còn
+thuộc kỳ đang truy vấn**. KHÔNG còn trạng thái "đã đọc" — con số là hàm thuần của
+*dữ liệu × bộ lọc*: `tổng bị sửa (bỏ ngày) − số bị sửa trong kỳ`. Không thể lệch, không thể
+lỡ tay tắt mất. Cùng triết lý `packages/reconcile` (tính on-read, không lưu).
+
+Hai chỗ nay chia việc rạch ròi, không chồng lấn:
+
+| | Trả lời câu hỏi | Phạm vi |
+|---|---|---|
+| Thẻ **Kết quả** | *"Kỳ này có bao nhiêu hóa đơn lệch, tiền bao nhiêu, là những hóa đơn nào?"* | Kỳ đang lọc |
+| Nút **"bị sửa ở kỳ khác"** | *"Ngoài kỳ này còn gì?"* — bấm vào nhảy thẳng sang kỳ đó | Ngoài kỳ đang lọc |
+
+**Áp dụng CẢ HAI CHIỀU.** Số thật 29/07: bán ra 17 mã 4 + 1 mã 5; **mua vào 2 mã 5**. Mã 4 ở
+chiều mua vào chưa từng thấy ca nào, nhưng biên bản §6.5 đã **rút** kết luận "GDT không trả
+bản gốc cho bên mua" (cỡ mẫu = 1) ⇒ mã và test cố ý xử lý hai chiều như nhau.
+
+**Đã gỡ có chủ đích, đừng thêm lại:**
+- `apiClient.getInvoiceChanges` / `markInvoiceChangesRead`. Endpoint server và bảng
+  `lich_su_thay_doi_hoa_don` **giữ nguyên** làm dấu vết kiểm toán.
+- Dòng *"Từ 28/07/2026, hóa đơn bị thay thế không còn được cộng vào tổng"* — `U36-plan.md`
+  §7.2 ghi "bắt buộc" nhưng đã GỠ: là thông báo **di trú**, chỉ có nghĩa với người đã thấy số
+  cũ, mà ghim vĩnh viễn và thừa. Nội dung nằm ở `changelog.ts` v2.0 → trang Lịch sử cập nhật.
 
 ## 5. Đang kẹt — cần bàn thêm
 
@@ -85,13 +114,15 @@ cả 28 ca.**
 
 | Thành phần | Phiên bản | Ghi chú |
 |---|---|---|
-| `vat-api` | `53dd450f` | Tính tổng loại hóa đơn bị thay thế |
-| `vat-web` | `5fd9bcad` | Mới nhất — gồm cả trang Đối chiếu |
-| Migration | `0018` đã áp | ⚠️ **`0019` (U37) CHƯA áp** |
+| `vat-api` | `354ff45c` | Tính tổng loại hóa đơn bị thay thế + cờ lọc `biSua` |
+| `vat-web` | `5a8db0af` | Mới nhất — gồm trang Đối chiếu + U39/U40 |
+| Migration | `0018` + **`0019` đã áp** | Hậu kiểm bằng truy vấn thật: bảng `tep_hoa_don_goc` tồn tại, `vat_app` đủ quyền |
 | `vat-sync-worker` | không đụng | Không phụ thuộc phần đã sửa |
 
-⚠️ **Ai deploy `vat-api` hoặc `sync-worker` lần tới PHẢI chạy `make migrate` TRƯỚC** — phiên
-U37 đã thêm migration `0019` (bảng `tep_hoa_don_goc`) chưa có trên production.
+⚠️ **Vẫn giữ kỷ luật `make migrate` trước mỗi lần deploy `vat-api`/`sync-worker`** — phiên U37
+còn đang làm và có thể thêm migration mới. Ghi nhận: `sync-worker e7a641fc` được deploy
+28/07 21:49 **trước khi** `0019` được áp (29/07) — thứ tự ngược `deploy.md`; nay đã nhất quán,
+nhưng phiên U37 nên soi log khoảng giữa đó.
 
 ## 7. Nợ kỹ thuật đáng chú ý
 
@@ -107,7 +138,7 @@ Chi tiết đầy đủ: `docs/BACKLOG-y-tuong-va-de-xuat.md`.
 
 ## 8. Ba việc cần quyết
 
-1. Có cho bấm vào số trên trang Danh sách để **bung danh sách hóa đơn lệch** không? (§4)
+1. ~~Bung danh sách hóa đơn lệch~~ **✅ XONG** (U39/U40).
 2. Có làm tiếp phép kiểm cho hóa đơn bán hàng không, và ai soi tay 2–3 hóa đơn mẫu? (§5)
 3. Mã **"hủy"** thật vẫn CHƯA có bằng chứng — cả 33.945 hóa đơn chưa có ca nào. Giữ nguyên
    trạng thái "chưa biết", hay chủ động tạo một ca hủy thử trên cổng thuế để lấy bằng chứng?
