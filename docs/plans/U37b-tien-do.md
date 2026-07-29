@@ -14,5 +14,5 @@ Một dòng mỗi gói: `[gói] — DONE/BLOCKED — commit — ghi chú`.
 | Gói 4c-1 — hàm thuần `dungGoiZip` | ✅ DONE | `5c98f1d` | Đặt ở `packages/export` (đã có fflate + @vat/domain) chứ không phải apps/api. `boDau` chuyển sang @vat/domain dùng chung. 14 test |
 | Gói 4c-2/4c-3 — GET tiến độ + POST đóng gói | ✅ DONE | `ed7ee67` | GET thuần đọc; POST bầu người đóng bằng UPDATE có điều kiện; hết hạn 7 ngày đặt lúc PHÁT HÀNH |
 | Gói 5 — thu hồi + danh sách + audit | ✅ DONE | `ed7ee67` | Thu hồi mở MỌI VAI, xóa R2 trước đổi trạng thái sau, idempotent; audit cả phát hành lẫn thu hồi, chiTiet không chứa khóa |
-| Gói 6 — giao diện | ✅ DONE | `<pending>` | `TaiHoaDonGoc`: ba vế mở nút mỗi vế một lý do riêng, cảnh báo inline + checkbox (QĐ-B11), poll tiến độ, link + thu hồi. 13 test |
+| Gói 6 — giao diện | ✅ DONE | `93f5d4b` | `TaiHoaDonGoc`: ba vế mở nút mỗi vế một lý do riêng, cảnh báo inline + checkbox (QĐ-B11), poll tiến độ, link + thu hồi. 13 test |
 | Gói 7 — tài liệu | ⏸ | — | |
