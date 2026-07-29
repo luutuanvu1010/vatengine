@@ -29,6 +29,12 @@ const PENDING = [
 type ProfileChoice = "native" | "reference";
 
 const optionCard = (selected: boolean): React.CSSProperties => ({
+  // `<button>` KHÔNG kế thừa font của trang — thiếu hai dòng này thì trình duyệt áp mặc định
+  // 13.33px, khiến TIÊU ĐỀ lựa chọn nhỏ hơn chính dòng mô tả 18px bên dưới nó (đo thật
+  // 2026-07-29). Đây là "hardcode do bỏ sót": không có số nào trong mã, nhưng kết quả vẫn là
+  // một cỡ chữ nằm ngoài thang token.
+  fontFamily: "inherit",
+  fontSize: "var(--fs-base)",
   padding: "var(--sp-4)",
   border: `1px solid ${selected ? "var(--brand-600)" : "var(--border)"}`,
   background: selected ? "var(--brand-50)" : "var(--surface-card)",
