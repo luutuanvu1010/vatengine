@@ -13,6 +13,21 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.2",
+    date: "2026-07-29",
+    title: "Tải hóa đơn gốc gửi khách hàng, chia sẻ bằng một liên kết",
+    changes: [
+      "Bạn có thể tải về bản hóa đơn GỐC do Tổng cục Thuế phát hành — có chữ ký số, kèm bản xem được bằng trình duyệt — cho những hóa đơn đã xuất cho MỘT khách hàng trong một khoảng thời gian. Phần mềm gói tất cả thành một tệp nén và tạo sẵn một liên kết để bạn gửi cho khách.",
+      "Chọn khách hàng bằng cách gõ tên doanh nghiệp hoặc mã số thuế ngay tại ô tìm ở trang Danh sách hóa đơn — gõ tới đâu hiện gợi ý tới đó, không cần nhớ chính xác mã số thuế.",
+      "Gửi liên kết cho khách bằng nút Sao chép, Gửi Email, hoặc Chia sẻ (trên điện thoại sẽ mở khay chia sẻ của máy, có sẵn Zalo).",
+      "Người nhận KHÔNG cần tài khoản và không cần đăng nhập — chỉ cần mở liên kết là tải được. Vì vậy phần mềm hỏi bạn xác nhận trước khi tạo, và chỉ gửi cho đúng người nhận.",
+      "Liên kết tự hết hiệu lực sau khoảng 1 tuần. Bạn cũng có thể THU HỒI bất cứ lúc nào — thu hồi xong là liên kết ngừng tải được ngay lập tức, không có độ trễ.",
+      "Mục 'Liên kết chia sẻ' mới ở thanh bên trái cho biết bạn đã phát những liên kết nào, cho khách nào, kỳ nào, còn hạn tới bao giờ và ĐÃ ĐƯỢC TẢI BAO NHIÊU LƯỢT — hữu ích khi cần rà lại xem một liên kết có bị dùng ngoài dự kiến hay không.",
+      "Đã thu hồi rồi vẫn chia sẻ lại được: bấm 'Chia sẻ lại' để phát một liên kết MỚI cho cùng khách hàng và cùng kỳ. Liên kết cũ vẫn vô hiệu vĩnh viễn.",
+    ],
+    kind: "feature",
+  },
+  {
     version: "v2.1",
     date: "2026-07-29",
     title: "Chữ to hơn, dễ đọc hơn trên mọi màn hình",

@@ -11,6 +11,7 @@
 | Gói 5 — trang Liên kết chia sẻ | ✅ DONE | `<gói 5+6>` | Mục điều hướng riêng `/lien-ket`, đủ 4 trạng thái, hiện tên khách + số lượt tải |
 | Gói 6 — anchor + Sao chép/Chia sẻ/Email | ✅ DONE | `<gói 5+6>` | `HanhDongLienKet` dùng chung; mailto bằng hàm thuần; nút Chia sẻ ẩn khi trình duyệt không hỗ trợ |
 | Gói 7 — tài liệu + review | ✅ DONE | `<gói 7>` | Review chéo đã chạy; 2 Major đã vá (xem dưới) |
+| Nghiệm thu tay + vá | ✅ DONE | `<chốt phiên>` | Chủ dự án nghiệm thu: thu hồi ĐẠT, nhưng thu hồi xong là **ngõ cụt** → thêm "Tạo liên kết mới" + "Chia sẻ lại" (tạo gói MỚI, không hồi sinh token cũ); sửa kèm lỗi gói kẹt `dang_tao` vĩnh viễn vì chỉ một màn biết gọi bước đóng gói. Changelog v2.2. `vat-web 8bc918c5` |
 
 ## ⚠️ Đính chính một lời khai SAI của chính nhật ký này
 
