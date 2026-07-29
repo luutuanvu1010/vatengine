@@ -7,6 +7,7 @@ import {
   getInvoiceLines,
   invoiceFilterSchema,
   listInvoices,
+  listKhachHang,
   pageSchema,
   sortSchema,
   summarizeInvoices,
@@ -69,6 +70,22 @@ export function invoicesRoutes(deps: AppDeps) {
   // GET /invoices/:id — một hóa đơn trong phạm vi tenant, KÈM mảng dòng hàng
   // (dong_hang_hoa) join theo hoadon_id, lọc tenant_id tường minh + RLS. Pipeline U5
   // nay có lấy dòng hàng 2 pha (ĐV3) nên bảng đã có dữ liệu để trả về.
+  // GET /invoices/khach-hang — danh sách khách hàng (bên mua) để CHỌN khi tải hóa đơn
+  // gốc (U37b). PHẢI đứng TRƯỚC "/:id": Hono khớp theo thứ tự khai báo, đặt sau thì
+  // "khach-hang" bị nuốt thành `:id` rồi trượt kiểm UUID và trả 400 (đã có test canh).
+  // Chỉ ĐỌC dữ liệu đã đồng bộ, không gọi GDT. Danh sách nhỏ (đo thật: 167 mục ở tenant
+  // lớn nhất) nên trả trọn — lọc/tìm làm ở máy khách, không cần phân trang.
+  r.get("/khach-hang", async (c) => {
+    const tenantId = c.get("tenantId");
+    const { db, close } = await deps.getDb(c.env);
+    try {
+      const result = await withTenant(db, tenantId, (tx) => listKhachHang(tx, tenantId));
+      return c.json(result);
+    } finally {
+      await close();
+    }
+  });
+
   r.get("/:id", async (c) => {
     const id = c.req.param("id");
     // id không phải UUID → request sai (tránh lỗi 22P02 ở Postgres).

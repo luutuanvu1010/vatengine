@@ -89,9 +89,11 @@ Nên deploy vừa rồi **chưa đổi hành vi gì** của hệ thống đang c
 > - **Live search** theo tên và MST; nguồn là hóa đơn của chính tenant, **167 mục** ⇒ trả cả
 >   danh sách rồi lọc trên máy khách, không cần tìm kiếm phía server.
 > - Kỳ + khách hàng **dùng CHUNG bộ lọc** trang Danh sách hóa đơn (module *Tra cứu hóa đơn*).
-> - **Phải bổ sung bộ lọc MST người mua vào module đó** — trang hiện chỉ lọc được theo *tên*.
->   Server đã sẵn sàng (`filters.ts:43` + `:222` khớp chính xác); chỉ thiếu khai `locDuoc` cho
->   `nmmst` ở `registry.ts:87`.
+> - ~~Phải bổ sung bộ lọc MST người mua~~ — **ĐÍNH CHÍNH 29/07: bộ lọc ĐÃ CÓ SẴN và có test canh.**
+>   Khẳng định cũ suy từ Registry mà không đọc `FilterBar` nên sai. `nmmst` đi trọn tuyến
+>   `types/api.ts:187` → `FilterBar.tsx:137` → `filterStore.ts:10` → `apiClient.ts:127` →
+>   `filters.ts:222` (khớp chính xác). **Việc còn lại KHÔNG phải thêm bộ lọc, mà là biến ô nhập
+>   MST thô đó thành ô TÌM LIVE theo tên + MST** (xem hồ sơ §8 mục 9-10).
 >
 > **Quy mô thật (đo 2026-07-29):** một lần xuất lớn nhất **56 hóa đơn**, trung bình **6,6** ⇒
 > **28 giây / ~3 giây**. Ngân sách hàng đợi là 30 phút ⇒ **không có vấn đề quy mô nào**. Mọi lo

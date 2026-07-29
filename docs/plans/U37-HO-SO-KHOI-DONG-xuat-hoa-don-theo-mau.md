@@ -379,13 +379,17 @@ XML lấy từ GDT theo **định danh hóa đơn** (`nbmst`/`khhdon`/`shdon`/`k
      (module *Tra cứu hóa đơn*), để người dùng thấy gì tải nấy. `InvoiceExportButtons` vốn
      đã nhận sẵn prop `filter`.
 
-8. **Thiếu bộ lọc MST — phải bổ sung vào module Tra cứu hóa đơn.** Bộ lọc hiện có trên trang
-   đó (đo từ Registry): `shdon`, `nbten`, `nmten`, `tgtttbso`, `chieu`, `nguon` — **không có
-   MST nào**. Lọc theo *tên* là không đủ chắc (viết tắt/thiếu dấu là trượt). Server **đã sẵn
-   sàng**: `packages/query/src/filters.ts:43` nhận `nmmst`, dòng `:222` khớp CHÍNH XÁC
-   (`eq(hoaDon.nmmst, …)`). Chỉ thiếu khai `locDuoc` cho `nmmst` ở `packages/domain/src/registry.ts:87`
-   (hiện chỉ có `tren: { fileXuat: true }`). ⚠️ Lưu ý ngữ nghĩa: `nmmst` khớp **chính xác**,
-   khác `nmten` dùng `ilike` — nhãn phải nói rõ để người dùng không tưởng là tìm gần đúng.
+8. **~~Thiếu bộ lọc MST~~ — ĐÍNH CHÍNH 2026-07-29: BỘ LỌC ĐÃ CÓ SẴN, không phải làm.**
+   Khẳng định trước đó ("trang chỉ lọc được theo tên") **SAI** — suy từ Registry (`nmmst` không
+   khai `locDuoc`) mà không đọc `FilterBar`. Kiểm lại toàn tuyến thì `nmmst` đi trọn vẹn:
+   `apps/web/src/types/api.ts:187` → `FilterBar.tsx:137-146` (hiện khi `chieu !== "purchase"`)
+   → `filterStore.ts:10` (giữ qua phiên) → `apiClient.ts:127` → `packages/query/src/filters.ts:222`
+   (`eq`, khớp CHÍNH XÁC). Đã có test canh: `apps/web/test/features/filterBarDirection.test.tsx`
+   phủ cả ẩn/hiện theo chiều lẫn việc xóa `nmmst` khi đổi sang Mua vào.
+   **Ghi nhận drift (không sửa trong U37b):** `nbmst`/`nmmst` được render TAY ở `FilterBar`, không
+   dẫn xuất từ Registry — lệch `.claude/rules/ui.md:18`. Có lý do chính đáng: khả năng hiện/ẩn phụ
+   thuộc `chieu`, Registry hiện không diễn đạt được. Muốn hết lệch thì phải mở rộng Registry, lạc
+   phạm vi U37b.
 
 9. **Live search chọn khách hàng.** Nguồn dữ liệu: chính hóa đơn của tenant
    (`DISTINCT nmmst, nmten WHERE chieu='sold'`), bọc `withTenant`. **167 mục** ⇒ trả cả danh

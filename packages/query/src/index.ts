@@ -18,6 +18,13 @@ export {
   type Page,
 } from "./filters";
 export { getInvoiceById, getInvoiceLines, type DongHangHoaRow } from "./getInvoice";
+// U37b — danh sách khách hàng để chọn khi tải hóa đơn gốc (chỉ chiều bán ra).
+export {
+  listKhachHang,
+  type KhachHang,
+  type KhachHangResult,
+  type ListKhachHangOptions,
+} from "./khachHang";
 export {
   listInvoiceChanges,
   markInvoiceChangesRead,
