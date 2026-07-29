@@ -23,9 +23,12 @@
 
 ## 2. Hai phát hiện làm đổi thiết kế (đo 2026-07-29)
 
-**(a) `fflate` chỉ là devDependency của `apps/api`.** Mã sản phẩm chưa dùng được ⇒ Gói 4c
-phải nâng nó thành `dependencies` (đã là phụ thuộc được duyệt của dự án, dùng ở
-`packages/export` và `packages/sync`).
+**(a) ~~`fflate` chỉ là devDependency của `apps/api` ⇒ phải nâng lên dependencies~~ —
+ĐÍNH CHÍNH 2026-07-29: KHÔNG nâng, mà ĐẶT ĐÚNG NHÀ.** `packages/export` đã có `fflate` là
+dependency thật **và** đã phụ thuộc `@vat/domain` — nó vốn lo việc "gói file để tải về".
+Đặt `dungGoiZip` ở đó thì không phải thêm phụ thuộc nào, và `apps/api` chỉ gọi hàm thuần.
+Hàm bỏ dấu (`boDau`, có xử lý `Đ` riêng) chuyển từ `apps/web` sang `@vat/domain` để web và
+server dùng CHUNG một bản — nhân đôi nó là mời gọi hai bên lệch nhau.
 
 **(b) KHÔNG tái dùng được `zipStream.ts` cho cặp tệp.** `uniqueName(stem, ext, used)` khóa
 theo **`stem`**, nên gọi hai lần cho cùng `<khhdon>-<shdon>`:
@@ -184,7 +187,7 @@ liệu đang phơi ra là hại nhiều hơn lợi. Phát hành vẫn giữ `ke_
 
 | Bước | Nội dung | Test trước (nhóm) |
 |---|---|---|
-| 4c-1 | Nâng `fflate` lên `dependencies` của `apps/api`; hàm thuần `dungGoiZip(...)` | unit: cấu trúc phẳng, MỘT bộ tệp tĩnh, chống trùng giữ NGUYÊN CẶP, `bao-cao.txt` |
+| 4c-1 | `boDau` → `@vat/domain`; hàm thuần `dungGoiZip(...)` trong `packages/export` | unit: cấu trúc phẳng, MỘT bộ tệp tĩnh, chống trùng giữ NGUYÊN CẶP, `bao-cao.txt` |
 | 4c-2 | `GET /goi-chia-se/:id` (thuần đọc, tiến độ) | integration: `dang_tao`+tiến độ, cách ly tenant, 404 |
 | 4c-3 | `POST /goi-chia-se/:id/dong-goi` | integration: chưa đủ ⇒ 409; đóng hai lần ⇒ chỉ một; `xong=0` ⇒ `loi`, KHÔNG phát link; ghi đúng bucket `CHIA_SE` |
 | 5 | thu hồi + `GET /goi-chia-se` + audit | integration: thu hồi xóa R2 rồi mới đổi trạng thái; idempotent; audit ghi đủ 2 hành động; `chiTiet` KHÔNG chứa `khoa_r2`; cách ly tenant |
