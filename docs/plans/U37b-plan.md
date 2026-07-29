@@ -4,6 +4,9 @@
 > QĐ-B7…QĐ-B11 ở §2. Sẵn sàng thực thi theo `docs/plans/U37b-prompt-dieu-phoi.md`.
 > Gói 0 đã hoàn thành **trước khi** có kế hoạch này (xem §4, ghi chú trung thực).
 >
+> **Kế hoạch chi tiết phần còn lại (Gói 4c → 7): `docs/plans/U37b-plan-4c-7.md`** — gộp bốn gói
+> cuối thành một kế hoạch liền mạch vì chúng khớp nối chặt với nhau.
+>
 > **Bàn giao phiên gần nhất: `docs/plans/HANDOFF-phien-2026-07-29-U37b.md`** — đọc file đó trước
 > nếu bạn là phiên mới. Xong Gói 0–3 + 4a; tiếp theo là Gói 4b.
 >
