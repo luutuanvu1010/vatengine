@@ -213,6 +213,28 @@ describe("U37b — phát hành / thu hồi gói (integration, PGlite)", () => {
       expect(row?.kichThuoc).toBeGreaterThan(0);
     });
 
+    // THU HỒI CHỈ THẬT SỰ THU HỒI KHI BIÊN KHÔNG GIỮ BẢN SAO.
+    //
+    // `docs.tourdao.vn` là custom domain của R2 ⇒ phản hồi đi qua CDN Cloudflare. Probe
+    // THẬT trên bucket production 2026-07-29:
+    //   put (không đặt cache-control) → `cache-control: max-age=14400`; GET lần 2 → `HIT`;
+    //   DELETE khỏi R2 → GET vẫn `HTTP 200`, `cf-cache-status: HIT`, TRẢ NGUYÊN NỘI DUNG.
+    //   ⇒ nút "Thu hồi" hứa sai: tệp còn tải được TỚI 4 GIỜ sau khi đã thu hồi.
+    //   put --cache-control "no-store" → `cf-cache-status: BYPASS`; DELETE → GET 404 NGAY.
+    //
+    // Review bảo mật soi đúng thứ tự xóa-rồi-đổi-trạng-thái và kết luận an toàn — đúng ở
+    // tầng mã, nhưng lớp CDN nằm NGOÀI mã. Chỉ probe thật mới thấy. Ca này khoá lại để
+    // không ai gỡ `cacheControl` mà tưởng vô hại.
+    it("đặt Cache-Control no-store — thiếu nó thì thu hồi KHÔNG thật sự thu hồi", async () => {
+      await seedHD("1", "da_tai");
+      const id = await taoGoi();
+      await goi(`/goi-chia-se/${id}/dong-goi`, { method: "POST" });
+
+      const khoa = [...chiaSe.kho.keys()][0] as string;
+      const opts = chiaSe.meta.get(khoa) as { httpMetadata?: { cacheControl?: string } };
+      expect(opts?.httpMetadata?.cacheControl).toBe("no-store");
+    });
+
     it("hết hạn tính từ lúc PHÁT HÀNH và là 7 NGÀY (không phải 30)", async () => {
       await seedHD("1", "da_tai");
       const id = await taoGoi();

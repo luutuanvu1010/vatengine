@@ -452,6 +452,17 @@ export function goiChiaSeRoutes(deps: AppDeps) {
         httpMetadata: {
           contentType: "application/zip",
           contentDisposition: `attachment; filename="${goi.tenTepTaiVe}"`,
+          // BẮT BUỘC — thiếu dòng này thì nút "Thu hồi" hứa sai.
+          //
+          // `docs.tourdao.vn` là custom domain của R2 ⇒ phản hồi đi qua CDN Cloudflare.
+          // Probe THẬT trên bucket production 2026-07-29:
+          //   không đặt cache-control → `max-age=14400`; GET lần 2 `HIT`; DELETE khỏi R2
+          //   → GET VẪN trả `200` + `cf-cache-status: HIT` + nguyên nội dung, tới 4 GIỜ.
+          //   đặt `no-store` → `cf-cache-status: BYPASS`; DELETE → GET `404` ngay lập tức.
+          //
+          // Xóa object KHÔNG vô hiệu hóa bản đã nằm ở biên. Đây là lý do lớp CDN phải
+          // được tính vào mô hình thu hồi, dù nó không xuất hiện trong mã.
+          cacheControl: "no-store",
         },
       });
 

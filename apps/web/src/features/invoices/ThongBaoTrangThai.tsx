@@ -25,6 +25,15 @@ import type { ChieuSummary, InvoiceFilter } from "../../types/api";
 //     khỏi tổng: trước thuế −X, thuế −Y, tổng thanh toán −Z".
 // Nội dung này nay nằm ở `lib/changelog.ts` v2.0 → trang "Lịch sử cập nhật", đúng chỗ dành
 // cho tin về thay đổi của phần mềm.
+//
+// CÙNG LÝ DO, chú giải "(số thuế phải nộp thật không đổi - trước đây phần mềm tính dư)" cũng
+// ĐÃ GỠ (chủ dự án chốt 2026-07-29), tuy `U36-plan.md` §2.1 từng ghi là bắt buộc. Nó gánh hai
+// việc: rào chắn hiểu nhầm, và một câu di trú. Nhưng thứ tạo ra nhu cầu rào chắn chính là câu
+// tiêu đề cũ — "Thuế phải nộp trên báo cáo giảm X ₫" không nêu giảm SO VỚI GÌ, nên đọc một
+// mình rất dễ tưởng nghĩa vụ thuế vừa đổi. Nay câu tự nêu mốc so sánh ngay trong nó ("Việc
+// loại hóa đơn bị thay thế làm…"): mốc chuyển từ "phiên bản phần mềm cũ" sang "dữ liệu của
+// chính kỳ này", người dùng MỚI đọc vẫn hiểu, và chú giải thành thừa thật chứ không bị cắt
+// cụt. Gỡ chú giải mà giữ nguyên câu cũ thì chỉ còn cái bẫy, mất rào chắn — đừng làm vậy.
 
 const soLoai = (c: ChieuSummary): number => c.soLoaiKhoiTong ?? 0;
 
@@ -181,8 +190,9 @@ export function ThongBaoTrangThai({
           ))}
           {delta !== null ? (
             <div style={{ marginBottom: "var(--sp-2)" }}>
-              <strong>Thuế phải nộp trên báo cáo {dienGiaiDelta(delta)}</strong>{" "}
-              <em>(số thuế phải nộp thật không đổi - trước đây phần mềm tính dư)</em>
+              <strong>
+                Việc loại hóa đơn bị thay thế làm thuế phải nộp trên báo cáo {dienGiaiDelta(delta)}.
+              </strong>
             </div>
           ) : null}
           {/* Bung danh sách ngay tại chỗ — người dùng đang đứng ở đây, không bắt họ đi tìm

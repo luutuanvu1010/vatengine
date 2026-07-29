@@ -132,6 +132,12 @@ describe("ThongBaoTrangThai — nội dung theo từng chiều", () => {
     expect(n).not.toContain("Từ 28/07/2026");
   });
 
+  // GOLDEN ĐỔI CÓ CHỦ ĐÍCH (chủ dự án chốt 2026-07-29): chú giải "(số thuế phải nộp thật
+  // không đổi - trước đây phần mềm tính dư)" ĐÃ GỠ. Nó gánh hai việc — rào chắn hiểu nhầm và
+  // một câu DI TRÚ ("trước đây phần mềm tính dư") — nhưng thứ tạo ra nhu cầu rào chắn chính
+  // là chữ "giảm" ở câu tiêu đề cũ, vốn không nêu giảm SO VỚI GÌ. Nay câu tự nêu mốc so sánh
+  // ("Việc loại hóa đơn bị thay thế làm…") nên chú giải thành thừa thật, không phải bị cắt
+  // cụt. Test khóa hai điều: mốc so sánh nằm TRONG câu, và không nhắc phiên bản phần mềm cũ.
   it("QĐ-12 — dòng thuế phải nộp xuất hiện ĐÚNG MỘT LẦN dù có hai chiều", () => {
     render(
       <ThongBaoTrangThai
@@ -143,10 +149,12 @@ describe("ThongBaoTrangThai — nội dung theo từng chiều", () => {
       />,
     );
     const noiDung = screen.getByRole("status").textContent ?? "";
-    expect(noiDung.match(/Thuế phải nộp trên báo cáo/g)).toHaveLength(1);
+    expect(noiDung.match(/thuế phải nộp trên báo cáo/g)).toHaveLength(1);
     expect(noiDung).toContain("giảm 1.711.111 ₫");
-    // Cách đọc phải ghi rõ, nếu không kế toán tưởng nghĩa vụ thuế đổi.
-    expect(noiDung).toContain("số thuế phải nộp thật không đổi");
+    // Mốc so sánh phải nằm trong chính câu đó, nếu không kế toán tưởng nghĩa vụ thuế đổi.
+    expect(noiDung).toContain("Việc loại hóa đơn bị thay thế");
+    // Nội dung di trú thuộc về trang "Lịch sử cập nhật", không ghim ở đây.
+    expect(noiDung).not.toContain("trước đây");
   });
 
   it("mua vào có mã 4 → dòng thuế phải nộp nói TĂNG", () => {
@@ -166,7 +174,7 @@ describe("ThongBaoTrangThai — nội dung theo từng chiều", () => {
         byChieu={[chieu({ chieu: "sold", soHdThayThe: 2, thueThayTheDieuChinh: "5000" })]}
       />,
     );
-    expect(screen.getByRole("status").textContent).not.toContain("Thuế phải nộp trên báo cáo");
+    expect(screen.getByRole("status").textContent).not.toContain("thuế phải nộp trên báo cáo");
   });
 
   it("#16 QĐ-6 — soMaLa > 0 → cảnh báo mã chưa xác định", () => {
