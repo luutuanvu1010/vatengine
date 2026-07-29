@@ -75,7 +75,14 @@ thiếu tên, sắp theo tên, trần 2.000 và báo `biCatBot` khi cắt.
 - Gõ khớp **cả tên lẫn MST**, không phân biệt hoa/thường và **bỏ dấu** (gõ "cong ty" ra "CÔNG TY").
 - Hiển thị `Tên — MST · N hóa đơn`; chọn xong ràng `nmmst` **chính xác** vào bộ lọc.
 - Có nút xóa lựa chọn (đưa `nmmst` về `undefined`).
-- Bàn phím: ↑/↓ di chuyển, Enter chọn, Esc đóng. `role="combobox"`/`listbox`, có nhãn.
+- Bàn phím: ↑/↓ di chuyển, Enter chọn, Esc đóng. Ô nhập mang `role="combobox"` +
+  `aria-expanded`/`aria-controls`, có nhãn.
+  **ĐÍNH CHÍNH 2026-07-29 sau khi hiện thực:** panel gợi ý KHÔNG dùng `role="listbox"`/`option`.
+  Mẫu combobox của ARIA xung đột với 5 quy tắc a11y của Biome (`useSemanticElements`,
+  `noNoninteractiveElementToInteractiveRole`, `useFocusableInteractive`…) vốn giả định
+  `<select>` — mà `<select>` không lọc live được. Chọn `<ul>`/`<li>` + `<button>` thật:
+  vẫn tiếp cận được bằng bàn phím và trình đọc màn hình, và KHÔNG phải tắt 5 quy tắc a11y
+  trong một primitive dùng chung. Đổi câu chữ tiêu chí thay vì lệch âm thầm.
 - Bốn trạng thái (`ui.md:22`): rảnh / đang tải / rỗng ("chưa có khách hàng nào có MST") / lỗi.
 - `biCatBot = true` ⇒ hiện dòng "còn nữa, hãy gõ thêm để thu hẹp" — **không cắt im lặng**.
 
