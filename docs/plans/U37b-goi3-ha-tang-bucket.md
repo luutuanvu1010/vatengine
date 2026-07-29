@@ -100,7 +100,7 @@ kiểm soát.
 | 1 | Bucket | ✅ `vat-chia-se`, tạo `2026-07-29T05:02:28Z` |
 | 2 | Tên miền | ✅ `docs.tourdao.vn` — `enabled: Yes`, `ownership_status: active`, `min_tls: 1.2`, zone `tourdao.vn` |
 | 3 | `r2.dev` | ✅ **disabled** |
-| 4 | Lifecycle | ✅ `het-han-30-ngay`, prefix `goi-hoa-don/`, hết hạn sau **30 ngày** |
+| 4 | Lifecycle | ✅ **SỬA 29/07: `het-han-1-tuan`, prefix `goi-hoa-don/`, hết hạn sau 7 ngày.** Rule `het-han-30-ngay` ban đầu đã gỡ — chủ dự án đổi thời hiệu xuống 1 tuần (QĐ-6 sửa). ⚠️ `lifecycle remove` KHÔNG nhận cờ `-y`: truyền vào thì lệnh in help và im lặng không gỡ gì, để lại HAI rule chồng nhau. Luôn `lifecycle list` lại sau khi đổi |
 
 Kiểm trước khi gắn: `docs.tourdao.vn` **chưa phân giải** và không phục vụ gì — không đè lên
 bản ghi đang chạy nào.

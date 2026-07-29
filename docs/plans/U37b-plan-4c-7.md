@@ -1,6 +1,7 @@
 # U37b — Kế hoạch chi tiết phần còn lại: Gói 4c → 7
 
-> **Trạng thái:** 🟡 **CHỜ DUYỆT (QA1).** Có **4 điểm cần chốt ở §6** trước khi code.
+> **Trạng thái:** 🟢 **ĐÃ DUYỆT (QA1) 2026-07-29** — 4 điểm ở §6 đã chốt. Sẵn sàng thực thi
+> theo thứ tự §7.
 >
 > Bổ sung cho `docs/plans/U37b-plan.md` (§2 — 11 quyết định QĐ-B1…QĐ-B11 vẫn nguyên hiệu lực).
 > Gói 0, 1, 2, 3, 4a, 4b đã xong và đã push. Tài liệu này gộp **toàn bộ phần còn lại** thành
@@ -17,7 +18,7 @@
 | `listHoaDonChoGoi` | Nguồn DUY NHẤT sinh `ref`, đã lọc `tenant_id` |
 | `demTienDoGoi` | Đếm xong / không-có-hồ-sơ-gốc / lỗi / còn chờ từ `tep_hoa_don_goc` |
 | Kho hồ sơ gốc | `vat-raw`: `hoadon-goc/<tenant>/<hoaDonId>.{xml,html}` + `hoadon-goc/_chung/` (3 tệp tĩnh) |
-| Bucket công khai | `vat-chia-se` + `docs.tourdao.vn`, lifecycle 30 ngày prefix `goi-hoa-don/`, `r2.dev` tắt |
+| Bucket công khai | `vat-chia-se` + `docs.tourdao.vn`, lifecycle **1 tuần** prefix `goi-hoa-don/`, `r2.dev` tắt |
 | Binding | `CHIA_SE` đã khai trong `apps/api` — **`vat-api` CHƯA deploy** |
 
 ## 2. Hai phát hiện làm đổi thiết kế (đo 2026-07-29)
@@ -104,12 +105,13 @@ KHÔNG có trong gói (2):
   không lưu tên, và derive thì khỏi phải thêm cột/migration. Rút gọn + bỏ dấu + chỉ giữ
   `[a-z0-9-]` để tên tệp an toàn trên mọi hệ điều hành.
   ⚠️ Tên khách vào **tên tệp tải về** thì được; vào **khóa R2** thì TUYỆT ĐỐI KHÔNG.
-- Xong: `trang_thai='san_sang'`, `kich_thuoc`, và **đặt lại `het_han_luc = now + 30 ngày`**
-  (xem §6 điểm 2).
+- Xong: `trang_thai='san_sang'`, `kich_thuoc`, và **đặt lại `het_han_luc = now + 7 ngày`**
+  (§6 điểm 2 — khớp đúng lifecycle `het-han-1-tuan` trên bucket).
 
 ## 4. Gói 5 — Thu hồi + audit + danh sách
 
 - `POST /goi-chia-se/:id/thu-hoi` → `env.CHIA_SE.delete(khoaR2)` rồi `trang_thai='da_thu_hoi'`.
+  **Mở cho MỌI VAI** (điểm 4) — khác `POST /goi-chia-se` vốn giới hạn kế toán trưởng trở lên.
   Xóa R2 **trước**, đổi trạng thái **sau**: ngược lại thì sổ nói đã thu hồi trong khi file
   vẫn tải được — sai theo hướng nguy hiểm.
   Thu hồi lại lần hai ⇒ 200 (idempotent), không lỗi.
@@ -147,31 +149,36 @@ KHÔNG có trong gói (2):
 
 ---
 
-## 6. BỐN ĐIỂM CẦN CHỐT trước khi code
+## 6. Bốn điểm — ĐÃ CHỐT 2026-07-29
 
-1. **`POST /:id/dong-goi` riêng, hay để `GET /:id` tự đóng gói?**
-   QĐ-B7 nói *"client hỏi lại và thấy đã đủ"* — đọc theo nghĩa GET tự làm. Nhưng GET gây tác
-   dụng phụ là bẫy: prefetch của trình duyệt/proxy có thể kích hoạt đóng gói ngoài ý muốn.
-   **Đề xuất: tách POST**, GET giữ thuần đọc.
+| # | Chốt |
+|---|---|
+| 1 | **Tách `POST /:id/dong-goi`**; `GET /:id` giữ thuần đọc |
+| 2 | **`het_han_luc` đặt lúc PHÁT HÀNH** — và **thời hiệu đổi từ 30 ngày → 1 TUẦN** |
+| 3 | Bấm Xuất lần nữa ⇒ **tạo gói mới**; giao diện hiện danh sách để tự thu hồi |
+| 4 | **Thu hồi mở cho MỌI VAI** (kể cả `ke_toan`) |
 
-2. **`het_han_luc` tính từ lúc TẠO hay lúc PHÁT HÀNH?**
-   Hiện đặt ở `POST /goi-chia-se` (lúc tạo), nhưng lifecycle của R2 đếm từ lúc **ghi object**
-   (lúc 4c). Nếu tải hồ sơ mất một giờ thì sổ nói hết hạn sớm hơn thực tế một giờ.
-   **Đề xuất: đặt lại `het_han_luc` ở bước phát hành**, để sổ khớp vòng đời thật của file.
+### ⚠️ Điểm 2 kéo theo nhiều thứ hơn vẻ ngoài — QĐ-6 (đã chốt trước) HẾT HIỆU LỰC
 
-3. **Bấm "Xuất" lần nữa cho cùng khách hàng + cùng kỳ thì sao?**
-   Hiện tạo gói MỚI với khóa mới; gói cũ vẫn sống tới 30 ngày. Ba lựa chọn:
-   (a) cứ tạo mới, chấp nhận nhiều link song song *(đơn giản nhất)*;
-   (b) tái dùng gói `san_sang` còn hạn cùng phạm vi;
-   (c) tự thu hồi gói cũ khi phát gói mới.
-   **Đề xuất (a)**, và giao diện hiện danh sách gói đã phát để người dùng tự thu hồi — vì
-   người dùng có thể CỐ Ý phát hai link cho hai người nhận khác nhau.
+Đổi 30 ngày → 7 ngày chạm **bốn nơi**, lệch một nơi là sổ và thực tế nói khác nhau:
 
-4. **Ai được thu hồi?** Hiện `POST` giới hạn `ke_toan_truong`+`quan_tri`.
-   **Đề xuất: thu hồi cũng cùng mức** — nhưng cân nhắc cho phép **mọi vai** thu hồi, vì thu
-   hồi là hành động **giảm** rủi ro; chặn người phát hiện lộ dữ liệu lại là hại.
+| Nơi | Việc | Trạng thái |
+|---|---|---|
+| Lifecycle trên bucket | gỡ `het-han-30-ngay`, thêm `het-han-1-tuan` (7 ngày, prefix `goi-hoa-don/`) | ✅ đã đổi + hậu kiểm 29/07 |
+| `SO_NGAY_SONG` trong `goiChiaSe.ts` | 30 → 7 | ⏳ Gói 4c |
+| Test "hết hạn khoảng 30 ngày" | đổi kỳ vọng sang 7 | ⏳ Gói 4c |
+| Chữ trên giao diện | "khoảng 1 tuần", KHÔNG hứa mốc chính xác (Cloudflare xóa trong vòng 24h sau mốc) | ⏳ Gói 6 |
 
----
+> **Bẫy khi gỡ rule:** `wrangler r2 bucket lifecycle remove` **không nhận cờ `-y`** (khác
+> `add`). Truyền `-y` thì lệnh in help và **im lặng không gỡ gì** — lúc đó bucket có HAI rule
+> chồng nhau trên cùng prefix. Đã dính một lần, phát hiện nhờ hậu kiểm `lifecycle list` ngay
+> sau đó. Luôn `list` lại sau mỗi lần đổi.
+
+### Điểm 4 — vì sao mở cho mọi vai
+
+Ngược nguyên tắc phân quyền thông thường, nhưng có lý do: **thu hồi là hành động GIẢM rủi ro**.
+Người phát hiện link bị lộ có thể là kế toán viên; bắt họ đi tìm kế toán trưởng trong lúc dữ
+liệu đang phơi ra là hại nhiều hơn lợi. Phát hành vẫn giữ `ke_toan_truong`+`quan_tri`.
 
 ## 7. Thứ tự thực thi + test viết trước
 

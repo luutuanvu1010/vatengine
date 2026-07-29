@@ -36,7 +36,7 @@ Người nhận mở link tải về mà **không cần tài khoản**; link s�
 | QĐ-B5 | **Không có bộ lọc riêng cho nút xuất** — dùng CHUNG bộ lọc trang Danh sách hóa đơn | Chủ dự án 2026-07-29 |
 | QĐ-B6 | Tìm **live theo cả tên và MST**; danh sách nhỏ ⇒ lọc trên máy khách | Chủ dự án 2026-07-29 |
 | QĐ-5 | Tên miền công khai **`docs.tourdao.vn`**, KHÔNG dùng `r2.dev` | Hồ sơ §3 |
-| QĐ-6 | Tự xóa sau **~30 ngày** bằng R2 Lifecycle theo prefix | Hồ sơ §3 |
+| QĐ-6 | ~~Tự xóa sau ~30 ngày~~ → **SỬA 2026-07-29: ~1 TUẦN (7 ngày)** bằng R2 Lifecycle theo prefix | Hồ sơ §3, chủ dự án sửa 29/07 |
 | QĐ-7 | **Cảnh báo rủi ro link công khai có checkbox xác nhận** + nút thu hồi + audit log | Hồ sơ §3 |
 | QĐ-3 | Trường rỗng để trống — không bịa | Hồ sơ §3 |
 | QĐ-B7 | **`vat-api` đóng gói ZIP** (không phải sync-worker) — worker giữ đơn nhiệm là tải hồ sơ gốc | Chủ dự án 2026-07-29 |
