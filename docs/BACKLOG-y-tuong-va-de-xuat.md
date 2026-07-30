@@ -1024,7 +1024,16 @@ Sau khi gỡ, `git worktree list` chỉ còn checkout chính; `git worktree prun
 
 ---
 
-## [2026-07-30] Bỏ tính năng xuất CSV — đã nghiên cứu, CHỜ chủ dự án chốt mức độ
+## [2026-07-30] Bỏ tính năng xuất CSV — ĐÃ CHỐT phương án A+, ĐÃ THI HÀNH VÀ ĐẨY LÊN ORIGIN
+
+- **Trạng thái:** ĐÓNG phần thi hành. Chủ dự án chốt **A+** (ẩn bằng cờ, giữ lõi `csv.ts`) trong cùng ngày. Hai commit trên trục `feat/cloudflare-stack-u0`, đã push:
+  - `a1f11eb` — tài liệu nghiên cứu + mục backlog này (2 file, +261).
+  - `eeca420` — thi hành: `SHOW_EXPORTS=false`, `SHOW_CSV_EXPORT=false` trong `apps/web/src/lib/featureFlags.ts`; dọn 3 câu hứa "Excel hoặc CSV"; **thêm** changelog v2.3 (không sửa 6 mục cũ); 16 file, +289/−49.
+  - Bằng chứng cổng chất lượng, chạy TRƯỚC commit: `make lint` sạch; `npm run test -w apps/web` = **59 file / 447 test xanh**, trong đó `csvHidden.test.tsx` (3 ca, có ca khẳng định nút Excel VẪN còn — chống xanh-giả mất cả hai nút) và `exportsHidden.test.tsx` (3 ca).
+- **Món "Chặn đường" ở cuối mục này đã xử lý xong:** `exportsHidden.test.tsx` không còn untracked và không còn đỏ — cờ `SHOW_EXPORTS` đã có trong `featureFlags.ts`, `Sidebar.tsx` + `AppRouter.tsx` không còn phơi `/exports`.
+- **CÒN NỢ, chưa làm:** chưa đo `audit_log` (`doiTuong = format`) để biết có tenant nào đang dùng CSV thật. Vẫn **CHƯA KIỂM CHỨNG** hành vi người dùng — nên đây là "ẩn", không phải "bỏ vĩnh viễn". Backend `POST /exports?format=csv` vẫn nhận CSV có chủ đích.
+- **Còn mở:** "xuất theo profile kế toán" mất lối vào khi trang Kết xuất bị ẩn — đề xuất chuyển sang màn Tra cứu (ghi ở mục riêng phía trên).
+- **Sự cố phụ, đã xử lý:** lần chạy script chốt đầu tiên dừng ở commit 1 vì `.git/index.lock` rỗng còn sót từ phiên trước (cùng phiên để lại `.git/_probe`). Không có tiến trình git nào chạy ⇒ lock chết, xoá rồi chạy lại, `git fsck` chỉ còn object dangling thường. **Bài học công cụ:** hook `.claude/hooks/block-dangerous.sh:28-31` chặn dương tính giả ở đây — nó đòi đồng thời `rm` + cờ khớp `-…r…` + chuỗi `.git`, nhưng cờ khớp lại là `--porcelain` của một lệnh **khác** trong cùng câu lệnh gộp. Nên so cờ đệ quy trong phạm vi token của chính lệnh `rm`.
 
 Nghiên cứu đầy đủ: **`docs/NGHIEN-CUU-bo-xuat-csv-2026-07-30.md`** (bản đồ điểm chạm theo `file:dòng`, 3 phương án, con số chi phí test). Tóm tắt để không phải mở file:
 
@@ -1036,3 +1045,38 @@ Nghiên cứu đầy đủ: **`docs/NGHIEN-CUU-bo-xuat-csv-2026-07-30.md`** (b�
 - **Chặn đường:** `apps/web/test/features/exportsHidden.test.tsx` đang **untracked và ĐỎ** — nó đòi cờ `SHOW_EXPORTS` mà `featureFlags.ts` không có; `Sidebar.tsx:23` + `AppRouter.tsx:108-115` vẫn phơi `/exports`. Việc "ẩn trang Kết xuất" đang làm dở, phải xử lý trước để không lẫn nguyên nhân test đỏ.
 - **Mức ưu tiên:** Thấp cho việc bỏ CSV (không chặn ai) — **Trung bình** cho món untracked ĐỎ ở trên.
 - **Nguồn phát hiện:** Phiên Cowork 2026-07-30, chủ dự án yêu cầu "nghiên cứu loại bỏ tính năng xuất CSV trên toàn hệ thống".
+
+---
+
+## [2026-07-30] Nợ nhánh, mục (1): đã phân loại 7 nhánh "chưa gộp" bằng NỘI DUNG — không nhánh nào giữ việc bị bỏ quên
+
+Đây là phần trả nợ cho mục (1) trong `[2026-07-29] Dọn kho` phía trên: câu hỏi *"7 nhánh chưa gộp là việc còn dở hay đã bỏ?"*. Trả lời: **đã vào trục cả, dưới dạng commit khác** — không phải việc bị bỏ quên.
+
+### Phép đo đã dùng (tái lập được)
+
+`git merge-base --is-ancestor` chỉ so **object commit**, nên nhánh bị squash/rebase luôn hiện ra "chưa gộp" dù nội dung đã vào trục — đúng như mục (1) cảnh báo. Nên đo hai tầng:
+
+1. `git cherry -v feat/cloudflare-stack-u0 <nhánh>` — so **patch-id**. Dòng `-` = trục đã có patch tương đương; `+` = chưa có patch **y hệt**.
+2. Với mỗi commit `+`, kiểm **cấp tính năng** bằng `grep` trên trục — vì patch-id đổi khi commit bị sửa lúc rebase, `+` **không** đồng nghĩa "nội dung mất".
+
+| Nhánh | `git cherry`: `-` / `+` | Kết luận sau khi kiểm cấp tính năng |
+|---|---|---|
+| `feat/doi-mst-cong-admin` | 3 / **0** | Nội dung nằm hết trong trục. Sạch. |
+| `feat/u34-lat3-dat-mat-khau` | 1 / **0** | Nội dung nằm hết trong trục. Sạch. |
+| `backup/u17b-before-rebase-20260720` | 5 / 1 | `+` duy nhất là U17b-3 `auth_lookup_user()` trả `tenant_trang_thai` → có trong `packages/db/migrations/0009_auth_lookup_trang_thai.sql`. |
+| `backup/hb6-before-rebase-20260720` | 14 / 4 | 3 `+` là loạt U27-B1/B2/B3 (xem dòng dưới); `+` thứ 4 là bảng DLQ `dong_bo_that_bai` → có trong `packages/db/migrations/0008_dong_bo_that_bai.sql` + `packages/db/src/schema/dongBoThatBai.ts`. |
+| `feat/u27-web-loc-ketxuat-dongbo` | 0 / 3 | U27-B1 ẩn ô MST theo chiều → `apps/web/src/features/invoices/FilterBar.tsx:49,61-62` (chú thích ghi rõ "B1 (U27)"); B2 nút xuất → `InvoiceExportButtons.tsx`; B3 role-gate → `canManageTaxAccounts` trong `lib/rbac.ts` + 4 nơi dùng. |
+| `claude/u23-unit-execution-59b6aa` | 0 / 13 | Kiểm mẫu A→D: A dòng hàng → `packages/db/src/schema/dongHangHoa.ts`; B kết xuất dòng hàng → `packages/export/src/lineRows.ts`; C Dashboard trạng thái kết nối → `DashboardPage.tsx`; D3 ngắt kết nối → `apps/api/src/routes/taxAccounts.ts:632`. 6/13 commit còn lại là docs/nhật ký tiến độ của chính phiên đó. |
+| `wip/line-view-snapshot-20260717` | 0 / 1 | Ảnh chụp an toàn, **tự ghi "do-not-merge"** trong thông điệp commit. Không phải việc dở — là lưới an toàn. |
+
+⇒ **Cả 7 nhánh: không nhánh nào là công việc thật đang bị bỏ quên.** Hai khối lớn từng đáng lo nhất (`backup/hb6` 18 commit, `claude/u23` 13 commit) đều đã vào trục dưới dạng đã sửa.
+
+### Trả nợ kèm: mục (4) `feat/u27-clean` lệch hai chiều
+
+`git cherry -v feat/cloudflare-stack-u0 origin/feat/u27-clean` → **4 dòng `+`**, đúng 4 commit mà mục (4) ghi là **CHƯA KIỂM CHỨNG**. Cả 4 là U27-B1/B2/B3 + docs đổi tên U26→U27 — cùng nội dung với loạt đã kiểm ở bảng trên, nên **nội dung đã ở trong trục**, chỉ khác commit. Mục (4) coi như đã trả lời.
+
+### Còn nguyên, chưa trả nợ
+
+- Mục (2) `main` mồ côi (không có `origin/main`), mục (3) 3 con trỏ deploy nên chuyển thành tag, mục (5) hai stash treo, mục (6) chưa có quy ước đặt tên nhánh — **chưa làm gì**.
+- **Giới hạn của phép đo trên, nói thẳng:** `grep` cấp tính năng chứng minh *tính năng có mặt*, **không** chứng minh *từng dòng của commit gốc đều đã vào*. Muốn chắc tuyệt đối phải đọc `git diff` từng commit `+` — chưa làm, và với kết luận "đã vào trục dưới dạng khác" thì mức bằng chứng hiện tại là đủ để **xoá ref**, vì `git tag archive/<tên>` giữ được đường quay lại.
+- **Nguồn phát hiện:** Phiên Cowork 2026-07-30, chủ dự án yêu cầu "dọn nhánh" — nên phải qua cổng mục (1) trước.
