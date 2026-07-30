@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
@@ -33,7 +33,13 @@ describe("Trang Kết xuất & Convert (SHOW_EXPORTS tắt)", () => {
     renderWithProviders(<AppRouter />, "/");
     // Chờ app vào được bên trong rồi mới khẳng định — khẳng định sớm sẽ đọc nhầm lúc còn ở
     // màn "Đang kiểm tra phiên" (khi đó chưa link nào tồn tại, ca test xanh giả).
-    await screen.findByRole("link", { name: "Danh sách hóa đơn" });
+    // U41: Footer bốn cột cũng có liên kết "Danh sách hóa đơn" ⇒ tìm toàn trang sẽ mơ hồ.
+    // Khoanh vào đúng thanh điều hướng — vốn là thứ ca này nói tới.
+    const thanhBen = await screen.findByRole("navigation", { name: "Điều hướng chính" });
+    await within(thanhBen).findByRole("link", { name: "Danh sách hóa đơn" });
+    // Khẳng định vắng mặt vẫn quét TOÀN TRANG (mạnh hơn): "Kết xuất & Convert" không được
+    // xuất hiện ở bất kỳ bề mặt nào — kể cả cột "Sản phẩm" của Footer, nơi bản thiết kế
+    // 30/07 đã vẽ nhầm nó vào.
     expect(screen.queryByRole("link", { name: "Kết xuất & Convert" })).not.toBeInTheDocument();
   });
 

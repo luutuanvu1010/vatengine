@@ -32,19 +32,25 @@ export function AboutPage() {
         </p>
       </Card>
 
-      <Card>
-        <SectionTitle>Trung tâm hỗ trợ &amp; tài liệu</SectionTitle>
-        <div style={{ marginTop: "var(--sp-3)" }}>
-          <SupportCenter />
-        </div>
-      </Card>
+      {/* U41 — hai neo `#faq` và `#lich-su` là ĐÍCH của liên kết trong Footer bốn cột. Đổi
+          hoặc bỏ `id` ở đây sẽ làm hai liên kết đó rơi vào đầu trang mà không báo lỗi gì. */}
+      <div id="faq">
+        <Card>
+          <SectionTitle>Trung tâm hỗ trợ &amp; tài liệu</SectionTitle>
+          <div style={{ marginTop: "var(--sp-3)" }}>
+            <SupportCenter />
+          </div>
+        </Card>
+      </div>
 
-      <Card>
-        <SectionTitle>Lịch sử cập nhật phần mềm</SectionTitle>
-        <div style={{ marginTop: "var(--sp-3)" }}>
-          <Changelog />
-        </div>
-      </Card>
+      <div id="lich-su">
+        <Card>
+          <SectionTitle>Lịch sử cập nhật phần mềm</SectionTitle>
+          <div style={{ marginTop: "var(--sp-3)" }}>
+            <Changelog />
+          </div>
+        </Card>
+      </div>
 
       {SHOW_DONATION && (
         <Card>

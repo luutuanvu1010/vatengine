@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRouter } from "../../src/routes/AppRouter";
@@ -13,6 +13,17 @@ const profile = (role: string) => () =>
     ghiChu: null,
     role,
   });
+
+/** Chờ tên doanh nghiệp hiện trong THANH ĐẦU TRANG — mốc "đã vào được app".
+ *
+ * U41: phải khoanh vùng, không tìm toàn trang nữa. Footer bốn cột hiện tên pháp nhân
+ * `ORG.congTy` — vốn cũng là "Công ty TNHH Tour Đảo" — nên `findByText` toàn trang khớp hai
+ * phần tử và ném lỗi mơ hồ. Khoanh vào `banner` còn đúng NGHĨA hơn bản cũ: ca này nói "header
+ * hiện tên DN từ /me", chứ không phải "chuỗi đó có ở đâu đó trên trang". */
+async function tenTrongHeader() {
+  const header = await screen.findByRole("banner", { name: "Thanh tài khoản" });
+  return within(header).findByText("Công ty TNHH Tour Đảo");
+}
 
 async function loginAs(role: string) {
   // Mô phỏng TRUNG THỰC cookie phiên (ADR-0003 Amendment #1): trước khi đăng nhập chưa
@@ -51,8 +62,14 @@ describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
   it("đăng nhập đúng (kế toán trưởng) → vào app, thấy nav kết nối thuế", async () => {
     await loginAs("ke_toan_truong");
     // Header hiện tên DN (từ /me).
-    expect(await screen.findByText("Công ty TNHH Tour Đảo")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Kết nối tài khoản thuế" })).toBeInTheDocument();
+    expect(await tenTrongHeader()).toBeInTheDocument();
+    // U41: cùng nhãn có ở cột "Sản phẩm" của Footer ⇒ khoanh vào thanh điều hướng, vì đây
+    // là ca kiểm NAV theo RBAC.
+    expect(
+      within(screen.getByRole("navigation", { name: "Điều hướng chính" })).getByRole("link", {
+        name: "Kết nối tài khoản thuế",
+      }),
+    ).toBeInTheDocument();
   });
 
   // ⚠️ 2026-07-30 — HAI ca dưới YẾU ĐI, ghi lại để không tin hão: chúng khẳng định mục nav
@@ -62,7 +79,7 @@ describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
   // thuế" (cùng ca) và ở test/lib/rbac.test.ts.
   it("kế toán → ẩn nav kết xuất + kết nối thuế (khớp RBAC 403)", async () => {
     await loginAs("ke_toan");
-    await screen.findByText("Công ty TNHH Tour Đảo");
+    await tenTrongHeader();
     expect(screen.queryByRole("link", { name: "Kết xuất & Convert" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Kết nối tài khoản thuế" })).not.toBeInTheDocument();
   });
@@ -83,7 +100,7 @@ describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
     await userEvent.type(await screen.findByLabelText("Email công việc"), "kt@tourdao.vn");
     await userEvent.type(screen.getByLabelText("Mật khẩu"), "pw");
     await userEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
-    await screen.findByText("Công ty TNHH Tour Đảo");
+    await tenTrongHeader();
     // Điều hướng tới /exports qua thanh địa chỉ giả — dùng lại render mới ở route đó.
     // (Ở đây kiểm nav bị ẩn là đủ cho guard hiển thị; guard route kiểm bằng test riêng.)
     expect(screen.queryByRole("link", { name: "Kết xuất & Convert" })).not.toBeInTheDocument();
@@ -103,7 +120,7 @@ describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
 
   it("đăng xuất → về màn đăng nhập", async () => {
     await loginAs("quan_tri");
-    await screen.findByText("Công ty TNHH Tour Đảo");
+    await tenTrongHeader();
     await userEvent.click(screen.getByRole("button", { name: "Mở hồ sơ" }));
     await userEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
     await waitFor(() =>

@@ -4,6 +4,7 @@ import { useAuth } from "../../features/auth/auth-context";
 import { labelRole } from "../../lib/rbac";
 import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
 import type { MeResponse } from "../../types/api";
+import { Footer } from "./Footer";
 import { ProfileMenu } from "./ProfileMenu";
 import { Sidebar } from "./Sidebar";
 
@@ -69,7 +70,11 @@ export function AppLayout({ me, onLogout }: { me: MeResponse; onLogout: () => vo
       )}
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* Đặt TÊN cho vùng mốc này: `PageHeader` của từng trang cũng dùng thẻ <header>, nên
+            không có nhãn thì trình đọc màn hình đọc ra hai vùng "banner" không phân biệt được
+            — và test cũng không trỏ được vào đúng cái nào. */}
         <header
+          aria-label="Thanh tài khoản"
           style={{
             display: "flex",
             justifyContent: "space-between",
@@ -146,6 +151,10 @@ export function AppLayout({ me, onLogout }: { me: MeResponse; onLogout: () => vo
         >
           <Outlet />
         </main>
+        {/* U41 — Footer nay có ở MỌI trang, không riêng màn Đăng nhập. Đặt NGOÀI <main> vì
+            nó không phải nội dung chính của trang; truyền `role` để cột "Sản phẩm" lọc đúng
+            vai (màn Đăng nhập gọi <Footer /> không kèm vai nên cột đó vắng hẳn). */}
+        <Footer role={me.role} />
       </div>
     </div>
   );
