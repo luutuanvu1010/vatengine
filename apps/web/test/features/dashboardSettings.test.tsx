@@ -121,12 +121,15 @@ describe("Dashboard (U23-C) — tối giản: 1 dòng trạng thái kết nối,
     expect(screen.queryByText("Kết nối tài khoản thuế")).not.toBeInTheDocument();
   });
 
-  it("(d) vai ke_toan_truong: hiện đủ 3 lối tắt", async () => {
+  // 2026-07-30: lối tắt "Kết xuất" ẩn theo cờ SHOW_EXPORTS ⇒ vai ke_toan_truong còn 2 lối tắt.
+  // Ý đồ ca test KHÔNG đổi: vai này thấy NHIỀU HƠN ke_toan ở ca (c) — cụ thể là thấy thêm
+  // "Kết nối tài khoản thuế". Sự vắng mặt của "Kết xuất" khoá ở exportsHidden.test.tsx.
+  it("(d) vai ke_toan_truong: hiện 2 lối tắt (Kết xuất đang ẩn theo cờ)", async () => {
     mockTaxAccounts([], "ke_toan_truong");
     renderWithProviders(<DashboardAs vaiTro="ke_toan_truong" />);
-    expect(await screen.findByText("Kết xuất")).toBeInTheDocument();
-    expect(screen.getByText("Xem hóa đơn")).toBeInTheDocument();
+    expect(await screen.findByText("Xem hóa đơn")).toBeInTheDocument();
     expect(screen.getByText("Kết nối tài khoản thuế")).toBeInTheDocument();
+    expect(screen.queryByText("Kết xuất")).not.toBeInTheDocument();
   });
 });
 

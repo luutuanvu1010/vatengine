@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Card, Loading, SectionTitle } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
+import { SHOW_EXPORTS } from "../../lib/featureFlags";
 import { formatDateVN } from "../../lib/format";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
 import type { Role, TaxAccountView } from "../../types/api";
@@ -92,8 +93,11 @@ export function DashboardPage() {
           }}
         >
           <Shortcut to="/invoices" title="Xem hóa đơn" desc="Lọc theo kỳ, chiều, nguồn" />
-          {canExport(role) ? (
-            <Shortcut to="/exports" title="Kết xuất" desc="Xuất xlsx/csv theo profile" />
+          {/* Lối tắt tới trang Kết xuất — ẩn theo cờ SHOW_EXPORTS (tắt 2026-07-30). Điểm nối
+              dây thứ ba của trang này, cạnh Sidebar + AppRouter; tất cả khoá bằng
+              test/features/exportsHidden.test.tsx. */}
+          {SHOW_EXPORTS && canExport(role) ? (
+            <Shortcut to="/exports" title="Kết xuất" desc="Xuất Excel theo profile kế toán" />
           ) : null}
           {canManageTaxAccounts(role) ? (
             <Shortcut

@@ -41,7 +41,7 @@ export const FAQ: FaqItem[] = [
   {
     group: PHAP_LUAT,
     q: "Dữ liệu hóa đơn trích xuất có dùng để kê khai thuế được không?",
-    a: "Phần mềm giữ đầy đủ trường dữ liệu gốc của hóa đơn (lưu cả bản JSON gốc) và cho kết xuất Excel/CSV, phục vụ đối chiếu và chuẩn bị kê khai. Việc kê khai chính thức vẫn do bạn/kế toán thực hiện trên hệ thống của cơ quan thuế.",
+    a: "Phần mềm giữ đầy đủ trường dữ liệu gốc của hóa đơn (lưu cả bản JSON gốc) và cho kết xuất Excel, phục vụ đối chiếu và chuẩn bị kê khai. Việc kê khai chính thức vẫn do bạn/kế toán thực hiện trên hệ thống của cơ quan thuế.",
   },
   {
     group: TINH_NANG,

@@ -14,6 +14,7 @@ import {
 } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { saveBlob } from "../../lib/download";
+import { SHOW_CSV_EXPORT } from "../../lib/featureFlags";
 import { loadInvoiceFilter } from "../../lib/filterStore";
 import { MOBILE_QUERY, useMediaQuery } from "../../lib/useMediaQuery";
 import type { ExportFormat } from "../../types/api";
@@ -100,16 +101,22 @@ export function ExportsPage() {
                 Bảng tính đầy đủ cột.
               </div>
             </button>
-            <button
-              type="button"
-              style={optionCard(format === "csv")}
-              onClick={() => setFormat("csv")}
-            >
-              <strong>CSV (.csv)</strong>
-              <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
-                Dữ liệu dạng bảng thuần, dung lượng nhỏ.
-              </div>
-            </button>
+            {/* Thẻ chọn CSV ẩn theo cờ SHOW_CSV_EXPORT (tắt 2026-07-30). Cả TRANG này cũng
+                đang ẩn theo SHOW_EXPORTS, nhưng vẫn bọc cờ ở đây: nếu sau này bật lại trang
+                mà quên chỗ này thì CSV lặng lẽ quay về — mặc định phải là "ẩn ở mọi lối vào".
+                `format` khởi tạo là "xlsx" nên bỏ thẻ này không để lại trạng thái mồ côi. */}
+            {SHOW_CSV_EXPORT ? (
+              <button
+                type="button"
+                style={optionCard(format === "csv")}
+                onClick={() => setFormat("csv")}
+              >
+                <strong>CSV (.csv)</strong>
+                <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-base)" }}>
+                  Dữ liệu dạng bảng thuần, dung lượng nhỏ.
+                </div>
+              </button>
+            ) : null}
           </div>
 
           <SectionTitle style={{ marginTop: "var(--sp-6)" }}>

@@ -13,6 +13,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3",
+    date: "2026-07-30",
+    title: "Kết xuất gọn lại: chỉ còn Excel",
+    changes: [
+      "Nút 'Xuất CSV' ở trang Danh sách hóa đơn đã được bỏ. Kết xuất nay chỉ còn một định dạng duy nhất là Excel (.xlsx) — vẫn đủ mọi cột như trước, kèm sheet chi tiết dòng hàng, và mở được bằng Excel, Google Sheets hay LibreOffice.",
+      "Vì sao bỏ: hai nút cạnh nhau cho cùng một việc chỉ làm người dùng phải chọn mà không rõ khác gì. Tệp Excel giữ được định dạng số, ngày và nhiều sheet — CSV thì không, nên thường gây lệch khi mở lên.",
+      "Trang 'Kết xuất & Convert' cũng được tạm ẩn. Việc xuất dữ liệu nay làm gọn tại chỗ, ngay trong trang Danh sách hóa đơn: chọn bộ lọc, chọn cột, bấm Xuất Excel.",
+      "Dữ liệu của bạn không bị ảnh hưởng. Những tệp đã tải về trước đây vẫn dùng bình thường.",
+    ],
+    kind: "improvement",
+  },
+  {
     version: "v2.2",
     date: "2026-07-29",
     title: "Tải hóa đơn gốc gửi khách hàng, chia sẻ bằng một liên kết",

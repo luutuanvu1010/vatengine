@@ -16,7 +16,7 @@ import { LienKetPage } from "../features/lienket/LienKetPage";
 import { ReconcilePage } from "../features/reconcile/ReconcilePage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { TaxAccountsPage } from "../features/taxAccounts/TaxAccountsPage";
-import { SHOW_RECONCILE } from "../lib/featureFlags";
+import { SHOW_EXPORTS, SHOW_RECONCILE } from "../lib/featureFlags";
 import { vi } from "../lib/i18n/vi";
 import { canExport, canManageTaxAccounts } from "../lib/rbac";
 import type { Role } from "../types/api";
@@ -105,14 +105,19 @@ export function AppRouter() {
         {/* U37c — quản lý liên kết đã phát hành. Mở cho MỌI vai: xem là vô hại, còn thu
             hồi là hành động GIẢM rủi ro nên chặn người phát hiện lộ link là hại hơn lợi. */}
         <Route path="lien-ket" element={<LienKetPage />} />
-        <Route
-          path="exports"
-          element={
-            <RoleRoute allow={canExport}>
-              <ExportsPage />
-            </RoleRoute>
-          }
-        />
+        {/* Đang ẩn bằng cờ SHOW_EXPORTS (tắt 2026-07-30 — xem lịch sử trong lib/featureFlags.ts).
+            Giữ import ExportsPage để không sinh file mồ côi. Route tắt ⇒ /exports rơi vào
+            catch-all "*" cuối file → về Tổng quan. */}
+        {SHOW_EXPORTS && (
+          <Route
+            path="exports"
+            element={
+              <RoleRoute allow={canExport}>
+                <ExportsPage />
+              </RoleRoute>
+            }
+          />
+        )}
         <Route
           path="tax-accounts"
           element={

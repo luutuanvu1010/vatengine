@@ -83,11 +83,13 @@ describe("B2 — nút kết xuất theo hóa đơn", () => {
     vi.unstubAllGlobals();
   });
 
-  it("vai ke_toan_truong → thấy 2 nút Xuất Excel/CSV", () => {
+  // 2026-07-30 — CSV ẩn theo cờ SHOW_CSV_EXPORT, nên chỉ còn MỘT nút. Việc CSV *phải* vắng
+  // mặt được khoá riêng ở csvHidden.test.tsx (cùng khuôn reconcileHidden/exportsHidden), để
+  // file này giữ đúng phạm vi của nó: RBAC + luồng xuất.
+  it("vai ke_toan_truong → thấy nút Xuất Excel", () => {
     mockExports(201, "ke_toan_truong");
     renderWithProviders(<ExportButtonsAs vaiTro="ke_toan_truong" />);
     expect(screen.getByRole("button", { name: "Xuất Excel" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Xuất CSV" })).toBeInTheDocument();
   });
 
   it("vai ke_toan → KHÔNG render nút", () => {
@@ -115,16 +117,9 @@ describe("B2 — nút kết xuất theo hóa đơn", () => {
     });
   });
 
-  it("bấm Xuất CSV → createExport('csv', filter)", async () => {
-    mockExports(201, "quan_tri");
-    renderWithProviders(<ExportButtonsAs vaiTro="quan_tri" />);
-    await userEvent.click(screen.getByRole("button", { name: "Xuất CSV" }));
-    await waitFor(() => {
-      expect(calls.some((c) => c.method === "POST" && c.url.includes("/exports?format=csv"))).toBe(
-        true,
-      );
-    });
-  });
+  // Ca "bấm Xuất CSV → createExport('csv')" đã BỎ ngày 2026-07-30: không còn nút để bấm.
+  // Việc `format` được truyền đúng xuống API vẫn còn khoá ở test/lib/apiClient.methods.test.ts
+  // (gọi trực tiếp api.createExport("csv", …)), nên bỏ ca này không tạo lỗ hổng.
 
   it("403 → hiện 'Bạn không có quyền kết xuất.', không crash", async () => {
     mockExports(403, "quan_tri");

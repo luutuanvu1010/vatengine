@@ -45,14 +45,21 @@ describe("U15.1 — đăng nhập + phiên + RBAC guard", () => {
     expect(await screen.findByRole("heading", { name: "Đăng nhập" })).toBeInTheDocument();
   });
 
-  it("đăng nhập đúng (kế toán trưởng) → vào app, thấy nav kết xuất + kết nối thuế", async () => {
+  // 2026-07-30: mục nav "Kết xuất & Convert" đã ẩn theo cờ SHOW_EXPORTS (lịch sử ở
+  // lib/featureFlags.ts), nên ca này chỉ còn khẳng định nav theo RBAC còn lại — "Kết nối tài
+  // khoản thuế". Việc mục Kết xuất PHẢI vắng mặt khoá riêng ở exportsHidden.test.tsx.
+  it("đăng nhập đúng (kế toán trưởng) → vào app, thấy nav kết nối thuế", async () => {
     await loginAs("ke_toan_truong");
     // Header hiện tên DN (từ /me).
     expect(await screen.findByText("Công ty TNHH Tour Đảo")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Kết xuất & Convert" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Kết nối tài khoản thuế" })).toBeInTheDocument();
   });
 
+  // ⚠️ 2026-07-30 — HAI ca dưới YẾU ĐI, ghi lại để không tin hão: chúng khẳng định mục nav
+  // "Kết xuất & Convert" vắng mặt với vai ke_toan, nhưng từ khi cờ SHOW_EXPORTS tắt thì mục
+  // đó vắng với MỌI vai ⇒ chúng xanh kể cả khi RBAC hỏng. Nếu bật lại cờ SHOW_EXPORTS, hai ca
+  // này lấy lại đúng sức nặng ban đầu. Phần RBAC còn được khoá thật ở "Kết nối tài khoản
+  // thuế" (cùng ca) và ở test/lib/rbac.test.ts.
   it("kế toán → ẩn nav kết xuất + kết nối thuế (khớp RBAC 403)", async () => {
     await loginAs("ke_toan");
     await screen.findByText("Công ty TNHH Tour Đảo");

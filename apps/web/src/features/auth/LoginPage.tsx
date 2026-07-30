@@ -42,7 +42,7 @@ const LOGIN_FACTS: ReadonlyArray<{ title: string; desc: ReactNode }> = [
   },
   {
     title: "Sẵn sàng đối chiếu & kê khai",
-    desc: "Tra cứu theo kỳ kê khai, phát hiện lệch thuế và kết xuất Excel hoặc CSV chỉ trong vài thao tác, phục vụ đối chiếu, kê khai và tích hợp kế toán.",
+    desc: "Tra cứu theo kỳ kê khai và kết xuất Excel chỉ trong vài thao tác, phục vụ đối chiếu, kê khai và tích hợp kế toán.",
   },
 ];
 

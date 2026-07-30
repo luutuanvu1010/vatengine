@@ -264,9 +264,9 @@ export function InvoicesPage() {
           thiếu. Việc này xử lý nền: bạn có thể tiếp tục thao tác khác, số liệu sẽ đầy dần. Chỉ vai
           quản trị tài khoản thuế thấy chức năng này.
         </MucHuongDan>
-        <MucHuongDan nhan="Tùy chỉnh cột và Xuất Excel / CSV">
+        <MucHuongDan nhan="Tùy chỉnh cột và Xuất Excel">
           Chọn những cột cần đưa vào tệp kết xuất, rồi xuất toàn bộ kết quả khớp bộ lọc ra tệp Excel
-          hoặc CSV để đối chiếu và kê khai. Đây là kết xuất dữ liệu đã có, không truy xuất mới.
+          để đối chiếu và kê khai. Đây là kết xuất dữ liệu đã có, không truy xuất mới.
         </MucHuongDan>
         <MucHuongDan nhan="Tải hóa đơn gốc (.zip)">
           Truy xuất bản gốc có chữ ký số từ Tổng cục Thuế đối với các hóa đơn đã phát hành cho người

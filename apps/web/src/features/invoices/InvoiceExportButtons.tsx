@@ -5,6 +5,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "../../components/ui/primitives";
 import { ApiError } from "../../lib/apiClient";
+import { SHOW_CSV_EXPORT } from "../../lib/featureFlags";
 import { canExport } from "../../lib/rbac";
 import type { ExportFormat, InvoiceFilter } from "../../types/api";
 import { useAuth } from "../auth/auth-context";
@@ -41,9 +42,14 @@ export function InvoiceExportButtons({ filter, cols }: { filter: InvoiceFilter; 
       <Button variant="secondary" onClick={() => run.mutate("xlsx")} disabled={run.isPending}>
         {nhan("xlsx", "Excel")}
       </Button>
-      <Button variant="secondary" onClick={() => run.mutate("csv")} disabled={run.isPending}>
-        {nhan("csv", "CSV")}
-      </Button>
+      {/* Nút CSV ẩn theo cờ SHOW_CSV_EXPORT (tắt 2026-07-30 — lịch sử + lý do giữ lõi mã ở
+          lib/featureFlags.ts; nghiên cứu: docs/NGHIEN-CUU-bo-xuat-csv-2026-07-30.md). Đây là
+          lối vào CSV DUY NHẤT còn lại của người dùng sau khi trang Kết xuất bị ẩn. */}
+      {SHOW_CSV_EXPORT ? (
+        <Button variant="secondary" onClick={() => run.mutate("csv")} disabled={run.isPending}>
+          {nhan("csv", "CSV")}
+        </Button>
+      ) : null}
       {thongBaoLoi ? (
         <span style={{ fontSize: "var(--fs-xs)", color: "var(--danger-600)" }}>{thongBaoLoi}</span>
       ) : null}
