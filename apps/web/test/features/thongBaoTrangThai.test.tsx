@@ -6,7 +6,10 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ThongBaoTrangThai, deltaThuePhaiNop } from "../../src/features/invoices/ThongBaoTrangThai";
+import { ThongBaoTrangThai } from "../../src/features/invoices/ThongBaoTrangThai";
+// U41 — hàm chuyển sang nguồn dùng chung; các ca dưới GIỮ NGUYÊN vì chúng phủ những tổ hợp
+// (shape cũ, tiền vượt 2^53) mà test của lib/ruiRo không lặp lại.
+import { deltaThuePhaiNop } from "../../src/lib/ruiRo";
 import type { ChieuSummary } from "../../src/types/api";
 import { renderWithProviders } from "../helpers/renderApp";
 

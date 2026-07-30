@@ -8,11 +8,13 @@
 // Chịu được dữ liệu shape CŨ: `queryKey` không đổi sau deploy nên một tab đang mở vẫn giữ
 // dữ liệu cũ trong cache tới lần refetch kế. Mọi trường mới đọc qua `?? 0` / `?? "0"`.
 import { useQuery } from "@tanstack/react-query";
-import { nhanTthai, truTienChuoi } from "@vat/domain";
+import { nhanTthai } from "@vat/domain";
 import { useState } from "react";
 import { Alert, Button, ErrorState, Loading } from "../../components/ui/primitives";
 import { api } from "../../lib/apiClient";
 import { formatDateVN, formatMoney } from "../../lib/format";
+// U41 — `deltaThuePhaiNop` nay ở `lib/ruiRo.ts`, dùng CHUNG với trang Tổng quan.
+import { deltaThuePhaiNop } from "../../lib/ruiRo";
 import { labelChieu } from "../../lib/statusLabels";
 import type { ChieuSummary, InvoiceFilter } from "../../types/api";
 
@@ -41,23 +43,6 @@ const soLoai = (c: ChieuSummary): number => c.soLoaiKhoiTong ?? 0;
 function tien(v: string, am = false): string {
   const s = formatMoney(v);
   return `${am && s !== "0" ? "-" : ""}${s} ₫`;
-}
-
-/**
- * Δ thuế phải nộp = −thueDaLoai(bán ra) + thueDaLoai(mua vào), tức `mua vào − bán ra`.
- *
- * HAI CHIỀU NGƯỢC DẤU — đây chính là chỗ bản kế hoạch đầu làm sai khi cộng thẳng:
- * loại hóa đơn mã 4 ở BÁN RA làm thuế đầu ra giảm ⇒ thuế phải nộp GIẢM; loại ở MUA VÀO làm
- * thuế được khấu trừ giảm ⇒ thuế phải nộp TĂNG.
- *
- * Tính bằng BigInt trên chuỗi (`truTienChuoi`) — tiền có thể vượt 2^53, `06-BINDING_MAP` §4.2
- * CẤM `Number()`/`parseFloat`. Không chiều nào có mã 4 → `null` (ẩn dòng, tiêu chí #17c).
- */
-export function deltaThuePhaiNop(byChieu: readonly ChieuSummary[]): string | null {
-  if (!byChieu.some((c) => soLoai(c) > 0)) return null;
-  const ban = byChieu.find((c) => c.chieu === "sold");
-  const mua = byChieu.find((c) => c.chieu === "purchase");
-  return truTienChuoi(mua?.thueDaLoai ?? "0", ban?.thueDaLoai ?? "0");
 }
 
 /** "-1711111" → "giảm 1.711.111 ₫". Nêu hướng bằng CHỮ, không để dấu trừ đứng cạnh chữ
