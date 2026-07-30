@@ -7,8 +7,9 @@ import type {
   SelectHTMLAttributes,
 } from "react";
 import { useEffect, useId, useRef, useState } from "react";
-import { dmyToIso, isoToDmy } from "../../lib/dateVn";
+import { dmyToIso, isoToDmy, luoiThang } from "../../lib/dateVn";
 import { vi } from "../../lib/i18n/vi";
+import { vnYearMonth } from "../../lib/period";
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -187,8 +188,25 @@ export function DateField({ label, hideLabel, co, value, onChangeIso }: DateFiel
     setLastValue(value);
     setText(isoToDmy(value));
   }
+
+  // Lịch chọn ngày (2026-07-30, yêu cầu chủ dự án): gõ tay vẫn giữ, focus vào ô mở lịch
+  // tháng tiếng Việt. Mọi nút trong lịch bắt `onMouseDown` + preventDefault để KHÔNG cướp
+  // focus của input — nhờ đó blur chỉ nổ khi bấm thật sự ra ngoài (đóng lịch tự nhiên,
+  // không cần lắng nghe click toàn tài liệu).
+  const [moLich, setMoLich] = useState(false);
+  const [thangHienThi, setThangHienThi] = useState(() => thangCuaValue(value));
+  const chuyenThang = (huong: -1 | 1) => {
+    setThangHienThi(({ y, m }) => {
+      const tong = y * 12 + (m - 1) + huong;
+      return { y: Math.floor(tong / 12), m: (tong % 12) + 1 };
+    });
+  };
+  const openLich = () => {
+    setThangHienThi(thangCuaValue(value));
+    setMoLich(true);
+  };
   return (
-    <span style={boc(co)}>
+    <span style={{ ...boc(co), position: "relative" }}>
       <label htmlFor={inputId} style={hideLabel ? srOnly : nhanCss}>
         {label}
       </label>
@@ -198,6 +216,7 @@ export function DateField({ label, hideLabel, co, value, onChangeIso }: DateFiel
         inputMode="numeric"
         placeholder="dd/mm/yyyy"
         value={text}
+        onFocus={openLich}
         onChange={(e) => {
           const raw = e.target.value;
           setText(raw);
@@ -208,12 +227,159 @@ export function DateField({ label, hideLabel, co, value, onChangeIso }: DateFiel
           const iso = dmyToIso(raw);
           if (iso) onChangeIso(iso);
         }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setMoLich(false);
+        }}
         onBlur={() => {
+          setMoLich(false);
           if (text.trim() !== "" && !dmyToIso(text)) setText(isoToDmy(value));
         }}
         style={oNhapVoiCo(co)}
       />
+      {moLich ? (
+        <LichThang
+          y={thangHienThi.y}
+          m={thangHienThi.m}
+          ngayDangChon={value}
+          onChuyenThang={chuyenThang}
+          onChonNgay={(iso) => {
+            onChangeIso(iso);
+            setText(isoToDmy(iso));
+            setMoLich(false);
+          }}
+        />
+      ) : null}
     </span>
+  );
+}
+
+/** Tháng mở lịch ban đầu: tháng của value nếu có, không thì tháng hiện tại theo lịch VN. */
+function thangCuaValue(value: string | undefined): { y: number; m: number } {
+  const m = value ? /^(\d{4})-(\d{2})-\d{2}$/.exec(value) : null;
+  if (m) return { y: Number(m[1]), m: Number(m[2]) };
+  return vnYearMonth(new Date());
+}
+
+const THU_VN = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"] as const;
+
+/** Nút trong lịch: dùng mousedown (đã preventDefault ở container) nên onClick không nổ —
+ * hành động gắn vào onMouseDown. */
+function nutLichCss(dangChon: boolean): React.CSSProperties {
+  return {
+    padding: "var(--sp-1) 0",
+    fontSize: "var(--fs-sm)",
+    fontFamily: "inherit",
+    textAlign: "center",
+    color: dangChon ? "var(--text-on-brand)" : "var(--text-primary)",
+    background: dangChon ? "var(--brand-600)" : "transparent",
+    border: "1px solid transparent",
+    borderRadius: "var(--radius-sm)",
+    cursor: "pointer",
+  };
+}
+
+/** Bảng lịch một tháng — tuần Thứ Hai → Chủ Nhật, nhãn tiếng Việt, dẫn xuất từ luoiThang. */
+function LichThang({
+  y,
+  m,
+  ngayDangChon,
+  onChuyenThang,
+  onChonNgay,
+}: {
+  y: number;
+  m: number;
+  /** ISO đang áp — tô đậm đúng ô ngày nếu thuộc tháng đang xem. */
+  ngayDangChon?: string;
+  onChuyenThang: (huong: -1 | 1) => void;
+  onChonNgay: (iso: string) => void;
+}) {
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  return (
+    // <dialog open> không-modal (Biome a11y/useSemanticElements): vai trò dialog gốc,
+    // vẫn định vị absolute như popup thường; reset margin vì dialog gốc tự căn giữa.
+    <dialog
+      open
+      aria-label="Chọn ngày trên lịch"
+      // Giữ focus ở input: mọi mousedown trong lịch không được cướp focus (xem DateField).
+      onMouseDown={(e) => e.preventDefault()}
+      style={{
+        position: "absolute",
+        top: "100%",
+        left: 0,
+        zIndex: 10,
+        margin: 0,
+        marginTop: "var(--sp-1)",
+        padding: "var(--sp-3)",
+        minWidth: 232,
+        background: "var(--surface-card)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-md)",
+        boxShadow: "var(--shadow-md)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "var(--sp-2)",
+        }}
+      >
+        <button
+          type="button"
+          aria-label="Tháng trước"
+          onMouseDown={() => onChuyenThang(-1)}
+          style={{ ...nutLichCss(false), padding: "var(--sp-1) var(--sp-2)" }}
+        >
+          ‹
+        </button>
+        <span style={{ fontSize: "var(--fs-sm)", fontWeight: "var(--fw-semibold)" }}>
+          Tháng {m}/{y}
+        </span>
+        <button
+          type="button"
+          aria-label="Tháng sau"
+          onMouseDown={() => onChuyenThang(1)}
+          style={{ ...nutLichCss(false), padding: "var(--sp-1) var(--sp-2)" }}
+        >
+          ›
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+        {THU_VN.map((thu) => (
+          <span
+            key={thu}
+            style={{
+              fontSize: "var(--fs-xs)",
+              fontWeight: "var(--fw-semibold)",
+              color: "var(--text-secondary)",
+              textAlign: "center",
+              padding: "var(--sp-1) 0",
+            }}
+          >
+            {thu}
+          </span>
+        ))}
+        {luoiThang(y, m)
+          .flat()
+          .map((ngay, i) =>
+            ngay === null ? (
+              // biome-ignore lint/suspicious/noArrayIndexKey: ô trống tĩnh, thứ tự cố định
+              <span key={`trong-${i}`} />
+            ) : (
+              <button
+                key={ngay}
+                type="button"
+                aria-label={`Chọn ngày ${pad2(ngay)}/${pad2(m)}/${y}`}
+                onMouseDown={() => onChonNgay(`${y}-${pad2(m)}-${pad2(ngay)}`)}
+                style={nutLichCss(ngayDangChon === `${y}-${pad2(m)}-${pad2(ngay)}`)}
+              >
+                {ngay}
+              </button>
+            ),
+          )}
+      </div>
+    </dialog>
   );
 }
 

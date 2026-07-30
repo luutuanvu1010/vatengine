@@ -25,6 +25,27 @@ export function isoToDmy(iso: string | undefined): string {
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
+/**
+ * Lưới lịch tháng cho bộ chọn ngày: mảng tuần, mỗi tuần 7 ô Thứ Hai → Chủ Nhật (quy ước
+ * lịch VN), ô ngoài tháng là null. Số học lịch qua Date.UTC — không parse chuỗi, không locale.
+ */
+export function luoiThang(y: number, m: number): (number | null)[][] {
+  if (!Number.isInteger(m) || m < 1 || m > 12) {
+    throw new Error(`Tháng không hợp lệ: ${m} (phải 1–12)`);
+  }
+  const soNgay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  // getUTCDay: 0=CN..6=T7 → quy về 0=T2..6=CN
+  const thuNgayDau = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+  const o: (number | null)[] = [
+    ...Array.from({ length: thuNgayDau }, () => null),
+    ...Array.from({ length: soNgay }, (_, i) => i + 1),
+  ];
+  while (o.length % 7 !== 0) o.push(null);
+  const tuan: (number | null)[][] = [];
+  for (let i = 0; i < o.length; i += 7) tuan.push(o.slice(i, i + 7));
+  return tuan;
+}
+
 /** "01/07/2026" (chấp nhận d/m/yyyy) → "2026-07-01". Sai định dạng/ngày phi thực tế → null. */
 export function dmyToIso(dmy: string): string | null {
   const m = DMY_RE.exec(dmy.trim());
