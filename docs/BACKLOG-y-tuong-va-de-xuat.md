@@ -1021,3 +1021,18 @@ Sau khi gỡ, `git worktree list` chỉ còn checkout chính; `git worktree prun
 - **Điều kiện dọn về sau (đề xuất):** làm xong mục (1) — phân loại 7 nhánh chưa gộp bằng so **nội dung** chứ không so commit — rồi mới bàn tới xoá. Trước khi xoá bất kỳ nhánh nào: `git tag archive/<tên-nhánh> <sha>` để giữ đường quay lại, vì tag không bị `git gc` dọn như ref đã xoá.
 - **Mức ưu tiên đề xuất:** Thấp cho việc dọn (không chặn ai, không tốn hạ tầng) — **Trung bình** cho riêng mục (1), vì 18+13 commit chưa rõ số phận là công việc thật có thể đang bị bỏ quên.
 - **Nguồn phát hiện:** Phiên Cowork 2026-07-29 — dọn worktree theo yêu cầu, kiểm nhánh khi chủ dự án yêu cầu "kiểm tra lại 42 nhánh một cách chắc chắn và có bằng chứng".
+
+---
+
+## [2026-07-30] Bỏ tính năng xuất CSV — đã nghiên cứu, CHỜ chủ dự án chốt mức độ
+
+Nghiên cứu đầy đủ: **`docs/NGHIEN-CUU-bo-xuat-csv-2026-07-30.md`** (bản đồ điểm chạm theo `file:dòng`, 3 phương án, con số chi phí test). Tóm tắt để không phải mở file:
+
+- **Bỏ được.** CSV độc lập với XLSX (`grep -c csv packages/export/src/xlsx.ts` = 0) và **không có luồng NHẬP CSV nào** trong toàn hệ thống ⇒ không vỡ Excel, không vỡ file kế toán, không vỡ đối chiếu.
+- **Lối vào người dùng chỉ 2 chỗ:** nút "Xuất CSV" (`InvoiceExportButtons.tsx:44-46`) và thẻ chọn ở trang Kết xuất (`ExportsPage.tsx:103-112`). Backend gom trong một file (`apps/api/src/routes/exports.ts`), nguồn sự thật định dạng ở `packages/export/src/formats.ts:4`.
+- **⚠️ Cái bẫy:** 38 lượt `?format=csv` trong `apps/api/test` **phần lớn không kiểm CSV** — chúng kiểm cách ly tenant, RBAC, mask audit, chọn `ids`, và chọn CSV chỉ vì CSV là văn bản đọc được từng dòng (`csvLines`/`csvOf`, 15 lượt) trong khi XLSX là nhị phân. Xoá `"csv"` khỏi `ExportFormat` ⇒ phải viết lại ~50 ca test cách ly/phân quyền sang nhị phân, rủi ro **làm yếu đi** đúng bộ test bảo vệ ranh giới tenant mà không ai nhận ra.
+- **Đề xuất:** phương án **A+** — ẩn khỏi giao diện bằng cờ `SHOW_CSV_EXPORT` (đúng khuôn `SHOW_RECONCILE`), dọn 4 câu văn hứa hẹn với khách (`LoginPage.tsx:45`, `faq.ts:44`, `DashboardPage.tsx:96`, `InvoicesPage.tsx:267-269`), **thêm** mục changelog mới thay vì sửa 6 mục cũ, giữ lõi `csv.ts` làm hạ tầng kiểm thử. Sửa ~6 file, 0 test backend, đảo lại bằng một hằng số.
+- **Nên đo trước khi chốt:** `audit_log` đã lưu `doiTuong = format` (`exports.ts:158, 213`) ⇒ đếm được số lượt xuất CSV thật theo tenant. Đừng quyết bằng cảm giác. **CHƯA KIỂM CHỨNG:** có khách nào đang dùng CSV.
+- **Chặn đường:** `apps/web/test/features/exportsHidden.test.tsx` đang **untracked và ĐỎ** — nó đòi cờ `SHOW_EXPORTS` mà `featureFlags.ts` không có; `Sidebar.tsx:23` + `AppRouter.tsx:108-115` vẫn phơi `/exports`. Việc "ẩn trang Kết xuất" đang làm dở, phải xử lý trước để không lẫn nguyên nhân test đỏ.
+- **Mức ưu tiên:** Thấp cho việc bỏ CSV (không chặn ai) — **Trung bình** cho món untracked ĐỎ ở trên.
+- **Nguồn phát hiện:** Phiên Cowork 2026-07-30, chủ dự án yêu cầu "nghiên cứu loại bỏ tính năng xuất CSV trên toàn hệ thống".
