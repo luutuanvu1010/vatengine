@@ -63,11 +63,17 @@ function thangDangChayNen(tacVuNen: SyncStatusView): string {
 export function RangeSyncPanel({ backfill }: { backfill: RangeBackfill }) {
   const { state, lineResult, tacVuNen } = backfill;
   const running = state.kind === "dang_lay";
+  // Tác vụ nền: chỉ hiện khi KHÔNG đang hiển thị tiến độ của chính phiên này — tránh nói
+  // cùng một việc hai lần.
+  const hienTacVuNen = !running && !!tacVuNen && tacVuNen.soTacVu > 0;
+  const hienDongHang = !!lineResult && lineResult.soDaXepHang > 0;
+  // Không có gì để nói → KHÔNG render vùng chứa rỗng. Khoảng cách trên của panel do `gap`
+  // của vùng chứa dọc trong `InvoicesPage` lo; một <div> rỗng vẫn chiếm một ô lưới nên vẫn
+  // sinh một khoảng hở ảo, làm khoảng cách lệch giữa trạng thái có và không có thông báo.
+  if (state.kind === "idle" && !hienTacVuNen && !hienDongHang) return null;
   return (
     <div style={{ display: "grid", gap: "var(--sp-2)" }}>
-      {/* Tác vụ nền: chỉ hiện khi KHÔNG đang hiển thị tiến độ của chính phiên này —
-          tránh nói cùng một việc hai lần. */}
-      {!running && tacVuNen && tacVuNen.soTacVu > 0 && (
+      {hienTacVuNen && tacVuNen && (
         <Alert tone="info">
           Đang có <strong>{tacVuNen.soTacVu}</strong> tác vụ đồng bộ xử lý nền (tháng{" "}
           <strong>{thangDangChayNen(tacVuNen)}</strong>). Chọn{" "}

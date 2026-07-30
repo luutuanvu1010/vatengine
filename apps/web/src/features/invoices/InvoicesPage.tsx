@@ -136,40 +136,41 @@ export function InvoicesPage() {
           tách bạch theo hợp đồng tương tác ui.md. Ghi chú dài → InfoTip (spec 2026-07-26). */}
       <Card style={{ marginBottom: "var(--sp-4)" }}>
         <SectionLabel>Tra cứu hóa đơn</SectionLabel>
-        <FilterBar
-          value={filter}
-          onApply={applyFilter}
-          hanhDongPhu={
-            /* Hàng hành động cạnh "Lọc dữ liệu": Đồng bộ (kéo nặng, vai quản trị) + Xuất
+        {/* Vùng chứa DỌC của thẻ: một `gap` duy nhất lo mọi khoảng cách giữa bộ lọc, khối
+            thông báo trạng thái đồng bộ và dòng ghi chú cuối thẻ — không margin lẻ cho từng
+            khối, nên khoảng cách không lệch khi khối giữa xuất hiện hay biến mất. */}
+        <div style={{ display: "grid", gap: "var(--sp-4)" }}>
+          <FilterBar
+            value={filter}
+            onApply={applyFilter}
+            hanhDongPhu={
+              /* Hàng hành động cạnh "Lọc dữ liệu": Đồng bộ (kéo nặng, vai quản trị) + Xuất
                (đọc nhẹ — tải dữ liệu ĐÃ có; InvoiceExportButtons tự ẩn theo canExport).
                Yêu cầu chủ dự án 2026-07-26: nút xuất đứng cạnh nút đồng bộ cho dễ thấy. */
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-2)" }}>
-              {nenHienPanelDongBo(filter, canSync) && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-1)" }}>
-                  <Button onClick={backfill.start} disabled={backfillRunning}>
-                    {backfillRunning ? "Đang đồng bộ…" : "Đồng bộ từ Tổng cục Thuế"}
-                  </Button>
-                </span>
-              )}
-              {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
-              <InvoiceExportButtons filter={filter} cols={cols} />
-              <BiSuaKyKhacBadge
-                filter={filter}
-                trongKy={soBiSuaTrongKy}
-                onChonKy={(tuNgay, denNgay) => applyFilter({ ...filter, tuNgay, denNgay })}
-              />
-            </span>
-          }
-        />
-        {nenHienPanelDongBo(filter, canSync) && <RangeSyncPanel backfill={backfill} />}
-        <div
-          style={{
-            marginTop: "var(--sp-4)",
-            fontSize: "var(--fs-xs)",
-            color: "var(--text-disabled)",
-          }}
-        >
-          Đã ghi nhớ bộ lọc gần nhất · Giờ hiển thị theo VN (UTC+7)
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-2)" }}>
+                {nenHienPanelDongBo(filter, canSync) && (
+                  <span
+                    style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-1)" }}
+                  >
+                    <Button onClick={backfill.start} disabled={backfillRunning}>
+                      {backfillRunning ? "Đang đồng bộ…" : "Đồng bộ từ Tổng cục Thuế"}
+                    </Button>
+                  </span>
+                )}
+                {canExp ? <ChonCotXuat value={cols} onChange={doiCols} /> : null}
+                <InvoiceExportButtons filter={filter} cols={cols} />
+                <BiSuaKyKhacBadge
+                  filter={filter}
+                  trongKy={soBiSuaTrongKy}
+                  onChonKy={(tuNgay, denNgay) => applyFilter({ ...filter, tuNgay, denNgay })}
+                />
+              </span>
+            }
+          />
+          {nenHienPanelDongBo(filter, canSync) && <RangeSyncPanel backfill={backfill} />}
+          <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-disabled)" }}>
+            Đã ghi nhớ bộ lọc gần nhất · Giờ hiển thị theo VN (UTC+7)
+          </div>
         </div>
       </Card>
 

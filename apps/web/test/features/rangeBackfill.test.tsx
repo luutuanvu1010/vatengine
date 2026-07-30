@@ -104,9 +104,7 @@ function panel(
   state: RangeBackfillState,
   over: Partial<Parameters<typeof RangeSyncPanel>[0]["backfill"]> = {},
 ) {
-  const start = vi.fn();
-  render(<RangeSyncPanel backfill={{ state, lineResult: null, start, ...over }} />);
-  return start;
+  return render(<RangeSyncPanel backfill={{ state, lineResult: null, start: vi.fn(), ...over }} />);
 }
 
 // Task 12 — nút "Đồng bộ từ Thuế" chuyển ra khỏi RangeSyncPanel (nay ở hàng nút của
@@ -117,6 +115,14 @@ describe("RangeSyncPanel — render từng trạng thái (thuần tiến độ +
     panel({ kind: "idle" });
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
+  });
+  // Khoảng cách TRÊN của khối thông báo do `gap` của vùng chứa dọc trong `InvoicesPage` lo
+  // (không margin lẻ). Điều đó chỉ đúng nếu panel KHÔNG render vùng chứa rỗng khi chẳng có
+  // gì để nói — một <div> rỗng vẫn tính là một ô lưới, sinh thêm một khoảng hở ảo và làm
+  // khoảng cách LỆCH giữa trạng thái "không tác vụ nền" và "có tác vụ nền".
+  it("idle + không tác vụ nền + không dòng hàng → KHÔNG render vùng chứa nào", () => {
+    const { container } = panel({ kind: "idle" });
+    expect(container.firstChild).toBeNull();
   });
   it("dang_lay → thanh tiến độ + X/N tháng + tháng hiện tại; KHÔNG có nút", () => {
     panel({ kind: "dang_lay", soXong: 1, tong: 3, thangHienTai: "2026-02" });
