@@ -26,10 +26,14 @@ export interface ViecCanXuLy {
   ma: string;
   /** Câu đủ nghĩa: sự việc — hệ quả nghiệp vụ. Luôn `--fs-base` ở tầng trình bày. */
   cau: string;
-  /** Nhãn nút: cụm động từ ngắn ≤ 40 ký tự, KHÔNG dấu chấm cuối (ui.md). */
-  nhanHanhDong: string;
+  /** Nhãn nút: cụm động từ ngắn ≤ 40 ký tự, KHÔNG dấu chấm cuối (ui.md).
+   *
+   * VẮNG cùng với `den` khi việc này KHÔNG thuộc quyền của vai đang đăng nhập. Chìa một nút
+   * dẫn tới trang mà người bấm chắc chắn ăn 403 còn tệ hơn là không có nút: nó biến một câu
+   * thông tin thành một lời hứa suông. Khi đó câu văn phải tự nói ai mới làm được việc ấy. */
+  nhanHanhDong?: string;
   /** Đích đến, kèm sẵn bộ lọc để bấm vào là thấy đúng tập hóa đơn. */
-  den: string;
+  den?: string;
   sacDo: SacDo;
   /** Nút chính (chỉ mục "chưa kết nối") — mọi mục khác là nút phụ. */
   chinh?: boolean;
@@ -70,6 +74,10 @@ export interface NguonViec {
   daKetNoi: boolean;
   /** Hóa đơn bị sửa nằm NGOÀI kỳ đang xem — nguồn duy nhất báo ca vắt kỳ. */
   soBiSuaKyKhac: number;
+  /** Vai đang đăng nhập có được quản lý tài khoản thuế không (`rbac.canManageTaxAccounts`).
+   * Vai `ke_toan` KHÔNG có quyền ⇒ mục "chưa kết nối" không được chìa nút dẫn sang trang mà
+   * họ chắc chắn bị chặn. */
+  coQuyenKetNoi: boolean;
   /** Bộ lọc kỳ, để gắn vào liên kết "Xem danh sách". */
   tuNgay?: string;
   denNgay?: string;
@@ -90,20 +98,30 @@ function lienKetBiSua(tuNgay?: string, denNgay?: string): string {
  * liệu".
  */
 export function viecCanXuLy(nguon: NguonViec): ViecCanXuLy[] {
-  const { byChieu, daKetNoi, soBiSuaKyKhac, tuNgay, denNgay } = nguon;
+  const { byChieu, daKetNoi, soBiSuaKyKhac, coQuyenKetNoi, tuNgay, denNgay } = nguon;
 
   // Chưa kết nối thì mọi con số đều vô nghĩa (cache có thể còn số liệu kỳ cũ). Trả đúng một
   // việc — kết nối — thay vì trộn thêm cảnh báo gây nhiễu.
   if (!daKetNoi) {
+    const cauChung =
+      "Chưa kết nối tới hệ thống Tổng cục Thuế — chưa thể truy xuất hóa đơn của kỳ này.";
     return [
-      {
-        ma: "chua_ket_noi",
-        cau: "Chưa kết nối tới hệ thống Tổng cục Thuế — chưa thể truy xuất hóa đơn của kỳ này.",
-        nhanHanhDong: "Kết nối tài khoản thuế",
-        den: "/tax-accounts",
-        sacDo: "canh_bao",
-        chinh: true,
-      },
+      coQuyenKetNoi
+        ? {
+            ma: "chua_ket_noi",
+            cau: cauChung,
+            nhanHanhDong: "Kết nối tài khoản thuế",
+            den: "/tax-accounts",
+            sacDo: "canh_bao",
+            chinh: true,
+          }
+        : {
+            // Vai `ke_toan` không được vào /tax-accounts. Không nút — câu văn tự nói ai làm
+            // được việc này, để người đọc biết phải nhờ ai thay vì bấm vào rồi ăn 403.
+            ma: "chua_ket_noi",
+            cau: `${cauChung} Vui lòng liên hệ kế toán trưởng để kết nối.`,
+            sacDo: "canh_bao",
+          },
     ];
   }
 

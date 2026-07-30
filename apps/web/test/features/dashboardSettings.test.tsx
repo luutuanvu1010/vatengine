@@ -64,19 +64,39 @@ function DashboardAs({ vaiTro }: { vaiTro: Role }) {
   return <DashboardPage />;
 }
 
-describe("Dashboard (U23-C) — tối giản: 1 dòng trạng thái kết nối, không số tiền", () => {
+describe("Dashboard — dòng trạng thái kết nối (U23-C) + lối tắt", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("(a) không hiển thị số tiền + KHÔNG gọi /invoices/summary hay /reconcile", async () => {
+  // ⚠️ CA NÀY ĐỔI CÓ CHỦ ĐÍCH — U41 (2026-07-30). Đọc trước khi sửa tiếp.
+  //
+  // Bản cũ khoá HAI thứ trong cùng một khối:
+  //   (1) "KHÔNG gọi /invoices/summary" — thuộc U23-C, NAY ĐÃ ĐỔI.
+  //   (2) "KHÔNG gọi /reconcile"        — thuộc quyết định ẩn trang Đối chiếu, VẪN CÒN HIỆU LỰC.
+  //
+  // Hai điều đó có nguồn gốc KHÁC HẲN nhau. Xoá cả cụm cho nhanh là cách hỏng dễ xảy ra
+  // nhất — test vẫn xanh và không ai biết Tổng quan đã lặng lẽ gọi lại /reconcile. Vì vậy (2)
+  // được TÁCH RA thành ca riêng bên dưới và giữ nguyên sức nặng.
+  //
+  // Vì sao (1) đổi: U23-C gỡ số liệu vì khi đó trang phơi thẻ tiền RỜI RẠC, không dẫn tới
+  // hành động nào — quyết định ấy đúng. U41 kế thừa chứ không đảo: số liệu quay lại CHỈ dưới
+  // dạng việc cần làm, mỗi con số kèm một hành động. Dòng trạng thái kết nối của U23-C giữ
+  // nguyên vai trò (các ca (b) bên dưới không đổi một chữ).
+  it("(a) KHÔNG gọi /reconcile — trang Đối chiếu đang ẩn có chủ đích", async () => {
     const spy = mockTaxAccounts([]);
     renderWithProviders(<DashboardPage />);
     await screen.findByText(/Chưa kết nối/);
     const called = spy.mock.calls.map((c) => String(c[0]));
-    expect(called.some((u) => u.includes("/invoices/summary"))).toBe(false);
     expect(called.some((u) => u.includes("/reconcile"))).toBe(false);
-    // Không còn chuỗi tiền rút gọn (tr/tỷ + " đ").
+  });
+
+  it("(a2) số liệu chỉ xuất hiện kèm hành động — không có thẻ tiền rút gọn đứng một mình", async () => {
+    mockTaxAccounts([]);
+    renderWithProviders(<DashboardPage />);
+    await screen.findByText(/Chưa kết nối/);
+    // Chuỗi tiền rút gọn kiểu "12,4 tr đ" của bản dashboard cũ đã bỏ hẳn: tiền nay viết đủ
+    // chữ số, phân nhóm nghìn, và luôn nằm trong một khối có ngữ cảnh.
     expect(screen.queryByText(/\btr đ\b|\btỷ đ\b/)).not.toBeInTheDocument();
   });
 
@@ -113,23 +133,33 @@ describe("Dashboard (U23-C) — tối giản: 1 dòng trạng thái kết nối,
     expect(screen.queryByText(/10\/01\/2999/)).not.toBeInTheDocument();
   });
 
-  it("(c) vai ke_toan: chỉ 'Xem hóa đơn'; ẩn 'Kết xuất' + 'Kết nối tài khoản thuế'", async () => {
+  // U41: nhãn lối tắt nay lấy từ NGUỒN ĐIỀU HƯỚNG DÙNG CHUNG (`lib/nav.ts`) thay vì chuỗi gõ
+  // rời trong trang — nên "Xem hóa đơn" thành "Danh sách hóa đơn", khớp đúng mục trên thanh
+  // bên. Ý đồ ca test không đổi: vai ke_toan thấy ÍT hơn.
+  it("(c) vai ke_toan: chỉ 'Danh sách hóa đơn'; ẩn 'Kết xuất' + 'Kết nối tài khoản thuế'", async () => {
     mockTaxAccounts([], "ke_toan");
     renderWithProviders(<DashboardAs vaiTro="ke_toan" />);
-    expect(await screen.findByText("Xem hóa đơn")).toBeInTheDocument();
-    expect(screen.queryByText("Kết xuất")).not.toBeInTheDocument();
-    expect(screen.queryByText("Kết nối tài khoản thuế")).not.toBeInTheDocument();
+    expect(await screen.findByText("Lối tắt")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Danh sách hóa đơn/ })).toBeInTheDocument();
+    expect(screen.queryByText("Kết xuất & Convert")).not.toBeInTheDocument();
+    // Vai này không có quyền quản lý tài khoản thuế ⇒ không lối tắt, và mục "chưa kết nối"
+    // trong khối Cần xử lý cũng KHÔNG được chìa nút dẫn sang trang họ sẽ bị chặn.
+    expect(screen.queryByRole("link", { name: "Kết nối tài khoản thuế" })).toBeNull();
+    expect(screen.getByText(/liên hệ kế toán trưởng/)).toBeInTheDocument();
   });
 
   // 2026-07-30: lối tắt "Kết xuất" ẩn theo cờ SHOW_EXPORTS ⇒ vai ke_toan_truong còn 2 lối tắt.
   // Ý đồ ca test KHÔNG đổi: vai này thấy NHIỀU HƠN ke_toan ở ca (c) — cụ thể là thấy thêm
   // "Kết nối tài khoản thuế". Sự vắng mặt của "Kết xuất" khoá ở exportsHidden.test.tsx.
-  it("(d) vai ke_toan_truong: hiện 2 lối tắt (Kết xuất đang ẩn theo cờ)", async () => {
+  it("(d) vai ke_toan_truong: thấy thêm 'Kết nối tài khoản thuế' (Kết xuất vẫn ẩn theo cờ)", async () => {
     mockTaxAccounts([], "ke_toan_truong");
     renderWithProviders(<DashboardAs vaiTro="ke_toan_truong" />);
-    expect(await screen.findByText("Xem hóa đơn")).toBeInTheDocument();
-    expect(screen.getByText("Kết nối tài khoản thuế")).toBeInTheDocument();
-    expect(screen.queryByText("Kết xuất")).not.toBeInTheDocument();
+    expect(await screen.findByText("Lối tắt")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Danh sách hóa đơn/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Kết nối tài khoản thuế" }).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByText("Kết xuất & Convert")).not.toBeInTheDocument();
   });
 });
 

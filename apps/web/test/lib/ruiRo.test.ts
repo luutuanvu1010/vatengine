@@ -19,7 +19,12 @@ const chieu = (over: Partial<ChieuSummary> & { chieu: string }): ChieuSummary =>
 });
 
 /** Không kết nối, không số liệu — nền để từng ca thêm đúng một tín hiệu. */
-const KHONG_GI = { byChieu: [] as ChieuSummary[], daKetNoi: true, soBiSuaKyKhac: 0 };
+const KHONG_GI = {
+  byChieu: [] as ChieuSummary[],
+  daKetNoi: true,
+  soBiSuaKyKhac: 0,
+  coQuyenKetNoi: true,
+};
 
 const ma = (ds: ReturnType<typeof viecCanXuLy>) => ds.map((v) => v.ma);
 
@@ -41,6 +46,7 @@ describe("viecCanXuLy — suy việc từ số liệu", () => {
       byChieu: [chieu({ chieu: "purchase", soLoaiKhoiTong: 9, soMaLa: 3 })],
       daKetNoi: false,
       soBiSuaKyKhac: 4,
+      coQuyenKetNoi: true,
     });
     expect(ma(ds)).toEqual(["chua_ket_noi"]);
   });
@@ -133,9 +139,20 @@ describe("viecCanXuLy — suy việc từ số liệu", () => {
       ],
       daKetNoi: true,
       soBiSuaKyKhac: 1,
+      coQuyenKetNoi: true,
     });
     expect(ma(ds)[0]).toBe("lech_thue_phai_nop");
     expect(ma(ds).at(-1)).toBe("ma_la");
+  });
+
+  // Vai `ke_toan` không được vào /tax-accounts. Chìa nút dẫn tới đó là hứa suông — bấm vào
+  // ăn 403. Bộ test cũ (auth + taxAccounts) đã bắt đúng lỗi này khi bản đầu bỏ sót.
+  it("chưa kết nối + KHÔNG có quyền ⇒ không nút, câu tự nói phải nhờ ai", () => {
+    const ds = viecCanXuLy({ ...KHONG_GI, daKetNoi: false, coQuyenKetNoi: false });
+    expect(ma(ds)).toEqual(["chua_ket_noi"]);
+    expect(ds[0]?.den).toBeUndefined();
+    expect(ds[0]?.nhanHanhDong).toBeUndefined();
+    expect(ds[0]?.cau).toMatch(/liên hệ kế toán trưởng/);
   });
 
   it("mỗi mục đều có đủ ba phần: câu, hành động, đích đến", () => {
@@ -143,14 +160,18 @@ describe("viecCanXuLy — suy việc từ số liệu", () => {
       byChieu: [chieu({ chieu: "purchase", soLoaiKhoiTong: 2, soMaLa: 1, soDuocDieuChinh: 1 })],
       daKetNoi: true,
       soBiSuaKyKhac: 2,
+      coQuyenKetNoi: true,
     });
     expect(ds.length).toBeGreaterThan(0);
     for (const v of ds) {
       expect(v.cau.length).toBeGreaterThan(10);
-      expect(v.nhanHanhDong.length).toBeGreaterThan(0);
-      expect(v.nhanHanhDong.length).toBeLessThanOrEqual(40); // ui.md: nhãn nút ≤ 40 ký tự
-      expect(v.nhanHanhDong).not.toMatch(/\.$/); // không dấu chấm cuối
-      expect(v.den).toMatch(/^\//);
+      // Mục KHÔNG có hành động là hợp lệ khi việc đó ngoài quyền của vai — khi ấy câu văn
+      // phải tự nói ai làm được (ca riêng bên dưới). Mục CÓ hành động thì phải đủ chuẩn.
+      if (v.nhanHanhDong) {
+        expect(v.nhanHanhDong.length).toBeLessThanOrEqual(40); // ui.md: nhãn nút ≤ 40 ký tự
+        expect(v.nhanHanhDong).not.toMatch(/\.$/); // không dấu chấm cuối
+        expect(v.den).toMatch(/^\//);
+      }
     }
   });
 });

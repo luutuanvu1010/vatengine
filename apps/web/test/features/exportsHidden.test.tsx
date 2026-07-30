@@ -55,9 +55,10 @@ describe("Trang Kết xuất & Convert (SHOW_EXPORTS tắt)", () => {
   it("Tổng quan KHÔNG còn lối tắt 'Kết xuất'", async () => {
     moPhienDaDangNhap();
     renderWithProviders(<AppRouter />, "/");
-    // Chờ lối tắt đầu tiên hiện — Dashboard còn ở trạng thái đang tải thì chưa lối tắt nào
-    // tồn tại, khẳng định lúc đó là xanh giả.
-    await screen.findByText("Xem hóa đơn");
-    expect(screen.queryByText("Kết xuất")).not.toBeInTheDocument();
+    // Chờ khối Lối tắt hiện — Dashboard còn đang tải thì chưa lối tắt nào tồn tại, khẳng
+    // định lúc đó là xanh giả. (U41: nhãn lối tắt nay lấy từ `lib/nav.ts` nên "Xem hóa đơn"
+    // đã thành "Danh sách hóa đơn"; chờ chính tiêu đề khối thì không phụ thuộc nhãn.)
+    await screen.findByText("Lối tắt");
+    expect(screen.queryByText("Kết xuất & Convert")).not.toBeInTheDocument();
   });
 });

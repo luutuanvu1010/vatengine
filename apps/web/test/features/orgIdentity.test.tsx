@@ -80,16 +80,25 @@ describe("U32 — OrgIdentity render từ hằng số", () => {
   });
 });
 
-describe("U32 — Tổng quan có khối giới thiệu", () => {
+// U41 (2026-07-30) — THÔNG TIN PHÁP NHÂN CHUYỂN CHỖ, không bị bỏ.
+//
+// Trước U41, `OrgIdentity` nằm ở cuối trang Tổng quan vì đó là nơi DUY NHẤT còn chỗ đặt.
+// Nay Footer bốn cột có mặt ở MỌI trang và đã mang đầy đủ pháp nhân (tên, mã số thuế, địa
+// chỉ, ghi chú hạ tầng) — giữ thêm một khối nữa ngay trên nó là nói hai lần trên cùng màn.
+//
+// Yêu cầu U32 KHÔNG bị nới lỏng: nội dung vẫn phải hiện cho người dùng, vẫn đọc từ một nguồn
+// `lib/orgInfo.ts`. Chỗ khoá nay là `footerNhieuCot.test.tsx` (gồm cả ca chống-bịa địa chỉ),
+// và `OrgIdentity` vẫn còn dùng ở trang Cài đặt (`features/settings/ThongTinSanPham.tsx`).
+describe("U32/U41 — pháp nhân không còn lặp ở Tổng quan", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("màn Tổng quan hiển thị khối pháp nhân", async () => {
+  it("Tổng quan KHÔNG lặp lại khối pháp nhân (đã có ở Footer mọi trang)", async () => {
     mockApi();
-    renderWithProviders(<DashboardPage />);
-    expect(await screen.findByText(new RegExp(ORG.congTy, "i"))).toBeTruthy();
-    expect(screen.getByText(/Cloudflare/i)).toBeTruthy();
+    const { container } = renderWithProviders(<DashboardPage />);
+    await screen.findByText("Lối tắt");
+    expect(container.textContent).not.toContain("dự án cộng đồng");
   });
 
   it("không phá các khối sẵn có của Tổng quan (lối tắt vẫn còn)", async () => {
