@@ -75,11 +75,10 @@ export function RangeSyncPanel({ backfill }: { backfill: RangeBackfill }) {
     <div style={{ display: "grid", gap: "var(--sp-2)" }}>
       {hienTacVuNen && tacVuNen && (
         <Alert tone="info">
-          Đang có <strong>{tacVuNen.soTacVu}</strong> tác vụ đồng bộ xử lý nền (tháng{" "}
-          <strong>{thangDangChayNen(tacVuNen)}</strong>). Chọn{" "}
-          <strong>Đồng bộ từ Tổng cục Thuế</strong> lúc này sẽ{" "}
-          <strong>không tạo phiên trùng</strong>: hệ thống tự ghép vào phiên đang chạy và dữ liệu sẽ
-          đầy dần.
+          Đang có <strong>{tacVuNen.soTacVu === 1 ? "một" : tacVuNen.soTacVu}</strong> tác vụ đồng
+          bộ chạy nền cho kỳ <strong>{thangDangChayNen(tacVuNen)}</strong>. Nếu chọn{" "}
+          <strong>Đồng bộ từ Tổng cục Thuế</strong> lúc này, hệ thống sẽ ghép vào phiên đang chạy
+          thay vì tạo phiên mới; dữ liệu tiếp tục được bổ sung dần.
         </Alert>
       )}
       {running && (
