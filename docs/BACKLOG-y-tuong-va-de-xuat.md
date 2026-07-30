@@ -985,6 +985,8 @@ Sau khi gỡ, `git worktree list` chỉ còn checkout chính; `git worktree prun
 
 **Chủ dự án, 2026-07-29.** Đã có đề xuất xoá 38–42 nhánh (kèm bằng chứng an toàn bên dưới); chủ dự án **bác đề xuất, quyết định giữ nguyên tất cả** để rà soát thật kỹ về sau. **Phiên sau không đề xuất xoá lại** khi chưa có việc rà soát nói trên — nhánh cũ không tốn gì ngoài chỗ trong danh sách, còn xoá nhầm thì không lấy lại được bằng công cụ thông thường.
 
+> **CẬP NHẬT 2026-07-30 — quyết định trên ĐÃ ĐƯỢC THAY THẾ.** Sau khi trả nợ mục (1) bằng phép đo nội dung (xem mục `[2026-07-30] Nợ nhánh, mục (1)` ở cuối tài liệu), chủ dự án chốt xoá **42 nhánh đã gộp**, giữ 7 nhánh chưa gộp, **chỉ dọn local — không chạm origin**. Đã thi hành, chi tiết ở mục `[2026-07-30] Đã dọn 42 nhánh local`. Giữ nguyên đoạn trên làm lịch sử quyết định, không xoá.
+
 ### Bằng chứng đã thu thập (đừng đo lại từ đầu)
 
 Đo 2026-07-29. Tiền đề đã tự kiểm: trục local **trùng khớp** trục remote — `feat/cloudflare-stack-u0` local và `origin/feat/cloudflare-stack-u0` cùng là `9ef0fdc`, `git rev-list --left-right --count` cho `0 0`. Nên "nằm trong trục" đồng thời là "đã có trên origin".
@@ -1080,3 +1082,29 @@ Nghiên cứu đầy đủ: **`docs/NGHIEN-CUU-bo-xuat-csv-2026-07-30.md`** (b�
 - Mục (2) `main` mồ côi (không có `origin/main`), mục (3) 3 con trỏ deploy nên chuyển thành tag, mục (5) hai stash treo, mục (6) chưa có quy ước đặt tên nhánh — **chưa làm gì**.
 - **Giới hạn của phép đo trên, nói thẳng:** `grep` cấp tính năng chứng minh *tính năng có mặt*, **không** chứng minh *từng dòng của commit gốc đều đã vào*. Muốn chắc tuyệt đối phải đọc `git diff` từng commit `+` — chưa làm, và với kết luận "đã vào trục dưới dạng khác" thì mức bằng chứng hiện tại là đủ để **xoá ref**, vì `git tag archive/<tên>` giữ được đường quay lại.
 - **Nguồn phát hiện:** Phiên Cowork 2026-07-30, chủ dự án yêu cầu "dọn nhánh" — nên phải qua cổng mục (1) trước.
+
+---
+
+## [2026-07-30] Đã dọn 42 nhánh local: 50 → 8. Origin KHÔNG chạm
+
+- **Quyết định chủ dự án, 2026-07-30:** xoá **42 nhánh đã gộp**, giữ **7 nhánh chưa gộp**, **chỉ local**. Thay thế quyết định "giữ toàn bộ" ngày 29/07 (đã ghi chú chéo tại mục đó).
+
+### Cách làm và bằng chứng
+
+1. **Điều kiện vào danh sách xoá — hai phép, phải đạt cả hai:** `git merge-base --is-ancestor <nhánh> feat/cloudflare-stack-u0` exit 0 **và** `git rev-list --count feat/cloudflare-stack-u0..<nhánh>` = 0. Đúng 42 nhánh đạt.
+2. **Tag lưu trữ TRƯỚC khi xoá:** `git tag archive/<tên-nhánh> <sha>` cho cả 42. Hậu kiểm từng cái (`git rev-parse archive/<tên>` so với sha nhánh) → **0 lệch**. Tag không bị `git gc` dọn như ref đã xoá, nên đường quay lại là `git branch <tên> archive/<tên>`.
+3. **Xoá bằng `git branch -d`, không dùng `-D`** — để chính git kiểm lại lần nữa thay vì tin danh sách của mình. 41/42 xoá gọn.
+4. **Đúng một nhánh bị git từ chối: `feat/u27-clean`.** Lý do: `-d` so nhánh với **upstream** của nó (`origin/feat/u27-clean`, đang `ahead 1, behind 4`), **không** so với trục. Đã kiểm ba lớp trước khi ép `-D`: tip nằm trong trục (`is-ancestor` exit 0, `rev-list` = 0); `archive/feat/u27-clean` giữ đúng tip `5410337`; nhánh trên origin còn nguyên ở `67449f1` vì phạm vi là local-only. Mất một trong ba lớp thì đã không xoá.
+5. **Hậu kiểm:** còn 8 nhánh; 42 tag `archive/*`; `git fsck` không có dòng lỗi nào ngoài dangling thường; trục vẫn khớp origin (`git rev-list --left-right --count` = `0 0`); **hai stash còn nguyên** — kể cả `stash@{1}` neo trên `claude/u22-backfill` vừa bị xoá, đúng như mục (5) đã ghi: xoá nhánh không xoá stash.
+
+### 8 nhánh còn lại
+
+Trục `feat/cloudflare-stack-u0` + 7 nhánh chưa gộp: `backup/hb6-before-rebase-20260720`, `backup/u17b-before-rebase-20260720`, `claude/u23-unit-execution-59b6aa`, `feat/doi-mst-cong-admin`, `feat/u27-web-loc-ketxuat-dongbo`, `feat/u34-lat3-dat-mat-khau`, `wip/line-view-snapshot-20260717`. Giữ dù mục (1) đã kết luận nội dung chúng nằm trong trục — chủ dự án chọn mức bảo thủ.
+
+### Còn nợ sau lượt dọn này
+
+- **42 tag `archive/*` chỉ có ở máy này** (`git push --tags` **chưa chạy**). Máy này mất ⇒ mất lưới an toàn, dù nội dung 42 nhánh vẫn nằm trong trục nên không mất *việc*. Cần quyết: đẩy tag lên origin, hay chấp nhận.
+- **`main` local đã bị xoá** (nó nằm trong nhóm 42, `archive/main` @ `e598ac8` giữ lại). Mục (2) — tên `main` gây hiểu nhầm "main là trục" — nay tự hết ở local, nhưng **`origin/main` vốn không tồn tại** nên gốc vấn đề vẫn còn: trục thật là `feat/cloudflare-stack-u0` mà chưa ghi rõ ở `README`/`CHEATSHEET`. Chưa làm.
+- **Mục (3) con trỏ deploy:** `deploy/u17b`, `trunk-check`, `trunk-deploy` đã xoá cùng nhóm 42 và giữ ở `archive/*` — nhưng **chưa** chuyển thành tag `deploy/<ngày>` có quy ước như mục (3) đề xuất. Dấu mốc "lần đó deploy cái gì" hiện chỉ còn dạng `archive/*`, tên không nói lên ngày deploy.
+- **Mục (5) stash và mục (6) quy ước đặt tên nhánh:** chưa làm gì.
+- **Nguồn phát hiện:** Phiên Cowork 2026-07-30, chủ dự án yêu cầu "dọn nhánh"; phạm vi do chủ dự án chọn sau khi được trình 4 phương án.
