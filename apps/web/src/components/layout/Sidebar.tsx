@@ -1,37 +1,10 @@
 import { NavLink } from "react-router-dom";
-import { SHOW_EXPORTS, SHOW_RECONCILE } from "../../lib/featureFlags";
-import { vi } from "../../lib/i18n/vi";
-import { canExport, canManageTaxAccounts } from "../../lib/rbac";
+// U41 — danh sách mục điều hướng KHÔNG còn khai ở đây. Nguồn duy nhất: `lib/nav.ts`, dùng
+// chung với Footer bốn cột và khối "Lối tắt" ở Tổng quan. Kỷ luật cũ giữ nguyên: cờ tính năng
+// lọc ở tầng danh sách, RBAC (`visible`) lọc ở tầng vai — xem đầu `lib/nav.ts`.
+import { NAV_CHINH, NAV_HE_THONG, type NavItem, navHienThi } from "../../lib/nav";
 import type { Role } from "../../types/api";
 import { Brand } from "../Brand";
-
-interface NavItem {
-  to: string;
-  label: string;
-  /** Guard hiển thị theo vai (undefined = mọi vai). Phản chiếu RBAC server (BINDING_MAP §6). */
-  visible?: (role: Role) => boolean;
-  end?: boolean;
-}
-
-const MAIN: NavItem[] = [
-  { to: "/", label: vi.navDashboard, end: true },
-  { to: "/invoices", label: vi.navInvoices },
-  // Cờ tính năng, KHÔNG dùng `visible` — `visible` dành riêng cho RBAC theo vai; trộn hai
-  // thứ khác bản chất vào một chỗ sẽ làm mờ ý nghĩa của cả hai.
-  ...(SHOW_RECONCILE ? [{ to: "/reconcile", label: vi.navReconcile }] : []),
-  { to: "/lien-ket", label: vi.navLienKet },
-  // Cùng lý do như /reconcile: cờ tính năng lọc ở tầng danh sách, RBAC (`visible`) lọc ở tầng
-  // vai. Mục này cần CẢ HAI — tắt cờ ⇒ không ai thấy; bật cờ ⇒ chỉ vai được kết xuất thấy.
-  ...(SHOW_EXPORTS
-    ? [{ to: "/exports", label: vi.navExports, visible: canExport } satisfies NavItem]
-    : []),
-  { to: "/tax-accounts", label: vi.navTaxAccounts, visible: canManageTaxAccounts },
-];
-
-const SYSTEM: NavItem[] = [
-  { to: "/settings", label: vi.navSettings },
-  { to: "/gioi-thieu", label: vi.navAbout },
-];
 
 function NavGroup({
   title,
@@ -40,12 +13,12 @@ function NavGroup({
   onNavigate,
 }: {
   title: string;
-  items: NavItem[];
+  items: readonly NavItem[];
   role: Role;
   /** Gọi khi bấm một mục — dùng để đóng drawer trên mobile. */
   onNavigate?: () => void;
 }) {
-  const shown = items.filter((it) => !it.visible || it.visible(role));
+  const shown = navHienThi(items, role);
   if (shown.length === 0) return null;
   return (
     <div style={{ display: "grid", gap: "var(--sp-1)" }}>
@@ -115,8 +88,8 @@ export function Sidebar({
       <div style={{ padding: "var(--sp-2) var(--sp-3) var(--sp-3)" }}>
         <Brand />
       </div>
-      <NavGroup title="Chính" items={MAIN} role={role} onNavigate={onNavigate} />
-      <NavGroup title="Hệ thống" items={SYSTEM} role={role} onNavigate={onNavigate} />
+      <NavGroup title="Chính" items={NAV_CHINH} role={role} onNavigate={onNavigate} />
+      <NavGroup title="Hệ thống" items={NAV_HE_THONG} role={role} onNavigate={onNavigate} />
     </nav>
   );
 }
