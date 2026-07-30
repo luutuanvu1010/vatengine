@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { labelOf } from "@vat/domain";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../../components/layout/PageHeader";
 import {
   Badge,
@@ -17,6 +18,7 @@ import {
 import { api } from "../../lib/apiClient";
 import { loadExportCols, saveExportCols } from "../../lib/exportColsStore";
 import { loadInvoiceFilter, saveInvoiceFilter } from "../../lib/filterStore";
+import { filterTuUrl } from "../../lib/filterTuUrl";
 import { formatMoney } from "../../lib/format";
 import { monthRangeOf, vnYearMonth } from "../../lib/period";
 import { canExport, canManageTaxAccounts } from "../../lib/rbac";
@@ -75,9 +77,16 @@ export function InvoicesPage() {
   // U-K4 (yêu cầu 2) — mở màn LUÔN mặc định tháng hiện tại: giữ nguồn/MST đã lưu, GHI ĐÈ kỳ =
   // tháng này. Chiều MẶC ĐỊNH = Mua vào (bỏ "Tất cả"): giữ chiều đã lưu nếu có, chưa có → Mua
   // vào (chủ dự án 2026-07-23). filterStore đã bỏ nhớ tuNgay/denNgay nên kỳ cũ không lọt vào.
+  //
+  // U41 — tham số URL ĐÈ LÊN mặc định trên, chỉ ở lượt khởi tạo. Nhờ đó nút "Xem danh sách"
+  // ở khối "Cần xử lý" của Tổng quan mở đúng tập hóa đơn thay vì đổ về danh sách không lọc.
+  // Không có tham số nào ⇒ `filterTuUrl` trả nguyên bộ lọc mặc định, tức hành vi cũ không
+  // đổi một chút nào cho mọi lần mở trang bình thường.
+  const [urlParams] = useSearchParams();
   const [filter, setFilter] = useState<InvoiceFilter>(() => {
     const daLuu = loadInvoiceFilter();
-    return { ...daLuu, chieu: daLuu.chieu ?? "purchase", ...kyThangHienTai() };
+    const macDinh = { ...daLuu, chieu: daLuu.chieu ?? "purchase", ...kyThangHienTai() };
+    return filterTuUrl(urlParams, macDinh);
   });
 
   // 2026-07-23 (chủ dự án) — Danh sách hóa đơn KHÔNG còn hiện bảng: chỉ SỐ ĐẾM + nút
