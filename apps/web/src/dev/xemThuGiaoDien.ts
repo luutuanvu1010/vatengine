@@ -152,6 +152,11 @@ const TONG_HOP: InvoiceSummary = {
       tcthueDaLoai: "45000000",
       thueDaLoai: "3600000",
       ttbsoDaLoai: "48600000",
+      // U41 — hai trường dưới thêm để chế độ XEM THỬ dựng đủ BỐN sắc độ của khối "Cần xử
+      // lý" (nghiêm trọng / cảnh báo / info / trung tính). Không có chúng thì soi bằng mắt
+      // chỉ thấy hai màu, và cái cần chốt nhất — màu nào nặng hơn màu nào — lại không hiện.
+      soDuocDieuChinh: 3,
+      soMaLa: 2,
     },
     {
       chieu: "purchase",
