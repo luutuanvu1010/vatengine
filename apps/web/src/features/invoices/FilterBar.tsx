@@ -9,7 +9,7 @@
 import { INVOICE_FIELDS } from "@vat/domain";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { Button, Field, SegmentedControl, Select } from "../../components/ui/primitives";
+import { Button, DateField, Field, SegmentedControl, Select } from "../../components/ui/primitives";
 import type { DateRange } from "../../lib/period";
 import type { Chieu, InvoiceFilter, Nguon } from "../../types/api";
 import { ChonKhachHang } from "./ChonKhachHang";
@@ -75,19 +75,21 @@ export function FilterBar({
       <div style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap", alignItems: "end" }}>
         {/* Nhóm khoảng ngày */}
         <div style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap", alignItems: "end" }}>
-          <Field
+          {/* 2026-07-30: DateField (dd/mm/yyyy đồng nhất mọi thiết bị) thay input type="date"
+              gốc — cái sau hiển thị theo locale hệ điều hành nên mỗi máy một kiểu 01/07 vs
+              07/01, và trên trình duyệt không hỗ trợ đẩy chuỗi dd/mm/yyyy thô lên API → 400.
+              Giá trị trong nháp/bộ lọc vẫn là ISO YYYY-MM-DD (hợp đồng filters.ts). */}
+          <DateField
             label="Từ ngày"
-            type="date"
             co="md"
-            value={draft.tuNgay ?? ""}
-            onChange={(e) => set({ tuNgay: e.target.value || undefined })}
+            value={draft.tuNgay}
+            onChangeIso={(iso) => set({ tuNgay: iso })}
           />
-          <Field
+          <DateField
             label="Đến ngày"
-            type="date"
             co="md"
-            value={draft.denNgay ?? ""}
-            onChange={(e) => set({ denNgay: e.target.value || undefined })}
+            value={draft.denNgay}
+            onChangeIso={(iso) => set({ denNgay: iso })}
           />
         </div>
 

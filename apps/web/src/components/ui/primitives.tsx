@@ -7,6 +7,7 @@ import type {
   SelectHTMLAttributes,
 } from "react";
 import { useEffect, useId, useRef, useState } from "react";
+import { dmyToIso, isoToDmy } from "../../lib/dateVn";
 import { vi } from "../../lib/i18n/vi";
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
@@ -151,6 +152,67 @@ export function Field({ label, hideLabel, co, id, ...rest }: FieldProps) {
         {label}
       </label>
       <input id={inputId} {...rest} style={oNhapVoiCo(co)} />
+    </span>
+  );
+}
+
+interface DateFieldProps {
+  label: string;
+  /** Ẩn nhãn về mặt thị giác (vẫn đọc được cho trình đọc màn hình). */
+  hideLabel?: boolean;
+  /** Cỡ bề rộng tối thiểu (sm/md/lg) — bật hành vi wrap gọn trong thanh lọc. */
+  co?: CoO;
+  /** Giá trị ISO YYYY-MM-DD (hợp đồng API) — hiển thị ra dd/mm/yyyy. */
+  value?: string;
+  /** Phát ISO khi người dùng gõ đủ ngày hợp lệ; xóa rỗng → undefined. */
+  onChangeIso: (iso: string | undefined) => void;
+}
+
+/**
+ * Ô nhập ngày hiển thị ĐỒNG NHẤT dd/mm/yyyy trên mọi thiết bị (2026-07-30). KHÔNG dùng
+ * `<input type="date">` gốc: nó hiển thị theo locale HỆ ĐIỀU HÀNH (máy này 01/07/2026,
+ * máy khác 07/01/2026 — không ép được), và trình duyệt không hỗ trợ rơi về ô chữ tự do
+ * đẩy chuỗi dd/mm/yyyy thẳng lên API (Zod YYYY-MM-DD từ chối → truy vấn 400).
+ * Giao tiếp với ngoài LUÔN bằng ISO; đổi chiều qua `lib/dateVn.ts` (thuần chuỗi, không
+ * qua Date parsing). Đang gõ dở → không phát; rời ô khi chuỗi không hợp lệ → trả về
+ * hiển thị của giá trị đang áp (không âm thầm giữ chuỗi hỏng).
+ */
+export function DateField({ label, hideLabel, co, value, onChangeIso }: DateFieldProps) {
+  const inputId = useId();
+  const [text, setText] = useState(() => isoToDmy(value));
+  // Đồng bộ khi value đổi TỪ NGOÀI (vd ChonKy điền kỳ nhanh) — pattern derived-state của
+  // React: so sánh trong render, không effect.
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(isoToDmy(value));
+  }
+  return (
+    <span style={boc(co)}>
+      <label htmlFor={inputId} style={hideLabel ? srOnly : nhanCss}>
+        {label}
+      </label>
+      <input
+        id={inputId}
+        type="text"
+        inputMode="numeric"
+        placeholder="dd/mm/yyyy"
+        value={text}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setText(raw);
+          if (raw.trim() === "") {
+            onChangeIso(undefined);
+            return;
+          }
+          const iso = dmyToIso(raw);
+          if (iso) onChangeIso(iso);
+        }}
+        onBlur={() => {
+          if (text.trim() !== "" && !dmyToIso(text)) setText(isoToDmy(value));
+        }}
+        style={oNhapVoiCo(co)}
+      />
     </span>
   );
 }
