@@ -1,0 +1,5 @@
+# HANDOFF U41 — Tổng quan & Footer (2026-07-30)
+
+1. **Trạng thái:** 5 commit U41 (`eeb5ee0`→`2e9a8f8`) **chưa đẩy**, nhánh `feat/cloudflare-stack-u0` ahead 5; `528/528` test xanh, `make lint` exit 0; **chưa deploy**.
+2. **Việc tiếp:** soi bằng mắt `npm run dev -w apps/web` → `http://localhost:5174/?xem-thu=1` (KHÔNG dùng `npm run dev` ở gốc — nó chạy apps/api và đòi Postgres), đối chiếu với `docs/design/claude-design/dac-ta-tong-quan-va-footer.md` + 8 ảnh mockup cùng thư mục (⚠️ **đặc tả đang UNTRACKED — commit trước khi làm gì khác kẻo mất**); chốt 3 điểm chờ duyệt: thứ tự khối, bốn sắc độ khối "Cần xử lý", cỡ tiêu đề cột Footer (`--fs-lg` 22px); rồi mới push + deploy (thứ tự DB→worker→api→web).
+3. **Bẫy đã biết:** địa chỉ pháp nhân trong mockup là **BỊA** ("Trần Phú/Vĩnh Nguyên" — thật là `lib/orgInfo.ts`, có ca kiểm chặn); mockup còn vẽ "Kết xuất & Convert" dù `SHOW_EXPORTS=false` — cờ nay lọc tại `lib/nav.ts` nên đừng thêm tay ở Footer/Lối tắt; `?xem-thu=1` **chưa chặn `/goi-chia-se`** (lọt ra API thật, `ECONNREFUSED`) — chưa sửa; và một phiên khác đang commit song song trên cùng nhánh (`cea322b`, `becdd68`).

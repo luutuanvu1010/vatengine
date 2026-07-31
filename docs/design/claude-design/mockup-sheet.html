@@ -1,0 +1,70 @@
+<!-- @dsCard group="VAT Engine Web App" viewport="1400x1200" name="Mockup — Tổng quan & Footer" subtitle="Sáu khung xuất ảnh: 4 trạng thái Tổng quan, Footer 4 cột, bản hẹp 390px" -->
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">
+<title>VAT Engine — Mockup Tổng quan &amp; Footer</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+html,body{margin:0;background:#e9eaec}
+.sheet{display:grid;gap:56px;padding:40px}
+.frame{background:var(--surface-card);box-shadow:var(--shadow-lg);border-radius:var(--radius-lg);overflow:hidden}
+.cap{font-family:var(--font-sans);font-size:var(--fs-base);font-weight:var(--fw-semibold);color:var(--text-secondary);margin:0 0 12px}
+.cap em{font-style:normal;font-weight:var(--fw-regular);color:var(--text-tertiary)}
+.w1280{width:1280px}
+.w390{width:390px}
+.row{display:flex;gap:40px;align-items:flex-start}
+.crop{height:860px;overflow:hidden}
+</style></head>
+<body><div id="root"></div>
+<script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../_ds_bundle.js"></script>
+<script type="text/babel" src="../ui_kits/web_app/data.jsx"></script>
+<script type="text/babel" src="../ui_kits/web_app/dashboard-data.jsx"></script>
+<script type="text/babel" src="../ui_kits/web_app/Footer.jsx"></script>
+<script type="text/babel" src="../ui_kits/web_app/AppShell.jsx"></script>
+<script type="text/babel" src="../ui_kits/web_app/DashboardScreen.jsx"></script>
+<script type="text/babel">
+function Shot({ id, cap, note, w = "w1280", children }) {
+  return (
+    <figure style={{ margin: 0 }}>
+      <p className="cap">{cap} {note && <em>· {note}</em>}</p>
+      <div className={"frame " + w} id={id}>{children}</div>
+    </figure>
+  );
+}
+function Frame({ state, narrow }) {
+  return (
+    <window.AppShell role="ke_toan_truong" onRole={() => {}} current="overview" onNav={() => {}} narrow={narrow}>
+      <window.DashboardScreen state={state} role="ke_toan_truong" narrow={narrow} onNav={() => {}} onRetry={() => {}} />
+    </window.AppShell>
+  );
+}
+function Sheet() {
+  return (
+    <div className="sheet">
+      <Shot id="shot-ranh" cap="Tổng quan — rảnh" note="có cảnh báo, 5 việc cần xử lý"><Frame state="ready" /></Shot>
+      <Shot id="shot-khong-canh-bao" cap="Tổng quan — không có cảnh báo" note="trạng thái trấn an"><Frame state="clear" /></Shot>
+      <Shot id="shot-rong" cap="Tổng quan — rỗng" note="chưa kết nối tài khoản thuế, khách mới"><Frame state="empty" /></Shot>
+      <Shot id="shot-dang-tai" cap="Tổng quan — đang tải"><Frame state="loading" /></Shot>
+      <Shot id="shot-loi" cap="Tổng quan — lỗi"><Frame state="error" /></Shot>
+      <Shot id="shot-footer" cap="Footer — 4 cột" note="mọi trang sau đăng nhập">
+        <window.Footer role="ke_toan_truong" onNav={() => {}} />
+      </Shot>
+      <Shot id="shot-footer-login" cap="Footer — màn Đăng nhập" note="ẩn cột Sản phẩm">
+        <window.Footer role="ke_toan_truong" showProduct={false} onNav={() => {}} />
+      </Shot>
+      <div className="row">
+        <Shot id="shot-hep-ranh-crop" cap="Bản hẹp 390px" note="rảnh · cắt tại khối Cần xử lý" w="w390 crop"><Frame state="ready" narrow /></Shot>
+        <Shot id="shot-hep-rong-crop" cap="Bản hẹp 390px" note="rỗng · cắt tại khối Cần xử lý" w="w390 crop"><Frame state="empty" narrow /></Shot>
+      </div>
+      <div className="row">
+        <Shot id="shot-hep-ranh" cap="Bản hẹp 390px" note="rảnh · toàn trang" w="w390"><Frame state="ready" narrow /></Shot>
+        <Shot id="shot-hep-rong" cap="Bản hẹp 390px" note="rỗng · toàn trang" w="w390"><Frame state="empty" narrow /></Shot>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Sheet />);
+</script>
+</body></html>
