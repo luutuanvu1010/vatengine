@@ -1,5 +1,38 @@
 # HANDOFF U41 — Tổng quan & Footer
 
+## Kết phiên 2026-07-31 (lượt 2) — U41 ĐẠT DoD, còn một phép đo cần người
+
+Phiên này chỉ làm nốt ba việc còn nợ ở mục "Việc còn nợ" bên dưới. Không đụng production.
+
+1. **Review chéo `dod-auditor`: ĐẠT.** Xác minh trên HEAD `1a91453`: `make lint` EXIT=0,
+   `make test` EXIT=0, **0** dòng `Errors`, coverage `apps/web` 93,67% (file mới của U41 —
+   `ruiRo.ts`, `filterTuUrl.ts`, `Footer.tsx` — đều 100%). Không phát hiện mức Nghiêm trọng.
+   Auditor chấm KHÔNG ĐẠT tại `570516f` do ca test chập chờn, nhưng phiên khác đã sửa ở
+   `1a91453` **trong lúc review đang chạy**; phán quyết lật lại sau khi chạy lại `make test`
+   trên HEAD, **không** tin theo thông điệp commit.
+2. **Vá `/goi-chia-se` — commit `2ca5d50`, CHƯA push.** TDD thật: test đỏ trước (cả hai ca ghi
+   nhận lọt ra `fetch` thật) rồi mới vá. Hợp đồng phản hồi lấy từ
+   `apps/api/src/routes/goiChiaSe.ts:301`, không bịa hình dạng. Đính chính mô tả cũ ở mục
+   "Việc còn nợ": **chỉ `LienKetPage.tsx:165` thực sự lộ** (gọi lúc mount);
+   `TaiHoaDonGoc.tsx` KHÔNG lộ vì POST bị chặn giả trả `{ok:true}` ⇒ `goiId` = `undefined` ⇒
+   query GET không kích hoạt. **Không cần deploy** — `import.meta.env.DEV` loại hẳn khỏi bundle.
+3. **Đo Tổng quan trên production: MỚI XONG MỘT NỬA.** Đo được (2026-07-31, `curl` từ máy
+   chủ dự án): `/api/invoices/summary` trả 401 có TTFB ~0,38 s (0,23–0,92), **bằng** HTML tĩnh
+   cùng origin ~0,38 s (0,33–0,41) ⇒ **chặng Worker không cộng thêm độ trễ đo được**; ~0,35 s
+   đó là mạng tới edge. Bundle đang chạy xác nhận đúng `index-CgTVusCH.js`.
+   ⚠️ **CHƯA KIỂM CHỨNG:** tổng ~0,4 s nóng / ~0,75 s nguội là **suy ra** (401 dừng ở tầng xác
+   thực, chưa chạm Hyperdrive). **Việc còn lại cho người:** đăng nhập → DevTools → Network →
+   đọc thời gian thật của `invoices/summary`. Nếu chậm, gỡ khối "Chỉ số đã đo được" là đủ.
+   *(Không tự động hoá được ở phiên này: extension trình duyệt hỏng — `example.com` cũng lỗi
+   `Script injection timed out` y hệt, tức lỗi công cụ đo, KHÔNG phải trang treo.)*
+
+**Bài học thứ tư của U41 — cùng một bệnh, lần thứ 4.** Neo `findBy…` vào thứ **hiện ngay**
+(tiêu đề tĩnh, khung `data-testid`) rồi khẳng định **đồng bộ** về thứ phải chờ dữ liệu. Máy dev
+nhanh nên xanh, runner CI chậm nên đỏ. Nguy hơn cả việc đỏ: khi component chưa render thì mọi
+`queryBy…toBeNull()` trong ca đó **xanh giả**. Đã quét sạch `apps/web/test`; chỗ duy nhất còn
+`findByTestId` là `biSuaKyKhacBadge.test.tsx:57` và ca đó neo **đúng** (`so-chua-doc` chỉ render
+khi số > 0).
+
 ## Kết phiên 2026-07-31 — ĐÃ LÊN PRODUCTION
 
 1. **Trạng thái:** 11 commit (`eeb5ee0`→`945148c`) đã đẩy, **CI xanh**; **`vat-web` đã deploy hai lượt** — `f54c0e42` (mã U41, bundle `index-D69GxB-7.js`) rồi `22fe994a` (**bản đang chạy**, thêm changelog v2.4, bundle `index-CgTVusCH.js`) trên `vatengine.tourdao.vn`. Không đụng DB / sync-worker / api (thuần frontend, **không migration** ⇒ quay lui = deploy lại bản `vat-web` trước đó).
