@@ -300,8 +300,18 @@ export function DashboardPage() {
       <Card>
         <SectionTitle>Chỉ số đã đo được</SectionTitle>
         <div style={luoi}>
+          {/* `?.` XUYÊN SUỐT, không dùng phép kiểm truthy rồi truy cập sâu.
+              Bản đầu viết `moiKy.data ? … moiKy.data.total.count : "—"` và NÉM khi phản hồi
+              có hình dạng khác (`.total` undefined) — ngoại lệ trong lúc render làm React
+              tháo cả cây, người dùng thấy MÀN TRẮNG. Đúng ca mà chú thích U36 ở `types/api.ts`
+              đã cảnh báo: `queryKey` không đổi sau deploy nên một tab đang mở vẫn giữ dữ liệu
+              shape CŨ trong cache tới lần refetch kế. Chưa biết thì hiện "—". */}
           <Stat
-            value={moiKy.data ? formatMoney(String(moiKy.data.total.count)) : "—"}
+            value={
+              moiKy.data?.total?.count === undefined
+                ? "—"
+                : formatMoney(String(moiKy.data.total.count))
+            }
             label="hóa đơn đã truy xuất và lưu trữ (mọi kỳ)"
           />
           <Stat value={dangTai ? "—" : ds.length} label="việc cần xử lý trong kỳ này" />

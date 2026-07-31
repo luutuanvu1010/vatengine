@@ -171,6 +171,37 @@ describe("Tổng quan — số liệu và chỉ số", () => {
     expect(await screen.findByText("18.462")).toBeInTheDocument();
   });
 
+  // CHỐNG HỒI QUY — lỗi thật, CI bắt được ngày 2026-07-31.
+  //
+  // Bản đầu viết `moiKy.data ? … moiKy.data.total.count : "—"`: chỉ kiểm truthy rồi truy cập
+  // sâu. Phản hồi có hình dạng khác (`.total` undefined) ⇒ NÉM ngay trong lúc render ⇒ React
+  // tháo cả cây ⇒ MÀN TRẮNG. Đây đúng ca mà chú thích U36 ở `types/api.ts` đã cảnh báo:
+  // `queryKey` không đổi sau deploy nên tab đang mở vẫn giữ dữ liệu shape CŨ trong cache.
+  //
+  // Đáng chú ý: 528 test khi đó vẫn "xanh" — lỗi rơi vào mục `Errors` của Vitest chứ không
+  // vào assertion nào. Chỉ mã thoát khác 0 mới lộ ra.
+  //
+  // ⚠️ 2026-07-31 — BẢN ĐẦU CỦA CHÍNH CA NÀY CŨNG XANH GIẢ, phải sửa lại. Nó chờ
+  // `findByText("Chỉ số đã đo được")` rồi khẳng định `textContent` có "—". Cả hai đều ĐÚNG
+  // NGAY LÚC CÒN ĐANG TẢI: tiêu đề khối là chữ tĩnh, và "—" chính là giá trị lúc chưa có dữ
+  // liệu. Ca kết thúc trước khi payload dị dạng kịp về ⇒ nó không hề chạm tới dòng nó định
+  // canh. Muốn khoá được lỗi thì phải chờ TRẠNG THÁI CUỐI, tức chờ chính payload ấy vào cây.
+  it("phản hồi tóm tắt sai hình dạng ⇒ hiện '—', KHÔNG ném và KHÔNG làm trắng màn", async () => {
+    // `[]` là truthy nhưng không có `.total` — đúng thứ đã làm vỡ bản đầu.
+    mock({ tomTatMoiKy: [] as unknown });
+    const { container } = ve();
+    // Mốc chờ = khối "Cần xử lý" đã tải xong (cần /tax-accounts + /invoices/summary của kỳ).
+    // Ba lời gọi cùng phát lúc gắn cây, nên tới đây lời gọi "mọi kỳ" cũng đã về và đã render.
+    expect(await screen.findByText(/không có việc nào cần xử lý/i)).toBeInTheDocument();
+    // Trang vẫn dựng đủ, không phải cây rỗng.
+    expect(screen.getByRole("heading", { level: 1, name: "Tổng quan" })).toBeInTheDocument();
+    expect(screen.getByText("Chỉ số đã đo được")).toBeInTheDocument();
+    // Ô số suy biến về "—" — KHÔNG được là "undefined" lọt ra màn.
+    const nhan = screen.getByText("hóa đơn đã truy xuất và lưu trữ (mọi kỳ)");
+    expect(nhan.parentElement?.textContent).toContain("—");
+    expect(container.textContent).not.toMatch(/undefined/i);
+  });
+
   // Không quy đổi ra giờ/tiền tiết kiệm — số suy đoán trình bày như sự thật là vi phạm
   // nguyên tắc bằng chứng của Hiến pháp.
   it("KHÔNG có chỉ số quy đổi kiểu 'tiết kiệm ~N giờ'", async () => {

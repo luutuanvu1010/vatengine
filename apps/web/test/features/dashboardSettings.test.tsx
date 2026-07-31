@@ -139,13 +139,22 @@ describe("Dashboard — dòng trạng thái kết nối (U23-C) + lối tắt", 
   it("(c) vai ke_toan: chỉ 'Danh sách hóa đơn'; ẩn 'Kết xuất' + 'Kết nối tài khoản thuế'", async () => {
     mockTaxAccounts([], "ke_toan");
     renderWithProviders(<DashboardAs vaiTro="ke_toan" />);
-    expect(await screen.findByText("Lối tắt")).toBeInTheDocument();
+    // CHỜ ĐÚNG THỨ ĐANG KIỂM, không chờ một mốc tiện tay.
+    //
+    // Bản đầu chờ chữ "Lối tắt" rồi khẳng định đồng bộ — CI đỏ (2026-07-31). "Lối tắt" hiện
+    // NGAY vì nó không phụ thuộc dữ liệu, trong khi khối "Cần xử lý" còn đang tải. Máy dev
+    // nhanh nên kịp, runner CI chậm hơn nên trượt.
+    //
+    // Nguy hơn cả việc đỏ: mọi khẳng định `queryBy…toBeNull()` bên dưới đều XANH GIẢ trong
+    // lúc còn đang tải — chưa render thì đương nhiên không tìm thấy. Chờ đúng câu văn của
+    // trạng thái cuối mới làm chúng có sức nặng thật.
+    expect(await screen.findByText(/liên hệ kế toán trưởng/)).toBeInTheDocument();
+    expect(screen.getByText("Lối tắt")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Danh sách hóa đơn/ })).toBeInTheDocument();
     expect(screen.queryByText("Kết xuất & Convert")).not.toBeInTheDocument();
     // Vai này không có quyền quản lý tài khoản thuế ⇒ không lối tắt, và mục "chưa kết nối"
     // trong khối Cần xử lý cũng KHÔNG được chìa nút dẫn sang trang họ sẽ bị chặn.
     expect(screen.queryByRole("link", { name: "Kết nối tài khoản thuế" })).toBeNull();
-    expect(screen.getByText(/liên hệ kế toán trưởng/)).toBeInTheDocument();
   });
 
   // 2026-07-30: lối tắt "Kết xuất" ẩn theo cờ SHOW_EXPORTS ⇒ vai ke_toan_truong còn 2 lối tắt.
@@ -154,11 +163,14 @@ describe("Dashboard — dòng trạng thái kết nối (U23-C) + lối tắt", 
   it("(d) vai ke_toan_truong: thấy thêm 'Kết nối tài khoản thuế' (Kết xuất vẫn ẩn theo cờ)", async () => {
     mockTaxAccounts([], "ke_toan_truong");
     renderWithProviders(<DashboardAs vaiTro="ke_toan_truong" />);
-    expect(await screen.findByText("Lối tắt")).toBeInTheDocument();
+    // Chờ khối "Cần xử lý" tải xong (cùng lý do ca (c)). Ca này không đỏ trên CI, nhưng
+    // `getAllByRole(…).length > 0` vẫn qua được nhờ liên kết ở khối "Lối tắt" vốn hiện ngay
+    // — tức nó xanh mà chưa chứng minh được điều muốn nói. Chờ đúng trạng thái cuối rồi mới
+    // khẳng định CẢ HAI liên kết cùng tồn tại: một ở việc cần làm, một ở lối tắt.
+    expect(await screen.findByText(/Chưa kết nối tới hệ thống Tổng cục Thuế/)).toBeInTheDocument();
+    expect(screen.getByText("Lối tắt")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Danh sách hóa đơn/ })).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Kết nối tài khoản thuế" }).length).toBeGreaterThan(
-      0,
-    );
+    expect(screen.getAllByRole("link", { name: "Kết nối tài khoản thuế" })).toHaveLength(2);
     expect(screen.queryByText("Kết xuất & Convert")).not.toBeInTheDocument();
   });
 });
