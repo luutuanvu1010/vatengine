@@ -13,6 +13,21 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4",
+    date: "2026-07-31",
+    title: "Trang Tổng quan nói rõ việc cần xử lý trước khi kê khai",
+    changes: [
+      "Trang Tổng quan trước đây chỉ cho biết đã kết nối tới hệ thống Tổng cục Thuế hay chưa. Nay nó tập hợp những việc phát sinh trên hóa đơn của kỳ đang xem, đặt ngay đầu trang.",
+      "Khối 'Cần xử lý' nêu từng việc kèm hệ quả: hóa đơn đã bị thay thế nên không được tính vào tổng kê khai kỳ này; hóa đơn đã bị điều chỉnh nên số tiền kê khai thay đổi; hóa đơn mang mã trạng thái chưa xác định. Mỗi mục có một nút dẫn thẳng tới đúng danh sách hóa đơn liên quan để bạn kiểm tra.",
+      "Đáng chú ý nhất là mục 'hóa đơn thuộc kỳ khác vừa bị sửa'. Đây là trường hợp dễ bỏ sót: một hóa đơn của kỳ trước bị thay thế hoặc điều chỉnh sau khi tờ khai kỳ đó đã nộp, và bạn sẽ không thấy nó khi chỉ xem kỳ hiện tại. Biết sớm để cân nhắc khai bổ sung.",
+      "Khi kỳ không có việc nào cần xử lý, trang nói rõ điều đó cùng danh sách những gì đã được đối soát — thay vì để trống khiến bạn phân vân là chưa có dữ liệu hay chưa kiểm.",
+      "Bổ sung số liệu kỳ hiện tại theo hai chiều mua vào và bán ra: số hóa đơn, tiền thuế, tổng thanh toán.",
+      "Phần chân trang nay có ở mọi trang, gồm lối vào Trung tâm hỗ trợ, Câu hỏi thường gặp, Lịch sử cập nhật, kênh góp ý qua Zalo và WhatsApp, cùng thông tin pháp nhân của đơn vị phát hành phần mềm.",
+      "Những mã trạng thái chưa được kiểm chứng vẫn hiển thị trung tính, không suy diễn ý nghĩa. Phần mềm chỉ nói những gì đọc được từ dữ liệu của bạn.",
+    ],
+    kind: "feature",
+  },
+  {
     version: "v2.3",
     date: "2026-07-30",
     title: "Kết xuất gọn lại: chỉ còn Excel",
