@@ -29,7 +29,18 @@ function mockApi() {
         role: "quan_tri",
       });
     }
-    return json([]); // /tax-accounts rỗng
+    // ĐỊNH TUYẾN THEO PATH, không bắt-tất bằng `[]`.
+    //
+    // 2026-07-31 — nhánh bắt-tất cũ trả `[]` cho MỌI endpoint, kể cả `/invoices/summary`
+    // vốn khai trả `{ byChieu, total }`. `[]` là truthy nên nó lọt qua chốt của Tổng quan
+    // rồi làm vỡ lúc render; hai lỗi `Errors` của CI run f4c5991 sinh ra từ đây. Chốt ấy đã
+    // siết bằng `?.` (cb14290) nên nay không vỡ nữa — nhưng mock vẫn phải trả ĐÚNG hợp đồng.
+    // Mock nói dối về hình dạng thì mọi ca dựa vào nó chỉ chứng minh được hành vi trước một
+    // phản hồi không bao giờ có thật.
+    if (url.includes("/tax-accounts")) return json([]); // chưa kết nối tài khoản thuế
+    if (url.includes("/invoices/summary")) return json({ byChieu: [], total: { count: 0 } });
+    if (url.includes("/invoices")) return json({ rows: [], total: 0 });
+    return json({});
   });
 }
 
