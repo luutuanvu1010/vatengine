@@ -156,8 +156,16 @@ describe("Tổng quan — số liệu và chỉ số", () => {
       },
     });
     ve();
+    // CHỜ CHÍNH CON SỐ, không chờ cái khung chứa nó.
+    //
+    // CI đỏ 2026-07-31 (run 30617544253). `findByTestId("so-lieu-purchase")` khớp NGAY vì
+    // khối `data-testid` là mã tĩnh — lúc chưa có dữ liệu nó vẫn dựng đủ, chỉ hiện "—" bên
+    // trong. `getByText` ngay sau đó chạy ĐỒNG BỘ nên soi vào đúng khoảnh khắc còn đang tải.
+    // Máy dev kịp, runner CI thì trượt — và trượt KHÔNG ĐỀU (lượt trước cùng mã vẫn xanh),
+    // nên nó là ca đỏ chập chờn chứ không phải đỏ thẳng.
     const mua = await screen.findByTestId("so-lieu-purchase");
-    expect(within(mua).getByText(/204\.786\.364/)).toBeInTheDocument();
+    expect(await within(mua).findByText(/204\.786\.364/)).toBeInTheDocument();
+    // Tới đây dữ liệu kỳ đã vào cây ⇒ chiều còn lại khẳng định đồng bộ được.
     const ban = screen.getByTestId("so-lieu-sold");
     expect(within(ban).getByText(/6\.192\.728/)).toBeInTheDocument();
   });
