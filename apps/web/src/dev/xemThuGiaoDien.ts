@@ -22,6 +22,8 @@
 // không phải bằng chứng về hành vi hệ thống (Hiến pháp §Nguyên tắc bằng chứng).
 
 import type {
+  GoiChiaSeItem,
+  GoiChiaSeView,
   InvoiceDetailResponse,
   InvoiceListResult,
   InvoiceSummary,
@@ -223,6 +225,68 @@ const TAI_KHOAN_THUE: TaxAccountView[] = [
   },
 ];
 
+// Dựng đủ các trạng thái mà `LienKetPage` phải vẽ khác nhau (sẵn sàng / đang đóng gói / đã
+// thu hồi) — soi bằng mắt mà chỉ có một trạng thái thì không thấy được bố cục nào lệch.
+// `url` CHỈ có ở gói `san_sang`, đúng ràng buộc của hợp đồng phía API.
+const GOI_CHIA_SE: { items: GoiChiaSeItem[] } = {
+  items: [
+    {
+      id: "xem-thu-goi-1",
+      nmmst: "0307654321",
+      nmten: "Công ty TNHH MTV Lữ hành Biển Xanh Khánh Hoà",
+      tuNgay: "2026-06-01",
+      denNgay: "2026-06-30",
+      soHoaDon: 6,
+      trangThai: "san_sang",
+      soLuotTai: 3,
+      lanTaiCuoi: "2026-07-28T09:12:00.000Z",
+      taoLuc: "2026-07-27T02:30:00.000Z",
+      hetHanLuc: "2026-08-26T02:30:00.000Z",
+      url: "https://example.invalid/xem-thu/goi-1",
+    },
+    {
+      id: "xem-thu-goi-2",
+      nmmst: "0307654320",
+      nmten: "Công ty CP Khách sạn & Nghỉ dưỡng Vĩnh Điềm Trung",
+      tuNgay: "2026-05-01",
+      denNgay: "2026-05-31",
+      soHoaDon: 4,
+      trangThai: "dang_dong_goi",
+      soLuotTai: 0,
+      lanTaiCuoi: null,
+      taoLuc: "2026-07-29T01:05:00.000Z",
+      hetHanLuc: "2026-08-28T01:05:00.000Z",
+      url: null,
+    },
+    {
+      id: "xem-thu-goi-3",
+      nmmst: "0307654319",
+      nmten: "Chi nhánh Công ty CP Du lịch Việt — Văn phòng Khánh Hoà",
+      tuNgay: "2026-04-01",
+      denNgay: "2026-04-30",
+      soHoaDon: 1,
+      trangThai: "da_thu_hoi",
+      soLuotTai: 1,
+      lanTaiCuoi: "2026-07-20T04:40:00.000Z",
+      taoLuc: "2026-07-18T03:00:00.000Z",
+      hetHanLuc: "2026-08-17T03:00:00.000Z",
+      url: null,
+    },
+  ],
+};
+
+function motGoi(id: string): GoiChiaSeView {
+  const g = GOI_CHIA_SE.items.find((x) => x.id === id) ?? GOI_CHIA_SE.items[0];
+  if (!g) throw new Error("danh sách gói xem thử rỗng");
+  return {
+    id: g.id,
+    trangThai: g.trangThai,
+    soHoaDon: g.soHoaDon,
+    soThieu: 0,
+    hetHanLuc: g.hetHanLuc,
+  };
+}
+
 const TRANG_THAI_DONG_BO: SyncStatusView = { soTacVu: 0, thang: [] };
 
 function chiTiet(id: string): InvoiceDetailResponse {
@@ -261,9 +325,11 @@ function traLoi(duong: string): unknown {
   if (duong === "/invoices/khach-hang") return KHACH_HANG;
   if (duong === "/reconcile") return DOI_CHIEU;
   if (duong === "/tax-accounts") return TAI_KHOAN_THUE;
+  if (duong === "/goi-chia-se") return GOI_CHIA_SE;
   if (duong.endsWith("/sync-status")) return TRANG_THAI_DONG_BO;
   if (duong.startsWith("/invoices/")) return chiTiet(duong.slice("/invoices/".length));
   if (duong.startsWith("/tax-accounts/")) return TAI_KHOAN_THUE[0];
+  if (duong.startsWith("/goi-chia-se/")) return motGoi(duong.slice("/goi-chia-se/".length));
   return undefined;
 }
 
