@@ -25,7 +25,7 @@ Biome. Chỉ tầng trình bày `apps/web` — không đụng API, schema, RBAC,
 - **TDD bắt buộc** (`.claude/rules/testing.md`): viết test → chạy cho **đỏ** → hiện thực → chạy
   cho **xanh** → commit. Test viết sau để khớp mã đã có không tính là xong.
 - **Kết luận xanh/đỏ bằng mã thoát**, không đọc dòng đếm. Vitest có thể in "N passed" trong khi
-  vẫn thoát khác 0. Lệnh chạy một tệp: `npx vitest run <đường-dẫn> -w apps/web`. Lệnh cổng đầy
+  vẫn thoát khác 0. Lệnh chạy một tệp: `cd apps/web && npx vitest run <đường-dẫn>`. Lệnh cổng đầy
   đủ: `make lint && make test`.
 - **Chỉ dùng token + primitive** (`.claude/rules/ui.md`): màu/khoảng cách/chữ chỉ qua biến
   `--…`; cấm hex và px cứng. Nút mới phải nằm ở `components/ui/primitives.tsx`, không tô kiểu
@@ -96,7 +96,7 @@ describe("hienThiSoDienThoai — số để đọc trên màn hình", () => {
 
 - [ ] **Bước 2: Chạy test cho đỏ**
 
-Chạy: `npx vitest run test/lib/contactLinks.test.ts -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/lib/contactLinks.test.ts`
 Chờ: FAIL — `telUrl is not a function` / `hienThiSoDienThoai is not a function`.
 
 - [ ] **Bước 3: Hiện thực hai hàm**
@@ -135,7 +135,7 @@ export const GIO_HO_TRO = "08:00 – 17:00";
 
 - [ ] **Bước 5: Chạy test cho xanh**
 
-Chạy: `npx vitest run test/lib/contactLinks.test.ts -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/lib/contactLinks.test.ts`
 Chờ: PASS, mã thoát 0.
 
 - [ ] **Bước 6: Commit**
@@ -210,7 +210,7 @@ describe("Luật một-nguồn — giờ hỗ trợ", () => {
 
 - [ ] **Bước 2: Chạy test cho đỏ**
 
-Chạy: `npx vitest run test/conventions/gio-ho-tro-mot-nguon.test.ts -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/conventions/gio-ho-tro-mot-nguon.test.ts`
 Chờ: FAIL — danh sách phạm chứa `features/about/SupportCenter.tsx`.
 
 - [ ] **Bước 3: Thêm primitive `LienKetNut`**
@@ -289,7 +289,7 @@ import { FAQ } from "../../lib/faq";
 
 - [ ] **Bước 5: Chạy test cho xanh — cả ca cũ**
 
-Chạy: `npx vitest run test/conventions/gio-ho-tro-mot-nguon.test.ts test/features/about.test.tsx -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/conventions/gio-ho-tro-mot-nguon.test.ts test/features/about.test.tsx`
 Chờ: PASS cả hai tệp. `about.test.tsx` phải **vẫn xanh** — nó là bằng chứng việc dọn không đổi
 hành vi nhìn thấy được.
 
@@ -406,7 +406,7 @@ describe("Khối Cần hỗ trợ?", () => {
 
 - [ ] **Bước 2: Chạy test cho đỏ**
 
-Chạy: `npx vitest run test/features/khoiHoTro.test.tsx -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/features/khoiHoTro.test.tsx`
 Chờ: FAIL — không phân giải được `../../src/components/KhoiHoTro`.
 
 - [ ] **Bước 3: Tạo component**
@@ -498,7 +498,7 @@ và chèn ngay **sau** khối `{xong ? … : …}`, tức là con cuối của
 
 - [ ] **Bước 6: Chạy test cho xanh**
 
-Chạy: `npx vitest run test/features/khoiHoTro.test.tsx test/features/auth.test.tsx test/features/dangKy.test.tsx -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/features/khoiHoTro.test.tsx test/features/auth.test.tsx test/features/dangKy.test.tsx`
 Chờ: PASS cả ba tệp. Hai tệp cũ phải **vẫn xanh** — chèn khối mới không được làm lệch bất kỳ
 truy vấn nào của chúng.
 
@@ -594,7 +594,7 @@ describe("useCuonTheoHash", () => {
 
 - [ ] **Bước 2: Chạy test cho đỏ**
 
-Chạy: `npx vitest run test/lib/useCuonTheoHash.test.tsx -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/lib/useCuonTheoHash.test.tsx`
 Chờ: FAIL — không phân giải được `../../src/lib/useCuonTheoHash`.
 
 - [ ] **Bước 3: Hiện thực hook**
@@ -622,7 +622,7 @@ export function useCuonTheoHash(sanSang: boolean): void {
 
 - [ ] **Bước 4: Chạy test cho xanh**
 
-Chạy: `npx vitest run test/lib/useCuonTheoHash.test.tsx -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/lib/useCuonTheoHash.test.tsx`
 Chờ: PASS, mã thoát 0.
 
 - [ ] **Bước 5: Commit**
@@ -758,7 +758,7 @@ describe("Neo #faq và #lich-su cuộn tới đúng mục", () => {
 
 - [ ] **Bước 2: Chạy test cho đỏ**
 
-Chạy: `npx vitest run test/features/gioiThieuCongKhai.test.tsx -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/features/gioiThieuCongKhai.test.tsx`
 Chờ: FAIL — ca "chưa đăng nhập" tìm không thấy tiêu đề vì bị chuyển hướng về `/login`.
 
 - [ ] **Bước 3: Tạo khung công khai**
@@ -874,7 +874,7 @@ function KhungGioiThieu() {
 
 - [ ] **Bước 5: Chạy test cho xanh**
 
-Chạy: `npx vitest run test/features/gioiThieuCongKhai.test.tsx test/features/footerNhieuCot.test.tsx test/features/responsiveNav.test.tsx -w apps/web`
+Chạy: `cd apps/web && npx vitest run test/features/gioiThieuCongKhai.test.tsx test/features/footerNhieuCot.test.tsx test/features/responsiveNav.test.tsx`
 Chờ: PASS cả ba. Hai tệp cũ phải **vẫn xanh** — chúng là bằng chứng Footer và thanh điều hướng
 không bị chuyển route làm gãy.
 

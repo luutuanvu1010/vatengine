@@ -89,7 +89,7 @@ describe("Footer bốn cột", () => {
   });
 
   // ---- Cột Hỗ trợ ---------------------------------------------------------------------
-  it("liên kết hỗ trợ trỏ đúng neo, Zalo/WhatsApp dựng từ số dùng chung", () => {
+  it("liên kết hỗ trợ trỏ đúng neo, Zalo dựng từ số dùng chung", () => {
     ve("ke_toan");
     const v = cot("Hỗ trợ");
     expect(within(v).getByRole("link", { name: "Câu hỏi thường gặp" })).toHaveAttribute(
@@ -104,10 +104,14 @@ describe("Footer bốn cột", () => {
       "href",
       "https://zalo.me/0989929373",
     );
-    expect(within(v).getByRole("link", { name: "Góp ý qua WhatsApp" })).toHaveAttribute(
-      "href",
-      "https://wa.me/84989929373",
-    );
+  });
+
+  // QĐ chủ dự án 2026-08-06: gỡ WhatsApp khỏi mọi bề mặt — kế toán viên VN hầu như không
+  // dùng kênh này. Ca này khoá sự vắng mặt, để một sửa đổi sau không âm thầm thêm lại.
+  it("KHÔNG còn liên kết Góp ý qua WhatsApp", () => {
+    ve("ke_toan");
+    const v = cot("Hỗ trợ");
+    expect(within(v).queryByRole("link", { name: /WhatsApp/ })).toBeNull();
   });
 
   // ---- Dải đáy ------------------------------------------------------------------------

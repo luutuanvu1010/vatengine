@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "../components/layout/AppLayout";
+import { KhungCongKhai } from "../components/layout/KhungCongKhai";
 import { PageHeader } from "../components/layout/PageHeader";
 import { AboutPage } from "../features/about/AboutPage";
 import { DangKyPage } from "../features/auth/DangKyPage";
@@ -19,6 +20,7 @@ import { TaxAccountsPage } from "../features/taxAccounts/TaxAccountsPage";
 import { SHOW_EXPORTS, SHOW_RECONCILE } from "../lib/featureFlags";
 import { vi } from "../lib/i18n/vi";
 import { canExport, canManageTaxAccounts } from "../lib/rbac";
+import { useCuonTheoHash } from "../lib/useCuonTheoHash";
 import type { Role } from "../types/api";
 
 function Forbidden() {
@@ -77,6 +79,24 @@ function DangKyRoute() {
   return <DangKyPage />;
 }
 
+/** U42 — `/gioi-thieu` CÔNG KHAI, khung đổi theo trạng thái phiên.
+ *
+ * Trước đây route này nằm trong `ProtectedLayout`, nên ba liên kết trong cột "Hỗ trợ" của
+ * Footer bật ngược về màn Đăng nhập với khách chưa có tài khoản — liên kết chết, không báo
+ * lỗi gì. Nội dung trang vốn thuần tĩnh (giới thiệu, FAQ, changelog), không gọi API và không
+ * chạm dữ liệu tenant, nên chẳng có lý do gì phải giấu sau đăng nhập.
+ *
+ * MỘT đường dẫn, MỘT nội dung: người đã đăng nhập vẫn nhận `AppLayout` y như cũ. Tách thành
+ * hai URL sẽ là hai nguồn sự thật cho cùng một trang. */
+function KhungGioiThieu() {
+  const { status, me, logout } = useAuth();
+  // Hook gọi TRƯỚC mọi nhánh trả sớm — nhánh `checking` không được làm lệch thứ tự hook.
+  useCuonTheoHash(status !== "checking");
+  if (status === "checking") return <DangKiemTraPhien />;
+  if (status === "authed" && me) return <AppLayout me={me} onLogout={logout} />;
+  return <KhungCongKhai />;
+}
+
 export function AppRouter() {
   return (
     <Routes>
@@ -93,6 +113,9 @@ export function AppRouter() {
           đang đăng nhập đi đâu cả, cùng lý do với /xac-thuc-email: rất có thể họ mở thư
           ở một máy khác, hoặc đang đăng nhập bằng một tài khoản khác. */}
       <Route path="/dat-mat-khau" element={<DatMatKhauPage />} />
+      <Route path="/gioi-thieu" element={<KhungGioiThieu />}>
+        <Route index element={<AboutPage />} />
+      </Route>
       <Route element={<ProtectedLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="invoices" element={<InvoicesPage />} />
@@ -127,7 +150,6 @@ export function AppRouter() {
           }
         />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="gioi-thieu" element={<AboutPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

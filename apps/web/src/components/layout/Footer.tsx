@@ -2,7 +2,7 @@
 //
 // NGUỒN SỰ THẬT — không chép chuỗi vào JSX:
 //   • pháp nhân → `lib/orgInfo.ts`   • liên kết sản phẩm → `lib/nav.ts`
-//   • số liên hệ → `lib/contact.ts`  • URL Zalo/WhatsApp → `lib/contactLinks.ts`
+//   • số liên hệ → `lib/contact.ts`  • URL Zalo → `lib/contactLinks.ts`
 // Chép là tạo nguồn sự thật thứ hai. Riêng địa chỉ pháp nhân thì hậu quả không chỉ là lệch:
 // bản mockup 30/07 ghi một địa chỉ HOÀN TOÀN BỊA ("Số 12 đường Trần Phú…") trong khi mã số
 // thuế lại đúng, nên nhìn lướt rất giống thật. `footerNhieuCot.test.tsx` có ca chống-bịa.
@@ -14,7 +14,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { CONTACT_PHONE } from "../../lib/contact";
-import { whatsappUrl, zaloUrl } from "../../lib/contactLinks";
+import { zaloUrl } from "../../lib/contactLinks";
 import { vi } from "../../lib/i18n/vi";
 import { NAV_CHINH, navHienThi } from "../../lib/nav";
 import { ORG } from "../../lib/orgInfo";
@@ -126,7 +126,6 @@ export function Footer({ role }: { role?: Role }) {
           <LienKetTrong to="/gioi-thieu#faq">Câu hỏi thường gặp</LienKetTrong>
           <LienKetTrong to="/gioi-thieu#lich-su">Lịch sử cập nhật</LienKetTrong>
           <LienKetNgoai href={zaloUrl(CONTACT_PHONE)}>Góp ý qua Zalo</LienKetNgoai>
-          <LienKetNgoai href={whatsappUrl(CONTACT_PHONE)}>Góp ý qua WhatsApp</LienKetNgoai>
         </Cot>
 
         {/* Cột 4 — pháp nhân. Mọi chuỗi từ ORG. */}

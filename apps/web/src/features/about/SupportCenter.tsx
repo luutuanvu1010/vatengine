@@ -1,35 +1,10 @@
 // Trung tâm hỗ trợ & tài liệu — a) FAQ accordion nhóm theo chủ đề, b) kênh liên hệ
 // (nâng cấp từ phần "Góp ý" cũ của U16).
-import { type ReactNode, useId, useState } from "react";
-import { CONTACT_PHONE } from "../../lib/contact";
-import { whatsappUrl, zaloUrl } from "../../lib/contactLinks";
+import { useId, useState } from "react";
+import { LienKetNut } from "../../components/ui/primitives";
+import { CONTACT_PHONE, GIO_HO_TRO } from "../../lib/contact";
+import { zaloUrl } from "../../lib/contactLinks";
 import { FAQ } from "../../lib/faq";
-
-function LinkButton({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "var(--sp-2)",
-        padding: "var(--sp-3) var(--sp-5)",
-        fontSize: "var(--fs-base)",
-        fontWeight: "var(--fw-semibold)",
-        color: "var(--text-on-brand)",
-        background: "var(--brand-600)",
-        border: "1px solid transparent",
-        borderRadius: "var(--radius-md)",
-        textDecoration: "none",
-      }}
-    >
-      {children}
-    </a>
-  );
-}
 
 function FaqAccordionItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
@@ -117,11 +92,10 @@ export function SupportCenter() {
             marginTop: "var(--sp-4)",
           }}
         >
-          <LinkButton href={zaloUrl(CONTACT_PHONE)}>Góp ý qua Zalo</LinkButton>
-          <LinkButton href={whatsappUrl(CONTACT_PHONE)}>Góp ý qua WhatsApp</LinkButton>
+          <LienKetNut href={zaloUrl(CONTACT_PHONE)}>Góp ý qua Zalo</LienKetNut>
         </div>
         <p style={{ color: "var(--text-secondary)", margin: "var(--sp-4) 0 0" }}>
-          <strong>Giờ hỗ trợ: 08:00 – 17:00</strong>
+          <strong>Giờ hỗ trợ: {GIO_HO_TRO}</strong>
         </p>
         <div style={{ marginTop: "var(--sp-3)" }}>
           <strong>Cách báo lỗi hiệu quả</strong>

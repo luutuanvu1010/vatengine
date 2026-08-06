@@ -42,15 +42,20 @@ describe("Trang Giới thiệu & Hỗ trợ (U16b)", () => {
     expect(screen.queryByText(new RegExp(escapeRegExp(cuNhat?.version ?? "")))).toBeNull();
   });
 
-  it("nút Zalo/WhatsApp: đúng liên kết, mở tab mới, chống tabnabbing + giờ hỗ trợ", () => {
+  it("nút Zalo: đúng liên kết, mở tab mới, chống tabnabbing + giờ hỗ trợ", () => {
     renderWithProviders(<AboutPage />);
     const zalo = screen.getByRole("link", { name: /Zalo/ });
-    const wa = screen.getByRole("link", { name: /WhatsApp/ });
     expect(zalo).toHaveAttribute("href", "https://zalo.me/0989929373");
-    expect(wa).toHaveAttribute("href", "https://wa.me/84989929373");
     expect(zalo).toHaveAttribute("target", "_blank");
     expect(zalo.getAttribute("rel")).toContain("noopener");
     expect(screen.getByText(/08:00 – 17:00/)).toBeInTheDocument();
+  });
+
+  // QĐ chủ dự án 2026-08-06: gỡ WhatsApp khỏi mọi bề mặt — kế toán viên VN hầu như không
+  // dùng kênh này. Ca này khoá sự vắng mặt, để một sửa đổi sau không âm thầm thêm lại.
+  it("KHÔNG còn liên kết WhatsApp", () => {
+    renderWithProviders(<AboutPage />);
+    expect(screen.queryByRole("link", { name: /WhatsApp/ })).toBeNull();
   });
 
   it("Đóng góp: khối QR KHÔNG render khi SHOW_DONATION tắt", () => {
