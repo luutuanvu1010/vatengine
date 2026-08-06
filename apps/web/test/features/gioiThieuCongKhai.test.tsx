@@ -15,16 +15,17 @@ function chuaDangNhap() {
   mockFetch({ login: () => json(401, { error: "unauthorized" }) });
 }
 
+// Tách riêng để test "không rò" (dưới) khoá thẳng vào đây — không gõ lại chuỗi rời,
+// tránh test và fixture lệch nhau theo thời gian.
+const HO_SO_DA_DANG_NHAP = {
+  ten: "Công ty TNHH Tour Đảo",
+  mst: "4201568932",
+  goiDichVu: "Miễn phí",
+  role: "ke_toan_truong",
+};
+
 function daDangNhap() {
-  mockFetch({
-    me: () =>
-      json(200, {
-        ten: "Công ty TNHH Tour Đảo",
-        mst: "4201568932",
-        goiDichVu: "Miễn phí",
-        role: "ke_toan_truong",
-      }),
-  });
+  mockFetch({ me: () => json(200, HO_SO_DA_DANG_NHAP) });
 }
 
 describe("Trang Giới thiệu & Hỗ trợ — công khai", () => {
@@ -52,6 +53,24 @@ describe("Trang Giới thiệu & Hỗ trợ — công khai", () => {
     renderWithProviders(<AppRouter />, "/gioi-thieu");
     await screen.findByRole("heading", { level: 1, name: "Giới thiệu & Hỗ trợ" });
     expect(screen.queryByRole("navigation", { name: "Điều hướng chính" })).toBeNull();
+  });
+
+  it("chưa đăng nhập: KHÔNG lộ bất cứ thứ gì của phiên đã đăng nhập", async () => {
+    // SaaS đa tenant xử lý dữ liệu thuế — "nhánh công khai không lộ gì của phiên đã đăng
+    // nhập" phải là ràng buộc MÁY KIỂM được, không phải suy luận từ việc đọc code. Lấy
+    // chuỗi cấm TỪ CHÍNH fixture của `daDangNhap()` (không gõ lại tay) để test không thể
+    // lệch nguồn nếu fixture đổi.
+    //
+    // Chỉ kiểm `mst`, KHÔNG kiểm `ten`: `HO_SO_DA_DANG_NHAP.ten` trùng tên pháp nhân thật
+    // (`ORG.congTy` ở `lib/orgInfo.ts`) mà Footer CÔNG KHAI hợp lệ hiện ở mọi trang (cùng
+    // collision đã ghi nhận ở `auth.test.tsx`) — kiểm `ten` toàn trang sẽ đỏ ngay cả khi
+    // không có gì rò, vì lẫn với tên pháp nhân trong Footer. `mst` của fixture không trùng
+    // mã số thuế pháp nhân thật nên không dính bẫy này.
+    chuaDangNhap();
+    const { container } = renderWithProviders(<AppRouter />, "/gioi-thieu");
+    await screen.findByRole("heading", { level: 1, name: "Giới thiệu & Hỗ trợ" });
+    expect(screen.queryByRole("banner", { name: "Thanh tài khoản" })).toBeNull();
+    expect(container.innerHTML).not.toContain(HO_SO_DA_DANG_NHAP.mst);
   });
 
   it("đã đăng nhập: vẫn thấy thanh điều hướng như cũ", async () => {

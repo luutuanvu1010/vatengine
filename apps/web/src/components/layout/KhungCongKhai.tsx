@@ -10,7 +10,11 @@ import { Footer } from "./Footer";
 export function KhungCongKhai() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {/* Đặt TÊN cho vùng mốc này: `PageHeader` của `AboutPage` cũng dùng thẻ <header>, nên
+          không có nhãn thì trình đọc màn hình đọc ra hai vùng "banner" không phân biệt được
+          — và test cũng không trỏ được vào đúng cái nào (cùng bẫy đã gặp ở `AppLayout`). */}
       <header
+        aria-label="Thanh thương hiệu"
         style={{
           borderBottom: "1px solid var(--border-subtle)",
           background: "var(--surface-card)",
