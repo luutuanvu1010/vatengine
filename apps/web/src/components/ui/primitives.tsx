@@ -1270,21 +1270,21 @@ export function MucHuongDan({ nhan, children }: { nhan: string; children: ReactN
 }
 
 /** Liên kết trông như nút chính. Có `<Button>` rồi nhưng nó render `<button>` — điều hướng
- * phải là `<a>` để trình đọc màn hình, chuột giữa và "mở tab mới" hoạt động đúng.
- * `ngoai = false` cho các lược đồ không rời trang như `tel:` và `mailto:`. */
+ * phải là `<a>` để trình đọc màn hình, chuột giữa và "mở tab mới" hoạt động đúng. Luôn mở
+ * tab mới (`target="_blank"` + `rel="noopener noreferrer"`) — mọi nơi gọi hiện tại đều là
+ * liên kết ngoài (Zalo, WhatsApp); `tel:` dùng `<a>` thường, không qua primitive này. */
 export function LienKetNut({
   href,
-  ngoai = true,
   children,
 }: {
   href: string;
-  ngoai?: boolean;
   children: ReactNode;
 }) {
   return (
     <a
       href={href}
-      {...(ngoai ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      target="_blank"
+      rel="noopener noreferrer"
       style={{
         display: "inline-flex",
         alignItems: "center",
