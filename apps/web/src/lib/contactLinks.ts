@@ -17,3 +17,20 @@ export function whatsappUrl(phone: string): string {
   if (d.startsWith("0")) d = `84${d.slice(1)}`;
   return `https://wa.me/${d}`;
 }
+
+/** `tel:` dạng E.164 — bấm gọi được cả khi máy đang ở mạng nước ngoài. Chuẩn hóa giống
+ * `whatsappUrl`: 0xxxxxxxxx → 84xxxxxxxxx. */
+export function telUrl(phone: string): string {
+  let d = digitsOnly(phone);
+  if (d.startsWith("0")) d = `84${d.slice(1)}`;
+  return `tel:+${d}`;
+}
+
+/** Số ĐỂ ĐỌC trên màn hình. Tách nhóm bằng hàm chứ không gõ tay chuỗi đã tách sẵn — chuỗi gõ
+ * tay sẽ lệch khỏi số thật vào ngày số đổi, mà không test nào bắt được.
+ * Đúng 10 chữ số → 4-3-3 (`0989 929 373`). Độ dài khác → trả nguyên dãy, không đoán. */
+export function hienThiSoDienThoai(phone: string): string {
+  const d = digitsOnly(phone);
+  if (d.length !== 10) return d;
+  return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
+}
