@@ -13,6 +13,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.5",
+    date: "2026-08-06",
+    title: "Kênh hỗ trợ hiện ngay ở màn hình đăng nhập",
+    changes: [
+      "Màn hình Đăng nhập và trang Đăng ký nay có khối 'Cần hỗ trợ?' ngay dưới biểu mẫu, gồm nút nhắn qua Zalo, số điện thoại bấm gọi được và giờ hỗ trợ. Khối này hiện trên cả máy tính lẫn điện thoại, nên khi bạn vướng ở bước đăng nhập thì không phải đi tìm chỗ liên hệ.",
+      "Trang Giới thiệu & Hỗ trợ nay đọc được mà không cần đăng nhập. Trước đây các liên kết Câu hỏi thường gặp và Lịch sử cập nhật ở chân trang đưa người chưa có tài khoản quay lại màn hình đăng nhập, nên họ không thể tự tìm hiểu trước khi đăng ký.",
+      "Bấm vào Câu hỏi thường gặp hoặc Lịch sử cập nhật nay đưa thẳng tới đúng mục, không dừng ở đầu trang.",
+      "Bỏ kênh WhatsApp. Zalo và điện thoại là hai kênh được dùng thực tế, nên phần mềm chỉ nêu những kênh chúng tôi thật sự trực.",
+    ],
+    kind: "improvement",
+  },
+  {
     version: "v2.4",
     date: "2026-07-31",
     title: "Trang Tổng quan nói rõ việc cần xử lý trước khi kê khai",
