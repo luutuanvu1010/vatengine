@@ -9,6 +9,7 @@
 import { type FormEvent, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Brand } from "../../components/Brand";
+import { KhoiHoTro } from "../../components/KhoiHoTro";
 import { Turnstile, type TurnstileHandle } from "../../components/Turnstile";
 import { Alert, Button, Card, TextField } from "../../components/ui/primitives";
 import { ApiError, api } from "../../lib/apiClient";
@@ -274,6 +275,8 @@ export function DangKyPage() {
             </p>
           </Card>
         )}
+
+        <KhoiHoTro />
       </div>
     </main>
   );

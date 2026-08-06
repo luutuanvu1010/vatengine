@@ -5,6 +5,7 @@ import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Brand } from "../../components/Brand";
 import { CloudflareIcon } from "../../components/CloudflareIcon";
+import { KhoiHoTro } from "../../components/KhoiHoTro";
 import { Turnstile, type TurnstileHandle } from "../../components/Turnstile";
 import { Footer } from "../../components/layout/Footer";
 import { Alert, Button, TextField } from "../../components/ui/primitives";
@@ -178,6 +179,8 @@ export function LoginPage() {
             <p style={{ fontSize: "var(--fs-base)", margin: 0 }}>
               Chưa có tài khoản? <Link to="/dang-ky">Đăng ký</Link>
             </p>
+
+            <KhoiHoTro />
           </form>
         </div>
 
