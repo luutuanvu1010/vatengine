@@ -83,7 +83,8 @@ có nguồn; một chưa.
 
 `hienThiSoDienThoai("0989929373")` → `"0989 929 373"`. Tách nhóm bằng hàm, **không** gõ tay
 chuỗi đã tách sẵn — chuỗi gõ tay sẽ lệch khỏi số thật khi số đổi. Quy tắc tách: đúng 10 chữ số
-thì chia 3-3-4; độ dài khác thì trả lại nguyên chuỗi chữ số, không đoán cách chia.
+thì chia **4-3-3** (`0989 929 373` — cách viết quen thuộc của số di động Việt Nam); độ dài khác
+thì trả lại nguyên chuỗi chữ số, không đoán cách chia.
 
 Sau thay đổi này, `SupportCenter.tsx` dùng chung `LienKetNut` và `GIO_HO_TRO`; `LinkButton`
 cục bộ bị gỡ.
