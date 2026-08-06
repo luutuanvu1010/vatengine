@@ -7,7 +7,7 @@ import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { KhoiHoTro } from "../../src/components/KhoiHoTro";
 import { CONTACT_PHONE, GIO_HO_TRO } from "../../src/lib/contact";
-import { hienThiSoDienThoai, telUrl, whatsappUrl, zaloUrl } from "../../src/lib/contactLinks";
+import { hienThiSoDienThoai, telUrl, zaloUrl } from "../../src/lib/contactLinks";
 import { AppRouter } from "../../src/routes/AppRouter";
 import { json, mockFetch, renderWithProviders } from "../helpers/renderApp";
 
@@ -20,20 +20,23 @@ function chuaDangNhap() {
 describe("Khối Cần hỗ trợ?", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("đủ ba kênh liên hệ, tất cả dẫn xuất từ hàm dựng liên kết", () => {
+  it("đủ hai kênh liên hệ, tất cả dẫn xuất từ hàm dựng liên kết", () => {
     renderWithProviders(<KhoiHoTro />);
     expect(screen.getByRole("link", { name: "Nhắn qua Zalo" })).toHaveAttribute(
       "href",
       zaloUrl(CONTACT_PHONE),
     );
-    expect(screen.getByRole("link", { name: "Nhắn qua WhatsApp" })).toHaveAttribute(
-      "href",
-      whatsappUrl(CONTACT_PHONE),
-    );
     expect(screen.getByRole("link", { name: hienThiSoDienThoai(CONTACT_PHONE) })).toHaveAttribute(
       "href",
       telUrl(CONTACT_PHONE),
     );
+  });
+
+  // QĐ chủ dự án 2026-08-06: gỡ WhatsApp khỏi mọi bề mặt — kế toán viên VN hầu như không
+  // dùng kênh này. Ca này khoá sự vắng mặt, để một sửa đổi sau không âm thầm thêm lại.
+  it("KHÔNG còn nút Nhắn qua WhatsApp", () => {
+    renderWithProviders(<KhoiHoTro />);
+    expect(screen.queryByRole("link", { name: /WhatsApp/ })).toBeNull();
   });
 
   it("hiện giờ hỗ trợ đọc từ nguồn chung", () => {
@@ -50,7 +53,7 @@ describe("Khối Cần hỗ trợ?", () => {
     expect(cacDay[0]?.replace(/\s/g, "")).toBe(CONTACT_PHONE);
   });
 
-  it("Zalo và WhatsApp mở tab mới, chống tabnabbing; nút gọi thì không", () => {
+  it("Zalo mở tab mới, chống tabnabbing; nút gọi thì không", () => {
     renderWithProviders(<KhoiHoTro />);
     const zalo = screen.getByRole("link", { name: "Nhắn qua Zalo" });
     expect(zalo).toHaveAttribute("target", "_blank");

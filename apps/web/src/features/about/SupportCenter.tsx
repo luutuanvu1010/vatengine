@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { LienKetNut } from "../../components/ui/primitives";
 import { CONTACT_PHONE, GIO_HO_TRO } from "../../lib/contact";
-import { whatsappUrl, zaloUrl } from "../../lib/contactLinks";
+import { zaloUrl } from "../../lib/contactLinks";
 import { FAQ } from "../../lib/faq";
 
 function FaqAccordionItem({ q, a }: { q: string; a: string }) {
@@ -93,7 +93,6 @@ export function SupportCenter() {
           }}
         >
           <LienKetNut href={zaloUrl(CONTACT_PHONE)}>Góp ý qua Zalo</LienKetNut>
-          <LienKetNut href={whatsappUrl(CONTACT_PHONE)}>Góp ý qua WhatsApp</LienKetNut>
         </div>
         <p style={{ color: "var(--text-secondary)", margin: "var(--sp-4) 0 0" }}>
           <strong>Giờ hỗ trợ: {GIO_HO_TRO}</strong>

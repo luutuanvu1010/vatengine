@@ -1,13 +1,13 @@
-// Dựng liên kết Zalo/WhatsApp từ số điện thoại VN — HÀM THUẦN (test được). Chuẩn hóa:
-// bỏ mọi ký tự không phải chữ số; WhatsApp cần E.164 (số 0 đầu → mã quốc gia 84).
+// Dựng liên kết Zalo/gọi điện từ số điện thoại VN — HÀM THUẦN (test được). Chuẩn hóa:
+// bỏ mọi ký tự không phải chữ số; `tel:` cần E.164 (số 0 đầu → mã quốc gia 84).
 
 /** Chỉ giữ chữ số. */
 function digitsOnly(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
-/** E.164 tiêu chuẩn: chữ số thuần + chuẩn hóa mã quốc gia.
- * Một quy tắc, một nguồn — nếu luật E.164 đổi, sửa ở đây thì cả WhatsApp và tel: cùng tuân thủ. */
+/** E.164 tiêu chuẩn cho liên kết gọi điện: chữ số thuần + chuẩn hóa mã quốc gia — máy đang ở
+ * mạng nước ngoài vẫn bấm gọi đúng số. */
 function toE164Digits(phone: string): string {
   let d = digitsOnly(phone);
   if (d.startsWith("0")) d = `84${d.slice(1)}`;
@@ -19,13 +19,7 @@ export function zaloUrl(phone: string): string {
   return `https://zalo.me/${digitsOnly(phone)}`;
 }
 
-/** WhatsApp cần E.164 không dấu cộng: 0xxxxxxxxx → 84xxxxxxxxx. */
-export function whatsappUrl(phone: string): string {
-  return `https://wa.me/${toE164Digits(phone)}`;
-}
-
-/** `tel:` dạng E.164 — bấm gọi được cả khi máy đang ở mạng nước ngoài. Chuẩn hóa giống
- * `whatsappUrl`: 0xxxxxxxxx → 84xxxxxxxxx. */
+/** `tel:` dạng E.164 — bấm gọi được cả khi máy đang ở mạng nước ngoài. */
 export function telUrl(phone: string): string {
   return `tel:+${toE164Digits(phone)}`;
 }

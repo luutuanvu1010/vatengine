@@ -4,9 +4,9 @@
 // panel giới thiệu bên phải, nên mọi thứ đặt vào panel đó biến mất trên điện thoại.
 //
 // NGUỒN SỰ THẬT — không gõ chuỗi rời: số điện thoại + giờ hỗ trợ đọc từ `lib/contact.ts`;
-// URL Zalo/WhatsApp/tel dựng bằng hàm ở `lib/contactLinks.ts`.
+// URL Zalo/tel dựng bằng hàm ở `lib/contactLinks.ts`.
 import { CONTACT_PHONE, GIO_HO_TRO } from "../lib/contact";
-import { hienThiSoDienThoai, telUrl, whatsappUrl, zaloUrl } from "../lib/contactLinks";
+import { hienThiSoDienThoai, telUrl, zaloUrl } from "../lib/contactLinks";
 import { LienKetNut, SectionTitle } from "./ui/primitives";
 
 export function KhoiHoTro() {
@@ -22,7 +22,6 @@ export function KhoiHoTro() {
       <SectionTitle>Cần hỗ trợ?</SectionTitle>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-3)" }}>
         <LienKetNut href={zaloUrl(CONTACT_PHONE)}>Nhắn qua Zalo</LienKetNut>
-        <LienKetNut href={whatsappUrl(CONTACT_PHONE)}>Nhắn qua WhatsApp</LienKetNut>
       </div>
       <p
         style={{
