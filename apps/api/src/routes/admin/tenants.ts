@@ -33,9 +33,7 @@ const patchSchema = z
   })
   .strict();
 
-// MST 10, 12, 13 chữ số hoặc dạng đơn vị phụ thuộc 10 số-3 số (TT 105/2020) — khớp
-// `dangKy.ts` (12 = số định danh cá nhân của cá nhân/hộ kinh doanh theo TT 86/2024/TT-BTC).
-const MST_RE = /^\d{10}(-\d{3})?$|^\d{12}$|^\d{13}$/;
+import { MST_RE, chuanHoaMst } from "../../lib/mst";
 const doiMstSchema = z.object({ mst: z.string() }).strict();
 
 /** Ánh xạ path → hành động máy trạng thái. Path dùng gạch nối (quy ước URL), hành động
@@ -297,7 +295,9 @@ export function adminTenantsRoutes(deps: AppDeps) {
     if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
     const parsed = doiMstSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "bad_request" }, 400);
-    const mst = parsed.data.mst.trim();
+    // Chuẩn hóa dạng đơn vị phụ thuộc có gạch về 13 số liền — cùng quy tắc với cổng
+    // đăng ký (xem `../../lib/mst.ts`).
+    const mst = chuanHoaMst(parsed.data.mst);
     if (!MST_RE.test(mst)) return c.json({ error: "mst_khong_hop_le" }, 400);
 
     const { db, close } = await deps.getDb(c.env);

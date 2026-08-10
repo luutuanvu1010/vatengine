@@ -21,11 +21,12 @@ là mã số thuế** — không tồn tại loại mã đăng ký kinh doanh ri
   các dạng cũ. Áp dụng đồng bộ ở 4 nơi: `apps/api/src/routes/dangKy.ts`,
   `apps/api/src/routes/admin/tenants.ts`, `apps/admin/.../DoiMstDialog.tsx`,
   `apps/web/.../DangKyPage.tsx`.
-- **Giữ giá trị verbatim, KHÔNG chuẩn hóa** `0305097236-005` ⇄ `0305097236005`: hệ thống
-  Tổng cục Thuế dùng dạng có gạch làm username đăng nhập; tự đổi dạng có thể làm lệch với
-  tài khoản thuế của khách. Hệ quả chấp nhận được: hai cách viết của cùng một mã là hai giá
-  trị khác nhau đối với ràng buộc UNIQUE — nếu thành vấn đề thực tế, cân nhắc chuẩn hóa khi
-  so trùng (CHƯA KIỂM CHỨNG là có xảy ra).
+- **Chuẩn hóa lúc GHI** (cập nhật cùng ngày, thay quyết định "verbatim" ban đầu): toàn hệ
+  thống vatengine dùng chuỗi thuần chữ số cho MST (username tài khoản thuế tự gán =
+  `tenants.mst`, ràng buộc UNIQUE, đối chiếu `nbmst` hóa đơn), nên dạng có gạch được nhận
+  ở ô nhập rồi chuẩn hóa về 13 số liền trước khi lưu — `chuanHoaMst` trong
+  `apps/api/src/lib/mst.ts` (một nguồn cho cả cổng đăng ký lẫn cổng đổi MST admin). Nhờ đó
+  `0305097236-005` và `0305097236005` là MỘT mã, không thành hai tenant.
 - Ô nhập MST ở trang đăng ký bỏ `inputMode="numeric"`: bàn phím số trên di động thiếu phím
   `-`, chi nhánh sẽ không gõ được mã của chính mình.
 
@@ -35,3 +36,5 @@ là mã số thuế** — không tồn tại loại mã đăng ký kinh doanh ri
   cổng đổi MST admin, và validate client (web + admin).
 - CHƯA KIỂM CHỨNG: hành vi đăng nhập hoadondientu.gdt.gov.vn với username dạng 13 số liền
   (không gạch) — khi làm tính năng kết nối thuế cho chi nhánh, cần contract test riêng.
+  Nếu Tổng cục Thuế chỉ nhận dạng CÓ gạch, tầng kết nối thuế phải trình bày lại dạng gạch
+  từ 13 số liền (phép đổi hai chiều là 1-1 nên không mất thông tin).

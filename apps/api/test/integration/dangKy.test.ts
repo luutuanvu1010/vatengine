@@ -135,9 +135,21 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
 
   // Đơn vị phụ thuộc (chi nhánh) viết đúng chuẩn TT 105/2020/TT-BTC Điều 5: 10 số + dấu
   // gạch ngang + 3 số. Trước đây bị chặn ⇒ chi nhánh như 0305097236-005 không đăng ký được.
-  it("MST đơn vị phụ thuộc dạng 10 số-3 số (0305097236-005) → 201", async () => {
+  // Giá trị LƯU được chuẩn hóa về 13 số liền — khớp quy ước chuỗi thuần chữ số của toàn
+  // hệ thống (username tài khoản thuế, UNIQUE, đối chiếu nbmst).
+  it("MST đơn vị phụ thuộc dạng 10 số-3 số (0305097236-005) → 201, lưu 13 số liền", async () => {
     const res = await dangKy(app, body({ mst: "0305097236-005", email: "chinhanh@abc.vn" }));
     expect(res.status).toBe(201);
+    const t = (await db.select().from(tenants)).find((x) => x.mst.startsWith("0305097236"));
+    expect(t?.mst).toBe("0305097236005");
+  });
+
+  // Hai cách viết của CÙNG một mã không được thành hai tenant.
+  it("đăng ký dạng có gạch rồi dạng 13 số liền của cùng mã → 409 da_ton_tai", async () => {
+    await dangKy(app, body({ mst: "0305097236-006", email: "cn6@abc.vn" }));
+    const res = await dangKy(app, body({ mst: "0305097236006", email: "cn6b@abc.vn" }));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "da_ton_tai" });
   });
 
   // 12 số = số định danh cá nhân (CCCD) dùng thay MST cho CÁ NHÂN & HỘ KINH DOANH theo
