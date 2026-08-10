@@ -33,9 +33,9 @@ const patchSchema = z
   })
   .strict();
 
-// MST 10, 12 hoặc 13 chữ số — khớp `dangKy.ts` (12 = số định danh cá nhân của
-// cá nhân/hộ kinh doanh theo TT 86/2024/TT-BTC).
-const MST_RE = /^\d{10}$|^\d{12}$|^\d{13}$/;
+// MST 10, 12, 13 chữ số hoặc dạng đơn vị phụ thuộc 10 số-3 số (TT 105/2020) — khớp
+// `dangKy.ts` (12 = số định danh cá nhân của cá nhân/hộ kinh doanh theo TT 86/2024/TT-BTC).
+const MST_RE = /^\d{10}(-\d{3})?$|^\d{12}$|^\d{13}$/;
 const doiMstSchema = z.object({ mst: z.string() }).strict();
 
 /** Ánh xạ path → hành động máy trạng thái. Path dùng gạch nối (quy ước URL), hành động

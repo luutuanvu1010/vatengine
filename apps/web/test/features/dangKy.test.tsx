@@ -117,8 +117,20 @@ describe("Gửi đăng ký", () => {
     await u.type(screen.getByLabelText(/^Tên doanh nghiệp$/i), "Cty");
     await u.type(screen.getByLabelText(/^Mã số thuế$/i), "123");
     await u.click(screen.getByRole("checkbox"));
-    expect(screen.getByText(/đúng 10, 12 hoặc 13 chữ số/i)).toBeInTheDocument();
+    expect(screen.getByText(/10, 12 hoặc 13 chữ số/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Gửi đăng ký/i })).toBeDisabled();
+  });
+
+  // Đơn vị phụ thuộc (chi nhánh) viết đúng chuẩn TT 105/2020: 10 số + gạch ngang + 3 số.
+  it("MST chi nhánh dạng 0305097236-005 → KHÔNG báo lỗi, nút gửi được", async () => {
+    renderWithProviders(<DangKyPage />);
+    const u = userEvent.setup();
+    await u.type(screen.getByLabelText(/^Email/i), "a@b.vn");
+    await u.type(screen.getByLabelText(/^Tên doanh nghiệp$/i), "Chi nhánh Cty");
+    await u.type(screen.getByLabelText(/^Mã số thuế$/i), "0305097236-005");
+    await u.click(screen.getByRole("checkbox"));
+    expect(screen.queryByText(/chữ số/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Gửi đăng ký/i })).toBeEnabled();
   });
 
   // Hộ kinh doanh / cá nhân dùng số định danh cá nhân 12 số làm MST (TT 86/2024/TT-BTC).

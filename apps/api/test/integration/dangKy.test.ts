@@ -111,7 +111,16 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
     expect(await res.json()).toEqual({ error: "email_khong_hop_le" });
   });
 
-  for (const mst of ["010000009", "01000000999", "010000009A"]) {
+  // Dạng gạch ngang sai: nhánh phải đúng 3 số, không treo gạch cuối, không gạch ở vị trí khác.
+  for (const mst of [
+    "010000009",
+    "01000000999",
+    "010000009A",
+    "0100000099-05",
+    "0100000099-0055",
+    "0100000099-",
+    "01000000-99005",
+  ]) {
     it(`MST sai dạng (${mst}) → 400 mst_khong_hop_le`, async () => {
       const res = await dangKy(app, body({ mst, email: `khac-${mst}@abc.vn` }));
       expect(res.status).toBe(400);
@@ -121,6 +130,13 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
 
   it("MST 13 số hợp lệ → 201 (không chỉ 10 số)", async () => {
     const res = await dangKy(app, body({ mst: "0100000099123", email: "khac13@abc.vn" }));
+    expect(res.status).toBe(201);
+  });
+
+  // Đơn vị phụ thuộc (chi nhánh) viết đúng chuẩn TT 105/2020/TT-BTC Điều 5: 10 số + dấu
+  // gạch ngang + 3 số. Trước đây bị chặn ⇒ chi nhánh như 0305097236-005 không đăng ký được.
+  it("MST đơn vị phụ thuộc dạng 10 số-3 số (0305097236-005) → 201", async () => {
+    const res = await dangKy(app, body({ mst: "0305097236-005", email: "chinhanh@abc.vn" }));
     expect(res.status).toBe(201);
   });
 

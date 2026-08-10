@@ -208,7 +208,14 @@ describe("POST /admin/tenants/:id/doi-mst", () => {
     expect(await res.json()).toEqual({ error: "mst_da_ton_tai" });
   });
 
-  it.each(["123", "abcdefghij", "01000000011", ""])(
+  it("đổi sang MST đơn vị phụ thuộc dạng 10 số-3 số → thành công", async () => {
+    const res = await doi("0100000002-001");
+    expect(res.status).toBe(200);
+    const t = (await db.select().from(tenants).where(eq(tenants.id, tenantId)))[0];
+    expect(t?.mst).toBe("0100000002-001");
+  });
+
+  it.each(["123", "abcdefghij", "01000000011", "", "0100000002-01", "0100000002-"])(
     "MST sai dạng %s → 400 mst_khong_hop_le",
     async (mst) => {
       const res = await doi(mst);

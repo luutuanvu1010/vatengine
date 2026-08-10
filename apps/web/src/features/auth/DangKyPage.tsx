@@ -15,9 +15,14 @@ import { Alert, Button, Card, TextField } from "../../components/ui/primitives";
 import { ApiError, api } from "../../lib/apiClient";
 import { vi } from "../../lib/i18n/vi";
 
-// 10 = doanh nghiệp/tổ chức; 13 = đơn vị phụ thuộc; 12 = số định danh cá nhân
+// 10 = doanh nghiệp/tổ chức; 10-3 (gạch ngang, chuẩn TT 105/2020, vd 0305097236-005)
+// hoặc 13 số liền = đơn vị phụ thuộc (chi nhánh); 12 = số định danh cá nhân
 // (hộ kinh doanh / cá nhân, theo TT 86/2024/TT-BTC). Khớp `apps/api/.../dangKy.ts`.
-const MST_RE = /^\d{10}$|^\d{12}$|^\d{13}$/;
+const MST_RE = /^\d{10}(-\d{3})?$|^\d{12}$|^\d{13}$/;
+
+// Một nguồn cho CẢ thông điệp lỗi server lẫn nhắc tại chỗ — hai chỗ hiển thị không lệch nhau.
+const MST_SAI_DANG =
+  "Mã số thuế phải gồm 10, 12 hoặc 13 chữ số; chi nhánh dùng dạng 10 số, gạch ngang và 3 số (ví dụ 0305097236-005).";
 
 /**
  * Ánh xạ ĐỦ 7 mã lỗi của `POST /dang-ky`. Mỗi câu phải nói người dùng cần LÀM GÌ tiếp —
@@ -32,7 +37,7 @@ export function thongDiepLoiDangKy(err: unknown): string {
     case "email_khong_hop_le":
       return "Email này không được chấp nhận. Vui lòng dùng email doanh nghiệp, Gmail hoặc Yahoo — không dùng email tạm thời.";
     case "mst_khong_hop_le":
-      return "Mã số thuế phải gồm đúng 10, 12 hoặc 13 chữ số.";
+      return MST_SAI_DANG;
     case "chua_dong_y_dieu_khoan":
       return "Bạn cần tích ô cam kết ủy quyền trước khi gửi đăng ký.";
     case "da_ton_tai":
@@ -219,13 +224,14 @@ export function DangKyPage() {
                 onChange={(e) => setTenDoanhNghiep(e.target.value)}
                 placeholder="Công ty TNHH ABC"
               />
+              {/* KHÔNG dùng inputMode="numeric": bàn phím số trên di động thiếu phím "-",
+                  chi nhánh (0305097236-005) sẽ không gõ nổi mã của chính mình. */}
               <TextField
                 label="Mã số thuế"
                 required
-                inputMode="numeric"
                 value={mst}
                 onChange={(e) => setMst(e.target.value)}
-                placeholder="10, 12 hoặc 13 chữ số"
+                placeholder="Ví dụ: 0305097236 hoặc 0305097236-005"
                 aria-describedby="mst-help"
               />
               {mst.trim() !== "" && !mstHopLe && (
@@ -233,7 +239,7 @@ export function DangKyPage() {
                   id="mst-help"
                   style={{ margin: 0, fontSize: "var(--fs-sm)", color: "var(--danger-600)" }}
                 >
-                  Mã số thuế phải gồm đúng 10, 12 hoặc 13 chữ số.
+                  {MST_SAI_DANG}
                 </p>
               )}
 

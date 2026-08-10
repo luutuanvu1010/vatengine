@@ -23,11 +23,13 @@ import { TURNSTILE_FIELD, kiemTraCauHinhTurnstile, xacMinhTurnstile } from "../t
 import type { AppDeps, AppEnv } from "../types";
 import { urlWeb } from "../urlWeb";
 
-// MST 10, 12 hoặc 13 chữ số (giá trị verbatim — không đổi dạng).
-// 10 = doanh nghiệp/tổ chức; 13 = đơn vị phụ thuộc (10 + 3 số chi nhánh);
-// 12 = số định danh cá nhân (CCCD) dùng thay MST cho cá nhân & hộ kinh doanh
-// theo Thông tư 86/2024/TT-BTC (áp dụng từ 01/07/2025).
-const MST_RE = /^\d{10}$|^\d{12}$|^\d{13}$/;
+// MST (giá trị verbatim — không đổi dạng), phủ đủ các loại mã tại Việt Nam:
+// 10 số = doanh nghiệp/tổ chức; 10 số + "-" + 3 số = đơn vị phụ thuộc (chi nhánh) viết
+// đúng chuẩn TT 105/2020/TT-BTC Điều 5 (vd 0305097236-005) — đây cũng là dạng hệ thống
+// Tổng cục Thuế hiển thị; 13 số liền = biến thể bỏ gạch của cùng mã đó; 12 số = số định
+// danh cá nhân (CCCD) dùng thay MST cho cá nhân & hộ kinh doanh theo TT 86/2024/TT-BTC
+// (áp dụng từ 01/07/2025).
+const MST_RE = /^\d{10}(-\d{3})?$|^\d{12}$|^\d{13}$/;
 
 // dongYDieuKhoan CỐ Ý optional ở tầng Zod: nếu bắt buộc boolean, THIẾU trường sẽ rớt ngay
 // ở safeParse thành `bad_request` chung chung, che mất mã lỗi nghiệp vụ riêng

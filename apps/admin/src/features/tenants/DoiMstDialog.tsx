@@ -8,12 +8,14 @@ import { useState } from "react";
 import { AdminApiError, adminApi } from "../../lib/adminApiClient";
 import type { TenantRow } from "../../lib/types";
 
-// 10 = doanh nghiệp/tổ chức; 13 = đơn vị phụ thuộc; 12 = số định danh cá nhân
-// (hộ kinh doanh / cá nhân, theo TT 86/2024/TT-BTC).
-const MST_RE = /^\d{10}$|^\d{12}$|^\d{13}$/;
+// 10 = doanh nghiệp/tổ chức; 10-3 (gạch ngang, TT 105/2020) hoặc 13 số liền = đơn vị
+// phụ thuộc; 12 = số định danh cá nhân (hộ kinh doanh / cá nhân, theo TT 86/2024/TT-BTC).
+// Khớp `apps/api/.../admin/tenants.ts`.
+const MST_RE = /^\d{10}(-\d{3})?$|^\d{12}$|^\d{13}$/;
 
 // Thông điệp kiểm ở CLIENT (dạng MST) — tách riêng vì nó không đến từ mã lỗi server.
-const MST_SAI_DANG = "Mã số thuế phải gồm 10, 12 hoặc 13 chữ số.";
+const MST_SAI_DANG =
+  "Mã số thuế phải gồm 10, 12 hoặc 13 chữ số; đơn vị phụ thuộc dùng dạng 10 số, gạch ngang và 3 số (ví dụ 0305097236-005).";
 
 // Ánh xạ MÃ LỖI server → tiếng người. `noUncheckedIndexedAccess` khiến truy cập trả
 // `string | undefined`, nên nơi dùng luôn có nhánh mặc định.
@@ -111,7 +113,7 @@ export function DoiMstDialog({ tenant, onDong, onXong }: Props) {
         )}
 
         <label htmlFor="mst-moi" style={{ display: "block", marginBottom: "0.35rem" }}>
-          Mã số thuế mới (10, 12 hoặc 13 chữ số)
+          Mã số thuế mới (10, 12, 13 chữ số hoặc dạng chi nhánh 10 số-3 số)
         </label>
         <input
           id="mst-moi"
