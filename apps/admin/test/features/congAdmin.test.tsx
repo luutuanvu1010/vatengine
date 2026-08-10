@@ -93,6 +93,38 @@ describe("🔴 Guard phiên — không lẫn sang miền khách", () => {
   });
 });
 
+describe("Tab 'Chờ xác thực email' — hồ sơ đăng ký chưa bấm link không được tàng hình", () => {
+  // Lỗi nền: từ U34c, hồ sơ mới đăng ký vào `cho_xac_thuc_email` và chỉ sang `cho_duyet`
+  // khi khách bấm link trong thư. Cổng Admin không có tab/nhãn nào cho trạng thái này ⇒
+  // chủ dự án thấy "Chờ duyệt" trống và tưởng không ai đăng ký.
+  it("có tab riêng, bấm vào thì lọc đúng trạng thái cho_xac_thuc_email", async () => {
+    api.lietKeTenant.mockResolvedValue({ items: [], total: 0 });
+    renderTenants();
+    const u = userEvent.setup();
+    await u.click(await screen.findByRole("button", { name: "Chờ xác thực email" }));
+    await waitFor(() =>
+      expect(api.lietKeTenant).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: "cho_xac_thuc_email" }),
+      ),
+    );
+    // Màn rỗng phải GIẢI THÍCH trạng thái này nghĩa là gì, không chỉ "không khớp".
+    expect(await screen.findByText(/chưa bấm liên kết xác thực/i)).toBeInTheDocument();
+  });
+
+  it("hàng ở trạng thái này có nhãn tiếng người + KHÔNG có nút máy trạng thái", async () => {
+    api.lietKeTenant.mockResolvedValue({
+      items: [tenant({ trang_thai: "cho_xac_thuc_email" })],
+      total: 1,
+    });
+    renderTenants();
+    const hang = within(await screen.findByRole("row", { name: /Công ty Chờ Duyệt/ }));
+    expect(hang.getByText("Chờ xác thực email")).toBeInTheDocument();
+    for (const nhan of ["Duyệt", "Từ chối", "Khóa", "Mở khóa"]) {
+      expect(hang.queryByRole("button", { name: nhan })).not.toBeInTheDocument();
+    }
+  });
+});
+
 describe("Bảng thao tác bám máy trạng thái U18", () => {
   it("hanhDongChoTrangThai khớp đúng máy trạng thái", () => {
     expect(hanhDongChoTrangThai("cho_duyet")).toEqual(["duyet", "tu_choi"]);

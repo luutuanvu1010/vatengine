@@ -1,8 +1,17 @@
 // U19 — Kiểu khớp hợp đồng Admin API (U18). Nguồn sự thật là `apps/api/src/routes/admin/*`
 // và các hàm SQL ở `packages/db/migrations/0011_super_admin.sql`; file này chỉ mô tả lại.
 
-/** Khớp máy trạng thái U18 (`apps/api/src/admin/tenantStateMachine.ts`). */
-export const TRANG_THAI_TENANT = ["cho_duyet", "active", "khoa", "tu_choi"] as const;
+/** Khớp máy trạng thái U18 (`apps/api/src/admin/tenantStateMachine.ts`).
+ * `cho_xac_thuc_email` (U34c) là trạng thái ĐẦU của mọi hồ sơ tự đăng ký — admin chỉ XEM
+ * (không hành động nào hợp lệ), nhưng phải NHÌN THẤY được, nếu không hồ sơ chưa/không
+ * xác thực được email sẽ tàng hình khỏi Cổng Admin. */
+export const TRANG_THAI_TENANT = [
+  "cho_xac_thuc_email",
+  "cho_duyet",
+  "active",
+  "khoa",
+  "tu_choi",
+] as const;
 export type TrangThaiTenant = (typeof TRANG_THAI_TENANT)[number];
 
 export interface TenantRow {

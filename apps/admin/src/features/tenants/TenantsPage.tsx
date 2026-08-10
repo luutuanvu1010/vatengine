@@ -15,6 +15,10 @@ const TAB: Array<{ ma: TrangThaiTenant | "tat_ca"; nhan: string }> = [
   // "Chờ duyệt" đứng đầu VÀ là mặc định: đó là việc cần làm của chủ dự án, không phải
   // danh sách để ngắm. Mở app ra là thấy ngay việc tồn đọng.
   { ma: "cho_duyet", nhan: "Chờ duyệt" },
+  // U34c: hồ sơ mới đăng ký nằm ở đây cho tới khi khách bấm link xác thực trong thư.
+  // Không có tab này thì hồ sơ kẹt xác thực (thư không tới, khách quên bấm) tàng hình
+  // hoàn toàn — chủ dự án thấy "Chờ duyệt" trống và tưởng không ai đăng ký.
+  { ma: "cho_xac_thuc_email", nhan: "Chờ xác thực email" },
   { ma: "active", nhan: "Đang hoạt động" },
   { ma: "khoa", nhan: "Đã khóa" },
   { ma: "tu_choi", nhan: "Đã từ chối" },
@@ -22,6 +26,7 @@ const TAB: Array<{ ma: TrangThaiTenant | "tat_ca"; nhan: string }> = [
 ];
 
 const NHAN_TRANG_THAI: Record<string, { chu: string; mau: string }> = {
+  cho_xac_thuc_email: { chu: "Chờ xác thực email", mau: "var(--chu-mo)" },
   cho_duyet: { chu: "Chờ duyệt", mau: "var(--cho)" },
   active: { chu: "Đang hoạt động", mau: "var(--tot)" },
   khoa: { chu: "Đã khóa", mau: "var(--nguy)" },
@@ -207,8 +212,10 @@ export function TenantsPage() {
       {ds.data && ds.data.items.length === 0 && (
         <p style={{ color: "var(--chu-mo)" }}>
           {tab === "cho_duyet"
-            ? "Không có doanh nghiệp nào đang chờ duyệt."
-            : "Không có doanh nghiệp nào khớp."}
+            ? "Không có doanh nghiệp nào đang chờ duyệt. Hồ sơ mới đăng ký nằm ở tab “Chờ xác thực email” cho tới khi khách bấm liên kết xác thực trong thư."
+            : tab === "cho_xac_thuc_email"
+              ? "Không có hồ sơ nào đang chờ xác thực email. Hồ sơ mới đăng ký nằm ở đây khi khách chưa bấm liên kết xác thực trong thư; bấm xong sẽ chuyển sang “Chờ duyệt”."
+              : "Không có doanh nghiệp nào khớp."}
         </p>
       )}
 
