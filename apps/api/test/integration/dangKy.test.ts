@@ -111,7 +111,17 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
     expect(await res.json()).toEqual({ error: "email_khong_hop_le" });
   });
 
-  for (const mst of ["010000009", "01000000999", "010000009A"]) {
+  for (const mst of [
+    "010000009",
+    "01000000999",
+    "010000009A",
+    // Gạch ngang sai vị trí/độ dài (khác đúng dạng 10 số-3 số của đơn vị phụ thuộc) —
+    // vẫn phải bị từ chối, không được regex nới lỏng vô tình chấp nhận theo.
+    "010000009-005",
+    "0100000099-05",
+    "0100000099-0055",
+    "0100000099-00A",
+  ]) {
     it(`MST sai dạng (${mst}) → 400 mst_khong_hop_le`, async () => {
       const res = await dangKy(app, body({ mst, email: `khac-${mst}@abc.vn` }));
       expect(res.status).toBe(400);
@@ -122,6 +132,16 @@ describe("POST /dang-ky (U17b Task 5, PGlite)", () => {
   it("MST 13 số hợp lệ → 201 (không chỉ 10 số)", async () => {
     const res = await dangKy(app, body({ mst: "0100000099123", email: "khac13@abc.vn" }));
     expect(res.status).toBe(201);
+  });
+
+  // MST đơn vị phụ thuộc/chi nhánh viết đúng dạng pháp lý "10 số-3 số" (vd
+  // "0305097236-005") phải đăng ký được — lưu VERBATIM (giữ nguyên dấu gạch ngang, không
+  // đổi dạng, đúng nguyên tắc ghi ở MST_RE phía trên).
+  it("MST đơn vị phụ thuộc dạng có gạch ngang (10-3) hợp lệ → 201, lưu verbatim", async () => {
+    const res = await dangKy(app, body({ mst: "0305097236-005", email: "chinhanh@abc.vn" }));
+    expect(res.status).toBe(201);
+    const t = await db.select().from(tenants).where(eq(tenants.mst, "0305097236-005"));
+    expect(t).toHaveLength(1);
   });
 
   // 12 số = số định danh cá nhân (CCCD) dùng thay MST cho CÁ NHÂN & HỘ KINH DOANH theo

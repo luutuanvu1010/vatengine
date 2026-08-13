@@ -8,12 +8,13 @@ import { useState } from "react";
 import { AdminApiError, adminApi } from "../../lib/adminApiClient";
 import type { TenantRow } from "../../lib/types";
 
-// 10 = doanh nghiệp/tổ chức; 13 = đơn vị phụ thuộc; 12 = số định danh cá nhân
-// (hộ kinh doanh / cá nhân, theo TT 86/2024/TT-BTC).
-const MST_RE = /^\d{10}$|^\d{12}$|^\d{13}$/;
+// 10 = doanh nghiệp/tổ chức; 13 (liền) hoặc 10-3 (gạch ngang) = đơn vị phụ thuộc/chi
+// nhánh; 12 = số định danh cá nhân (hộ kinh doanh / cá nhân, theo TT 86/2024/TT-BTC).
+const MST_RE = /^\d{10}$|^\d{12}$|^\d{13}$|^\d{10}-\d{3}$/;
 
 // Thông điệp kiểm ở CLIENT (dạng MST) — tách riêng vì nó không đến từ mã lỗi server.
-const MST_SAI_DANG = "Mã số thuế phải gồm 10, 12 hoặc 13 chữ số.";
+const MST_SAI_DANG =
+  "Mã số thuế phải gồm 10, 12 hoặc 13 chữ số (đơn vị phụ thuộc có thể viết dạng 10 số-3 số).";
 
 // Ánh xạ MÃ LỖI server → tiếng người. `noUncheckedIndexedAccess` khiến truy cập trả
 // `string | undefined`, nên nơi dùng luôn có nhánh mặc định.

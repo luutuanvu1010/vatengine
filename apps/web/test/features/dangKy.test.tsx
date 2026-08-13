@@ -132,6 +132,19 @@ describe("Gửi đăng ký", () => {
     expect(screen.queryByText(/chữ số/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Gửi đăng ký/i })).toBeEnabled();
   });
+
+  // MST đơn vị phụ thuộc/chi nhánh dạng pháp lý "10 số-3 số" (vd "0305097236-005") — khớp
+  // MST_RE backend (dangKy.ts), không được chặn tại nút gửi.
+  it("MST đơn vị phụ thuộc dạng có gạch ngang (10-3) → KHÔNG báo lỗi, nút gửi được", async () => {
+    renderWithProviders(<DangKyPage />);
+    const u = userEvent.setup();
+    await u.type(screen.getByLabelText(/^Email/i), "a@b.vn");
+    await u.type(screen.getByLabelText(/^Tên doanh nghiệp$/i), "Chi nhánh ABC");
+    await u.type(screen.getByLabelText(/^Mã số thuế$/i), "0305097236-005");
+    await u.click(screen.getByRole("checkbox"));
+    expect(screen.queryByText(/chữ số/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Gửi đăng ký/i })).toBeEnabled();
+  });
 });
 
 describe("Màn sau khi đăng ký", () => {

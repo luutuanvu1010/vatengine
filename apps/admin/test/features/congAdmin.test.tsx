@@ -409,4 +409,23 @@ describe("Đổi MST", () => {
     expect(hop.getByRole("alert")).toHaveTextContent(/Mã số thuế phải gồm 10, 12 hoặc 13 chữ số/i);
     expect(api.doiMst).not.toHaveBeenCalled();
   });
+
+  // MST đơn vị phụ thuộc/chi nhánh dạng pháp lý "10 số-3 số" (vd "0305097236-005") — khớp
+  // MST_RE backend (admin/tenants.ts), không được chặn tại client, gọi API verbatim.
+  it("MST đơn vị phụ thuộc dạng có gạch ngang (10-3) → KHÔNG báo lỗi, gọi API verbatim", async () => {
+    api.lietKeTenant.mockResolvedValue({ items: [tenant()], total: 1 });
+    api.doiMst.mockResolvedValue({
+      ok: true,
+      mst_cu: "0100000001",
+      mst_moi: "0305097236-005",
+      so_tk_thue_da_xoa: 0,
+    });
+    renderTenants();
+    await userEvent.click(await screen.findByRole("button", { name: "Đổi MST" }));
+    const hop = within(await screen.findByRole("dialog"));
+    await userEvent.type(hop.getByLabelText(/mã số thuế mới/i), "0305097236-005");
+    await userEvent.click(hop.getByRole("button", { name: "Đổi MST" }));
+    await waitFor(() => expect(api.doiMst).toHaveBeenCalledWith(tenant().id, "0305097236-005"));
+    expect(screen.queryByText(/Mã số thuế phải gồm/i)).not.toBeInTheDocument();
+  });
 });

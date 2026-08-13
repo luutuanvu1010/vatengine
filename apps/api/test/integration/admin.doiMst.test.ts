@@ -208,14 +208,28 @@ describe("POST /admin/tenants/:id/doi-mst", () => {
     expect(await res.json()).toEqual({ error: "mst_da_ton_tai" });
   });
 
-  it.each(["123", "abcdefghij", "01000000011", ""])(
-    "MST sai dạng %s → 400 mst_khong_hop_le",
-    async (mst) => {
-      const res = await doi(mst);
-      expect(res.status).toBe(400);
-      expect(await res.json()).toEqual({ error: "mst_khong_hop_le" });
-    },
-  );
+  it.each([
+    "123",
+    "abcdefghij",
+    "01000000011",
+    "",
+    // Gạch ngang sai vị trí/độ dài — khác đúng dạng 10 số-3 số của đơn vị phụ thuộc.
+    "010000009-005",
+    "0100000099-05",
+    "0100000099-0055",
+  ])("MST sai dạng %s → 400 mst_khong_hop_le", async (mst) => {
+    const res = await doi(mst);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "mst_khong_hop_le" });
+  });
+
+  // MST đơn vị phụ thuộc/chi nhánh dạng "10 số-3 số" (vd "0305097236-005") phải đổi
+  // được — lưu VERBATIM (giữ nguyên dấu gạch ngang, khớp dangKy.ts).
+  it("MST đơn vị phụ thuộc dạng có gạch ngang (10-3) → 200, giữ verbatim", async () => {
+    const res = await doi("0305097236-005");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, mst_moi: "0305097236-005" });
+  });
 
   it("tenant không tồn tại → 404", async () => {
     const res = await doi("0100000002", crypto.randomUUID());
