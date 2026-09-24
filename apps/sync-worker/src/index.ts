@@ -91,7 +91,7 @@ export default {
     // (chỉ nhồi DLQ vô ích). Sự kiện toàn cục → chỉ observability, không audit (cần tenant).
     const health = await egressHealthClient(env.EGRESS_HEALTH).loadHealth();
     if (isEgressBlocked(health)) {
-      console.warn("[GATE] egress GEO_BLOCKED — skip cron enqueue");
+      console.warn(`[GATE] egress ${health.lastVerdict} — skip cron enqueue`);
       return;
     }
 

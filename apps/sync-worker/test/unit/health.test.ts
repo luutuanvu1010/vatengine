@@ -79,4 +79,18 @@ describe("H-B.6 — lastVerdict + isEgressBlocked", () => {
     expect(isEgressBlocked(nextHealth(HEALTHY, "RATE_LIMITED").state)).toBe(false);
     expect(isEgressBlocked(HEALTHY)).toBe(false); // mặc định không chặn
   });
+
+  // QĐ-6 (U43): WAF chặn cả endpoint công khai = mọi thứ đã bị chặn → không enqueue (không
+  // thử dồn), nhưng KHÔNG chuyển relay (chặn theo header, relay cũng chết y hệt).
+  it("WAF_BLOCKED cũng chặn enqueue như GEO_BLOCKED", () => {
+    expect(isEgressBlocked({ consecutiveBad: 3, alerted: true, lastVerdict: "WAF_BLOCKED" })).toBe(
+      true,
+    );
+    expect(isEgressBlocked({ consecutiveBad: 3, alerted: true, lastVerdict: "GEO_BLOCKED" })).toBe(
+      true,
+    );
+    expect(isEgressBlocked({ consecutiveBad: 3, alerted: true, lastVerdict: "TIMEOUT" })).toBe(
+      false,
+    );
+  });
 });
