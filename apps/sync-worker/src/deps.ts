@@ -21,6 +21,8 @@ import {
 } from "@vat/sync";
 import type { AuditSyncMessage, DeltaPullMessage, HoSoGocMessage } from "@vat/sync";
 import { eq } from "drizzle-orm";
+import type { CanaryDeps } from "./canary";
+import { guiCanhBaoTelegram } from "./canhBao";
 import { egressHealthClient } from "./egressHealth";
 import type { EgressProbeDeps } from "./egressProbe";
 import {
@@ -48,15 +50,14 @@ import type {
 // Egress T0 (direct-cf) — điểm gọi GDT DUY NHẤT đi qua adapter (gdt-adapter.md).
 const transport = createDirectCfTransport();
 
-/** GIÁM SÁT (mục C) — dựng deps cho probe egress. Sink cảnh báo = Workers
- * observability (structured log CRITICAL): sự kiện TOÀN HỆ THỐNG, không tenant →
- * KHÔNG audit_log (tenant-scoped). Chỉ metadata vận hành, KHÔNG token/secret
- * (security.md — probe gọi endpoint công khai, không đăng nhập). */
+/** GIÁM SÁT (mục C) — deps cho probe egress. Sink = log CRITICAL (Workers observability)
+ * VÀ Telegram (U43, tới người thật). Sự kiện TOÀN HỆ THỐNG → KHÔNG audit_log (tenant-scoped).
+ * Chỉ metadata vận hành, KHÔNG token/secret (security.md). */
 export function makeEgressProbeDeps(env: Env): EgressProbeDeps {
   return {
     transport,
     ...egressHealthClient(env.EGRESS_HEALTH),
-    emitAlert(alert, result) {
+    async emitAlert(alert, result) {
       console.error(
         JSON.stringify({
           level: "CRITICAL",
@@ -69,6 +70,45 @@ export function makeEgressProbeDeps(env: Env): EgressProbeDeps {
           latencyMs: result.latencyMs,
         }),
       );
+      await guiCanhBaoTelegram(env, {
+        loai: "egress",
+        verdict: alert.verdict,
+        httpStatus: result.httpStatus,
+        consecutiveBad: alert.consecutiveBad,
+        egressCountry: result.egressCountry,
+        thoiDiem: new Date(),
+      });
+    },
+  };
+}
+
+/** U43 — deps cho canary lối vào GDT (cron mỗi giờ). Cùng transport T0, cùng DO EgressHealth. */
+export function makeCanaryDeps(env: Env): CanaryDeps {
+  const health = egressHealthClient(env.EGRESS_HEALTH);
+  return {
+    transport,
+    loadCanary: health.loadCanary,
+    saveCanary: health.saveCanary,
+    async emitCanaryAlert(alert) {
+      console.error(
+        JSON.stringify({
+          level: alert.kind === "bat_giam_sat" || alert.kind === "hoi_phuc" ? "INFO" : "CRITICAL",
+          event: "gdt_canary_alert",
+          kind: alert.kind,
+          verdict: alert.result.verdict,
+          httpStatus: alert.result.httpStatus,
+          consecutiveBad: alert.consecutiveBad,
+          latencyMs: alert.result.latencyMs,
+        }),
+      );
+      await guiCanhBaoTelegram(env, {
+        loai: alert.kind,
+        verdict: alert.result.verdict,
+        httpStatus: alert.result.httpStatus,
+        message: alert.result.message,
+        consecutiveBad: alert.consecutiveBad,
+        thoiDiem: new Date(),
+      });
     },
   };
 }
