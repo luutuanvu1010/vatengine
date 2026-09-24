@@ -5,6 +5,7 @@
 // GDT /api/* (ADR-0001 Amendment #3/#4). Đường T1 (vn-relay) TREO — chỉ hồi sinh
 // nếu probe phát hiện GEO_BLOCKED thật (security.md / gdt-adapter.md).
 import { BASE, PUBLIC_PROBE_PATH } from "./endpoints";
+import { withRequestId } from "./http";
 import { type GdtTransport, type ProbeResult, classify } from "./transport";
 
 /**
@@ -18,7 +19,12 @@ export function createDirectCfTransport(fetchImpl: typeof fetch = fetch): GdtTra
     async probe(): Promise<ProbeResult> {
       const start = Date.now();
       try {
-        const res = await fetchImpl(`${BASE}${PUBLIC_PROBE_PATH}`, { method: "GET" });
+        // Cùng header request-id như mọi request nghiệp vụ (gdt-adapter.md, 2026-09-24):
+        // probe không đi qua fetchWithRetry (cố ý: không retry/backoff khi đo sức khỏe).
+        const res = await fetchImpl(`${BASE}${PUBLIC_PROBE_PATH}`, {
+          method: "GET",
+          headers: withRequestId(undefined),
+        });
         return {
           transport: "direct-cf",
           verdict: classify(res.status, false, false),

@@ -19,6 +19,15 @@ export interface AuthResult {
   token: string;
 }
 
+/** Thông điệp GDT giải thích vì sao từ chối đăng nhập (message / error_description). */
+function thongDiepTuChoi(data: Record<string, unknown>): string {
+  return (
+    (typeof data.message === "string" && data.message) ||
+    (typeof data.error_description === "string" && data.error_description) ||
+    "Đăng nhập thất bại."
+  );
+}
+
 export async function authenticate(
   transport: GdtTransport,
   credentials: AuthCredentials,
@@ -35,26 +44,32 @@ export async function authenticate(
     opts,
   );
 
-  if (res.status === 401) {
-    throw new GdtError("Hết phiên đăng nhập.", "SESSION_EXPIRED");
-  }
-
-  let data: Record<string, unknown>;
+  let data: Record<string, unknown> = {};
+  let bodyLaJson = true;
   try {
     data = (await res.json()) as Record<string, unknown>;
   } catch {
+    bodyLaJson = false;
+  }
+
+  // Sai captcha/mật khẩu là lỗi NGHIỆP VỤ. KIỂM CHỨNG 2026-09-24 (curl thật): GDT trả
+  // HTTP **401** kèm {"message":"Mã captcha không đúng."}; tài liệu cũ nói "200 kèm
+  // message không token" — giữ cả hai nhánh. Ở bước đăng nhập CHƯA có phiên nào để
+  // "hết", nên 401 ở đây KHÔNG phải SESSION_EXPIRED (trước đây audit ghi "Hết phiên đăng
+  // nhập." cho mọi lượt gõ sai captcha — sai bản chất). Giữ đúng thông điệp GDT, kèm
+  // httpStatus để tầng gọi/contract test phân biệt 401 nghiệp vụ với 403 WAF chặn.
+  // KHÔNG coi là lệch hợp đồng (gdt-adapter.md) — 3 lần gõ sai captcha của người dùng
+  // thật không được tự mở circuit breaker.
+  if (res.status === 401) {
+    throw new GdtError(thongDiepTuChoi(data), "HTTP_ERROR", 401);
+  }
+
+  if (!bodyLaJson) {
     throw new GdtError(`Phản hồi không hợp lệ từ máy chủ thuế (HTTP ${res.status}).`);
   }
 
   if (res.status !== 200 || typeof data.token !== "string") {
-    // Sai captcha/mật khẩu là lỗi NGHIỆP VỤ — GDT có thể trả 200 kèm message lỗi
-    // mà không có token. KHÔNG được coi là lệch hợp đồng (xem gdt-adapter.md),
-    // nếu không 3 lần gõ sai captcha của người dùng thật sẽ tự mở circuit breaker.
-    const message =
-      (typeof data.message === "string" && data.message) ||
-      (typeof data.error_description === "string" && data.error_description) ||
-      "Đăng nhập thất bại.";
-    throw new GdtError(message);
+    throw new GdtError(thongDiepTuChoi(data), "HTTP_ERROR", res.status);
   }
 
   checkContract(data, "authenticate", AUTH_PATH);

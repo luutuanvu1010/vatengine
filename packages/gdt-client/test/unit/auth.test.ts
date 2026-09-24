@@ -49,8 +49,15 @@ describe("authenticate", () => {
     );
   });
 
-  it("401 → GdtError('hết phiên'), không retry bằng credential cũ", async () => {
-    const { transport, callCount } = sequenceTransport([() => jsonResponse(401, {})]);
+  // KIỂM CHỨNG 2026-09-24 (curl thật, MST giả + captcha sai): GDT trả HTTP **401** kèm
+  // {"message":"Mã captcha không đúng.","path":"uri=/authenticate"}. Ở bước đăng nhập CHƯA
+  // có phiên nào để "hết", nên 401 ở đây là "GDT từ chối" (sai captcha/mật khẩu) — phải giữ
+  // đúng thông điệp GDT cho audit/UI, KHÔNG gán nhãn SESSION_EXPIRED (trước đây audit ghi
+  // "Hết phiên đăng nhập." cho mọi lượt gõ sai captcha — sai bản chất).
+  it("401 + message → GdtError mang ĐÚNG thông điệp GDT, httpStatus 401, không retry", async () => {
+    const { transport, callCount } = sequenceTransport([
+      () => jsonResponse(401, { message: "Mã captcha không đúng." }),
+    ]);
 
     let error: unknown;
     try {
@@ -60,7 +67,25 @@ describe("authenticate", () => {
     }
 
     expect(error).toBeInstanceOf(GdtError);
-    expect((error as GdtError).code).toBe("SESSION_EXPIRED");
+    expect((error as GdtError).message).toBe("Mã captcha không đúng.");
+    expect((error as GdtError).code).not.toBe("SESSION_EXPIRED");
+    expect((error as GdtError).httpStatus).toBe(401);
+    expect(callCount()).toBe(1);
+  });
+
+  it("401 thân rỗng/không JSON → GdtError thông điệp mặc định, vẫn không retry", async () => {
+    const { transport, callCount } = sequenceTransport([() => new Response("", { status: 401 })]);
+
+    let error: unknown;
+    try {
+      await authenticate(transport, CREDENTIALS, { maxAttempts: 3, backoffMs: 5 });
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(GdtError);
+    expect((error as GdtError).message).toBe("Đăng nhập thất bại.");
+    expect((error as GdtError).httpStatus).toBe(401);
     expect(callCount()).toBe(1);
   });
 
