@@ -198,7 +198,8 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
       onDone();
     },
     onError: () => {
-      // Sai captcha/mật khẩu (401) → xin captcha mới; không giữ gì.
+      // Sai captcha/mật khẩu (422 gdt_tu_choi) → xin captcha mới; không giữ gì. KHÔNG phải
+      // 401: apiClient coi 401 là hết phiên ứng dụng và đăng xuất (sự cố 2026-09-24).
       setCvalue("");
       captcha.refetch();
     },
