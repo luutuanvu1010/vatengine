@@ -17,7 +17,8 @@ function makeDeps(
   prev: HealthState = HEALTHY,
 ) {
   let saved: HealthState = prev;
-  const emitAlert = vi.fn();
+  // Sink production trả `true` = Telegram ĐÃ NHẬN (hợp đồng mới, mục A của review U43).
+  const emitAlert = vi.fn(async () => true);
   const deps: EgressProbeDeps = {
     transport: {
       name: "direct-cf",
@@ -59,6 +60,32 @@ describe("runEgressProbe", () => {
     expect(out.alerted).toBe(false);
     expect(emitAlert).not.toHaveBeenCalled();
     expect(getSaved().consecutiveBad).toBe(1);
+  });
+
+  // MỤC A — cùng khuôn với canary: cảnh báo KHÔNG giao được thì KHÔNG được ghi
+  // `alerted: true`, nếu không một lần POST Telegram hỏng là im tới tận khi hồi phục.
+  it("sink trả false (không giao được) → lưu alerted false ⇒ tick sau báo lại", async () => {
+    const { deps, emitAlert, getSaved } = makeDeps("GEO_BLOCKED", {
+      consecutiveBad: 2,
+      alerted: false,
+    });
+    emitAlert.mockResolvedValue(false);
+    await runEgressProbe(deps);
+    expect(getSaved().alerted).toBe(false);
+    // lastVerdict PHẢI còn: gate enqueue (isEgressBlocked) đọc nó, mất là mở cổng lại.
+    expect(getSaved().lastVerdict).toBe("GEO_BLOCKED");
+    await runEgressProbe(deps);
+    expect(emitAlert).toHaveBeenCalledTimes(2);
+  });
+
+  it("sink NÉM → cron không chết, coi như chưa giao (alerted false)", async () => {
+    const { deps, getSaved } = makeDeps("WAF_BLOCKED", { consecutiveBad: 2, alerted: false });
+    deps.emitAlert = () => {
+      throw new Error("telegram chết");
+    };
+    await expect(runEgressProbe(deps)).resolves.toEqual({ verdict: "WAF_BLOCKED", alerted: true });
+    expect(getSaved().alerted).toBe(false);
+    expect(getSaved().lastVerdict).toBe("WAF_BLOCKED");
   });
 
   it("transport.probe() ném lỗi → coi như ERROR, KHÔNG ném ra ngoài (cron sống)", async () => {

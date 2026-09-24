@@ -14,7 +14,11 @@ export interface EgressProbeDeps {
   transport: GdtTransport;
   loadHealth(): Promise<HealthState>;
   saveHealth(state: HealthState): Promise<void>;
-  emitAlert(alert: HealthAlert, result: ProbeResult): Promise<void> | void;
+  /**
+   * Phát cảnh báo. Trả `true` KHI VÀ CHỈ KHI tin đã tới nơi (Telegram nhận). Thiếu cấu
+   * hình cũng là "chưa giao" (review U43, mục A — cùng khuôn với canary).
+   */
+  emitAlert(alert: HealthAlert, result: ProbeResult): Promise<boolean>;
 }
 
 export interface EgressProbeOutcome {
@@ -34,9 +38,25 @@ export async function runEgressProbe(deps: EgressProbeDeps): Promise<EgressProbe
 
   const prev = await deps.loadHealth();
   const step = nextHealth(prev, result.verdict);
-  await deps.saveHealth(step.state);
+  // BÁO TRƯỚC, LƯU SAU (cùng khuôn runCanary): cảnh báo không giao được thì KHÔNG ghi
+  // `alerted: true`, nếu không một lần POST Telegram hỏng là im tới tận khi hồi phục.
+  // `lastVerdict` VẪN được lưu ở cả hai đường — gate enqueue (isEgressBlocked) đọc nó.
+  let daGiao = true;
   if (step.alert) {
-    await deps.emitAlert(step.alert, result);
+    try {
+      daGiao = (await deps.emitAlert(step.alert, result)) === true;
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: "ERROR",
+          event: "egress_alert_sink_failed",
+          verdict: step.alert.verdict,
+          reason: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      daGiao = false;
+    }
   }
+  await deps.saveHealth(daGiao ? step.state : { ...step.state, alerted: false });
   return { verdict: result.verdict, alerted: step.alert !== null };
 }

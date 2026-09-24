@@ -54,9 +54,13 @@ const transport = createDirectCfTransport();
  * VÀ Telegram (U43, tới người thật). Sự kiện TOÀN HỆ THỐNG → KHÔNG audit_log (tenant-scoped).
  * Chỉ metadata vận hành, KHÔNG token/secret (security.md). */
 export function makeEgressProbeDeps(env: Env): EgressProbeDeps {
+  // Destructure TƯỜNG MINH (không spread cả client): probe egress chỉ cần load/save
+  // health — spread mang thêm loadCanary/saveCanary vào deps, nói sai về bề mặt phụ thuộc.
+  const health = egressHealthClient(env.EGRESS_HEALTH);
   return {
     transport,
-    ...egressHealthClient(env.EGRESS_HEALTH),
+    loadHealth: health.loadHealth,
+    saveHealth: health.saveHealth,
     async emitAlert(alert, result) {
       console.error(
         JSON.stringify({
@@ -70,7 +74,9 @@ export function makeEgressProbeDeps(env: Env): EgressProbeDeps {
           latencyMs: result.latencyMs,
         }),
       );
-      await guiCanhBaoTelegram(env, {
+      // Giá trị trả về = "tin đã tới người thật chưa". Chưa tới ⇒ runEgressProbe KHÔNG
+      // ghi `alerted: true`, tick sau báo lại (review U43, mục A).
+      const kq = await guiCanhBaoTelegram(env, {
         loai: "egress",
         verdict: alert.verdict,
         httpStatus: result.httpStatus,
@@ -78,6 +84,7 @@ export function makeEgressProbeDeps(env: Env): EgressProbeDeps {
         egressCountry: result.egressCountry,
         thoiDiem: new Date(),
       });
+      return kq.daGui;
     },
   };
 }
@@ -90,18 +97,23 @@ export function makeCanaryDeps(env: Env): CanaryDeps {
     loadCanary: health.loadCanary,
     saveCanary: health.saveCanary,
     async emitCanaryAlert(alert) {
-      console.error(
-        JSON.stringify({
-          level: alert.kind === "bat_giam_sat" || alert.kind === "hoi_phuc" ? "INFO" : "CRITICAL",
-          event: "gdt_canary_alert",
-          kind: alert.kind,
-          verdict: alert.result.verdict,
-          httpStatus: alert.result.httpStatus,
-          consecutiveBad: alert.consecutiveBad,
-          latencyMs: alert.result.latencyMs,
-        }),
-      );
-      await guiCanhBaoTelegram(env, {
+      // Tin VUI (đã bật giám sát / đã thông lại) là INFO ⇒ đi bằng console.log; chỉ tin
+      // xấu mới vào luồng lỗi. Trước đây mọi loại đều console.error nên tin vui nằm lẫn
+      // trong log lỗi, sai cả nhãn lẫn nơi đọc.
+      const vui = alert.kind === "bat_giam_sat" || alert.kind === "hoi_phuc";
+      const dong = JSON.stringify({
+        level: vui ? "INFO" : "CRITICAL",
+        event: "gdt_canary_alert",
+        kind: alert.kind,
+        verdict: alert.result.verdict,
+        httpStatus: alert.result.httpStatus,
+        consecutiveBad: alert.consecutiveBad,
+        latencyMs: alert.result.latencyMs,
+      });
+      if (vui) console.log(dong);
+      else console.error(dong);
+      // Giá trị trả về = "tin đã tới người thật chưa" (xem CanaryDeps.emitCanaryAlert).
+      const kq = await guiCanhBaoTelegram(env, {
         loai: alert.kind,
         verdict: alert.result.verdict,
         httpStatus: alert.result.httpStatus,
@@ -109,6 +121,7 @@ export function makeCanaryDeps(env: Env): CanaryDeps {
         consecutiveBad: alert.consecutiveBad,
         thoiDiem: new Date(),
       });
+      return kq.daGui;
     },
   };
 }

@@ -1,9 +1,24 @@
 // U43 — Máy trạng thái canary (thuần). QĐ-5: WAF_BLOCKED/DRIFT báo NGAY lần đầu (tín hiệu
 // xác định), im tới khi hồi phục, hồi phục thì báo; TIMEOUT/ERROR cần 3 lần liên tiếp.
-// Lần chạy đầu (chưa có trạng thái) và OK → tin "đã bật" đúng một lần.
+// Tin "đã bật" (bat_giam_sat) neo vào cờ BỀN `daChao`, KHÔNG suy ra từ `prev === undefined`:
+// nếu tick đầu sau deploy vướng nhiễu mạng (TIMEOUT) thì `prev` hết undefined vĩnh viễn và
+// chuông thử-khi-deploy mất câm (review U43, mục B).
 import type { CanaryResult } from "@vat/gdt-client";
 import { describe, expect, it } from "vitest";
-import { type CanaryState, HEALTHY_CANARY, nextCanaryHealth } from "../../src/canaryHealth";
+import {
+  type CanaryState,
+  HEALTHY_CANARY,
+  nextCanaryHealth,
+  trangThaiKhiGiaoHong,
+} from "../../src/canaryHealth";
+
+/** Trạng thái "khỏe và ĐÃ chào" — mốc bình thường sau khi chuông đã được thử. */
+const DA_CHAO: CanaryState = {
+  lastVerdict: "OK",
+  consecutiveBad: 0,
+  alerted: false,
+  daChao: true,
+};
 
 const NOW = "2026-09-24T05:00:00.000Z";
 const kq = (verdict: CanaryResult["verdict"], httpStatus?: number): CanaryResult => ({
@@ -13,10 +28,15 @@ const kq = (verdict: CanaryResult["verdict"], httpStatus?: number): CanaryResult
 });
 
 describe("nextCanaryHealth", () => {
-  it("chưa có trạng thái + OK → alert bat_giam_sat, state khỏe", () => {
+  it("chưa có trạng thái + OK → alert bat_giam_sat, state khỏe + daChao", () => {
     const s = nextCanaryHealth(undefined, kq("OK", 401), NOW);
     expect(s.alert?.kind).toBe("bat_giam_sat");
-    expect(s.state).toEqual({ lastVerdict: "OK", consecutiveBad: 0, alerted: false });
+    expect(s.state).toEqual({
+      lastVerdict: "OK",
+      consecutiveBad: 0,
+      alerted: false,
+      daChao: true,
+    });
   });
 
   it("chưa có trạng thái + WAF_BLOCKED → alert chan (KHÔNG phải 'đã bật')", () => {
@@ -26,8 +46,28 @@ describe("nextCanaryHealth", () => {
     expect(s.state.since).toBe(NOW);
   });
 
-  it("OK khi đang khỏe → không alert", () => {
-    expect(nextCanaryHealth(HEALTHY_CANARY, kq("OK", 401), NOW).alert).toBeNull();
+  it("đã chào + OK khi đang khỏe → không alert", () => {
+    expect(nextCanaryHealth(DA_CHAO, kq("OK", 401), NOW).alert).toBeNull();
+  });
+
+  // Mục B — tick ĐẦU TIÊN sau deploy vướng nhiễu mạng: dưới ngưỡng 3 nên KHÔNG có alert
+  // nào, nhưng cờ `daChao` vẫn tắt ⇒ tick OK kế tiếp VẪN chào. Trước đây điều kiện là
+  // `prev === undefined` nên chuông thử-khi-deploy mất vĩnh viễn, lặng lẽ.
+  it("chưa có trạng thái + TIMEOUT → không alert; tick OK sau VẪN chào", () => {
+    const s1 = nextCanaryHealth(undefined, kq("TIMEOUT"), NOW);
+    expect(s1.alert).toBeNull();
+    expect(s1.state.daChao).toBeFalsy();
+    const s2 = nextCanaryHealth(s1.state, kq("OK", 401), NOW);
+    expect(s2.alert?.kind).toBe("bat_giam_sat");
+    expect(s2.state.daChao).toBe(true);
+  });
+
+  // Mặt trái của ca trên: `daChao` phải đi XUYÊN nhánh xấu, nếu không mọi blip dưới
+  // ngưỡng sẽ làm hệ thống chào lại (spam).
+  it("đã chào + TIMEOUT dưới ngưỡng + OK → KHÔNG chào lại", () => {
+    const xau = nextCanaryHealth(DA_CHAO, kq("TIMEOUT"), NOW);
+    expect(xau.state.daChao).toBe(true);
+    expect(nextCanaryHealth(xau.state, kq("OK", 401), NOW).alert).toBeNull();
   });
 
   it("WAF_BLOCKED lần đầu → alert chan; lần hai → im (chống spam)", () => {
@@ -53,7 +93,13 @@ describe("nextCanaryHealth", () => {
     };
     const s = nextCanaryHealth(chan, kq("OK", 401), NOW);
     expect(s.alert?.kind).toBe("hoi_phuc");
-    expect(s.state).toEqual({ lastVerdict: "OK", consecutiveBad: 0, alerted: false });
+    // Tin hồi phục GIAO ĐƯỢC cũng chứng minh chuông sống ⇒ coi như đã chào.
+    expect(s.state).toEqual({
+      lastVerdict: "OK",
+      consecutiveBad: 0,
+      alerted: false,
+      daChao: true,
+    });
   });
 
   it("TIMEOUT ×2 → im; ×3 → alert loi_lien_tiep; ×4 → im", () => {
@@ -80,5 +126,60 @@ describe("nextCanaryHealth", () => {
       since: NOW,
     };
     expect(nextCanaryHealth(st, kq("WAF_BLOCKED", 403), NOW).alert?.kind).toBe("chan");
+  });
+});
+
+// Mục A — với hệ cảnh báo, "báo trùng" rẻ hơn "mất báo" rất nhiều. `nextCanaryHealth` LẠC
+// QUAN (giả định tin đã tới); khi sink báo KHÔNG giao được thì lưu trạng thái do hàm này
+// tính: giữ diễn biến (consecutiveBad/since/lastVerdict) nhưng xoá dấu "đã báo" để tick
+// sau báo LẠI.
+describe("trangThaiKhiGiaoHong", () => {
+  it("chan giao hỏng → alerted false (tick sau báo lại), giữ nguyên diễn biến", () => {
+    const step = nextCanaryHealth(DA_CHAO, kq("WAF_BLOCKED", 403), NOW);
+    expect(step.state.alerted).toBe(true);
+    const luu = trangThaiKhiGiaoHong(step, DA_CHAO);
+    expect(luu).toEqual({
+      lastVerdict: "WAF_BLOCKED",
+      consecutiveBad: 1,
+      alerted: false,
+      since: NOW,
+      daChao: true,
+    });
+    // Tick sau vẫn WAF_BLOCKED ⇒ báo `chan` LẠI.
+    expect(nextCanaryHealth(luu, kq("WAF_BLOCKED", 403), NOW).alert?.kind).toBe("chan");
+  });
+
+  it("loi_lien_tiep giao hỏng → alerted false, tick xấu sau báo lại", () => {
+    const truoc: CanaryState = { lastVerdict: "TIMEOUT", consecutiveBad: 2, alerted: false };
+    const step = nextCanaryHealth(truoc, kq("TIMEOUT"), NOW);
+    expect(step.alert?.kind).toBe("loi_lien_tiep");
+    const luu = trangThaiKhiGiaoHong(step, truoc);
+    expect(luu.alerted).toBe(false);
+    expect(luu.consecutiveBad).toBe(3);
+    expect(nextCanaryHealth(luu, kq("TIMEOUT"), NOW).alert?.kind).toBe("loi_lien_tiep");
+  });
+
+  it("bat_giam_sat giao hỏng → daChao vẫn tắt, tick OK sau chào lại", () => {
+    const step = nextCanaryHealth(undefined, kq("OK", 401), NOW);
+    const luu = trangThaiKhiGiaoHong(step, undefined);
+    expect(luu.daChao).toBe(false);
+    expect(nextCanaryHealth(luu, kq("OK", 401), NOW).alert?.kind).toBe("bat_giam_sat");
+  });
+
+  // QUYẾT ĐỊNH (review U43): tin hồi phục giao hỏng ⇒ GIỮ `alerted: true`. Người vận hành
+  // vẫn đang tin "GDT bị chặn" nên tick OK sau phải báo hồi phục LẠI; đổi lại, tick xấu
+  // tiếp theo im (đúng với hiểu biết hiện có của họ) thay vì báo trùng cái đã báo.
+  it("hoi_phuc giao hỏng → giữ alerted true, tick OK sau báo hồi phục lại", () => {
+    const chan: CanaryState = {
+      lastVerdict: "WAF_BLOCKED",
+      consecutiveBad: 5,
+      alerted: true,
+      since: NOW,
+    };
+    const step = nextCanaryHealth(chan, kq("OK", 401), NOW);
+    const luu = trangThaiKhiGiaoHong(step, chan);
+    expect(luu.alerted).toBe(true);
+    expect(luu.daChao).toBeFalsy();
+    expect(nextCanaryHealth(luu, kq("OK", 401), NOW).alert?.kind).toBe("hoi_phuc");
   });
 });
