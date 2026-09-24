@@ -5,8 +5,9 @@
 //    "vat-sync-dlq" (H-B.6): dlqConsume ghi sổ dong_bo_that_bai + audit CRITICAL rồi
 //    ack (lỗi ghi sổ → retry, trần max_retries:3 của consumer DLQ làm chốt, KHÔNG log
 //    body); còn lại = "vat-sync": trước tiên GATE H-B.6 (b) — đọc egress health MỘT
-//    LẦN đầu batch, GEO_BLOCKED → `blockedAction` hoãn TOÀN BỘ message thay vì chạy
-//    job (không đập GDT): dưới trần → reenqueue có delay + ack (KHÔNG tính max_retries),
+//    LẦN đầu batch, GEO_BLOCKED hoặc WAF_BLOCKED (U43) → `blockedAction` hoãn TOÀN BỘ
+//    message thay vì chạy job (không đập GDT): dưới trần → reenqueue có delay + ack
+//    (KHÔNG tính max_retries),
 //    ĐẠT trần bpAttempt → retry thật (max_retries → dead-letter, điểm dừng khi chặn
 //    kéo dài — spec §4); nếu không blocked, khối xử lý
 //    H-B.4 (KHÔNG đổi): consumer → runScheduledSync mỗi message → `consumerAction`
@@ -16,9 +17,11 @@
 //  - export TenantLimiter: Durable Object rate-limit/circuit-breaker theo tenant/MST.
 // Logic (schedule/runJob/fanout/rateLimiter/recorder) đã test offline; wiring kiểm khi deploy.
 import { buildAuditMessages, isDetailMessage, isHoSoGocMessage } from "@vat/sync";
+import { runCanary } from "./canary";
 import { getDbFromHyperdrive } from "./db";
 import {
   listActiveTenantIds,
+  makeCanaryDeps,
   makeDeltaJobDeps,
   makeDetailJobDeps,
   makeEgressProbeDeps,
@@ -59,6 +62,15 @@ export { TenantLimiter, EgressHealth };
 // GIÁM SÁT (mục C) — cron probe egress (mỗi 15'); TÁCH khỏi cron đồng bộ (0 3 * * *).
 const EGRESS_PROBE_CRON = "*/15 * * * *";
 
+// U43 — canary lối vào GDT mỗi giờ (captcha thật + authenticate MST giả, không retry).
+// Tách khỏi probe 15' vì đây là 2 request tới endpoint đăng nhập — giữ nhịp thấp (QĐ-4).
+// CHƯA KIỂM CHỨNG — WAF có đếm lượt đăng nhập sai theo IP hay không: 24 lượt/ngày từ MỘT
+// nguồn là rất thấp, nhưng đó là giả định, không phải quan sát. Thấy 429 hoặc dạng chặn
+// khác thì hạ tần suất (vd "0 */6 * * *") — chỉ đổi một chuỗi cron.
+// CHƯA KIỂM CHỨNG — độ ổn định lâu dài của 401 với MST giả (xem docblock
+// packages/gdt-client/src/canary.ts): đổi cách trả ⇒ canary báo DRIFT giả.
+const CANARY_CRON = "0 * * * *";
+
 export default {
   // H-B.6 (c) — endpoint phát lại THỦ CÔNG job DLQ. PHẢI đặt sau Cloudflare Access
   // (khu quản trị — security.md); code KHÔNG tự xác thực, chỉ ép `tenantId` tường
@@ -87,11 +99,16 @@ export default {
       return;
     }
 
-    // H-B.6 (b) — GATE: egress đang GEO_BLOCKED (403/451) thì KHÔNG enqueue lô nào
+    if (event.cron === CANARY_CRON) {
+      await runCanary(makeCanaryDeps(env));
+      return;
+    }
+
+    // H-B.6 (b) — GATE: egress đang GEO_BLOCKED hoặc WAF_BLOCKED (U43) thì KHÔNG enqueue lô nào
     // (chỉ nhồi DLQ vô ích). Sự kiện toàn cục → chỉ observability, không audit (cần tenant).
     const health = await egressHealthClient(env.EGRESS_HEALTH).loadHealth();
     if (isEgressBlocked(health)) {
-      console.warn("[GATE] egress GEO_BLOCKED — skip cron enqueue");
+      console.warn(`[GATE] egress ${health.lastVerdict} — skip cron enqueue`);
       return;
     }
 
@@ -175,8 +192,9 @@ export default {
       // ---- H-B.4 — khối xử lý "vat-sync" hiện có, KHÔNG đổi logic ----
       const { backpressureDelaySeconds, maxBackpressure } = resolveFanoutConfig(env);
       // H-B.6 (b) — GATE: đọc health MỘT LẦN đầu batch (không mỗi message). GEO_BLOCKED
-      // → hoãn TOÀN BỘ message trong batch (reenqueue-delay, mirror backpressure H-B.4)
-      // thay vì chạy job (tránh đập GDT khi biết chắc đang bị chặn địa lý).
+      // HOẶC WAF_BLOCKED (U43 — `isEgressBlocked` nay true cho cả hai) → hoãn TOÀN BỘ
+      // message trong batch (reenqueue-delay, mirror backpressure H-B.4) thay vì chạy job
+      // (tránh đập GDT khi biết chắc đang bị chặn).
       const blocked = isEgressBlocked(await egressHealthClient(env.EGRESS_HEALTH).loadHealth());
       for (const message of batch.messages) {
         const body = message.body;

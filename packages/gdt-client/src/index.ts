@@ -5,6 +5,12 @@
 // thể hiện HTML do GDT dựng sẵn).
 
 export { authenticate, type AuthCredentials, type AuthResult } from "./auth";
+export {
+  CANARY_USERNAME,
+  canaryAuthenticate,
+  type CanaryResult,
+  type CanaryVerdict,
+} from "./canary";
 export { getCaptcha, type Captcha } from "./captcha";
 export { createDirectCfTransport } from "./directTransport";
 export { deriveTokenExpiry } from "./tokenExpiry";
@@ -26,7 +32,13 @@ export {
   INVOICE_ENDPOINTS,
   PUBLIC_PROBE_PATH,
 } from "./endpoints";
-export { GdtContractDriftError, GdtError } from "./errors";
+export {
+  GdtContractDriftError,
+  GdtError,
+  WAF_BLOCK_SIGNATURE,
+  coChuKyWaf,
+  isWafBlocked,
+} from "./errors";
 export { type RetryOptions, fetchWithRetry, pace, retryAfterMs } from "./http";
 export {
   buildSearch,

@@ -1,12 +1,12 @@
 import type { GdtTransport } from "@vat/gdt-client";
 import type { VatSyncQueueMessage } from "@vat/sync";
+import type { ThongTinDangKyMoi } from "@vat/thong-bao";
 // Kiểu dùng chung cho Worker API (U6). Tầng ứng dụng PHI TRẠNG THÁI (mục 11).
 import type { TablesRelationalConfig } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { BackfillDef } from "./backfillTracker";
 import type { EmailTransport } from "./email/types";
 import type { Role } from "./rbac";
-import type { ThongTinDangKyMoi } from "./thongBao/telegram";
 
 export interface Env {
   ENVIRONMENT?: string;

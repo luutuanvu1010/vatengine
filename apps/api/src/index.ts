@@ -11,8 +11,8 @@ export type { Env };
 // U22 — Durable Object tracker backfill (B4). Export tên từ entry (Workers yêu cầu);
 // producer/GET (B5/B6) tiêu thụ qua binding BACKFILL_TRACKER.
 export { BackfillTracker } from "./backfillTrackerDO";
+import { baoDangKyMoi } from "@vat/thong-bao";
 import { taoEmailTransport } from "./email/ses";
-import { baoDangKyMoi } from "./thongBao/telegram";
 
 const app = createApp({
   getDb: getDbFromHyperdrive,

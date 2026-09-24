@@ -79,41 +79,28 @@ export function soanTinDangKyMoi(tt: ThongTinDangKyMoi, urlCongAdmin: string): s
 export interface CauHinhTelegram {
   botToken: string;
   chatId: string;
-  urlCongAdmin: string;
 }
 
 /**
- * Đọc cấu hình. Thiếu bất kỳ mảnh nào ⇒ coi như TẮT thông báo (không phải lỗi).
+ * Đọc cấu hình kênh. Thiếu bất kỳ mảnh nào ⇒ coi như TẮT thông báo (không phải lỗi).
  * Trả về `thieu` để chỗ gọi log ĐÚNG mảnh nào vắng — "thông báo không chạy" mà không biết
  * vì sao là kiểu hỏng tốn nhiều giờ nhất để tìm ra.
+ * U43: KHÔNG còn đòi URL_CONG_ADMIN — đó là nhu cầu riêng của tin "đăng ký mới"
+ * (`baoDangKyMoi` tự kiểm); sync-worker gửi tin giám sát không cần URL nào.
  */
 export function kiemTraCauHinhTelegram(env: {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
-  URL_CONG_ADMIN?: string;
 }): { ok: true; cauHinh: CauHinhTelegram } | { ok: false; thieu: string[] } {
-  // TRIM mọi giá trị. Không phải sạch sẽ hình thức — đây là chốt chặn một lỗi ĐÃ XẢY RA
-  // (2026-07-22): `TELEGRAM_CHAT_ID` bị dán dư một khoảng trắng đầu chuỗi, Telegram trả
-  // "chat not found", và vì module này FAIL-SILENT nên kênh báo chết CÂM: không lỗi, không
-  // 5xx, không gì cả — chỉ là tin nhắn không bao giờ tới. Dán vào `wrangler secret put`
-  // càng dễ dính (shell giữ nguyên khoảng trắng, không ai nhìn thấy nó).
+  // TRIM mọi giá trị — chốt chặn lỗi ĐÃ XẢY RA (2026-07-22): TELEGRAM_CHAT_ID dán dư một
+  // khoảng trắng đầu chuỗi ⇒ Telegram "chat not found" ⇒ kênh báo chết CÂM.
   const botToken = env.TELEGRAM_BOT_TOKEN?.trim();
   const chatId = env.TELEGRAM_CHAT_ID?.trim();
-  const urlCongAdmin = env.URL_CONG_ADMIN?.trim();
-
   const thieu: string[] = [];
   if (!botToken) thieu.push("TELEGRAM_BOT_TOKEN");
   if (!chatId) thieu.push("TELEGRAM_CHAT_ID");
-  if (!urlCongAdmin) thieu.push("URL_CONG_ADMIN");
   if (thieu.length > 0) return { ok: false, thieu };
-  return {
-    ok: true,
-    cauHinh: {
-      botToken: botToken as string,
-      chatId: chatId as string,
-      urlCongAdmin: urlCongAdmin as string,
-    },
-  };
+  return { ok: true, cauHinh: { botToken: botToken as string, chatId: chatId as string } };
 }
 
 /** Gửi tin. KHÔNG ném — mọi hỏng hóc trả về dưới dạng giá trị để chỗ gọi không cần
@@ -158,11 +145,13 @@ export async function baoDangKyMoi(
   tt: ThongTinDangKyMoi,
 ): Promise<KetQuaThongBao> {
   const ch = kiemTraCauHinhTelegram(env);
-  if (!ch.ok) {
-    console.warn(`[thongBao] Telegram TẮT — thiếu: ${ch.thieu.join(", ")}`);
+  const urlCongAdmin = env.URL_CONG_ADMIN?.trim();
+  const thieu = [...(ch.ok ? [] : ch.thieu), ...(urlCongAdmin ? [] : ["URL_CONG_ADMIN"])];
+  if (!ch.ok || !urlCongAdmin) {
+    console.warn(`[thongBao] Telegram TẮT — thiếu: ${thieu.join(", ")}`);
     return { daGui: false, lyDo: "chua_cau_hinh" };
   }
-  const kq = await guiTinTelegram(ch.cauHinh, soanTinDangKyMoi(tt, ch.cauHinh.urlCongAdmin));
+  const kq = await guiTinTelegram(ch.cauHinh, soanTinDangKyMoi(tt, urlCongAdmin));
   // Log KHÔNG kèm email/MST: đây là log vận hành, không phải audit. Muốn truy vết đầy đủ
   // thì đã có hàng `dang_ky` trong audit_log, nơi có kiểm soát tenant.
   if (!kq.daGui) console.warn(`[thongBao] không gửi được Telegram: ${kq.lyDo}`);

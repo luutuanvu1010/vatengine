@@ -124,7 +124,7 @@ export function consumerAction(
   }
 }
 
-/** H-B.6 (b) — khi egress GEO_BLOCKED, hoãn job thay vì đập GDT. DƯỚI trần → reenqueue
+/** H-B.6 (b) — khi egress GEO_BLOCKED hoặc WAF_BLOCKED (U43), hoãn job thay vì đập GDT. DƯỚI trần → reenqueue
  * message MỚI mang bpAttempt+1 + delay (ack, KHÔNG tính max_retries); ĐẠT trần → retry
  * THẬT (tính max_retries → rơi DLQ) để có ĐIỂM DỪNG khi chặn kéo dài (spec §4). */
 export function blockedAction(

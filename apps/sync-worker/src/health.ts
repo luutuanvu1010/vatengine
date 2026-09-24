@@ -17,7 +17,7 @@ export interface HealthState {
   lastVerdict?: ProbeVerdict;
 }
 
-export const HEALTHY: HealthState = { consecutiveBad: 0, alerted: false };
+export const HEALTHY: HealthState = Object.freeze({ consecutiveBad: 0, alerted: false });
 
 export interface HealthAlert {
   verdict: ProbeVerdict;
@@ -46,9 +46,9 @@ export function nextHealth(prev: HealthState, verdict: ProbeVerdict): HealthStep
   };
 }
 
-/** H-B.6 — egress đang bị CHẶN ĐỊA LÝ (403/451) theo verdict gần nhất. Chỉ GEO_BLOCKED
- * mới gate (RATE_LIMITED do backpressure H-B.4 xử; TIMEOUT/ERROR không gate — tránh
- * chặn oan khi mạng chập chờn). */
+/** H-B.6 — egress đang bị CHẶN theo verdict gần nhất: GEO_BLOCKED (403/451 địa lý) hoặc
+ * WAF_BLOCKED (U43, 2026-09-24: 403 + chữ ký WAF — chặn theo header). Cả hai đều = "gọi
+ * thêm chỉ nhồi DLQ". RATE_LIMITED do backpressure H-B.4 xử; TIMEOUT/ERROR không gate. */
 export function isEgressBlocked(state: HealthState): boolean {
-  return state.lastVerdict === "GEO_BLOCKED";
+  return state.lastVerdict === "GEO_BLOCKED" || state.lastVerdict === "WAF_BLOCKED";
 }

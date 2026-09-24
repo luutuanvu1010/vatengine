@@ -21,6 +21,8 @@ import {
 } from "@vat/sync";
 import type { AuditSyncMessage, DeltaPullMessage, HoSoGocMessage } from "@vat/sync";
 import { eq } from "drizzle-orm";
+import type { CanaryDeps } from "./canary";
+import { guiCanhBaoTelegram } from "./canhBao";
 import { egressHealthClient } from "./egressHealth";
 import type { EgressProbeDeps } from "./egressProbe";
 import {
@@ -48,15 +50,18 @@ import type {
 // Egress T0 (direct-cf) — điểm gọi GDT DUY NHẤT đi qua adapter (gdt-adapter.md).
 const transport = createDirectCfTransport();
 
-/** GIÁM SÁT (mục C) — dựng deps cho probe egress. Sink cảnh báo = Workers
- * observability (structured log CRITICAL): sự kiện TOÀN HỆ THỐNG, không tenant →
- * KHÔNG audit_log (tenant-scoped). Chỉ metadata vận hành, KHÔNG token/secret
- * (security.md — probe gọi endpoint công khai, không đăng nhập). */
+/** GIÁM SÁT (mục C) — deps cho probe egress. Sink = log CRITICAL (Workers observability)
+ * VÀ Telegram (U43, tới người thật). Sự kiện TOÀN HỆ THỐNG → KHÔNG audit_log (tenant-scoped).
+ * Chỉ metadata vận hành, KHÔNG token/secret (security.md). */
 export function makeEgressProbeDeps(env: Env): EgressProbeDeps {
+  // Destructure TƯỜNG MINH (không spread cả client): probe egress chỉ cần load/save
+  // health — spread mang thêm loadCanary/saveCanary vào deps, nói sai về bề mặt phụ thuộc.
+  const health = egressHealthClient(env.EGRESS_HEALTH);
   return {
     transport,
-    ...egressHealthClient(env.EGRESS_HEALTH),
-    emitAlert(alert, result) {
+    loadHealth: health.loadHealth,
+    saveHealth: health.saveHealth,
+    async emitAlert(alert, result) {
       console.error(
         JSON.stringify({
           level: "CRITICAL",
@@ -69,6 +74,54 @@ export function makeEgressProbeDeps(env: Env): EgressProbeDeps {
           latencyMs: result.latencyMs,
         }),
       );
+      // Giá trị trả về = "tin đã tới người thật chưa". Chưa tới ⇒ runEgressProbe KHÔNG
+      // ghi `alerted: true`, tick sau báo lại (review U43, mục A).
+      const kq = await guiCanhBaoTelegram(env, {
+        loai: "egress",
+        verdict: alert.verdict,
+        httpStatus: result.httpStatus,
+        consecutiveBad: alert.consecutiveBad,
+        egressCountry: result.egressCountry,
+        thoiDiem: new Date(),
+      });
+      return kq.daGui;
+    },
+  };
+}
+
+/** U43 — deps cho canary lối vào GDT (cron mỗi giờ). Cùng transport T0, cùng DO EgressHealth. */
+export function makeCanaryDeps(env: Env): CanaryDeps {
+  const health = egressHealthClient(env.EGRESS_HEALTH);
+  return {
+    transport,
+    loadCanary: health.loadCanary,
+    saveCanary: health.saveCanary,
+    async emitCanaryAlert(alert) {
+      // Tin VUI (đã bật giám sát / đã thông lại) là INFO ⇒ đi bằng console.log; chỉ tin
+      // xấu mới vào luồng lỗi. Trước đây mọi loại đều console.error nên tin vui nằm lẫn
+      // trong log lỗi, sai cả nhãn lẫn nơi đọc.
+      const vui = alert.kind === "bat_giam_sat" || alert.kind === "hoi_phuc";
+      const dong = JSON.stringify({
+        level: vui ? "INFO" : "CRITICAL",
+        event: "gdt_canary_alert",
+        kind: alert.kind,
+        verdict: alert.result.verdict,
+        httpStatus: alert.result.httpStatus,
+        consecutiveBad: alert.consecutiveBad,
+        latencyMs: alert.result.latencyMs,
+      });
+      if (vui) console.log(dong);
+      else console.error(dong);
+      // Giá trị trả về = "tin đã tới người thật chưa" (xem CanaryDeps.emitCanaryAlert).
+      const kq = await guiCanhBaoTelegram(env, {
+        loai: alert.kind,
+        verdict: alert.result.verdict,
+        httpStatus: alert.result.httpStatus,
+        message: alert.result.message,
+        consecutiveBad: alert.consecutiveBad,
+        thoiDiem: new Date(),
+      });
+      return kq.daGui;
     },
   };
 }

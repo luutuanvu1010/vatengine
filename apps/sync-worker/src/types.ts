@@ -35,6 +35,10 @@ export interface Env extends LimiterEnv, SyncRetryEnv {
   // fix bền cho "Too many subrequests by single Worker invocation" (sự cố 2026-07-18):
   // một lần gọi Worker chỉ kéo ≤ chừng này trang thay vì cả tháng. Bỏ trống → 40.
   DELTA_CHUNK_PAGES?: string;
+  // U43 — kênh báo người thật (Telegram) cho cảnh báo giám sát GDT. Workers Secret, CÙNG
+  // giá trị với vat-api; thiếu ⇒ chỉ log (fail-silent có log), không ném.
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
 }
 
 // Db bất kỳ (pg/Hyperdrive khi chạy; PGlite khi test). sync()/withTenant là generic

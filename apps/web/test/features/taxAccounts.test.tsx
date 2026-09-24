@@ -54,6 +54,32 @@ const authorized: TaxAccountView = {
 };
 const expired: TaxAccountView = { ...authorized, tokenHetHan: "2020-01-01T00:00:00.000Z" };
 
+/**
+ * U43 — dùng chung cho (e)/(f)/(g): /me, /captcha và danh sách giống hệt nhau, chỉ khác phản
+ * hồi của /login. `phanHoiLogin` trả Response, hoặc NÉM lỗi để mô phỏng mất mạng (ca (g)).
+ */
+function mockKetNoiThue(phanHoiLogin: () => Response) {
+  calls = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    if (url.endsWith("/me"))
+      return json(200, {
+        ten: "DN",
+        mst: "0311772540",
+        goiDichVu: null,
+        banQuyen: "Mặc định",
+        ghiChu: null,
+        role: "quan_tri",
+      });
+    calls.push({ url, method });
+    if (url.includes("/captcha"))
+      return json(200, { key: "ck", content: '<svg id="cap"><text>7K9P2</text></svg>' });
+    if (url.includes("/login")) return phanHoiLogin();
+    return json(200, [expired]);
+  });
+}
+
 /** Render TaxAccountsPage CÔ LẬP với MST + vai (seed qua applyMe, 1 lần). */
 function TaxPageAs({ mst, role = "quan_tri" }: { mst: string; role?: Role }) {
   const { applyMe } = useAuth();
@@ -173,25 +199,7 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
   // `gdt_tu_choi` (docs/06-BINDING_MAP.md); 401 dành riêng cho phiên ứng dụng. Test đi
   // qua AppRouter (có guard + LoginRoute) để đo đúng triệu chứng "bị đẩy ra màn đăng nhập".
   it("(e) GDT từ chối (422 gdt_tu_choi) → báo sai captcha/mật khẩu, VẪN Ở LẠI trang (không về màn đăng nhập)", async () => {
-    calls = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-      if (url.endsWith("/me"))
-        return json(200, {
-          ten: "DN",
-          mst: "0311772540",
-          goiDichVu: null,
-          banQuyen: "Mặc định",
-          ghiChu: null,
-          role: "quan_tri",
-        });
-      calls.push({ url, method });
-      if (url.includes("/captcha"))
-        return json(200, { key: "ck", content: '<svg id="cap"><text>7K9P2</text></svg>' });
-      if (url.includes("/login")) return json(422, { error: "gdt_tu_choi" });
-      return json(200, [expired]);
-    });
+    mockKetNoiThue(() => json(422, { error: "gdt_tu_choi" }));
     renderWithProviders(<AppRouter />, "/tax-accounts");
     await screen.findByAltText(/captcha/i);
     await userEvent.type(screen.getByLabelText("Mật khẩu thuế"), "matkhauthue");
@@ -206,6 +214,33 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
     await waitFor(() =>
       expect(calls.filter((c) => c.url.includes("/captcha")).length).toBeGreaterThanOrEqual(2),
     );
+  });
+
+  // U43: WAF GDT chặn → nói đúng sự thật, KHÔNG dụ nhập lại captcha (mỗi lượt lại đập WAF).
+  it("(f) GDT chặn (503 gdt_chan) → báo 'đang chặn', vẫn ở trang, KHÔNG xin captcha mới", async () => {
+    mockKetNoiThue(() => json(503, { error: "gdt_chan" }));
+    renderWithProviders(<AppRouter />, "/tax-accounts");
+    await screen.findByAltText(/captcha/i);
+    await userEvent.type(screen.getByLabelText("Mật khẩu thuế"), "matkhauthue");
+    await userEvent.type(screen.getByLabelText("Mã captcha"), "7K9P2");
+    await userEvent.click(screen.getByRole("button", { name: "Đăng nhập Tổng cục Thuế" }));
+    expect(await screen.findByText(/Tổng cục Thuế đang chặn yêu cầu/)).toBeInTheDocument();
+    expect(screen.queryByText(/Captcha hoặc mật khẩu không đúng/)).toBeNull();
+    expect(screen.queryByLabelText("Email công việc")).toBeNull();
+    // Captcha KHÔNG bị xin lại: vẫn đúng 1 lượt GET /captcha.
+    expect(calls.filter((c) => c.url.includes("/captcha")).length).toBe(1);
+  });
+
+  it("(g) mất mạng khi đăng nhập GDT → 'Không kết nối được với Tổng cục Thuế'", async () => {
+    mockKetNoiThue(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    renderWithProviders(<AppRouter />, "/tax-accounts");
+    await screen.findByAltText(/captcha/i);
+    await userEvent.type(screen.getByLabelText("Mật khẩu thuế"), "matkhauthue");
+    await userEvent.type(screen.getByLabelText("Mã captcha"), "7K9P2");
+    await userEvent.click(screen.getByRole("button", { name: "Đăng nhập Tổng cục Thuế" }));
+    expect(await screen.findByText(/Không kết nối được với Tổng cục Thuế/)).toBeInTheDocument();
   });
 
   it("(d) vai ke_toan → KHÔNG thấy lối vào màn kết nối (guard RBAC)", async () => {

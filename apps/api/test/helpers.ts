@@ -4,6 +4,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { hoaDon, lichSuThayDoiHoaDon, nguoiDung, taiKhoanThue, tenants } from "@vat/db";
 import type { GdtTransport } from "@vat/gdt-client";
+import type { ThongTinDangKyMoi } from "@vat/thong-bao";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
@@ -13,7 +14,6 @@ import { signAdminToken } from "../src/admin/adminAuth";
 import { type BackfillDef, initDef, readDef } from "../src/backfillTracker";
 import type { EmailTransport, KetQuaGuiThu, ThuCanGui } from "../src/email/types";
 import { hashPassword } from "../src/password";
-import type { ThongTinDangKyMoi } from "../src/thongBao/telegram";
 import type { AnyDb, AppDeps, BackfillTrackerClient, Env, StorageHandle } from "../src/types";
 
 // migrations của @vat/db (áp bằng PGlite) — giải qua URL để không phụ thuộc cwd.

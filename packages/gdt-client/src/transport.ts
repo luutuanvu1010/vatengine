@@ -3,7 +3,16 @@
 // (direct-cf ↔ vn-relay) mà không đụng logic nghiệp vụ. Xem ADR-0001 mục 5B
 // và .claude/rules/gdt-adapter.md. Hiện thực tham chiếu: spikes/gdt-egress-probe.
 
-export type ProbeVerdict = "OK" | "GEO_BLOCKED" | "RATE_LIMITED" | "TIMEOUT" | "ERROR";
+import { coChuKyWaf } from "./errors";
+
+// WAF_BLOCKED (2026-09-24): 403 + thân mang chữ ký WAF — chặn theo header, KHÔNG phải địa lý.
+export type ProbeVerdict =
+  | "OK"
+  | "GEO_BLOCKED"
+  | "WAF_BLOCKED"
+  | "RATE_LIMITED"
+  | "TIMEOUT"
+  | "ERROR";
 
 export interface ProbeResult {
   transport: string;
@@ -21,13 +30,17 @@ export interface GdtTransport {
 }
 
 // Phân loại một lần gọi thành ProbeVerdict (dùng chung cho probe & runtime routing).
+// `body` (tuỳ chọn): thân phản hồi đã đọc, CHỈ dùng để tách WAF_BLOCKED khỏi GEO_BLOCKED
+// khi status 403 — caller không cần đọc thân cho các status khác.
 export function classify(
   status: number | undefined,
   timedOut: boolean,
   errored: boolean,
+  body?: string,
 ): ProbeVerdict {
   if (timedOut) return "TIMEOUT";
   if (errored || status === undefined) return "ERROR";
+  if (status === 403 && coChuKyWaf(body)) return "WAF_BLOCKED";
   if (status === 403 || status === 451) return "GEO_BLOCKED";
   if (status === 429) return "RATE_LIMITED";
   if (status >= 200 && status < 500) return "OK"; // 4xx nghiệp vụ = vẫn tới được máy chủ

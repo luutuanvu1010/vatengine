@@ -55,4 +55,60 @@ describe("createDirectCfTransport — egress T0 (direct-cf)", () => {
     const p = await t.probe();
     expect(p.verdict).toBe("ERROR");
   });
+
+  it("probe() 403 + thân mang chữ ký WAF → verdict WAF_BLOCKED (đọc thân để phân loại)", async () => {
+    const fake = vi.fn(
+      async () =>
+        new Response(
+          '{"status":403,"message":"Hệ thống phát hiện hành vi không hợp lệ. Yêu cầu đã bị chặn."}',
+          { status: 403 },
+        ),
+    );
+    const t = createDirectCfTransport(fake as unknown as typeof fetch);
+    const p = await t.probe();
+    expect(p.verdict).toBe("WAF_BLOCKED");
+    expect(p.httpStatus).toBe(403);
+  });
+
+  it("probe() 403 thân HTML dài (không chữ ký) → GEO_BLOCKED, chỉ đọc 1 KB, không ném", async () => {
+    const than = `<html>${"x".repeat(50_000)}</html>`;
+    const fake = vi.fn(async () => new Response(than, { status: 403 }));
+    const t = createDirectCfTransport(fake as unknown as typeof fetch);
+    const p = await t.probe();
+    expect(p.verdict).toBe("GEO_BLOCKED");
+  });
+
+  // HÀNH VI CÓ CHỦ ĐÍCH, KHÔNG phải bug: thân được đọc HẾT rồi cắt 1024 ký tự đầu để phân
+  // loại, nên chữ ký WAF nằm sau mốc đó bị cắt mất ⇒ rơi về GEO_BLOCKED (vẫn báo, chỉ sai
+  // nhãn — runbook gdt-doi-phuong-thuc.md nói cách nhận ra). Đổi lại: không phải soi cả
+  // trang chặn HTML dài. Trang chặn GDT quan sát 24/09 là JSON nhỏ, chữ ký nằm ngay đầu.
+  it("probe() 403 + chữ ký WAF nằm SAU ký tự 1024 → bị cắt ⇒ GEO_BLOCKED", async () => {
+    const than = `${"x".repeat(1100)}Hệ thống phát hiện hành vi không hợp lệ.`;
+    const fake = vi.fn(async () => new Response(than, { status: 403 }));
+    const t = createDirectCfTransport(fake as unknown as typeof fetch);
+    const p = await t.probe();
+    expect(p.verdict).toBe("GEO_BLOCKED");
+    // Đối chứng: cùng chữ ký đó nằm TRONG 1024 ký tự đầu thì phân loại đúng.
+    const gan = vi.fn(
+      async () =>
+        new Response(`${"x".repeat(900)}Hệ thống phát hiện hành vi không hợp lệ.`, {
+          status: 403,
+        }),
+    );
+    const t2 = createDirectCfTransport(gan as unknown as typeof fetch);
+    expect((await t2.probe()).verdict).toBe("WAF_BLOCKED");
+  });
+
+  it("probe() 403 mà đọc thân ném lỗi → vẫn GEO_BLOCKED, không ném ra ngoài", async () => {
+    const res = new Response("x", { status: 403 });
+    Object.defineProperty(res, "text", {
+      value: async () => {
+        throw new Error("stream hỏng");
+      },
+    });
+    const fake = vi.fn(async () => res);
+    const t = createDirectCfTransport(fake as unknown as typeof fetch);
+    const p = await t.probe();
+    expect(p.verdict).toBe("GEO_BLOCKED");
+  });
 });

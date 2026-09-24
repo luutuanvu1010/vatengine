@@ -14,7 +14,7 @@ import {
   kiemTraCauHinhTelegram,
   soanTinDangKyMoi,
   thoatHtml,
-} from "../../src/thongBao/telegram";
+} from "../src/telegram";
 
 const fetchGia = vi.fn();
 const ENV_DU = {
@@ -98,14 +98,12 @@ describe("kiemTraCauHinhTelegram", () => {
     const kq = kiemTraCauHinhTelegram({
       TELEGRAM_BOT_TOKEN: " 123:ABC ",
       TELEGRAM_CHAT_ID: " -1001234567890\n",
-      URL_CONG_ADMIN: "  https://a.example  ",
     });
     expect(kq.ok).toBe(true);
     if (kq.ok)
       expect(kq.cauHinh).toEqual({
         botToken: "123:ABC",
         chatId: "-1001234567890",
-        urlCongAdmin: "https://a.example",
       });
   });
 
@@ -113,7 +111,6 @@ describe("kiemTraCauHinhTelegram", () => {
     const kq = kiemTraCauHinhTelegram({
       TELEGRAM_BOT_TOKEN: "   ",
       TELEGRAM_CHAT_ID: "x",
-      URL_CONG_ADMIN: "y",
     });
     expect(kq.ok).toBe(false);
     if (!kq.ok) expect(kq.thieu).toEqual(["TELEGRAM_BOT_TOKEN"]);
@@ -122,17 +119,22 @@ describe("kiemTraCauHinhTelegram", () => {
   it("🔴 thiếu biến nào thì NÓI RA biến đó — 'thông báo không chạy' mà không biết vì sao là kiểu hỏng tốn giờ nhất", () => {
     const kq = kiemTraCauHinhTelegram({ TELEGRAM_BOT_TOKEN: "x" });
     expect(kq.ok).toBe(false);
-    if (!kq.ok) expect(kq.thieu).toEqual(["TELEGRAM_CHAT_ID", "URL_CONG_ADMIN"]);
+    if (!kq.ok) expect(kq.thieu).toEqual(["TELEGRAM_CHAT_ID"]);
+  });
+
+  it("kiemTraCauHinhTelegram chỉ đòi bot token + chat id (URL_CONG_ADMIN là việc của tin đăng ký)", () => {
+    const kq = kiemTraCauHinhTelegram({
+      TELEGRAM_BOT_TOKEN: " 123:abc ",
+      TELEGRAM_CHAT_ID: " -100 ",
+    });
+    expect(kq).toEqual({ ok: true, cauHinh: { botToken: "123:abc", chatId: "-100" } });
   });
 });
 
 describe("guiTinTelegram", () => {
   it("gọi đúng endpoint sendMessage của bot, tắt xem trước link", async () => {
     fetchGia.mockResolvedValueOnce(new Response("{}", { status: 200 }));
-    const kq = await guiTinTelegram(
-      { botToken: "T", chatId: "C", urlCongAdmin: "https://a.example" },
-      "xin chao",
-    );
+    const kq = await guiTinTelegram({ botToken: "T", chatId: "C" }, "xin chao");
     expect(kq).toEqual({ daGui: true });
     const [url, init] = fetchGia.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.telegram.org/botT/sendMessage");
@@ -146,16 +148,18 @@ describe("guiTinTelegram", () => {
 
   it("🔴 Telegram trả 4xx → KHÔNG ném, trả lý do", async () => {
     fetchGia.mockResolvedValueOnce(new Response("{}", { status: 403 }));
-    await expect(
-      guiTinTelegram({ botToken: "T", chatId: "C", urlCongAdmin: "u" }, "x"),
-    ).resolves.toEqual({ daGui: false, lyDo: "telegram_tu_choi" });
+    await expect(guiTinTelegram({ botToken: "T", chatId: "C" }, "x")).resolves.toEqual({
+      daGui: false,
+      lyDo: "telegram_tu_choi",
+    });
   });
 
   it("🔴 mạng chết / quá hạn → KHÔNG ném, trả lý do", async () => {
     fetchGia.mockRejectedValueOnce(new Error("network down"));
-    await expect(
-      guiTinTelegram({ botToken: "T", chatId: "C", urlCongAdmin: "u" }, "x"),
-    ).resolves.toEqual({ daGui: false, lyDo: "khong_goi_duoc" });
+    await expect(guiTinTelegram({ botToken: "T", chatId: "C" }, "x")).resolves.toEqual({
+      daGui: false,
+      lyDo: "khong_goi_duoc",
+    });
   });
 });
 
@@ -165,6 +169,12 @@ describe("🔴 baoDangKyMoi — FAIL-SILENT ở mọi nhánh", () => {
       daGui: false,
       lyDo: "chua_cau_hinh",
     });
+    expect(fetchGia).not.toHaveBeenCalled();
+  });
+
+  it("baoDangKyMoi thiếu URL_CONG_ADMIN → chua_cau_hinh, không gọi mạng", async () => {
+    const kq = await baoDangKyMoi({ TELEGRAM_BOT_TOKEN: "123:abc", TELEGRAM_CHAT_ID: "-100" }, TT);
+    expect(kq).toEqual({ daGui: false, lyDo: "chua_cau_hinh" });
     expect(fetchGia).not.toHaveBeenCalled();
   });
 

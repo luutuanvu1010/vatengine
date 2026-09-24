@@ -31,11 +31,14 @@
   //  - "*/15 * * * *" (mỗi 15'): GIÁM SÁT (mục C) — probe egress T0; verdict xấu ổn
   //    định (3 tick liên tiếp) → cảnh báo qua Workers observability. scheduled() phân
   //    nhánh theo event.cron. KHÔNG bật T1 (đang TREO) — chỉ phát hiện + cảnh báo.
+  //  - "0 * * * *" (mỗi giờ): U43 canary lối vào GDT — 1 captcha + 1 authenticate MST giả,
+  //    không retry; WAF_BLOCKED/DRIFT → Telegram ngay.
   // 2026-07-27 (QĐ chủ dự án): dời cron đồng bộ 03:00 UTC (10:00 VN) → 20:00 UTC
   // (03:00 SÁNG VN hôm sau) — GDT nạp batch hoá đơn MTT ~19:00 VN tối (bằng chứng
   // ncnhat 27/07), kéo lúc 3h sáng thì dữ liệu hôm trước đã đủ và sẵn sàng trước giờ
   // làm việc; giờ thấp điểm cũng ít cạnh tranh với thao tác tay của người dùng.
-  "triggers": { "crons": ["0 20 * * *", "*/15 * * * *"] },
+  // Giới hạn 250 cron/tài khoản trên Workers Paid — tài liệu Cloudflare đọc 2026-09-24.
+  "triggers": { "crons": ["0 20 * * *", "*/15 * * * *", "0 * * * *"] },
 
   // Postgres qua Hyperdrive (giống apps/api). Thay "id" bằng id thật khi deploy.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "1011ff82e7154531883f0f2e62d344f0" }],
