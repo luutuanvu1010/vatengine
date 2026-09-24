@@ -30,3 +30,25 @@ export class GdtContractDriftError extends Error {
     this.name = "GdtContractDriftError";
   }
 }
+
+/**
+ * Chữ ký WAF của GDT — KIỂM CHỨNG 2026-09-24 (curl thật, sự cố 10/09→24/09/2026):
+ * WAF (cookie TS*, F5 BIG-IP) trả HTTP 403 kèm
+ * {"status":403,"message":"Hệ thống phát hiện hành vi không hợp lệ. Yêu cầu đã bị chặn."}
+ * cho POST /api/security-taxpayer/authenticate thiếu header `request-id`. Đây là chuỗi
+ * do GDT kiểm soát; nếu họ đổi chữ ngữ, 403 rơi về GEO_BLOCKED (vẫn báo, chỉ sai nhãn —
+ * xem docs/runbooks/gdt-doi-phuong-thuc.md). Nguồn chân lý DUY NHẤT — không so chuỗi ở
+ * nơi khác.
+ */
+export const WAF_BLOCK_SIGNATURE = "hành vi không hợp lệ";
+
+/** Thân phản hồi/thông điệp có mang chữ ký WAF không. So sau chuẩn hoá NFC + chữ thường. */
+export function coChuKyWaf(text: string | undefined): boolean {
+  if (!text) return false;
+  return text.normalize("NFC").toLowerCase().includes(WAF_BLOCK_SIGNATURE.normalize("NFC"));
+}
+
+/** Lỗi adapter có phải "WAF GDT chặn" không: GdtError, HTTP 403, thông điệp mang chữ ký. */
+export function isWafBlocked(err: unknown): boolean {
+  return err instanceof GdtError && err.httpStatus === 403 && coChuKyWaf(err.message);
+}

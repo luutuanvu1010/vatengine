@@ -55,4 +55,39 @@ describe("createDirectCfTransport — egress T0 (direct-cf)", () => {
     const p = await t.probe();
     expect(p.verdict).toBe("ERROR");
   });
+
+  it("probe() 403 + thân mang chữ ký WAF → verdict WAF_BLOCKED (đọc thân để phân loại)", async () => {
+    const fake = vi.fn(
+      async () =>
+        new Response(
+          '{"status":403,"message":"Hệ thống phát hiện hành vi không hợp lệ. Yêu cầu đã bị chặn."}',
+          { status: 403 },
+        ),
+    );
+    const t = createDirectCfTransport(fake as unknown as typeof fetch);
+    const p = await t.probe();
+    expect(p.verdict).toBe("WAF_BLOCKED");
+    expect(p.httpStatus).toBe(403);
+  });
+
+  it("probe() 403 thân HTML dài (không chữ ký) → GEO_BLOCKED, chỉ đọc 1 KB, không ném", async () => {
+    const than = `<html>${"x".repeat(50_000)}</html>`;
+    const fake = vi.fn(async () => new Response(than, { status: 403 }));
+    const t = createDirectCfTransport(fake as unknown as typeof fetch);
+    const p = await t.probe();
+    expect(p.verdict).toBe("GEO_BLOCKED");
+  });
+
+  it("probe() 403 mà đọc thân ném lỗi → vẫn GEO_BLOCKED, không ném ra ngoài", async () => {
+    const res = new Response("x", { status: 403 });
+    Object.defineProperty(res, "text", {
+      value: async () => {
+        throw new Error("stream hỏng");
+      },
+    });
+    const fake = vi.fn(async () => res);
+    const t = createDirectCfTransport(fake as unknown as typeof fetch);
+    const p = await t.probe();
+    expect(p.verdict).toBe("GEO_BLOCKED");
+  });
 });

@@ -26,7 +26,13 @@ export {
   INVOICE_ENDPOINTS,
   PUBLIC_PROBE_PATH,
 } from "./endpoints";
-export { GdtContractDriftError, GdtError } from "./errors";
+export {
+  GdtContractDriftError,
+  GdtError,
+  WAF_BLOCK_SIGNATURE,
+  coChuKyWaf,
+  isWafBlocked,
+} from "./errors";
 export { type RetryOptions, fetchWithRetry, pace, retryAfterMs } from "./http";
 export {
   buildSearch,
