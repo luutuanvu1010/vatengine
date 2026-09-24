@@ -5,7 +5,7 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { GdtError, authenticate, createDirectCfTransport, getCaptcha } from "../../src";
+import { authenticate, canaryAuthenticate, createDirectCfTransport, getCaptcha } from "../../src";
 
 const U = process.env.GDT_TEST_USERNAME;
 const P = process.env.GDT_TEST_PASSWORD;
@@ -60,30 +60,14 @@ describe.skipIf(!U || !P)("contract: GDT authenticate (probe dạng token)", () 
 });
 
 // KHÔNG cần credential — chạy trong mọi lượt `make test-contract`. Sự cố 10/09→24/09/2026:
-// GDT (WAF F5) chặn POST /authenticate thiếu header `request-id` bằng HTTP 403
-// "Hệ thống phát hiện hành vi không hợp lệ. Yêu cầu đã bị chặn." → 0 tenant đăng nhập được
-// suốt hai tuần mà contract test cũ (chỉ /captcha) không thấy. Test này gõ captcha SAI với
-// MST không tồn tại: GDT kiểm captcha TRƯỚC nên không đụng tài khoản thật nào (kiểm chứng
-// 2026-09-24: 401 "Mã captcha không đúng."). Kỳ vọng: lỗi NGHIỆP VỤ 401, không phải bị chặn.
-describe("contract: WAF GDT trên /authenticate (không cần credential)", () => {
-  it("captcha sai + MST giả → 401 nghiệp vụ từ GDT, KHÔNG 403 'bị chặn'", async () => {
-    const transport = createDirectCfTransport();
-    const cap = await getCaptcha(transport);
-    let error: unknown;
-    try {
-      await authenticate(transport, {
-        username: "0000000000",
-        password: "khong-dung",
-        ckey: cap.key,
-        cvalue: "0000",
-      });
-    } catch (e) {
-      error = e;
-    }
-    expect(error).toBeInstanceOf(GdtError);
-    const err = error as GdtError;
-    console.log("AUTH_REJECT_STATUS=", err.httpStatus, "MESSAGE=", err.message);
-    expect(err.message).not.toContain("bị chặn");
-    expect(err.httpStatus).toBe(401);
+// GDT (WAF F5) chặn POST /authenticate thiếu header `request-id` bằng HTTP 403 → 0 tenant
+// đăng nhập được hai tuần mà contract test cũ (chỉ /captcha) không thấy. Từ U43, cùng một
+// hàm `canaryAuthenticate` chạy ở đây (CI) lẫn cron mỗi giờ ở sync-worker — một nguồn chân lý.
+describe("contract: canary lối vào GDT (không cần credential)", () => {
+  it("captcha sai + MST giả → verdict OK (401 nghiệp vụ), KHÔNG WAF_BLOCKED/DRIFT", async () => {
+    const r = await canaryAuthenticate(createDirectCfTransport());
+    console.log("CANARY_VERDICT=", r.verdict, "STATUS=", r.httpStatus, "MESSAGE=", r.message);
+    expect(r.verdict).toBe("OK");
+    expect(r.httpStatus).toBe(401);
   });
 });

@@ -5,6 +5,12 @@
 // thể hiện HTML do GDT dựng sẵn).
 
 export { authenticate, type AuthCredentials, type AuthResult } from "./auth";
+export {
+  CANARY_USERNAME,
+  canaryAuthenticate,
+  type CanaryResult,
+  type CanaryVerdict,
+} from "./canary";
 export { getCaptcha, type Captcha } from "./captcha";
 export { createDirectCfTransport } from "./directTransport";
 export { deriveTokenExpiry } from "./tokenExpiry";
