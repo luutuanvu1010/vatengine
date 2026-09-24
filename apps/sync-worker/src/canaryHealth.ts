@@ -75,8 +75,13 @@ export function nextCanaryHealth(
   const truoc = prev ?? HEALTHY_CANARY;
   const consecutiveBad = truoc.consecutiveBad + 1;
   const since = truoc.since ?? nowIso;
+  // `alerted` chỉ chống trùng trong CÙNG một đợt xấu (lastVerdict ≠ OK). Một state "khỏe"
+  // (lastVerdict OK, consecutiveBad 0) vẫn có thể mang `alerted: true` — tàn dư của
+  // `trangThaiKhiGiaoHong` nhánh `hoi_phuc` giao hỏng — nhưng đó là dấu vết của đợt CŨ đã
+  // qua, không được phép bịt miệng một đợt sự cố MỚI đang bắt đầu ở tick này.
+  const daBao = truoc.alerted && truoc.lastVerdict !== "OK";
   let kind: CanaryAlertKind | null = null;
-  if (!truoc.alerted) {
+  if (!daBao) {
     if (XAC_DINH.has(verdict)) kind = verdict === "WAF_BLOCKED" ? "chan" : "drift";
     else if (consecutiveBad >= CANARY_BAD_STREAK_THRESHOLD) kind = "loi_lien_tiep";
   }
@@ -84,7 +89,7 @@ export function nextCanaryHealth(
     state: {
       lastVerdict: verdict,
       consecutiveBad,
-      alerted: truoc.alerted || kind !== null,
+      alerted: daBao || kind !== null,
       since,
       // Cờ chào đi XUYÊN nhánh xấu — rơi mất thì mọi blip dưới ngưỡng sẽ làm chào lại.
       ...(truoc.daChao === undefined ? {} : { daChao: truoc.daChao }),
@@ -101,8 +106,15 @@ export function nextCanaryHealth(
  * - `chan`/`drift`/`loi_lien_tiep` → `alerted: false`;
  * - `bat_giam_sat` → `daChao: false` (tick OK sau chào lại);
  * - `hoi_phuc` → GIỮ `alerted: true`. QUYẾT ĐỊNH (review U43): người vận hành vẫn đang tin
- *   "GDT bị chặn", nên tick OK sau phải báo hồi phục lại; đổi lại, tick xấu kế tiếp im —
- *   đúng với hiểu biết hiện có của họ, không báo trùng cái đã báo.
+ *   "GDT bị chặn", nên tick OK sau phải báo hồi phục lại. `alerted: true` ở đây nằm trên
+ *   một state đã "khỏe" (`lastVerdict: "OK"`, `consecutiveBad: 0`) — `nextCanaryHealth`
+ *   chỉ đọc nó là "đợt xấu đã báo" khi `lastVerdict !== "OK"`, nên một sự cố XẤU MỚI
+ *   (WAF_BLOCKED/DRIFT/chuỗi lỗi) ngay tick kế tiếp vẫn báo bình thường — KHÔNG bị cờ tàn
+ *   dư này bịt miệng (bug đã vá, xem test "hoi_phuc giao hỏng rồi gặp WAF_BLOCKED MỚI").
+ *   Ca CHƯA xử lý (nhỏ hơn, ngoài phạm vi vá này): nếu giữa lần giao hỏng và tick OK hồi
+ *   phục có một tick NHIỄU dưới ngưỡng (TIMEOUT/ERROR, không đủ 3 để thành `loi_lien_tiep`),
+ *   tick nhiễu đó đọc `lastVerdict === "OK"` nên tự tắt `alerted` — tick OK theo sau sẽ
+ *   KHÔNG gửi lại "đã thông lại" (mất đúng một tin hồi phục, không phải mất báo sự cố).
  */
 export function trangThaiKhiGiaoHong(step: CanaryStep, prev: CanaryState | undefined): CanaryState {
   const kind = step.alert?.kind;

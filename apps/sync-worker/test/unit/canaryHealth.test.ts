@@ -167,8 +167,9 @@ describe("trangThaiKhiGiaoHong", () => {
   });
 
   // QUYẾT ĐỊNH (review U43): tin hồi phục giao hỏng ⇒ GIỮ `alerted: true`. Người vận hành
-  // vẫn đang tin "GDT bị chặn" nên tick OK sau phải báo hồi phục LẠI; đổi lại, tick xấu
-  // tiếp theo im (đúng với hiểu biết hiện có của họ) thay vì báo trùng cái đã báo.
+  // vẫn đang tin "GDT bị chặn" nên tick OK sau phải báo hồi phục LẠI. `alerted: true` ở
+  // đây nằm trên state đã "khỏe" (lastVerdict OK) nên KHÔNG bịt miệng một sự cố xấu MỚI
+  // ngay tick kế tiếp (xem ca "hoi_phuc giao hỏng rồi gặp WAF_BLOCKED MỚI" bên dưới).
   it("hoi_phuc giao hỏng → giữ alerted true, tick OK sau báo hồi phục lại", () => {
     const chan: CanaryState = {
       lastVerdict: "WAF_BLOCKED",
@@ -181,5 +182,30 @@ describe("trangThaiKhiGiaoHong", () => {
     expect(luu.alerted).toBe(true);
     expect(luu.daChao).toBeFalsy();
     expect(nextCanaryHealth(luu, kq("OK", 401), NOW).alert?.kind).toBe("hoi_phuc");
+  });
+
+  // Bẫy vừa vá: `alerted: true` còn lại từ `hoi_phuc` giao hỏng là tàn dư của đợt XẤU CŨ
+  // (state đã "khỏe": lastVerdict OK, consecutiveBad 0). Nó không được phép bịt miệng một
+  // đợt sự cố MỚI — nếu không, một lần gửi "đã thông lại" thất bại sẽ làm mọi cảnh báo kế
+  // tiếp (chan/drift/loi_lien_tiep) câm vô thời hạn tới khi có một tick OK.
+  it("hoi_phuc giao hỏng rồi gặp WAF_BLOCKED MỚI → vẫn báo chan (không bị cờ alerted cũ bịt)", () => {
+    const chan: CanaryState = {
+      lastVerdict: "WAF_BLOCKED",
+      consecutiveBad: 5,
+      alerted: true,
+      since: NOW,
+      daChao: true,
+    };
+    const step = nextCanaryHealth(chan, kq("OK", 401), NOW);
+    const luu = trangThaiKhiGiaoHong(step, chan);
+    expect(luu).toEqual({
+      lastVerdict: "OK",
+      consecutiveBad: 0,
+      alerted: true,
+      daChao: true,
+    });
+    const suCoMoi = nextCanaryHealth(luu, kq("WAF_BLOCKED", 403), NOW);
+    expect(suCoMoi.alert?.kind).toBe("chan");
+    expect(suCoMoi.state.alerted).toBe(true);
   });
 });
