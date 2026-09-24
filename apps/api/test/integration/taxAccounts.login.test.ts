@@ -121,6 +121,48 @@ describe("POST /tax-accounts/:id/login (PGlite)", () => {
     expect(await res.json()).toEqual({ error: "gdt_tu_choi" });
   });
 
+  // U43: WAF GDT chặn (403 + chữ ký) ≠ sai captcha. Trả mã riêng để web nói đúng và người
+  // dùng KHÔNG thử đi thử lại (mỗi lượt lại đập vào WAF). Audit ghi lý do ngắn `waf_blocked`.
+  it("WAF chặn (403 + chữ ký) → 503 gdt_chan, KHÔNG lưu token, audit reason waf_blocked", async () => {
+    const wafTransport = makeTransport({
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            status: 403,
+            message: "Hệ thống phát hiện hành vi không hợp lệ. Yêu cầu đã bị chặn.",
+          }),
+          { status: 403, headers: { "content-type": "application/json" } },
+        ),
+    });
+    const app = createApp(injectDb(db, undefined, wafTransport));
+    const jwt = await tokenFor(tenantA, { role: "quan_tri" });
+    const res = await app.request(`/tax-accounts/${accId}/login`, loginReq(accId, jwt), makeEnv());
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "gdt_chan" });
+    const [acc] = await db.select().from(taiKhoanThue).where(eq(taiKhoanThue.id, accId));
+    expect(acc?.tokenHienTai).toBeNull();
+    const rows = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.doiTuong, accId), eq(auditLog.hanhDong, "dang_nhap_thue_that_bai")));
+    expect(rows.length).toBe(1);
+    expect((rows[0]?.chiTiet as { reason?: string }).reason).toBe("waf_blocked");
+  });
+
+  it("403 KHÔNG chữ ký WAF → vẫn 422 gdt_tu_choi (không hồi quy)", async () => {
+    const badTransport = makeTransport({
+      fetch: async () =>
+        new Response(JSON.stringify({ message: "Forbidden" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+    const app = createApp(injectDb(db, undefined, badTransport));
+    const jwt = await tokenFor(tenantA, { role: "quan_tri" });
+    const res = await app.request(`/tax-accounts/${accId}/login`, loginReq(accId, jwt), makeEnv());
+    expect(res.status).toBe(422);
+  });
+
   it("token GDT không phải JWT có exp → 502 token_shape_unexpected, KHÔNG lưu token, có audit thất bại", async () => {
     const app = createApp(injectDb(db, undefined, okTransport("not-a-jwt")));
     const jwt = await tokenFor(tenantA, { role: "quan_tri" });

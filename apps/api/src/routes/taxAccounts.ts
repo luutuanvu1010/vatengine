@@ -9,6 +9,7 @@ import {
   authenticate,
   deriveTokenExpiry,
   getCaptcha,
+  isWafBlocked,
 } from "@vat/gdt-client";
 import {
   type PeriodWindow,
@@ -296,9 +297,10 @@ export function taxAccountsRoutes(deps: AppDeps) {
   });
 
   // POST /tax-accounts/:id/login — captcha người dùng đã gõ → authenticate() → lưu token
-  // MÃ HÓA. 409 nếu chưa ủy quyền. 422 `gdt_tu_choi` nếu GDT từ chối (KHÔNG lưu). KHÔNG
-  // lưu mật khẩu. 401 ở route này CHỈ đến từ middleware phiên (sự cố 2026-09-24: trả 401
-  // cho "GDT từ chối" khiến apps/web tưởng phiên ứng dụng hết hạn và đăng xuất người dùng).
+  // MÃ HÓA. 409 nếu chưa ủy quyền. 422 `gdt_tu_choi` nếu GDT từ chối (KHÔNG lưu). 503
+  // `gdt_chan` nếu WAF GDT chặn (U43). KHÔNG lưu mật khẩu. 401 ở route này CHỈ đến từ
+  // middleware phiên (sự cố 2026-09-24: trả 401 cho "GDT từ chối" khiến apps/web tưởng
+  // phiên ứng dụng hết hạn và đăng xuất người dùng).
   r.post("/:id/login", async (c) => {
     const id = c.req.param("id");
     if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
@@ -339,7 +341,12 @@ export function taxAccountsRoutes(deps: AppDeps) {
       } catch (err) {
         // Lệch hợp đồng API thuế ≠ GDT từ chối nghiệp vụ — phải lộ ra, không được nuốt thành 422.
         if (err instanceof GdtContractDriftError) throw err;
-        // Audit thất bại (mask), rồi 422 gọn. Không phân biệt sai captcha vs mật khẩu.
+        // U43 — WAF GDT chặn (403 + chữ ký, kiểm chứng 2026-09-24) ≠ sai captcha: trả 503
+        // `gdt_chan` để web nói đúng và người dùng không thử dồn. Audit lý do NGẮN
+        // `waf_blocked` (không chép thông điệp dài). Không gửi Telegram từ đây — tầng API
+        // stateless không chống lặp được; canary ở sync-worker là đường báo (≤ 1 giờ).
+        const wafChan = isWafBlocked(err);
+        // Audit thất bại (mask), rồi mã lỗi gọn. Không phân biệt sai captcha vs mật khẩu.
         // KHÔNG trả 401: apps/web coi mọi 401 là "phiên ứng dụng hết hạn" và đăng xuất
         // (apiClient.onUnauthorized); phiên ứng dụng ở đây vẫn hợp lệ — chỉ GDT từ chối.
         // Cùng lệ với 409 `token_het_han` ở /sync: lỗi phía GDT không mượn mã 401.
@@ -348,9 +355,12 @@ export function taxAccountsRoutes(deps: AppDeps) {
             tenantId,
             hanhDong: "dang_nhap_thue_that_bai",
             doiTuong: id,
-            chiTiet: maskSensitive({ reason: err instanceof GdtError ? err.message : "loi" }),
+            chiTiet: maskSensitive({
+              reason: wafChan ? "waf_blocked" : err instanceof GdtError ? err.message : "loi",
+            }),
           });
         });
+        if (wafChan) return c.json({ error: "gdt_chan" }, 503);
         return c.json({ error: "gdt_tu_choi" }, 422);
       }
 
