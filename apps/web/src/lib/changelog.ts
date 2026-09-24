@@ -13,6 +13,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.7",
+    date: "2026-09-25",
+    title: "Báo đúng khi Tổng cục Thuế chặn kết nối",
+    changes: [
+      "Ở bước Kết nối tài khoản thuế, nếu hệ thống Tổng cục Thuế từ chối yêu cầu từ phần mềm (không phải do bạn nhập sai), phần mềm nay nói rõ điều đó và đã báo cho kỹ thuật, thay vì bảo bạn nhập lại captcha. Mất kết nối mạng cũng được báo riêng.",
+      "Phần mềm tự kiểm tra lối vào hệ thống Tổng cục Thuế mỗi giờ và báo ngay cho đội kỹ thuật khi có thay đổi, để sự cố như đầu tháng 9 được phát hiện trong vòng một giờ thay vì hai tuần.",
+    ],
+    kind: "improvement",
+  },
+  {
     version: "v2.6",
     date: "2026-09-24",
     title: "Kết nối lại được với Tổng cục Thuế; nhập sai captcha không còn bị đăng xuất",

@@ -178,6 +178,20 @@ function AuthorizeStep({ account, onDone }: { account: TaxAccountView; onDone: (
   );
 }
 
+/**
+ * Thông điệp lỗi đăng nhập GDT theo hợp đồng docs/06-BINDING_MAP.md (U43): nói đúng sự thật
+ * để người dùng làm đúng việc — sai captcha thì nhập lại, GDT chặn thì ĐỪNG thử dồn.
+ */
+function thongDiepLoiDangNhapThue(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  if (err.status === 409) return "Chưa ủy quyền. Vui lòng thực hiện bước ủy quyền trước.";
+  if (err.status === 422)
+    return "Captcha hoặc mật khẩu không đúng. Vui lòng nhập lại với captcha mới.";
+  if (err.status === 503 && err.code === "gdt_chan")
+    return "Tổng cục Thuế đang chặn yêu cầu từ hệ thống. Kỹ thuật đã được báo, vui lòng thử lại sau.";
+  return "Không kết nối được với Tổng cục Thuế. Vui lòng thử lại sau.";
+}
+
 function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () => void }) {
   const [password, setPassword] = useState("");
   const [cvalue, setCvalue] = useState("");
@@ -197,20 +211,15 @@ function LoginStep({ account, onDone }: { account: TaxAccountView; onDone: () =>
       setCvalue("");
       onDone();
     },
-    onError: () => {
-      // Sai captcha/mật khẩu (422 gdt_tu_choi) → xin captcha mới; không giữ gì. KHÔNG phải
-      // 401: apiClient coi 401 là hết phiên ứng dụng và đăng xuất (sự cố 2026-09-24).
+    onError: (err) => {
       setCvalue("");
-      captcha.refetch();
+      // CHỈ xin captcha mới khi GDT đã tiêu captcha cũ (422 sai captcha/mật khẩu). Bị chặn
+      // (503) hay mất mạng thì captcha còn nguyên — xin lại chỉ tạo thêm request vô ích.
+      if (err instanceof ApiError && err.status === 422) captcha.refetch();
     },
   });
 
-  const loginError =
-    login.error instanceof ApiError
-      ? login.error.status === 409
-        ? "Chưa ủy quyền. Vui lòng thực hiện bước ủy quyền trước."
-        : "Captcha hoặc mật khẩu không đúng. Vui lòng nhập lại với captcha mới."
-      : null;
+  const loginError = thongDiepLoiDangNhapThue(login.error);
 
   return (
     <Card>
