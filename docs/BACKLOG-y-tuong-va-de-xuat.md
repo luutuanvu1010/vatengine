@@ -1123,7 +1123,7 @@ Trục `feat/cloudflare-stack-u0` + 7 nhánh chưa gộp: `backup/hb6-before-reb
 
 **Nguồn phát hiện:** phiên 2026-09-24, báo cáo chủ dự án "kết nối tài khoản thuế không thành công, lập tức đăng xuất".
 
-**Deploy 2026-09-24 ~12:05 (giờ VN), merge `aac9499` trên trục:** `vat-sync-worker` `652d8545` → `vat-api` `0b45b21d` → `vat-web` `2965a9de` (bundle `index-BQNr1-KS.js`, đã soi production có changelog v2.6). Không migration. Mục 1 (kiểm chứng từ biên) chuyển sang: chờ một lượt đăng nhập thật rồi soi `audit_log`.
+**Deploy 2026-09-24 ~12:05 (giờ VN), merge `aac9499` trên trục:** `vat-sync-worker` `652d8545` → `vat-api` `0b45b21d` → `vat-web` `2965a9de` (bundle `index-BQNr1-KS.js`, đã soi production có changelog v2.6). Không migration. Mục 1 ĐÃ KIỂM CHỨNG từ biên Cloudflare 24/09 12:15–12:20: `audit_log` có `dang_nhap_thue_thanh_cong` ở 2 tenant, token hạn tới 25/09; lượt "bị chặn" cuối 11:35 (trước deploy).
 
 ### Đề xuất phát hiện tự động khi lối vào GDT bị chặn / đổi phương thức (phiên cố vấn bảo mật 24/09 — CHỜ CHỦ DỰ ÁN CHỐT PHẠM VI, chưa làm)
 
