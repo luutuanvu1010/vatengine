@@ -1124,3 +1124,31 @@ Trục `feat/cloudflare-stack-u0` + 7 nhánh chưa gộp: `backup/hb6-before-reb
 **Nguồn phát hiện:** phiên 2026-09-24, báo cáo chủ dự án "kết nối tài khoản thuế không thành công, lập tức đăng xuất".
 
 **Deploy 2026-09-24 ~12:05 (giờ VN), merge `aac9499` trên trục:** `vat-sync-worker` `652d8545` → `vat-api` `0b45b21d` → `vat-web` `2965a9de` (bundle `index-BQNr1-KS.js`, đã soi production có changelog v2.6). Không migration. Mục 1 (kiểm chứng từ biên) chuyển sang: chờ một lượt đăng nhập thật rồi soi `audit_log`.
+
+### Đề xuất phát hiện tự động khi lối vào GDT bị chặn / đổi phương thức (phiên cố vấn bảo mật 24/09 — CHỜ CHỦ DỰ ÁN CHỐT PHẠM VI, chưa làm)
+
+Mở rộng mục "Còn nợ" #2. Các vị trí mã dưới đây đã đối chiếu lại 24/09 (grep thật), không phải suy đoán.
+
+**Vì sao im lặng 14 ngày:**
+- Probe egress mỗi 15 phút (`apps/sync-worker/src/index.ts`) chỉ GET `/api/captcha` — WAF không áp lên captcha nên probe luôn OK. `classify()` (`packages/gdt-client/src/transport.ts:31`) xếp MỌI 403/451 vào `GEO_BLOCKED` → nếu WAF chặn cả captcha, hệ thống hiểu nhầm là chặn địa lý và rơi sang relay VN, nơi cũng bị chặn y hệt (chặn theo header).
+- CI contract cron 02:00 UTC (`.github/workflows/ci.yml`) không có secret → chỉ `captcha.contract` chạy; authenticate/invoices/detail/exportXml đều skip; fail chỉ có thông báo mặc định GitHub. (Bản vá 24/09 đã thêm ca authenticate không cần credential — chuông này nay có tiếng.)
+- Cron đồng bộ: `enumerateDueAccounts` (`apps/sync-worker/src/schedule.ts:57`) chỉ lấy tài khoản `token_het_han > now`. 0 tài khoản → cron "hoàn thành" với 0 việc, không đếm, không log, không audit. Im lặng trông y hệt thành công.
+- Audit có `dang_nhap_thue_that_bai/thanh_cong` nhưng không gì gom theo cửa sổ thời gian.
+- CRITICAL của probe chỉ là `console.error` (`apps/sync-worker/src/deps.ts:60`). Telegram bot có sẵn (`apps/api/src/thongBao/telegram.ts`) nhưng chỉ báo tenant đăng ký mới và sync-worker không với tới.
+- `GdtContractDriftError` trong sync-worker: `classifyFailure` (`packages/sync/src/sync.ts:217`) không có nhánh drift → coi là `transient`, retry rồi breaker per-tenant, lặp mãi không báo ai.
+
+**Tư thế ứng phó:** khách hàng hợp pháp, trung thành với portal — gửi đúng header portal gửi (`request-id`; dự phòng `Action`, `End-Point`). KHÔNG xoay IP, KHÔNG giả lập trình duyệt, KHÔNG giải captcha (Hiến pháp). Bốn lớp lỗi, bốn phản ứng: `WAF_BLOCKED` → dừng toàn cục đăng nhập + báo người, không thử dồn (tránh leo thang thành chặn IP); `DRIFT` → mở breaker + CRITICAL + không nạp dữ liệu lạ; GEO/mạng → mới chuyển relay; 429 → backoff như hiện có. Im lặng không phải thành công: mọi lượt chạy nền phát nhịp tim kèm số liệu. Viết runbook "GDT đổi phương thức": tải bundle portal → đọc interceptor axios → so header → curl tái lập → cập nhật `gdt-adapter.md` → contract test → deploy → xác nhận `audit_log`.
+
+**10 biện pháp (xếp theo giá trị/chi phí), thứ tự đề nghị 1, 2, 6 → 3, 4, 5 → 7, 8, 9, 10:**
+1. **Canary authenticate không cần credential** trong probe: POST authenticate với MST `0000000000` + captcha sai; mong 401 "Mã captcha không đúng"; 403 → `WAF_BLOCKED`; mã khác → `DRIFT`. Đúng phép curl đã tái lập sự cố, chỉ cần đưa vào lịch. Tần suất 30–60 phút, MỘT nguồn, DỪNG ngay khi thấy chặn. *CHƯA KIỂM CHỨNG: độ ổn định dài hạn của 401 với MST giả.*
+2. **Tách `WAF_BLOCKED` khỏi `GEO_BLOCKED`** trong `classify()`: dựa thân phản hồi "Hệ thống phát hiện hành vi không hợp lệ" + cookie `TS*`. Không tách thì phản ứng tự động đi sai sang relay.
+3. **Chỉ số tài khoản còn token hợp lệ** trong cron: đếm đã-kết-nối vs còn-token; có kết nối mà 0 token > 24h, hoặc rớt mạnh so hôm trước → cảnh báo. Riêng chỉ số này đã bắt được sự cố vào ngày đầu.
+4. **Gom audit đăng nhập cửa sổ 24h:** N thất bại, 0 thành công, cùng thông điệp trên nhiều tenant = chữ ký "GDT đổi", không phải "người dùng gõ sai". Cảnh báo kèm thông điệp GDT nguyên văn.
+5. **Nhịp tim đồng bộ (dead-man's switch):** mỗi lượt cron ghi thời điểm + số liệu vào KV/Analytics Engine; cron riêng kiểm độ cũ > 36h → báo.
+6. **Kênh cảnh báo tới người thật:** chuyển Telegram sang package dùng chung để sync-worker gọi được; mọi CRITICAL ở trên phải tới Telegram chủ dự án. Bật thêm Cloudflare Notifications/Logpush làm đường dự phòng.
+7. **Contract CI** chạy ca authenticate không cần credential (đã có) và bước thất bại gọi Telegram — chuông thứ hai, độc lập với Workers.
+8. **`GdtContractDriftError` là lỗi vĩnh viễn** trong sync-worker: thêm nhánh drift vào `classifyFailure` → mở breaker + CRITICAL thay vì retry.
+9. **Theo dõi bundle portal như chỉ báo sớm:** mỗi ngày tải trang portal, băm chunk chứa interceptor axios (module 81466 trong `_app` chunk theo quan sát 24/09), trích danh sách header nó gắn; băm đổi → mức thông tin; tập header đổi → cảnh báo. *CHƯA KIỂM CHỨNG: mức nhiễu do portal build lại.*
+10. **Diễn tập định kỳ mỗi quý:** giả lập chặn header trong mock, xác nhận chuông kêu tới tận Telegram. Kiểm cái chuông, không chỉ kiểm mã.
+
+Ba lưu ý khi triển khai: canary tần suất thấp, một nguồn, dừng khi bị chặn; ghi rõ canary dùng MST không tồn tại nên không đụng dữ liệu ai; giữ ranh giới đạo đức CLAUDE.md (không giải captcha, không né chặn).
