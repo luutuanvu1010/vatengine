@@ -167,6 +167,47 @@ describe("S5 / U23-D4 — kết nối tài khoản thuế", () => {
     }
   });
 
+  // Sự cố 2026-09-24: /tax-accounts/:id/login từng trả 401 khi GDT từ chối; apiClient coi
+  // MỌI 401 là "phiên ứng dụng hết hạn" → onUnauthorized → router đẩy về /login. Người dùng
+  // gõ sai captcha là bị đăng xuất khỏi VATEngine. Hợp đồng mới: GDT từ chối → 422
+  // `gdt_tu_choi` (docs/06-BINDING_MAP.md); 401 dành riêng cho phiên ứng dụng. Test đi
+  // qua AppRouter (có guard + LoginRoute) để đo đúng triệu chứng "bị đẩy ra màn đăng nhập".
+  it("(e) GDT từ chối (422 gdt_tu_choi) → báo sai captcha/mật khẩu, VẪN Ở LẠI trang (không về màn đăng nhập)", async () => {
+    calls = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (url.endsWith("/me"))
+        return json(200, {
+          ten: "DN",
+          mst: "0311772540",
+          goiDichVu: null,
+          banQuyen: "Mặc định",
+          ghiChu: null,
+          role: "quan_tri",
+        });
+      calls.push({ url, method });
+      if (url.includes("/captcha"))
+        return json(200, { key: "ck", content: '<svg id="cap"><text>7K9P2</text></svg>' });
+      if (url.includes("/login")) return json(422, { error: "gdt_tu_choi" });
+      return json(200, [expired]);
+    });
+    renderWithProviders(<AppRouter />, "/tax-accounts");
+    await screen.findByAltText(/captcha/i);
+    await userEvent.type(screen.getByLabelText("Mật khẩu thuế"), "matkhauthue");
+    await userEvent.type(screen.getByLabelText("Mã captcha"), "SAI00");
+    await userEvent.click(screen.getByRole("button", { name: "Đăng nhập Tổng cục Thuế" }));
+    // Thông báo lỗi hiện ra TẠI CHỖ...
+    expect(await screen.findByText(/Captcha hoặc mật khẩu không đúng/)).toBeInTheDocument();
+    // ...và người dùng vẫn ở màn Kết nối tài khoản thuế, KHÔNG bị đẩy về màn đăng nhập.
+    expect(screen.getByRole("button", { name: "Đăng nhập Tổng cục Thuế" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Email công việc")).toBeNull();
+    // Captcha được xin lại (mã cũ đã bị GDT tiêu) — hai lượt GET /captcha.
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url.includes("/captcha")).length).toBeGreaterThanOrEqual(2),
+    );
+  });
+
   it("(d) vai ke_toan → KHÔNG thấy lối vào màn kết nối (guard RBAC)", async () => {
     mockFetch({
       login: () => json(200, { token: "jwt" }),

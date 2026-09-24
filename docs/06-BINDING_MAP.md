@@ -52,7 +52,7 @@
 | **`POST /tax-accounts`** | `{loai?: "chinh"\|"con", username?}` — **chính**: username AUTO = `tenants.mst` (KHÔNG nhận từ body); **con** (sau cờ, mặc định TẮT) validate `startsWith(mst)` | `201 {id}` | `400` MST rỗng / con-tắt / tiền tố sai · **`409` đạt hạn mức** (getGioiHanTkThue, tạm=1; U23-D2) | `ke_toan_truong`,`quan_tri` |
 | **`POST /tax-accounts/:id/authorize`** | `:id` UUID | `200 {ok:true}` (đặt `uy_quyen_luc`, ghi audit) | `400` · `404` (khác tenant) | `ke_toan_truong`,`quan_tri` |
 | **`GET /tax-accounts/:id/captcha`** | `:id` UUID | `200 {key, content}` — `content` = **SVG markup thô** (không base64) | `400` | `ke_toan_truong`,`quan_tri` |
-| **`POST /tax-accounts/:id/login`** | `{password, ckey, cvalue}` | `200 {ok:true, tokenHetHan}` (lưu token GDT mã hoá) | `400` · `401` GDT từ chối (sai captcha/mật khẩu — KHÔNG lưu) · `404` · **`409` chưa ủy quyền** | `ke_toan_truong`,`quan_tri` |
+| **`POST /tax-accounts/:id/login`** | `{password, ckey, cvalue}` | `200 {ok:true, tokenHetHan}` (lưu token GDT mã hoá) | `400` · **`422 gdt_tu_choi`** GDT từ chối (sai captcha/mật khẩu — KHÔNG lưu; từng là `401` tới 2026-09-24 — web coi mọi `401` là hết phiên ứng dụng nên gõ sai captcha là bị đăng xuất) · `404` · **`409` chưa ủy quyền** | `ke_toan_truong`,`quan_tri` |
 | **`POST /tax-accounts/:id/disconnect`** | `:id` UUID | `200 {ok:true}` — xóa token đã lưu (`tokenHienTai`+`tokenHetHan`→null), GIỮ bản ghi MST, audit `ngat_ket_noi_thue` (U23-D3) | `400` · `404` (khác tenant) | `ke_toan_truong`,`quan_tri` |
 
 ## 3b. Endpoint bổ sung U15 (A1/A2 — ĐÃ có trong mã, chủ dự án chuẩn thuận 2026-07-15)
@@ -209,7 +209,7 @@ Trạng thái một `tax-account` và hành vi UI tương ứng:
 3. **Lấy captcha:** `GET /:id/captcha` → `{key, content}`. `content` là **SVG thô** → render trực tiếp (`<img>`/inline SVG) cho người **tự gõ** (Hiến pháp — KHÔNG tự giải captcha).
 4. **Đăng nhập GDT:** gửi `{password (mật khẩu thuế), ckey=key, cvalue=captcha đã gõ}` → `POST /:id/login`.
    - `200 {ok, tokenHetHan}` → đã lưu token (mã hoá); hiển thị hạn token.
-   - `401` → sai captcha/mật khẩu → xin captcha mới, **không** lưu gì.
+   - `422 gdt_tu_choi` → sai captcha/mật khẩu → xin captcha mới, **không** lưu gì. (**Không** dùng `401` cho ca này: `401` là hết phiên ứng dụng → web đăng xuất. Sửa 2026-09-24.)
    - `409` → chưa ủy quyền (quay bước 2).
 5. **Token hết hạn** (`tokenHetHan` < hiện tại): nhắc đăng nhập lại (lặp bước 3–4).
 6. **Ngắt kết nối (U23-D3):** `POST /:id/disconnect` (có bước xác nhận UI) → xóa token đã lưu, GIỮ bản ghi MST; quay về trạng thái chưa đăng nhập.
@@ -235,7 +235,7 @@ UI **phải phản chiếu** ma trận: `ke_toan` **không thấy** nút kết x
 - **Cách ly tenant** (`multi-tenant.md`): client KHÔNG là biên tin cậy — `tenant_id` luôn từ token; UI chỉ hiển thị thứ API trả trong phạm vi tenant; KHÔNG gửi/không tin `tenant_id` từ client.
 - **Nguyên tắc bằng chứng:** nhãn `ttxly`/`tthai` chỉ cho mã đã kiểm chứng; mã lạ → "số (chưa rõ)".
 - **4 trạng thái mỗi màn:** loading (skeleton) · rỗng (hướng dẫn) · lỗi (thông báo + thử lại) · dữ liệu. Không "màn trắng".
-- **Ánh xạ mã lỗi → hành vi:** `401`→về đăng nhập · `403`→chặn + báo sai vai · `400`→lỗi nhập liệu · `404`→không tìm thấy · `409`→(login thuế) chưa ủy quyền.
+- **Ánh xạ mã lỗi → hành vi:** `401`→về đăng nhập · `403`→chặn + báo sai vai · `400`→lỗi nhập liệu · `404`→không tìm thấy · `409`→(login thuế) chưa ủy quyền · `422 gdt_tu_choi`→(login thuế) GDT từ chối, báo tại chỗ + xin captcha mới.
 - **A11y + i18n:** WCAG AA (điều hướng bàn phím, tương phản, ARIA bảng/trạng thái), `lang="vi"`, tiếng Việt trước.
 
 ## 8. NGOÀI phạm vi (fence — chờ đơn vị backend khác, Design KHÔNG dựng)

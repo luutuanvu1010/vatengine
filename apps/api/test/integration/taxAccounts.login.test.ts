@@ -77,7 +77,12 @@ describe("POST /tax-accounts/:id/login (PGlite)", () => {
     expect(acc.tokenHienTai).toBeNull();
   });
 
-  it("GDT từ chối (200 không token) → 401, KHÔNG lưu token", async () => {
+  // Sự cố 2026-09-24: route này từng trả 401 khi GDT từ chối. apps/web coi MỌI 401 là
+  // "phiên ứng dụng hết hạn" (apiClient → onUnauthorized → về màn đăng nhập) — đúng cho
+  // middleware phiên, nhưng ở đây phiên ứng dụng vẫn hợp lệ, chỉ GDT từ chối. Hệ quả:
+  // gõ sai captcha là bị đẩy ra khỏi VATEngine. 401 nay DÀNH RIÊNG cho phiên ứng dụng;
+  // GDT từ chối → 422 `gdt_tu_choi` (cùng lệ với 409 `token_het_han` ở /sync).
+  it("GDT từ chối (200 không token) → 422 gdt_tu_choi (KHÔNG 401), KHÔNG lưu token, có audit", async () => {
     const badTransport = makeTransport({
       fetch: async () =>
         new Response(JSON.stringify({ message: "Sai captcha" }), {
@@ -88,10 +93,32 @@ describe("POST /tax-accounts/:id/login (PGlite)", () => {
     const app = createApp(injectDb(db, undefined, badTransport));
     const jwt = await tokenFor(tenantA, { role: "quan_tri" });
     const res = await app.request(`/tax-accounts/${accId}/login`, loginReq(accId, jwt), makeEnv());
-    expect(res.status).toBe(401);
+    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "gdt_tu_choi" });
     const [acc] = await db.select().from(taiKhoanThue).where(eq(taiKhoanThue.id, accId));
     if (!acc) throw new Error("tài khoản không tồn tại sau login");
     expect(acc.tokenHienTai).toBeNull();
+    const rows = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.doiTuong, accId), eq(auditLog.hanhDong, "dang_nhap_thue_that_bai")));
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it("GDT trả 401 (sai captcha thật — kiểm chứng 2026-09-24) → cũng 422 gdt_tu_choi", async () => {
+    const badTransport = makeTransport({
+      fetch: async () =>
+        new Response(JSON.stringify({ message: "Mã captcha không đúng." }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+    const app = createApp(injectDb(db, undefined, badTransport));
+    const jwt = await tokenFor(tenantA, { role: "quan_tri" });
+    const res = await app.request(`/tax-accounts/${accId}/login`, loginReq(accId, jwt), makeEnv());
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "gdt_tu_choi" });
   });
 
   it("token GDT không phải JWT có exp → 502 token_shape_unexpected, KHÔNG lưu token, có audit thất bại", async () => {

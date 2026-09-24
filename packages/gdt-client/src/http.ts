@@ -70,6 +70,31 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Header `request-id` (UUID) cho MỌI request tới GDT — KIỂM CHỨNG 2026-09-24.
+ *
+ * Sự cố 10/09→24/09/2026: WAF của GDT (cookie `TS*` = F5 BIG-IP) trả HTTP 403
+ * `{"message":"Hệ thống phát hiện hành vi không hợp lệ. Yêu cầu đã bị chặn."}` cho
+ * POST /api/security-taxpayer/authenticate THIẾU header này → 0 tenant đăng nhập được
+ * suốt hai tuần. Portal chính thức gắn `request-id` (uuid) + `Action` + `End-Point` vào
+ * mọi request qua interceptor axios; curl tái lập cùng ngày cho thấy CHỈ `request-id` là
+ * cần (có nó → 401 "Mã captcha không đúng." bình thường; chỉ `End-Point` → vẫn 403).
+ * Gắn tại đây vì fetchWithRetry là điểm ra duy nhất của adapter (gdt-adapter.md), khớp
+ * hành vi portal trên mọi endpoint. Mỗi request HTTP (kể cả lượt thử lại) một mã mới.
+ *
+ * Trả về object thuần (khóa chữ thường) chứ không phải `Headers`: mock transport trong
+ * test đọc `init.headers` như Record — giữ nguyên dạng để không đổi hợp đồng nội bộ.
+ * Export để `probe()` của transport (không đi qua fetchWithRetry) dùng cùng một nguồn.
+ */
+export function withRequestId(headers: HeadersInit | undefined): Record<string, string> {
+  const merged: Record<string, string> = {};
+  new Headers(headers).forEach((value, key) => {
+    merged[key] = value;
+  });
+  merged["request-id"] = crypto.randomUUID();
+  return merged;
+}
+
+/**
  * Đọc header `Retry-After` của một 429/503 và quy ra số ms cần chờ.
  * CHƯA KIỂM CHỨNG định dạng thật GDT trả khi 429 (§1 U25-plan.md) — hỗ trợ cả hai
  * dạng chuẩn HTTP: số giây nguyên, hoặc HTTP-date. Không parse được/không có header
@@ -123,7 +148,11 @@ export async function fetchWithRetry(
     // lỗi biến mất không dấu vết (.claude/rules/gdt-adapter.md — không nuốt lỗi im lặng).
     let res: Response;
     try {
-      res = await transport.fetch(url, { ...init, signal: ctrl.signal });
+      res = await transport.fetch(url, {
+        ...init,
+        headers: withRequestId(init.headers),
+        signal: ctrl.signal,
+      });
       clearTimeout(timer);
     } catch (err) {
       clearTimeout(timer);

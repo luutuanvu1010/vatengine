@@ -287,3 +287,71 @@ describe("fetchWithRetry — isPermanentError", () => {
     expect(res.status).toBe(500);
   });
 });
+
+// KIỂM CHỨNG 2026-09-24 (sự cố 10/09→24/09/2026, 0 lượt đăng nhập GDT thành công): WAF của
+// GDT (cookie TS* = F5 BIG-IP) trả 403 {"message":"Hệ thống phát hiện hành vi không hợp lệ.
+// Yêu cầu đã bị chặn."} cho POST /api/security-taxpayer/authenticate THIẾU header
+// `request-id`. Portal chính thức gắn header này (UUID ngẫu nhiên) vào MỌI request qua
+// interceptor axios (`l.headers["request-id"]=uuid()` trong _app chunk). Tái lập bằng curl
+// cùng ngày: thêm `request-id` → 401 {"message":"Mã captcha không đúng."} (nghiệp vụ bình
+// thường); chỉ `End-Point` không đủ. Gắn ở fetchWithRetry vì đây là điểm ra DUY NHẤT của
+// adapter (gdt-adapter.md) — mọi endpoint đều đi qua, khớp hành vi portal.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function headerSpyTransport(steps: Array<() => Response>): {
+  transport: GdtTransport;
+  seen: Headers[];
+} {
+  const seen: Headers[] = [];
+  let count = 0;
+  const transport: GdtTransport = {
+    name: "mock",
+    async fetch(_url, init) {
+      seen.push(new Headers(init?.headers));
+      const step = steps[Math.min(count, steps.length - 1)];
+      count++;
+      if (!step) throw new Error("headerSpyTransport: chưa cấu hình step nào");
+      return step();
+    },
+    async probe() {
+      throw new Error("không dùng trong test này");
+    },
+  };
+  return { transport, seen };
+}
+
+describe("fetchWithRetry — header request-id (WAF GDT, kiểm chứng 2026-09-24)", () => {
+  it("gắn header request-id dạng UUID vào request, GIỮ NGUYÊN header của caller", async () => {
+    const { transport, seen } = headerSpyTransport([() => jsonResponse(200)]);
+
+    await fetchWithRetry(transport, "https://example.test/x", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+
+    expect(seen[0]?.get("request-id")).toMatch(UUID_RE);
+    expect(seen[0]?.get("content-type")).toBe("application/json");
+  });
+
+  it("request không khai headers (GET captcha) vẫn có request-id", async () => {
+    const { transport, seen } = headerSpyTransport([() => jsonResponse(200)]);
+
+    await fetchWithRetry(transport, "https://example.test/x");
+
+    expect(seen[0]?.get("request-id")).toMatch(UUID_RE);
+  });
+
+  it("mỗi lần thử lại mang request-id MỚI (mỗi request HTTP một mã)", async () => {
+    const { transport, seen } = headerSpyTransport([
+      () => jsonResponse(500),
+      () => jsonResponse(500),
+      () => jsonResponse(200),
+    ]);
+
+    await fetchWithRetry(transport, "https://example.test/x", {}, { maxAttempts: 3, backoffMs: 1 });
+
+    const ids = seen.map((h) => h.get("request-id"));
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(3);
+  });
+});

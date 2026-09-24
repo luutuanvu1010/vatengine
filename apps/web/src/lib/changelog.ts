@@ -13,6 +13,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.6",
+    date: "2026-09-24",
+    title: "Kết nối lại được với Tổng cục Thuế; nhập sai captcha không còn bị đăng xuất",
+    changes: [
+      "Từ khoảng ngày 10/09, mọi lượt kết nối tài khoản thuế đều thất bại vì hệ thống Tổng cục Thuế bắt đầu từ chối yêu cầu đăng nhập gửi từ phần mềm, dù mật khẩu và captcha đều đúng. Phần mềm nay gửi yêu cầu theo đúng cách mà cổng hoadondientu.gdt.gov.vn yêu cầu, và kết nối hoạt động trở lại. Bạn cần vào 'Kết nối tài khoản thuế' đăng nhập lại một lần để việc đồng bộ tiếp tục.",
+      "Trước đây, khi kết nối tài khoản thuế không thành công (sai captcha, sai mật khẩu hoặc bị Tổng cục Thuế từ chối), phần mềm hiểu nhầm là phiên đăng nhập VATEngine đã hết hạn và đưa bạn về màn hình đăng nhập. Nay lỗi được báo ngay tại chỗ, bạn chỉ cần nhập lại captcha mới.",
+    ],
+    kind: "fix",
+  },
+  {
     version: "v2.5",
     date: "2026-08-06",
     title: "Kênh hỗ trợ hiện ngay ở màn hình đăng nhập",
