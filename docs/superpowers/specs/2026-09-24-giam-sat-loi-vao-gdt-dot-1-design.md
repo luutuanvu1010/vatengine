@@ -84,9 +84,9 @@ Mục tiêu đợt 1: **biết trong vòng một giờ** khi lối vào đăng n
 
 ## 6. Vận hành
 
-1. Chủ dự án đặt secret: `wrangler secret put TELEGRAM_BOT_TOKEN` và `TELEGRAM_CHAT_ID` trong `apps/sync-worker` (cùng giá trị `vat-api` đang dùng).
+1. Chủ dự án đặt secret: `wrangler secret put TELEGRAM_BOT_TOKEN` và `TELEGRAM_CHAT_ID` trong `apps/sync-worker` (cùng giá trị `vat-api` đang dùng). *Cập nhật sau review cuối U43: đặt secret SAU khi deploy không còn làm MẤT tin — sink phải giao được mới được ghi `alerted`, nên cảnh báo được báo lại mỗi giờ tới khi đặt xong. Đặt trước vẫn gọn hơn, nhưng không còn là điểm mất chuông.*
 2. Deploy `vat-sync-worker` → `vat-api` → `vat-web` (grep bundle web trước deploy). Không migration.
-3. Nghiệm thu thật: trong ≤ 1 giờ sau deploy, Telegram nhận tin "giám sát GDT đã bật" rồi tin canary đầu (mong `OK`); `wrangler tail` thấy log canary. Ghi Version ID vào backlog mục [2026-09-24].
+3. Nghiệm thu thật: trong ≤ 1 giờ sau deploy, Telegram nhận tin "giám sát GDT đã bật" rồi tin canary đầu (mong `OK`); `wrangler tail` thấy log canary — mỗi tick có một dòng `gdt_canary_tick` (INFO) kèm `verdict`/`httpStatus`/`latencyMs`, kể cả khi không có cảnh báo. Ghi Version ID vào backlog mục [2026-09-24]. *Lưu ý: nếu tick đầu vướng nhiễu mạng (`TIMEOUT`/`ERROR`) thì chưa có tin chào — cờ `daChao` vẫn tắt nên tick `OK` kế tiếp sẽ chào.*
 4. Rollback: gỡ cron canary khỏi `wrangler.jsonc` + deploy lại worker; API/web độc lập, rollback riêng.
 
 ## 7. Ngoài phạm vi (đợt sau)

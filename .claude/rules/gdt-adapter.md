@@ -29,7 +29,11 @@ Cụ thể hoá nguyên tắc "cô lập phụ thuộc API thuế" trong Hiến 
 ## Đường ra (egress) & fallback
 
 - Probe định kỳ (Cron) phân loại từng transport: `OK | GEO_BLOCKED | WAF_BLOCKED | RATE_LIMITED | TIMEOUT | ERROR`; lưu trạng thái sức khỏe trong Durable Object. `WAF_BLOCKED` (U43, kiểm chứng 2026-09-24) = 403 + thân mang chữ ký `WAF_BLOCK_SIGNATURE` (`errors.ts`, nguồn chân lý duy nhất): chặn theo HEADER, **không** chuyển relay; chặn enqueue đồng bộ như `GEO_BLOCKED`.
-- **Canary lối vào** (U43): `canaryAuthenticate()` — captcha thật + authenticate MST không tồn tại `0000000000` + captcha sai, **không retry**, cron mỗi giờ ở sync-worker và ca contract không cần credential. Mong `OK` (401 nghiệp vụ); `WAF_BLOCKED`/`DRIFT` báo Telegram ngay. Không tăng tần suất, không thêm nguồn, không thử dồn khi bị chặn.
+- **Canary lối vào** (U43): `canaryAuthenticate()` — captcha thật + authenticate MST `0000000000` + captcha sai, **không retry**, cron mỗi giờ ở sync-worker và ca contract không cần credential. Mong `OK` (401 nghiệp vụ); `WAF_BLOCKED`/`DRIFT` báo Telegram ngay. Không tăng tần suất, không thêm nguồn, không thử dồn khi bị chặn.
+  - Tiền đề chịu lực **đã kiểm chứng 2026-09-24** (curl thật): GDT kiểm **captcha TRƯỚC** mọi thứ khác → 401 `"Mã captcha không đúng."`, nên canary **không đụng tài khoản nào**. Việc MST `0000000000` có tồn tại hay không là **CHƯA KIỂM CHỨNG** — và không cần thiết cho tính đúng đắn của canary.
+  - **CHƯA KIỂM CHỨNG — độ ổn định lâu dài của 401 với MST giả:** GDT đổi cách trả (vd 400 "MST không hợp lệ") ⇒ canary báo `DRIFT` giả. Tin `DRIFT` mang mã + thông điệp để người đọc quyết nhanh; nếu xảy ra, cập nhật bảng phân loại **kèm bằng chứng**.
+  - **CHƯA KIỂM CHỨNG — WAF có đếm lượt đăng nhập sai theo IP hay không:** đó là nền của nhịp mỗi giờ (24 lượt/ngày, một nguồn). Thấy 429 hoặc dạng chặn khác ⇒ hạ tần suất cron, không tìm cách né.
+  - **Cảnh báo phải GIAO ĐƯỢC mới được coi là đã báo:** sink trả `boolean`; chưa giao ⇒ không ghi `alerted`, tick sau báo lại (`apps/sync-worker/src/canary.ts`). "Báo trùng" rẻ hơn "mất báo".
 - Runtime thử `direct-cf` (T0) trước; nếu `GEO_BLOCKED`/breaker mở → dùng `vn-relay` (T1). Mỗi lần rơi xuống T1 phải phát cảnh báo (tín hiệu "không còn thuần Cloudflare").
 - Tham chiếu hiện thực mẫu: `spikes/gdt-egress-probe/`.
 
