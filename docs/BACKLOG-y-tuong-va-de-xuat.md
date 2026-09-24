@@ -1154,4 +1154,4 @@ Mở rộng mục "Còn nợ" #2. Các vị trí mã dưới đây đã đối c
 9. **Theo dõi bundle portal như chỉ báo sớm:** mỗi ngày tải trang portal, băm chunk chứa interceptor axios (module 81466 trong `_app` chunk theo quan sát 24/09), trích danh sách header nó gắn; băm đổi → mức thông tin; tập header đổi → cảnh báo. *CHƯA KIỂM CHỨNG: mức nhiễu do portal build lại.*
 10. **Diễn tập định kỳ mỗi quý:** giả lập chặn header trong mock, xác nhận chuông kêu tới tận Telegram. Kiểm cái chuông, không chỉ kiểm mã.
 
-Ba lưu ý khi triển khai: canary tần suất thấp, một nguồn, dừng khi bị chặn; ghi rõ canary dùng MST không tồn tại nên không đụng dữ liệu ai; giữ ranh giới đạo đức CLAUDE.md (không giải captcha, không né chặn).
+Ba lưu ý khi triển khai: canary tần suất thấp, một nguồn, dừng khi bị chặn; ghi rõ canary không đụng dữ liệu ai vì **GDT kiểm captcha TRƯỚC** (kiểm chứng 24/09) — không phải vì MST giả "không tồn tại", điều đó là **CHƯA KIỂM CHỨNG** và không cần thiết; giữ ranh giới đạo đức CLAUDE.md (không giải captcha, không né chặn).

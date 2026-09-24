@@ -1,7 +1,9 @@
 // GIÁM SÁT (mục C) — Điều phối probe egress (ADR-0001 §5B, gdt-adapter.md).
 // Mỗi tick cron: probe đường ra T0 qua GdtTransport (KHÔNG fetch() trực tiếp GDT) →
-// phân loại verdict → cập nhật health-state (DO) → phát cảnh báo khi verdict xấu ổn
-// định. Mọi I/O tiêm vào (transport, load/save state, sink cảnh báo) để test offline.
+// phân loại verdict → phát cảnh báo khi verdict xấu ổn định → CUỐI CÙNG mới cập nhật
+// health-state (DO). Thứ tự "báo trước, lưu sau" là CỐ Ý (review U43): sink trả
+// boolean, chưa giao được thì không ghi `alerted` để tick sau báo lại.
+// Mọi I/O tiêm vào (transport, load/save state, sink cảnh báo) để test offline.
 //
 // Cảnh báo là sự kiện TOÀN HỆ THỐNG (không theo tenant) nên KHÔNG ghi audit_log
 // (tenant-scoped, tenant_id NOT NULL). Sink production = Workers observability
