@@ -1122,3 +1122,5 @@ Trục `feat/cloudflare-stack-u0` + 7 nhánh chưa gộp: `backup/hb6-before-reb
 6. **`maskSensitive` không che được `message` tự do của GDT** (security-reviewer 24/09, Minor, tồn dư — không do vá này gây ra): `chiTiet.reason` trong audit `dang_nhap_thue_that_bai` là nguyên văn thông điệp GDT; mask chỉ theo tên khóa + pattern JWT/email/connstring. Quan sát thật mới thấy "Mã captcha không đúng." — GDT có echo mật khẩu/MST trong message hay không là **CHƯA KIỂM CHỨNG**. Nếu lo, ánh xạ message → mã lỗi ngắn (`sai_captcha`, `khac`) trước khi ghi audit. Ưu tiên **Thấp**.
 
 **Nguồn phát hiện:** phiên 2026-09-24, báo cáo chủ dự án "kết nối tài khoản thuế không thành công, lập tức đăng xuất".
+
+**Deploy 2026-09-24 ~12:05 (giờ VN), merge `aac9499` trên trục:** `vat-sync-worker` `652d8545` → `vat-api` `0b45b21d` → `vat-web` `2965a9de` (bundle `index-BQNr1-KS.js`, đã soi production có changelog v2.6). Không migration. Mục 1 (kiểm chứng từ biên) chuyển sang: chờ một lượt đăng nhập thật rồi soi `audit_log`.
