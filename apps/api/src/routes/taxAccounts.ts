@@ -296,7 +296,9 @@ export function taxAccountsRoutes(deps: AppDeps) {
   });
 
   // POST /tax-accounts/:id/login — captcha người dùng đã gõ → authenticate() → lưu token
-  // MÃ HÓA. 409 nếu chưa ủy quyền. 401 nếu GDT từ chối (KHÔNG lưu). KHÔNG lưu mật khẩu.
+  // MÃ HÓA. 409 nếu chưa ủy quyền. 422 `gdt_tu_choi` nếu GDT từ chối (KHÔNG lưu). KHÔNG
+  // lưu mật khẩu. 401 ở route này CHỈ đến từ middleware phiên (sự cố 2026-09-24: trả 401
+  // cho "GDT từ chối" khiến apps/web tưởng phiên ứng dụng hết hạn và đăng xuất người dùng).
   r.post("/:id/login", async (c) => {
     const id = c.req.param("id");
     if (!isUuid(id)) return c.json({ error: "bad_request" }, 400);
@@ -324,7 +326,7 @@ export function taxAccountsRoutes(deps: AppDeps) {
       if (!acc) return c.json({ error: "not_found" }, 404);
       if (!acc.uyQuyenLuc) return c.json({ error: "chua_uy_quyen" }, 409);
 
-      // Gọi GDT qua adapter. 401/sai captcha → GdtError → KHÔNG lưu token.
+      // Gọi GDT qua adapter. GDT từ chối (sai captcha/mật khẩu) → GdtError → KHÔNG lưu token.
       let gdtToken: string;
       try {
         const authRes = await authenticate(deps.getTransport(c.env), {
@@ -335,9 +337,12 @@ export function taxAccountsRoutes(deps: AppDeps) {
         });
         gdtToken = authRes.token;
       } catch (err) {
-        // Lệch hợp đồng API thuế ≠ 401 nghiệp vụ — phải lộ ra, không được nuốt thành 401.
+        // Lệch hợp đồng API thuế ≠ GDT từ chối nghiệp vụ — phải lộ ra, không được nuốt thành 422.
         if (err instanceof GdtContractDriftError) throw err;
-        // Audit thất bại (mask), rồi 401 gọn. Không phân biệt sai captcha vs mật khẩu.
+        // Audit thất bại (mask), rồi 422 gọn. Không phân biệt sai captcha vs mật khẩu.
+        // KHÔNG trả 401: apps/web coi mọi 401 là "phiên ứng dụng hết hạn" và đăng xuất
+        // (apiClient.onUnauthorized); phiên ứng dụng ở đây vẫn hợp lệ — chỉ GDT từ chối.
+        // Cùng lệ với 409 `token_het_han` ở /sync: lỗi phía GDT không mượn mã 401.
         await withTenant(db, tenantId, async (tx) => {
           await tx.insert(auditLog).values({
             tenantId,
@@ -346,7 +351,7 @@ export function taxAccountsRoutes(deps: AppDeps) {
             chiTiet: maskSensitive({ reason: err instanceof GdtError ? err.message : "loi" }),
           });
         });
-        return c.json({ error: "unauthorized" }, 401);
+        return c.json({ error: "gdt_tu_choi" }, 422);
       }
 
       // deriveTokenExpiry ném lỗi nếu token GDT không đúng dạng JWT có exp (giả định
