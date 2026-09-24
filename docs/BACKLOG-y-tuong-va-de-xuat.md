@@ -1155,3 +1155,5 @@ Mở rộng mục "Còn nợ" #2. Các vị trí mã dưới đây đã đối c
 10. **Diễn tập định kỳ mỗi quý:** giả lập chặn header trong mock, xác nhận chuông kêu tới tận Telegram. Kiểm cái chuông, không chỉ kiểm mã.
 
 Ba lưu ý khi triển khai: canary tần suất thấp, một nguồn, dừng khi bị chặn; ghi rõ canary không đụng dữ liệu ai vì **GDT kiểm captcha TRƯỚC** (kiểm chứng 24/09) — không phải vì MST giả "không tồn tại", điều đó là **CHƯA KIỂM CHỨNG** và không cần thiết; giữ ranh giới đạo đức CLAUDE.md (không giải captcha, không né chặn).
+
+**Deploy U43 2026-09-24 ~21:25 (giờ VN), merge `794fd08` trên trục:** `vat-sync-worker` `5fdd9e63` (cron canary `0 * * * *` đã lên) → `vat-api` `4ea118e6` → `vat-web` `7094e405`. Không migration. Secret `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` đã đặt cho `vat-sync-worker` TRƯỚC khi deploy. Nghiệm thu chờ: tin "Giám sát lối vào GDT đã bật" ở tick canary đầu (đầu giờ kế tiếp) + `gdt_canary_tick` trong `wrangler tail`.
