@@ -1,7 +1,7 @@
 # Thiết kế — Giám sát lối vào GDT, đợt 1 (U43)
 
 - **Ngày:** 2026-09-24
-- **Trạng thái:** đã duyệt thiết kế trong hội thoại, chờ chủ dự án duyệt bản viết này, chưa lập kế hoạch thi công
+- **Trạng thái:** đã duyệt, đang thi công theo docs/superpowers/plans/2026-09-24-giam-sat-loi-vao-gdt-dot-1.md
 - **Phạm vi:** `packages/gdt-client` (phân loại + canary), `apps/sync-worker` (cron canary, sức khỏe, sink cảnh báo), package mới `packages/thong-bao` (Telegram dùng chung, chuyển từ `apps/api`), `apps/api` route login thuế (mã lỗi riêng khi WAF chặn), `apps/web` màn Kết nối tài khoản thuế (thông điệp), tài liệu hợp đồng + runbook. Không đụng schema DB, không migration.
 - **Nguồn:** mục "Đề xuất phát hiện tự động" trong `docs/BACKLOG-y-tuong-va-de-xuat.md` [2026-09-24]; đợt này lấy biện pháp **1, 2, 6** + phần báo ở web (chủ dự án chốt 2026-09-24). Biện pháp 3, 4, 5 (đợt 2) và 7–10 (đợt 3) KHÔNG thuộc spec này.
 

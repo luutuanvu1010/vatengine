@@ -28,7 +28,8 @@ Cụ thể hoá nguyên tắc "cô lập phụ thuộc API thuế" trong Hiến 
 
 ## Đường ra (egress) & fallback
 
-- Probe định kỳ (Cron) phân loại từng transport: `OK | GEO_BLOCKED | RATE_LIMITED | TIMEOUT | ERROR`; lưu trạng thái sức khỏe trong Durable Object.
+- Probe định kỳ (Cron) phân loại từng transport: `OK | GEO_BLOCKED | WAF_BLOCKED | RATE_LIMITED | TIMEOUT | ERROR`; lưu trạng thái sức khỏe trong Durable Object. `WAF_BLOCKED` (U43, kiểm chứng 2026-09-24) = 403 + thân mang chữ ký `WAF_BLOCK_SIGNATURE` (`errors.ts`, nguồn chân lý duy nhất): chặn theo HEADER, **không** chuyển relay; chặn enqueue đồng bộ như `GEO_BLOCKED`.
+- **Canary lối vào** (U43): `canaryAuthenticate()` — captcha thật + authenticate MST không tồn tại `0000000000` + captcha sai, **không retry**, cron mỗi giờ ở sync-worker và ca contract không cần credential. Mong `OK` (401 nghiệp vụ); `WAF_BLOCKED`/`DRIFT` báo Telegram ngay. Không tăng tần suất, không thêm nguồn, không thử dồn khi bị chặn.
 - Runtime thử `direct-cf` (T0) trước; nếu `GEO_BLOCKED`/breaker mở → dùng `vn-relay` (T1). Mỗi lần rơi xuống T1 phải phát cảnh báo (tín hiệu "không còn thuần Cloudflare").
 - Tham chiếu hiện thực mẫu: `spikes/gdt-egress-probe/`.
 
