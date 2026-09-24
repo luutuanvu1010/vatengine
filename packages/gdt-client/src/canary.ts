@@ -1,9 +1,19 @@
 // U43 — Canary lối vào GDT: "GDT còn xử lý đăng nhập như mọi khi không?"
 //
-// Cách đo: lấy captcha THẬT rồi gọi authenticate với MST KHÔNG TỒN TẠI + captcha cố ý SAI.
-// KIỂM CHỨNG 2026-09-24 (curl thật): GDT kiểm captcha TRƯỚC → 401 {"message":"Mã captcha
-// không đúng."} — không đụng tài khoản của ai, không có lượt "sai mật khẩu" nào bị đếm.
-// Đó chính là phép thử đã tái lập sự cố 10/09→24/09 (thiếu request-id → 403 WAF).
+// Cách đo: lấy captcha THẬT rồi gọi authenticate với MST `0000000000` + captcha cố ý SAI.
+//
+// Tiền đề CHỊU LỰC — KIỂM CHỨNG 2026-09-24 (curl thật): GDT kiểm captcha TRƯỚC mọi thứ
+// khác → 401 {"message":"Mã captcha không đúng."}, nên lời gọi này KHÔNG đụng tới tài
+// khoản nào và không có lượt "sai mật khẩu" nào bị đếm. Đó chính là phép thử đã tái lập
+// sự cố 10/09→24/09 (thiếu request-id → 403 WAF).
+// Việc MST `0000000000` có tồn tại hay không là CHƯA KIỂM CHỨNG — và KHÔNG cần thiết:
+// captcha chặn trước nên tính đúng đắn của canary không dựa vào điều đó.
+//
+// CHƯA KIỂM CHỨNG — độ ổn định lâu dài của 401 với MST giả: GDT có thể đổi cách trả (vd
+// 400 "MST không hợp lệ") ⇒ canary báo DRIFT giả. Tin DRIFT mang mã + thông điệp để người
+// đọc quyết nhanh; nếu xảy ra, cập nhật bảng phân loại KÈM bằng chứng.
+// CHƯA KIỂM CHỨNG — WAF có đếm lượt đăng nhập sai theo IP hay không: đó là nền của nhịp
+// mỗi giờ (24 lượt/ngày, một nguồn). Thấy 429 hoặc dạng chặn khác thì hạ tần suất cron.
 //
 // Ranh giới (CLAUDE.md): KHÔNG giải captcha (gửi giá trị sai có chủ ý), KHÔNG né chặn,
 // KHÔNG retry (một lượt cron = một lời gọi captcha + một lời gọi authenticate). Bị chặn
@@ -77,7 +87,7 @@ export async function canaryAuthenticate(
       return xong({ verdict: "OK", httpStatus: 401, message: err.message });
     }
     if (isWafBlocked(err)) {
-      return xong({ verdict: "WAF_BLOCKED", httpStatus: 403, message: (err as GdtError).message });
+      return xong({ verdict: "WAF_BLOCKED", httpStatus: err.httpStatus, message: err.message });
     }
     if (err instanceof GdtContractDriftError)
       return xong({ verdict: "DRIFT", message: err.message });

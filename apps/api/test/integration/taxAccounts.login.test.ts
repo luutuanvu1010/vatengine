@@ -161,6 +161,15 @@ describe("POST /tax-accounts/:id/login (PGlite)", () => {
     const jwt = await tokenFor(tenantA, { role: "quan_tri" });
     const res = await app.request(`/tax-accounts/${accId}/login`, loginReq(accId, jwt), makeEnv());
     expect(res.status).toBe(422);
+    // Lưới chống hồi quy: phải đúng MÃ LỖI cũ, và audit KHÔNG được gắn nhãn waf_blocked —
+    // nếu không, mọi 403 lạ sẽ bị đọc thành "GDT chặn" khi soi audit sau sự cố.
+    expect(await res.json()).toEqual({ error: "gdt_tu_choi" });
+    const rows = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.doiTuong, accId), eq(auditLog.hanhDong, "dang_nhap_thue_that_bai")));
+    expect(rows.length).toBe(1);
+    expect((rows[0]?.chiTiet as { reason?: string }).reason).not.toBe("waf_blocked");
   });
 
   it("token GDT không phải JWT có exp → 502 token_shape_unexpected, KHÔNG lưu token, có audit thất bại", async () => {

@@ -17,7 +17,7 @@ export interface HealthState {
   lastVerdict?: ProbeVerdict;
 }
 
-export const HEALTHY: HealthState = { consecutiveBad: 0, alerted: false };
+export const HEALTHY: HealthState = Object.freeze({ consecutiveBad: 0, alerted: false });
 
 export interface HealthAlert {
   verdict: ProbeVerdict;

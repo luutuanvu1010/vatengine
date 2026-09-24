@@ -360,7 +360,22 @@ export function taxAccountsRoutes(deps: AppDeps) {
             }),
           });
         });
-        if (wafChan) return c.json({ error: "gdt_chan" }, 503);
+        if (wafChan) {
+          // VẾT DUY NHẤT cho ca WAF bắt theo NỘI DUNG request của tenant (vd ký tự lạ
+          // trong mật khẩu thuế): canary ở sync-worker gửi payload cố định nên vẫn `OK`
+          // ⇒ KHÔNG ai được báo, mà người dùng thì đọc "kỹ thuật đã được báo". Chỉ log
+          // (spec §7 loại trừ tường minh việc gọi Telegram từ tầng API: stateless, không
+          // chống lặp được). KHÔNG ghi thông điệp GDT ở đây — audit đã giữ lý do ngắn.
+          console.error(
+            JSON.stringify({
+              level: "CRITICAL",
+              event: "gdt_waf_blocked_login",
+              tenantId,
+              taiKhoanId: id,
+            }),
+          );
+          return c.json({ error: "gdt_chan" }, 503);
+        }
         return c.json({ error: "gdt_tu_choi" }, 422);
       }
 

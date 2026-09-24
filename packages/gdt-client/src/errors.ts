@@ -42,13 +42,19 @@ export class GdtContractDriftError extends Error {
  */
 export const WAF_BLOCK_SIGNATURE = "hành vi không hợp lệ";
 
-/** Thân phản hồi/thông điệp có mang chữ ký WAF không. So sau chuẩn hoá NFC + chữ thường. */
+/** Thân phản hồi/thông điệp có mang chữ ký WAF không. So sau chuẩn hoá NFC + chữ thường.
+ * Hạ chữ thường CẢ HAI vế: hằng hiện toàn chữ thường, nhưng ai đó sửa nó thành có chữ hoa
+ * (vd chép nguyên văn từ phản hồi GDT) sẽ làm phép so hỏng CÂM nếu chỉ hạ vế `text`. */
 export function coChuKyWaf(text: string | undefined): boolean {
   if (!text) return false;
-  return text.normalize("NFC").toLowerCase().includes(WAF_BLOCK_SIGNATURE.normalize("NFC"));
+  return text
+    .normalize("NFC")
+    .toLowerCase()
+    .includes(WAF_BLOCK_SIGNATURE.normalize("NFC").toLowerCase());
 }
 
-/** Lỗi adapter có phải "WAF GDT chặn" không: GdtError, HTTP 403, thông điệp mang chữ ký. */
-export function isWafBlocked(err: unknown): boolean {
+/** Lỗi adapter có phải "WAF GDT chặn" không: GdtError, HTTP 403, thông điệp mang chữ ký.
+ * Type predicate để chỗ gọi đọc thẳng `err.httpStatus`/`err.message` mà không phải ép kiểu. */
+export function isWafBlocked(err: unknown): err is GdtError {
   return err instanceof GdtError && err.httpStatus === 403 && coChuKyWaf(err.message);
 }

@@ -25,8 +25,9 @@ export function createDirectCfTransport(fetchImpl: typeof fetch = fetch): GdtTra
           method: "GET",
           headers: withRequestId(undefined),
         });
-        // CHỈ đọc thân khi 403 — để tách WAF_BLOCKED khỏi GEO_BLOCKED (2026-09-24). Cắt 1 KB
-        // (trang chặn có thể là HTML dài); đọc hỏng thì coi như không có thân → GEO_BLOCKED.
+        // CHỈ đọc thân khi 403 — để tách WAF_BLOCKED khỏi GEO_BLOCKED (2026-09-24). Đọc
+        // HẾT thân rồi mới cắt 1024 ký tự đầu để phân loại; đọc hỏng thì coi như không có
+        // thân → GEO_BLOCKED.
         const body = res.status === 403 ? await docThanAnToan(res) : undefined;
         return {
           transport: "direct-cf",
@@ -43,7 +44,14 @@ export function createDirectCfTransport(fetchImpl: typeof fetch = fetch): GdtTra
 
 const PROBE_BODY_MAX_CHARS = 1024;
 
-/** Đọc thân phản hồi để phân loại, tối đa 1 KB; hỏng thì trả undefined (không ném). */
+/**
+ * Đọc thân phản hồi để phân loại rồi cắt 1024 ký tự đầu; hỏng thì trả undefined (không ném).
+ *
+ * CỐ Ý đọc hết thân rồi mới cắt (không dùng stream reader): trang chặn GDT quan sát ngày
+ * 2026-09-24 là JSON nhỏ, nên một stream reader chỉ thêm phức tạp mà không đổi kết quả.
+ * Đánh đổi: chữ ký WAF nằm SAU ký tự thứ 1024 sẽ bị cắt mất ⇒ rơi về GEO_BLOCKED (vẫn
+ * báo, chỉ sai nhãn) — có test chốt hành vi này trong directTransport.test.ts.
+ */
 async function docThanAnToan(res: Response): Promise<string | undefined> {
   try {
     return (await res.text()).slice(0, PROBE_BODY_MAX_CHARS);

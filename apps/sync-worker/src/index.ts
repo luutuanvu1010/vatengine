@@ -64,6 +64,11 @@ const EGRESS_PROBE_CRON = "*/15 * * * *";
 
 // U43 — canary lối vào GDT mỗi giờ (captcha thật + authenticate MST giả, không retry).
 // Tách khỏi probe 15' vì đây là 2 request tới endpoint đăng nhập — giữ nhịp thấp (QĐ-4).
+// CHƯA KIỂM CHỨNG — WAF có đếm lượt đăng nhập sai theo IP hay không: 24 lượt/ngày từ MỘT
+// nguồn là rất thấp, nhưng đó là giả định, không phải quan sát. Thấy 429 hoặc dạng chặn
+// khác thì hạ tần suất (vd "0 */6 * * *") — chỉ đổi một chuỗi cron.
+// CHƯA KIỂM CHỨNG — độ ổn định lâu dài của 401 với MST giả (xem docblock
+// packages/gdt-client/src/canary.ts): đổi cách trả ⇒ canary báo DRIFT giả.
 const CANARY_CRON = "0 * * * *";
 
 export default {
@@ -187,8 +192,9 @@ export default {
       // ---- H-B.4 — khối xử lý "vat-sync" hiện có, KHÔNG đổi logic ----
       const { backpressureDelaySeconds, maxBackpressure } = resolveFanoutConfig(env);
       // H-B.6 (b) — GATE: đọc health MỘT LẦN đầu batch (không mỗi message). GEO_BLOCKED
-      // → hoãn TOÀN BỘ message trong batch (reenqueue-delay, mirror backpressure H-B.4)
-      // thay vì chạy job (tránh đập GDT khi biết chắc đang bị chặn địa lý).
+      // HOẶC WAF_BLOCKED (U43 — `isEgressBlocked` nay true cho cả hai) → hoãn TOÀN BỘ
+      // message trong batch (reenqueue-delay, mirror backpressure H-B.4) thay vì chạy job
+      // (tránh đập GDT khi biết chắc đang bị chặn).
       const blocked = isEgressBlocked(await egressHealthClient(env.EGRESS_HEALTH).loadHealth());
       for (const message of batch.messages) {
         const body = message.body;

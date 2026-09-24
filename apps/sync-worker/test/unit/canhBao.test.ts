@@ -40,6 +40,22 @@ describe("guiCanhBaoTelegram", () => {
     expect(fetchGia).not.toHaveBeenCalled();
   });
 
+  // "Thông báo không chạy" mà không biết THIẾU CÁI GÌ là kiểu hỏng tốn nhiều giờ nhất để
+  // tìm ra — cấu hình khuyết MỘT mảnh phải nêu ĐÚNG tên mảnh đó, không nêu mảnh đã có.
+  it("thiếu ĐÚNG một mảnh → console.warn nêu đúng tên mảnh thiếu, không nêu mảnh đã có", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await guiCanhBaoTelegram({ TELEGRAM_BOT_TOKEN: "123456:TOKEN_GIA" }, SU_KIEN);
+      const dong = warn.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(dong).toContain("TELEGRAM_CHAT_ID");
+      expect(dong).not.toContain("TELEGRAM_BOT_TOKEN");
+      // Và KHÔNG rò giá trị bot token vào log.
+      expect(dong).not.toContain("TOKEN_GIA");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("Telegram trả 400 → telegram_tu_choi, không ném", async () => {
     fetchGia.mockResolvedValue(new Response("{}", { status: 400 }));
     await expect(guiCanhBaoTelegram(ENV, SU_KIEN)).resolves.toEqual({

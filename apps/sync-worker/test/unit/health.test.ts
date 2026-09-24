@@ -74,7 +74,7 @@ describe("H-B.6 — lastVerdict + isEgressBlocked", () => {
     // OK KHÔNG đặt lastVerdict (giữ nguyên HEALTHY) → gate mở. Xem Step 3 giải thích.
     expect(nextHealth(HEALTHY, "OK").state.lastVerdict).toBeUndefined();
   });
-  it("isEgressBlocked chỉ true khi lastVerdict = GEO_BLOCKED", () => {
+  it("isEgressBlocked true với GEO_BLOCKED, false với verdict xấu KHÔNG phải chặn", () => {
     expect(isEgressBlocked(nextHealth(HEALTHY, "GEO_BLOCKED").state)).toBe(true);
     expect(isEgressBlocked(nextHealth(HEALTHY, "RATE_LIMITED").state)).toBe(false);
     expect(isEgressBlocked(HEALTHY)).toBe(false); // mặc định không chặn
